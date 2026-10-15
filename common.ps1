@@ -48,7 +48,7 @@ function Get-GameTimePython([string]$PythonPath) {
 function Get-GameTimeFiles {
     @('main.py','gametime\__init__.py','gametime\model.py','gametime\discovery.py',
       'gametime\store.py','gametime\tracker.py','gametime\service.py','gametime\win32.py',
-      'gametime\ui.py','common.ps1','install.ps1','uninstall.ps1','launch.ps1','verify.ps1',
+      'gametime\ui.py','gametime\ubisoft.py','common.ps1','install.ps1','uninstall.ps1','launch.ps1','verify.ps1',
       'Telepites.cmd','Eltavolitas.cmd','Inditas.cmd','Ellenorzes.cmd','README.md','TESZTELES.md','TESZTEREDMENYEK.txt')
 }
 

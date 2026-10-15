@@ -63,17 +63,19 @@ def main():
                 settings.games_root = str(Path(args.games_root).resolve())
             store.save_settings(settings)
         if args.scan_once:
+            from gametime.model import LAUNCHER_SOURCES
             from gametime.discovery import Discovery, preserve_unreadable
             discovery = Discovery(store.settings())
             launchers = preserve_unreadable(discovery.scan_launchers(), store.games(True), discovery.errors)
             games = discovery.scan_games()
-            store.reconcile(launchers, lambda g: g.source in ("Steam", "Epic"))
+            store.reconcile(launchers, lambda g: g.source in LAUNCHER_SOURCES)
             store.reconcile(games, lambda g: g.source == "Games")
             print(json.dumps({"games": len(launchers) + len(games), "metadata_pending": discovery.errors}, ensure_ascii=False))
         if args.diagnose:
+            from gametime import __version__
             from gametime.win32 import sample
             current = sample()
-            print(json.dumps({"version": "1.0.0", "python": sys.version, "data": str(args.data_dir),
+            print(json.dumps({"version": __version__, "python": sys.version, "data": str(args.data_dir),
                               "interactive": current.interactive, "foreground_readable": bool(current.path),
                               "installed_games": len(store.games(True)),
                               "today_seconds": sum(store.totals(datetime.now().date()).values())}, ensure_ascii=False))

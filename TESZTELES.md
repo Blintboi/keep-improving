@@ -5,6 +5,9 @@ játékfájlokat vagy a lefekvési emlékeztetőt. A Steam/Epic telepítési jeg
 **szimulált tesztadatok**; nem állítjuk, hogy valódi Steam-/Epic-telepítést vagy
 valódi kontrollerhardvert teszteltünk.
 
+A Ubisoft-tesztek elkülönített registryadatokat és ideiglenes könyvtárakat
+használnak; valódi Ubisoft-játékot sem telepítenek vagy indítanak.
+
 ## Automatizált tesztek
 
 A csomag gyökérmappájában:
@@ -24,6 +27,13 @@ küszöb, új folyamatra ismételt értesítés, sakk, kivételek és beállít�
 A natív tesztek valódi `ReadDirectoryChangesW` értesítéseket és futó háttérfigyelőt
 használnak új Games-, Steam- és Epic-tesztadatok hozzáadásakor. Ellenőrzik a
 folyamat teljes útvonalának és létrehozási idejének kiolvasását és az egypéldányos futást.
+
+A `test_ubisoft.py` külön ellenőrzi a helyi indexből történő felismerést,
+az egyéni telepítési helyeket, az első indítás tartalék felismerését, az
+áthelyezést/eltávolítást, a kliens kizárását és a kézi rekord adatvesztés
+nélküli átvezetését Ubisoft-azonosítóra. Egy natív teszt egyedi HKCU-tesztkulcsban
+valódi `RegNotifyChangeKeyValue` értesítésekkel ellenőrzi a futás közbeni
+telepítést, áthelyezést és törlést; a tesztkulcsot utána eltávolítja.
 
 Telepítési integrációs próba (külön ideiglenes telepítés és egyedi Run-érték):
 
@@ -67,6 +77,7 @@ használ, nem tényleges játékot.
 | --- | --- |
 | Steam / több könyvtár | Telepíts egy játékot a normál és egy másik meghajtón lévő könyvtárba. Rövid időn belül jelenjenek meg a listában, a Steam kezelőfelülete ne fogyasszon időt. |
 | Epic / több meghajtó | Telepíts játékot egy másik meghajtóra. A listában az `.item` szerinti hely és név jelenjen meg. A Launcher kezelőfelülete ne számítson. |
+| Ubisoft Connect | Telepíts egy játékot Connectből, akár egyéni meghajtóra. Újraindítás nélkül jelenjen meg Ubisoft forrással, és az első előtéri indítástól mérjen. A Connect és a UplayWebCore ne fogyasszon időt. Áthelyezés/eltávolítás után frissüljön a lista. |
 | Games új játék | Indítsd el a figyelőt, majd telepíts/másolj saját játékot a beállított Games mappa új almappájába, akár `bin` alá. Felismerés újraindítás nélkül. |
 | Első indítás / egyidejű telepítés | Telepítés után azonnal indítsd az új játékot, és maradj benne 30 másodpercig. Körülbelül 30 másodperc gyűljön, külön ellenőrzés nélkül. |
 | Alt+Tab / háttér | Mérj 30 másodpercet a játékban, majd válts más alkalmazásra 30 másodpercre. A háttéridő ne adódjon hozzá; a váltás körül kb. 1 másodperc eltérés elfogadható. |

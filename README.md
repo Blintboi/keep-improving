@@ -1,6 +1,7 @@
 # Játékidőfigyelő – Windows 11
 
-Sötét témájú, offline játékidőfigyelő személyes használatra. A napi közös keret
+Sötét témájú, offline játékidőfigyelő személyes használatra, Steam-, Epic- és
+Ubisoft Connect-támogatással. A napi közös keret
 alapból **120 perc**, előzetes figyelmeztetés **100 percnél**. Csak az előtérben
 lévő telepített játék ideje számít. A program figyelmeztet, és nem állít le játékot.
 
@@ -52,14 +53,22 @@ mappát használja; automatikus indulást csak a telepítő állít be.
 - **Epic:** a ProgramData alatti Epic-jegyzékmappa `.item` fájljai és a
   `LauncherInstalled.dat` tartalék telepítési index. A jegyzékekben szereplő
   tetszőleges meghajtón lévő telepítési helyek támogatottak.
+- **Ubisoft Connect:** a helyi `Software\Ubisoft\Launcher\Installs` bejegyzések
+  `InstallDir` értékei, valamint a `Uplay Install <azonosító>` eltávolítási
+  bejegyzések neve és telepítési helye. Kezeli a felhasználói és a gépszintű,
+  32/64 bites adatokat, valamint az egyéni meghajtókat. A Ubisoft Connect,
+  `upc.exe` és `UplayWebCore.exe` nem számít játéknak.
 - **Games:** a beállított gyökér minden közvetlen almappája egy játékcsoport;
   az alatta lévő `bin`, `engine` és más alkönyvtárak EXE-fájljai ugyanahhoz a
   játékhoz tartoznak. A gyökérben közvetlenül lévő EXE-k egy közös csoportot alkotnak.
 
 Induláskor összeveti a jegyzékeket a korábbi nyilvántartással. Működés közben
-natív `ReadDirectoryChangesW` eseményeket használ; nincs rendszeres teljes gép-
+natív `ReadDirectoryChangesW` fájleseményeket és a Ubisofthoz
+`RegNotifyChangeKeyValue` registryértesítéseket használ; nincs rendszeres teljes gép-
 vagy teljes játékkönyvtár-ellenőrzés. Steam/Epic-esemény után a kis méretű
-telepítési jegyzékeket olvassa újra. Games-eseménynél csak az érintett játékcsoportot
+telepítési jegyzékeket és a Ubisoft kis telepítési indexét olvassa újra.
+A registryfigyelés a kulcsok létrehozását, módosítását és törlését is követi.
+Games-eseménynél csak az érintett játékcsoportot
 ellenőrzi. Teljes Games-bejárás induláskor, Games-gyökér váltásakor és elveszett
 fájlrendszeresemények helyreállításakor szükséges. A mentési fájlok és textúrák
 szokásos változásai nem indítanak játékkeresést.
@@ -72,10 +81,15 @@ a korábban olvasott adatot, és ritkuló ütemben újrapróbálja az olvasást.
 **Az első indítás is számít:** az előtérben futó EXE teljes útvonalát közvetlenül
 ellenőrzi az ismert Steam-könyvtárak `steamapps/common` alkönyvtáraiban és a Games
 gyökérben. Epicnél az `.item` és a launcher közös indexe adja a telepítési helyet.
+Ubisoftnál a telepítési index mellett az ismert launcher `games` mappája is
+tartalék felismerési gyökér, már az első indításkor.
 Ha a jegyzék késik, legfeljebb az utolsó 120 másodperc valóban megfigyelt előtéri
 intervallumát tudja utólag besorolni. Nem talál ki játékidőt a folyamat puszta
 futása alapján. A Steam ideiglenes útvonal alapú rekordja a végleges AppID-hez
 olvad össze, az addig mért idő megőrzésével.
+A Ubisoft ideiglenes rekordja ugyanígy a végleges játékazonosítóhoz kerül.
+Ha egy korábban kézzel felvett telepítés később automatikusan felismerhetővé
+válik ugyanazon a helyen, a játékideje, kizárása és EXE-szabályai összeolvadnak.
 
 ## Mérés és értesítések
 
@@ -84,7 +98,7 @@ Az EXE teljes útvonala alapján mér; a játékmappán belüli gyermekfolyamato
 felismerhetők. Alt+Tab után a háttérben maradó játék ideje nem gyűlik tovább.
 Egyszerre mindig egy előtéri folyamat időszaka számít, ezért két futó játék nem
 fogyaszt kétszeres időt. Menüben, kontrollerrel és billentyűzet-/egéraktivitás
-nélkül is mér. Böngészős játékokat és a Steam/Epic kezelőfelületét kizárja.
+nélkül is mér. Böngészős játékokat és a Steam/Epic/Ubisoft kezelőfelületét kizárja.
 
 Alváshoz és hibernáláshoz a Windows ébren töltött idejét mérő
 `QueryUnbiasedInterruptTime` számlálót használja. Hosszú mintavételi szünetet,
@@ -116,6 +130,9 @@ az előzetes figyelmeztetés ideje és a Games mappa. A figyelmeztetési küszö
 kisebbnek kell lennie a napi keretnél. A meglévő mai időadatok beállításváltáskor
 is megmaradnak.
 
+Nem alapértelmezett Steam-, Epic- és Ubisoft Connect-helyek a beállításokban
+szintén hozzáadhatók. A korábbi beállítások a frissítéskor megmaradnak.
+
 - **Kizárás / engedélyezés:** a kiválasztott teljes játékot kapcsolja át.
 - **Új kézi játék:** kiválasztasz egy EXE-t, és nevet adsz neki.
 - **EXE hozzárendelése:** egy kiválasztott játékhoz rendel másik EXE-t, például
@@ -137,14 +154,21 @@ A javítások a következő mintáktól hatnak; korábbi időt nem törölnek.
   nem mindig különíthetők el. Ezeket kézzel ki lehet zárni.
 - Az EXE-nevek alapján kiszűrt konfigurálók, launcherek és segédprogramok között
   lehet valódi játék is. A pontos EXE-hozzárendelés felülírja ezt a heurisztikát.
-  Ismeretlen segédprogramot egyszer kézzel ki kell zárni. Böngészők és a Steam/Epic
+  Ismeretlen segédprogramot egyszer kézzel ki kell zárni. Böngészők és a Steam/Epic/Ubisoft
   általános kezelőfelülete kézi hozzárendeléssel sem válik játékká.
 - Egy Games almappa egy játékcsoport. Több, egymásba ágyazott játékot külön
   főmappákba érdemes telepíteni, vagy pontos EXE-hozzárendeléssel elkülöníteni.
   Könyvtárkapcsolatok/junctionök bejárását kerüli.
+- A Games mappába tett `.lnk` parancsikonok az eredeti telepítési helyre mutatnak.
+  Önmagukban nem regisztrálnak új játékot. Külső, launcher által nem ismert
+  játékhoz az eredeti EXE-t kell kézzel hozzáadni a figyelőben.
 - Epic tetszőleges új telepítési helye csak valamely helyi telepítési indexből
   ismerhető meg. Ha egyik index sem írja le időben, az ismeretlen helyen futó
   játék azonosítása késhet; 120 másodpercnél régebbi ismeretlen időszakot nem pótol.
+- Ubisoftnál a szabványos launcher- és telepítési registrybejegyzéseket kezeli.
+  Ha ezek hiányoznak, az ismert `games` mappák és az utolsó 120 másodperc
+  megfigyelt előtéri időszaka ad tartalék felismerést. Szokatlan, index nélküli
+  telepítéshez kézi EXE-hozzárendelés szükséges lehet.
 - Más helyre telepített gyermekfolyamat vagy nem olvasható, védett folyamat kézi
   hozzárendelést igényelhet. Ha a Windows nem engedi lekérdezni az EXE útvonalát,
   a program nem próbál jogosultságot emelni vagy anti-cheat védelmet megkerülni.
@@ -174,5 +198,6 @@ személyes játéklista. Részletes tesztelés: [TESZTELES.md](TESZTELES.md).
 Műszaki alapok: [előtéri ablak](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getforegroundwindow),
 [teljes folyamatútvonal](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-queryfullprocessimagenamew),
 [fájlrendszeresemények](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-readdirectorychangesw),
+[registryértesítések](https://learn.microsoft.com/en-us/windows/win32/api/winreg/nf-winreg-regnotifychangekeyvalue),
 [alvást kihagyó időmérés](https://learn.microsoft.com/en-us/windows/win32/sysinfo/interrupt-time),
 [tálcaikon](https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shell_notifyiconw).

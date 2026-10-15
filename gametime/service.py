@@ -27,16 +27,18 @@ class Debouncer:
 
 
 class DiscoveryService:
-    def __init__(self, settings, watcher_factory=None, discovery=None):
+    def __init__(self, settings, watcher_factory=None, discovery=None, registry_factory=None):
         if watcher_factory is None:
             from .win32 import DirectoryWatcher
             watcher_factory = DirectoryWatcher
         self.factory = watcher_factory
+        self.registry_factory = registry_factory
         self.discovery = discovery or Discovery(settings)
         self.results = Queue()
         self.condition = threading.Condition()
         self.debounce = Debouncer()
         self.watchers = {}
+        self.registry_watchers = {}
         self.running = True
         self.retry_count = 0
         self.known_game_roots = set()
@@ -92,6 +94,18 @@ class DiscoveryService:
                 watcher = self.factory(directory, recursive,
                                        lambda path, k=kind, t=target: self._event(k, t, path))
                 self.watchers[key] = watcher, target
+        registry_specs = self.discovery.registry_watch_specs()
+        for spec in list(self.registry_watchers):
+            watcher = self.registry_watchers[spec]
+            if spec not in registry_specs or watcher.error or not watcher.thread.is_alive():
+                watcher.close()
+                del self.registry_watchers[spec]
+        for spec in registry_specs:
+            if spec not in self.registry_watchers:
+                if self.registry_factory is None:
+                    from .win32 import RegistryWatcher
+                    self.registry_factory = RegistryWatcher
+                self.registry_watchers[spec] = self.registry_factory(*spec, lambda: self.request("launchers"))
         errors = [f"{key[0]}: {w.error}" for key, (w, _) in self.watchers.items() if w.error]
         if errors:
             self.results.put(("status", "Fájlrendszerfigyelési hiba: " + "; ".join(errors)))
@@ -100,7 +114,8 @@ class DiscoveryService:
         try:
             if kind == "launchers":
                 games = self.discovery.scan_launchers()
-                self.results.put(("launchers", games, list(self.discovery.libraries), list(self.discovery.hints), list(self.discovery.errors)))
+                self.results.put(("launchers", games, list(self.discovery.libraries), list(self.discovery.hints),
+                                  list(self.discovery.errors), list(self.discovery.ubisoft_game_roots)))
                 self._watches()
                 if self.discovery.errors:
                     self.results.put(("status", "Jegyzék olvasása késik; újrapróbálás folyamatban."))
@@ -151,13 +166,18 @@ class DiscoveryService:
                 # Handle repair only; no periodic source or disk scans.
                 if time.monotonic() - last_repair > 30:
                     broken = [key for key, (w, _) in self.watchers.items() if w.error or not w.thread.is_alive()]
-                    if broken:
+                    registry_broken = any(w.error or not w.thread.is_alive() for w in self.registry_watchers.values())
+                    if broken or registry_broken:
                         self._watches()
                         for _, _, kind in broken:
                             self.request(kind)
+                        if registry_broken:
+                            self.request("launchers")
                     last_repair = time.monotonic()
         finally:
             for watcher, _ in list(self.watchers.values()):
+                watcher.close()
+            for watcher in list(self.registry_watchers.values()):
                 watcher.close()
 
     def close(self):

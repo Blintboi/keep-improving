@@ -196,6 +196,64 @@ class DirectoryWatcher:
                 self.stop_event = None
 
 
+advapi = C.WinDLL("advapi32", use_last_error=True)
+api(advapi, "RegNotifyChangeKeyValue", [W.HANDLE, W.BOOL, W.DWORD, W.HANDLE, W.BOOL], W.LONG)
+
+
+class RegistryWatcher:
+    """Native registry notifications on a persistent thread, no polling."""
+    def __init__(self, hive, key_path, view, recursive, callback):
+        self.hive, self.key_path, self.view = hive, key_path, view
+        self.recursive, self.callback = recursive, callback
+        self.error = None
+        self.ready = threading.Event()
+        self.stop_event = k.CreateEventW(None, True, False, None)
+        self.thread = threading.Thread(target=self._run, daemon=True, name="registry-events")
+        self.thread.start()
+
+    def _run(self):
+        import winreg
+        key, event = None, None
+        try:
+            hive = winreg.HKEY_CURRENT_USER if self.hive == "HKCU" else winreg.HKEY_LOCAL_MACHINE
+            key = winreg.OpenKey(hive, self.key_path, 0, winreg.KEY_READ | winreg.KEY_NOTIFY | self.view)
+            event = k.CreateEventW(None, True, False, None)
+            handles = (W.HANDLE * 2)(self.stop_event, event)
+            def arm():
+                k.ResetEvent(event)
+                code = advapi.RegNotifyChangeKeyValue(int(key), self.recursive, 0x10000005, event, True)
+                if code:
+                    raise C.WinError(code)
+            arm()
+            self.ready.set()
+            while True:
+                wait = k.WaitForMultipleObjects(2, handles, False, 0xFFFFFFFF)
+                if wait == 0:
+                    break
+                if wait != 1:
+                    raise C.WinError(C.get_last_error())
+                arm()  # Rearm before dispatching, so changes during a scan aren't lost.
+                self.callback()
+        except Exception as exc:
+            self.error = str(exc)
+            log.warning("A registry figyelése megszakadt: %s\\%s: %s", self.hive, self.key_path, exc)
+            self.callback()
+        finally:
+            self.ready.set()
+            if key is not None:
+                key.Close()  # Cancels the registered notification before releasing its event.
+            if event:
+                k.CloseHandle(event)
+
+    def close(self):
+        if self.stop_event:
+            k.SetEvent(self.stop_event)
+            self.thread.join(timeout=2)
+            if not self.thread.is_alive():
+                k.CloseHandle(self.stop_event)
+                self.stop_event = None
+
+
 class WNDCLASS(C.Structure):
     _fields_ = [("style", W.UINT), ("lpfnWndProc", WNDPROC), ("cbClsExtra", C.c_int),
                 ("cbWndExtra", C.c_int), ("hInstance", W.HINSTANCE), ("hIcon", W.HICON),

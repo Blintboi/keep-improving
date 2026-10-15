@@ -18,6 +18,9 @@ def within(path, root):
 BROWSERS = {"chrome.exe", "msedge.exe", "firefox.exe", "opera.exe", "brave.exe",
             "vivaldi.exe", "iexplore.exe", "librewolf.exe", "waterfox.exe", "browser.exe"}
 CLIENTS = {"steam.exe", "steamwebhelper.exe", "epicgameslauncher.exe", "epicwebhelper.exe"}
+CLIENTS.update({"ubisoftconnect.exe", "ubisoftgamelauncher.exe", "ubisoftgamelauncher64.exe", "upc.exe",
+                "uplay.exe", "uplaywebcore.exe", "uplayservice.exe", "ubisoftextension.exe", "upcelevationservice.exe"})
+LAUNCHER_SOURCES = ("Steam", "Epic", "Ubisoft")
 HELPERS = re.compile(r"unins|uninstall|(^|[-_ ])setup|^install|launcher|updater|crash|"
                      r"helper|config|redist|vcredist|dxsetup|benchmark|anticheat|easyanticheat", re.I)
 CHESS = re.compile(r"chess|sakk|stockfish|(^|[\W_])(lc0|fritz|houdini|komodo)([\W_]|$)", re.I)
@@ -52,6 +55,7 @@ class Settings:
     limit_seconds: float = 7200
     steam_roots: list = field(default_factory=list)
     epic_manifest_dirs: list = field(default_factory=list)
+    ubisoft_roots: list = field(default_factory=list)
 
     def validate(self):
         if not (0 < self.warning_seconds < self.limit_seconds <= 86400):
@@ -70,6 +74,7 @@ class Catalog:
         self.rules = rules or {}  # exact executable -> game ID; None excludes
         self.steam_libraries = []
         self.epic_hints = []
+        self.ubisoft_libraries = []
 
     def apply(self, games, scope):
         for key, game in list(self.games.items()):
@@ -109,6 +114,10 @@ class Catalog:
             if within(path, game.root):
                 self.games[game.id] = game
                 return game if self.enabled(game) else None
+        for root in self.ubisoft_libraries:
+            game = self._under(path, root, "Ubisoft")
+            if game:
+                return game
         return self._under(path, self.settings.games_root, "Games")
 
     def explicitly_ignored(self, path):
@@ -130,7 +139,7 @@ class Catalog:
             return None
         name = parts[0] if len(parts) > 1 else "Games (gyökér)"
         game_root = os.path.join(root, parts[0]) if len(parts) > 1 else str(root)
-        gid = ("games:" if source == "Games" else "pending:steam:") + norm(game_root)
+        gid = ("games:" if source == "Games" else f"pending:{source.lower()}:") + norm(game_root)
         game = Game(gid, name, source, game_root)
         self.games[gid] = game
         return game if self.enabled(game) else None

@@ -8,7 +8,7 @@ from tkinter import ttk, filedialog
 import uuid
 import winsound
 import ctypes
-from .model import Catalog, Game, norm
+from .model import Catalog, Game, norm, LAUNCHER_SOURCES
 from .service import DiscoveryService
 from .tracker import Tracker, Alert
 from . import win32
@@ -281,7 +281,7 @@ class App:
         refresh()
 
     def settings_dialog(self):
-        window = self._dialog("Beállítások", "700x490")
+        window = self._dialog("Beállítások", "700x560")
         frame = ttk.Frame(window, padding=20)
         frame.pack(fill="both", expand=True)
         variables = {}
@@ -289,7 +289,8 @@ class App:
                                     ("warning", "Előzetes figyelmeztetés ennyi perc után", self.settings.warning_seconds / 60),
                                     ("games", "Games mappa teljes útvonala", self.settings.games_root),
                                     ("steam", "További Steam-telepítések (pontosvesszővel)", ";".join(self.settings.steam_roots)),
-                                    ("epic", "További Epic-jegyzékmappák (pontosvesszővel)", ";".join(self.settings.epic_manifest_dirs))]:
+                                    ("epic", "További Epic-jegyzékmappák (pontosvesszővel)", ";".join(self.settings.epic_manifest_dirs)),
+                                    ("ubisoft", "További Ubisoft Connect-telepítések (pontosvesszővel)", ";".join(self.settings.ubisoft_roots))]:
             ttk.Label(frame, text=label).pack(anchor="w", pady=(7, 3))
             variables[key] = tk.StringVar(value=f"{initial:g}" if isinstance(initial, float) else initial)
             ttk.Entry(frame, textvariable=variables[key]).pack(fill="x")
@@ -307,7 +308,8 @@ class App:
                                     float(variables["warning"].get().replace(",", ".")) * 60,
                                     float(variables["limit"].get().replace(",", ".")) * 60,
                                     [p.strip() for p in variables["steam"].get().split(";") if p.strip()],
-                                    [p.strip() for p in variables["epic"].get().split(";") if p.strip()]).validate()
+                                    [p.strip() for p in variables["epic"].get().split(";") if p.strip()],
+                                    [p.strip() for p in variables["ubisoft"].get().split(";") if p.strip()]).validate()
                 self.tracker.flush()
                 self.store.save_settings(settings)
                 self.settings = self.catalog.settings = settings
@@ -362,10 +364,11 @@ class App:
                 self.status.set(result[1])
             elif kind == "launchers":
                 from .discovery import preserve_unreadable
-                _, games, libraries, hints, errors = result
+                _, games, libraries, hints, errors, ubisoft_roots = result
                 games = preserve_unreadable(games, self.catalog.games.values(), errors)
                 self.catalog.steam_libraries, self.catalog.epic_hints = libraries, hints
-                self.tracker.reconcile(games, lambda g: g.source in ("Steam", "Epic"))
+                self.catalog.ubisoft_libraries = ubisoft_roots
+                self.tracker.reconcile(games, lambda g: g.source in LAUNCHER_SOURCES)
                 self.last_rows = None
             elif kind == "games":
                 _, games, group = result

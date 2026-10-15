@@ -110,8 +110,10 @@ class Tracker:
 
     def reconcile(self, games, scope):
         self.flush()
-        self.store.reconcile(games, scope)
+        aliases = self.store.reconcile(games, scope)
         self.catalog.apply(games, scope)
+        for old_id in aliases:
+            self.catalog.games.pop(old_id, None)
         self.catalog.overrides = self.store.overrides()
         self.catalog.rules = self.store.rules()
         self.cache.clear()

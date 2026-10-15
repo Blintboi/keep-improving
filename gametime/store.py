@@ -1,7 +1,7 @@
 from dataclasses import asdict
 import json
 import sqlite3
-from .model import Game, Settings, norm
+from .model import Game, Settings, norm, LAUNCHER_SOURCES
 
 
 class Store:
@@ -55,7 +55,9 @@ class Store:
                     self.db.execute("UPDATE games SET installed=0 WHERE id=?", (prior.id,))
             for game in games:
                 for prior in old:
-                    if prior.id != game.id and prior.id.startswith("pending:") and norm(prior.root) == norm(game.root):
+                    if (prior.id != game.id and norm(prior.root) == norm(game.root)
+                            and (prior.id.startswith("pending:") or
+                                 (prior.source == "Kézi" and game.source in LAUNCHER_SOURCES))):
                         self._merge(prior.id, game.id)
                         aliases[prior.id] = game.id
             self.upsert(games)

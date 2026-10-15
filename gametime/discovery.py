@@ -60,6 +60,7 @@ def preserve_unreadable(games, previous, errors):
         if game.id in found:
             continue
         if any(within(game.metadata, error) or (game.source == "Steam" and Path(error).name == "libraryfolders.vdf")
+               or (game.source == "Ubisoft" and error.startswith("registry:Ubisoft:"))
                for error in errors):
             found[game.id] = game
     return list(found.values())
@@ -88,7 +89,7 @@ def epic_dirs():
 
 
 class Discovery:
-    def __init__(self, settings, steam=None, epic=None, launcher_dat=None):
+    def __init__(self, settings, steam=None, epic=None, launcher_dat=None, ubisoft=True):
         self.settings = settings
         self.roots = steam if steam is not None else list(dict.fromkeys(steam_roots() + settings.steam_roots))
         self.epic_dirs = epic if epic is not None else list(dict.fromkeys(epic_dirs() + settings.epic_manifest_dirs))
@@ -98,6 +99,9 @@ class Discovery:
         self.hints = []
         self.cache = {}  # Preserve last complete metadata during partial writes.
         self.errors = []
+        from .ubisoft import UbisoftSource
+        self.ubisoft = UbisoftSource(settings.ubisoft_roots) if ubisoft is True else ubisoft or None
+        self.ubisoft_game_roots = []
 
     def _read_vdf(self, path):
         try:
@@ -190,6 +194,10 @@ class Discovery:
         # .item names take precedence over the launcher-wide fallback index.
         found = {g.id: g for g in hints}
         found.update((g.id, g) for g in games)
+        if self.ubisoft:
+            found.update((g.id, g) for g in self.ubisoft.scan())
+            self.ubisoft_game_roots = list(self.ubisoft.game_roots)
+            self.errors.extend(self.ubisoft.errors)
         return list(found.values())
 
     def scan_games(self, group=None):
@@ -230,6 +238,7 @@ class Discovery:
                        (str(Path(lib) / "steamapps" / "common"), False, "launchers")]
         wanted += [(p, False, "launchers") for p in self.epic_dirs]
         wanted += [(str(self.launcher_dat.parent), False, "launchers")]
+        wanted += [(root, False, "launchers") for root in self.ubisoft_game_roots]
         specs = {}
         for target, recursive, kind in wanted:
             existing = Path(target)
@@ -240,3 +249,6 @@ class Discovery:
                 # Multiple missing targets may share an ancestor.
                 specs.setdefault((str(existing), actual_recursive, kind), []).append(target)
         return {key: tuple(dict.fromkeys(targets)) for key, targets in specs.items()}
+
+    def registry_watch_specs(self):
+        return self.ubisoft.watch_specs() if self.ubisoft else set()
