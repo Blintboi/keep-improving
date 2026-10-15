@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+data/
+install.json
+*.log
+*.sqlite3*
+.venv/
+test-reports/

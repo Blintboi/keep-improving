@@ -1,0 +1,64 @@
+JÁTÉKIDŐFIGYELŐ – TESZTEREDMÉNYEK
+Ellenőrzés dátuma: 2026. október 15.
+Környezet: Windows, Python 3.12.10, Tk 8.6, SQLite 3.49.1.
+
+AUTOMATIZÁLT TESZTEK: 60 / 60 sikeres (9,402 másodperc).
+  py -3 -B -m unittest discover -s tests -q
+
+53 logikai teszt és 7 natív Windows-teszt. Lefedik a Steam/Epic/Games
+felismerést, több könyvtárat, új telepítési eseményeket, első indítást,
+versenyhelyzetet és késői besorolást, előtér/háttér mintákat, két játék
+közös keretét, bevitel nélküli mérést, alvást, zárolást, óraugrást,
+mentést, újraindítást, éjfélt, küszöböket, ismételt értesítéseket,
+sakkot, manuális szabályokat, eltávolítást és áthelyezést.
+
+A natív tesztek valódi Windows-fájlrendszereseményeket használnak
+ideiglenes tesztmappákban, továbbá valódi folyamatútvonal-lekérdezést
+és mutexet. A Steam/Epic jegyzékek ezekben szimulált tesztadatok.
+Valódi Steam- vagy Epic-játékot nem telepítettünk a teszt kedvéért.
+
+FELÜLETI PRÓBA: 5 / 5 ellenőrzés sikeres.
+  py -3 -B tests\gui_smoke.py --ui-only --report <jelentés.json>
+
+Valódi sötét Tk-főablak, beállítások és popupok; sötét címsorok vizuális
+ellenőrzése; natív tálcaikon; topmost popup; rejtett főablak mellett is
+látható popup; a nyugtázó gomb bezárja az értesítést. A saját tesztablakok
+képeit megvizsgáltuk, a főablak alsó vezérlői is teljesen láthatók.
+
+A valódi előtéri méréshez készült szintetikus ablakpróbát a Windows
+fókuszátadási korlátozása megakadályozta: egy másik alkalmazás maradt
+előtérben. Ezt a próbát nem tekintjük sikeresnek. Az előtéri mérés
+logikáját automatizált mintákkal teszteltük; tényleges játékban az
+Alt+Tab, kontroller, alvás/hibernálás és kizárólagos teljes képernyő
+kézi próbája a TESZTELES.md szerint még szükséges.
+
+TELEPÍTÉSI INTEGRÁCIÓ: 14 / 14 logikai ellenőrzés sikeres.
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\install_smoke.ps1 -ReportPath <jelentés.json>
+
+Elkülönített ideiglenes telepítés szóközt tartalmazó útvonalra;
+ismételt telepítés; tárolt játékidő és kivételek megőrzése;
+bejelentkezési Run-bejegyzés; tényleges háttérindítás; futás közbeni
+ellenőrzés; szabályos leállítás; automatikus indulás eltávolítása;
+adatbázis és idegen tesztfájl megőrzése; programfájlok eltávolítása;
+megismételhető eltávolítás. A teszt saját Run-bejegyzése nem maradt meg.
+A telepítő a meglévő helyi launcherjegyzékeket is beolvasta; ez nem
+jelentett új játék telepítését vagy játék tényleges használatát.
+
+Rövid, hat másodperces háttérmérési minta: körülbelül 40,2 MiB memória,
+0,52% CPU egy processzormagra vetítve. Ez pillanatnyi próba, nem
+általános teljesítménygarancia. Nincs periodikus teljes gépkeresés.
+
+ADATBIZTONSÁG ÉS EGYÜTTÉLÉS
+A játékfigyelő megvalósítása külön könyvtárban történt; a másik
+munkamappában fejlesztett lefekvési emlékeztető fájljaihoz nem írt.
+A játékfigyelő nem hoz létre lefekvési ütemezést.
+A tesztek nem módosítottak játékfájlokat. A kiadott csomagban nincs
+személyes játéklista, adatbázis, napló vagy GitHub-hitelesítő adat.
+
+ISMERT KORLÁTOK
+A teljesen automatikus besorolás heurisztikus; a bizonytalan EXE-k
+kézzel javíthatók. Epic ismeretlen új helye valamelyik helyi jegyzék
+megjelenéséig késhet; legfeljebb 120 másodperc megfigyelt idő pótolható.
+Váratlan kilépéskor általában legfeljebb 10 másodperc nem mentett idő
+veszhet el. Biztonságos asztal vagy kizárólagos teljes képernyő fölött
+a popup nem garantálható, ezért értesítési hang is van.
