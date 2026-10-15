@@ -106,6 +106,7 @@ class Discovery:
         from .riot import RiotSource
         self.riot = RiotSource() if riot is True else riot or None
         self.riot_hints = []
+        self.install_roots = set()
 
     def _read_vdf(self, path):
         try:
@@ -206,6 +207,7 @@ class Discovery:
             found.update((g.id, g) for g in self.riot.scan())
             self.riot_hints = list(self.riot.hints)
             self.errors.extend(self.riot.errors)
+        self.install_roots.update(game.root for game in found.values())
         return list(found.values())
 
     def scan_games(self, group=None):
@@ -261,6 +263,12 @@ class Discovery:
                 actual_recursive = recursive and norm(existing) == norm(target)
                 # Multiple missing targets may share an ancestor.
                 specs.setdefault((str(existing), actual_recursive, kind), []).append(target)
+        for target in self.install_roots:
+            existing = Path(target).parent
+            while not existing.is_dir() and existing.parent != existing:
+                existing = existing.parent
+            if existing.is_dir():
+                specs.setdefault((str(existing), False, "installs"), []).append(target)
         return {key: tuple(dict.fromkeys(targets)) for key, targets in specs.items()}
 
     def registry_watch_specs(self):

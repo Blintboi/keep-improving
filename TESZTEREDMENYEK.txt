@@ -1,11 +1,11 @@
-JÁTÉKIDŐFIGYELŐ 1.3.0 – TESZTEREDMÉNYEK
+JÁTÉKIDŐFIGYELŐ 1.3.1 – TESZTEREDMÉNYEK
 Ellenőrzés dátuma: 2026. október 15.
 Környezet: Windows, Python 3.12.10, Tk 8.6, SQLite 3.49.1.
 
-AUTOMATIZÁLT TESZTEK: 112 / 112 sikeres (30,430 másodperc).
+AUTOMATIZÁLT TESZTEK: 116 / 116 sikeres (53,579 másodperc).
   py -3 -B -m unittest discover -s tests -q
 
-100 logikai teszt és 12 natív Windows-teszt. Lefedik a Steam/Epic/Ubisoft/Riot/Games
+100 logikai teszt és 16 natív Windows-teszt. Lefedik a Steam/Epic/Ubisoft/Riot/Games
 felismerést, több könyvtárat, új telepítési eseményeket, első indítást,
 versenyhelyzetet és késői besorolást, előtér/háttér mintákat, két játék
 közös keretét, bevitel nélküli mérést, alvást, zárolást, óraugrást,
@@ -41,6 +41,14 @@ könyvtárkapcsolatok elutasítását. A natív próbák valódi
 .lnk fájlt olvasnak vissza, és futó alkalmazással ellenőrzik új szimulált Steam-
 és kézi játék parancsikonjának automatikus létrehozását.
 
+A hub natív próbája az automatikus visszavonást és újbóli felvételt is
+ellenőrzi: Steam-jegyzék törlése; kézi EXE törlése megmaradó mappával;
+EXE visszatelepítése; Epic-telepítési mappa közvetlen törlése/visszaállítása,
+változatlan jegyzék mellett. A korábbi időadatok megmaradnak.
+Négy új natív tálcateszt lefedi a v4-es és régi Windows-eseményeket,
+a saját ikon betöltését, a natív menü elvetését, a bal kattintásra történő
+megnyitást, az X utáni háttérműködést és a kizárólag külön parancsra történő kilépést.
+
 FELÜLETI PRÓBA: 5 / 5 ellenőrzés sikeres.
   py -3 -B tests\gui_smoke.py --ui-only --report <jelentés.json>
 
@@ -70,7 +78,7 @@ A telepítő a meglévő helyi launcherjegyzékeket is beolvasta; ez nem
 jelentett új játék telepítését vagy játék tényleges használatát.
 
 Rövid, hat másodperces háttérmérési minta a telepített, bekapcsolt hubbal,
-a kezdeti szinkronizálás után: körülbelül 45,5 MiB memória, a mérésben
+a kezdeti szinkronizálás után: körülbelül 47,9 MiB memória, a mérésben
 0,0% CPU egy processzormagra vetítve. Ez pillanatnyi próba, nem
 általános teljesítménygarancia. Nincs periodikus teljes gépkeresés.
 

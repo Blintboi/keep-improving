@@ -274,21 +274,23 @@ class HubNativeTests(unittest.TestCase):
             games = base / "Gaming Hub"
             steam = base / "Steam"
             (steam / "steamapps/common").mkdir(parents=True)
+            epic = base / "Epic Manifests"
+            epic.mkdir()
             settings = Settings(games_root=str(games), hub_enabled=True)
             store = Store(base / "usage.sqlite3")
             store.save_settings(settings)
             store.add_usage({("2000-01-01", "fixture:prior"): 123})
-            discovery = Discovery(settings, [str(steam)], [], base / "none.dat", ubisoft=False, riot=False)
+            discovery = Discovery(settings, [str(steam)], [str(epic)], base / "none.dat", ubisoft=False, riot=False)
             service = DiscoveryService(settings, discovery=discovery)
             hub = Hub(base / "data", locations=[])
             worker = HubWorker(base / "data", hub)
             root = tk.Tk()
             app = App(root, store, base / "data", background=True, service=service, hub=worker)
-            def await_path(path, timeout=14):
+            def await_path(path, timeout=14, exists=True):
                 deadline = time.monotonic() + timeout
                 while time.monotonic() < deadline:
                     root.update()
-                    if path.exists():
+                    if path.exists() == exists:
                         return
                     time.sleep(.025)
                 self.fail("Hub shortcut did not appear while the app was running: " + str(path))
@@ -317,6 +319,30 @@ class HubNativeTests(unittest.TestCase):
                 saved = next(r for r in records if Path(r["path"]).name == "Other Source.lnk")
                 self.assertEqual(norm(saved["target"]), norm(exe))
                 self.assertEqual(store.totals("2000-01-01"), {"fixture:prior": 123})
+                store.add_usage({("2000-01-01", game.id): 45, ("2000-01-01", "steam:123"): 30})
+                # A real metadata deletion retires a managed platform shortcut.
+                (steam / "steamapps/appmanifest_123.acf").unlink()
+                await_path(games / "Fixture Steam.url", exists=False)
+                # A manual uninstall can leave its folder and saves behind.
+                exe.unlink()
+                await_path(games / "Other Source.lnk", exists=False)
+                self.assertTrue(manual_root.is_dir())
+                self.assertFalse(next(g.installed for g in store.games() if g.id == game.id))
+                self.assertEqual(store.totals("2000-01-01"), {"fixture:prior": 123, game.id: 45, "steam:123": 30})
+                exe.write_bytes(b"MZ fixture")
+                await_path(games / "Other Source.lnk")
+                self.assertTrue(next(g.installed for g in store.games() if g.id == game.id))
+                # A direct removal of an Epic installation is noticed even while
+                # its launcher index remains, including dots in the folder name.
+                epic_root = base / "Another Drive/Epic.Game.1"
+                epic_root.mkdir(parents=True)
+                (epic / "fixture.item").write_text(json.dumps({"AppName": "fixture_app", "DisplayName": "Fixture Epic",
+                                                              "InstallLocation": str(epic_root)}))
+                await_path(games / "Fixture Epic.url")
+                epic_root.rmdir()  # This test's empty synthetic installation only.
+                await_path(games / "Fixture Epic.url", exists=False)
+                epic_root.mkdir()
+                await_path(games / "Fixture Epic.url")
                 self.assertFalse(any(r.get("error") for r in list(worker.results.queue)))
             finally:
                 app.close()

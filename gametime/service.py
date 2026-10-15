@@ -43,6 +43,8 @@ class DiscoveryService:
         self.retry_count = 0
         self.known_game_roots = set()
         self.reconfigure = None
+        self.manual_specs = {}
+        self.manual_pending = None
         self.thread = threading.Thread(target=self._run, daemon=True, name="game-discovery")
 
     def start(self):
@@ -58,9 +60,36 @@ class DiscoveryService:
             self.reconfigure = settings
             self.condition.notify()
 
+    def watch_manual(self, games, rules):
+        """Watch exact manually assigned EXEs and their installation roots only."""
+        wanted = {}
+        for game in games:
+            if game.source != "Kézi":
+                continue
+            exes = [path for path, gid in rules.items() if gid == game.id]
+            if not exes:
+                continue  # Superseded manual records have no remaining assignments.
+            targets = exes + [game.root]
+            for target in targets:
+                parent = Path(target).parent
+                # WindowsApps' container is protected; the package's EXE directory
+                # itself still reports deletion without opening the container.
+                if parent.name.lower() == "windowsapps":
+                    continue
+                wanted.setdefault(str(parent), set()).add(str(target))
+        wanted = {key: tuple(sorted(values)) for key, values in wanted.items()}
+        with self.condition:
+            if wanted != (self.manual_pending if self.manual_pending is not None else self.manual_specs):
+                self.manual_pending = wanted
+                self.condition.notify()
+
     def _event(self, kind, target, path):
         targets = target if isinstance(target, tuple) else (target,)
         if path is not None and not any(within(path, t) or within(t, path) for t in targets):
+            return
+        if kind in ("manual", "installs"):
+            if path is None or any(norm(path) == norm(t) or within(t, path) for t in targets):
+                self.request(kind)
             return
         if kind == "shortcuts":
             if path is None or Path(path).suffix.lower() in (".lnk", ".url", "") or Path(path).is_dir():
@@ -89,6 +118,15 @@ class DiscoveryService:
 
     def _watches(self):
         desired = self.discovery.watch_specs()
+        for directory, targets in self.manual_specs.items():
+            existing = Path(directory)
+            while not existing.is_dir() and existing.parent != existing:
+                existing = existing.parent
+            if existing.name.lower() == "windowsapps":
+                continue
+            if existing.is_dir():
+                key = (str(existing), False, "manual")
+                desired[key] = tuple(sorted(set(desired.get(key, ())) | set(targets)))
         for key in list(self.watchers):
             watcher, target = self.watchers[key]
             if key not in desired or watcher.error or not watcher.thread.is_alive() or desired[key] != target:
@@ -118,7 +156,13 @@ class DiscoveryService:
 
     def _scan(self, kind, group=""):
         try:
-            if kind == "shortcuts":
+            if kind == "installs":
+                self._scan("launchers")
+                self.results.put(("availability",))
+            elif kind == "manual":
+                self._watches()
+                self.results.put(("manual",))
+            elif kind == "shortcuts":
                 self.results.put(("shortcuts",))
             elif kind == "launchers":
                 games = self.discovery.scan_launchers()
@@ -159,6 +203,9 @@ class DiscoveryService:
             last_repair = time.monotonic()
             while self.running:
                 with self.condition:
+                    if self.manual_pending is not None:
+                        self.manual_specs, self.manual_pending = self.manual_pending, None
+                        self.debounce.add(("manual", ""), time.monotonic() - 2)
                     if self.reconfigure:
                         self.discovery = Discovery(self.reconfigure)
                         self.reconfigure = None

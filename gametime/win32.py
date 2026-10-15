@@ -282,6 +282,15 @@ api(u, "CreateWindowExW", [W.DWORD, W.LPCWSTR, W.LPCWSTR, W.DWORD, C.c_int, C.c_
 api(u, "DefWindowProcW", [W.HWND, W.UINT, WPARAM, LPARAM], LRESULT)
 api(u, "DestroyWindow", [W.HWND], W.BOOL)
 api(u, "LoadIconW", [W.HINSTANCE, C.c_void_p], W.HICON)
+api(u, "LoadImageW", [W.HINSTANCE, W.LPCWSTR, W.UINT, C.c_int, C.c_int, W.UINT], W.HANDLE)
+api(u, "DestroyIcon", [W.HICON], W.BOOL)
+api(u, "CreatePopupMenu", [], W.HMENU)
+api(u, "AppendMenuW", [W.HMENU, W.UINT, WPARAM, W.LPCWSTR], W.BOOL)
+api(u, "DestroyMenu", [W.HMENU], W.BOOL)
+api(u, "SetMenuDefaultItem", [W.HMENU, W.UINT, W.UINT], W.BOOL)
+api(u, "TrackPopupMenuEx", [W.HMENU, W.UINT, C.c_int, C.c_int, W.HWND, C.c_void_p], W.UINT)
+api(u, "GetCursorPos", [C.POINTER(W.POINT)], W.BOOL)
+api(u, "PostMessageW", [W.HWND, W.UINT, WPARAM, LPARAM], W.BOOL)
 api(s, "Shell_NotifyIconW", [W.DWORD, C.POINTER(NOTIFYICONDATA)], W.BOOL)
 
 
@@ -291,9 +300,14 @@ class Tray:
         self.on_open, self.on_menu, self.on_devices = on_open, on_menu, on_devices
         self.taskbar_created = u.RegisterWindowMessageW("TaskbarCreated")
         self.proc = WNDPROC(self._message)
-        self.class_name = "GameTimeTray-" + str(os.getpid())
+        self.class_name = f"GameTimeTray-{os.getpid()}-{id(self)}"
         self.module = k.GetModuleHandleW(None)
-        self.wc = WNDCLASS(lpfnWndProc=self.proc, hInstance=self.module, lpszClassName=self.class_name)
+        self.icon = u.LoadImageW(None, str(Path(__file__).with_name("app.ico")), 1, 32, 32, 0x10)
+        self.owns_icon = bool(self.icon)
+        self.icon = self.icon or u.LoadIconW(None, C.c_void_p(32512))
+        self.menu_pending = False
+        self.menu_position = None
+        self.wc = WNDCLASS(lpfnWndProc=self.proc, hInstance=self.module, hIcon=self.icon, lpszClassName=self.class_name)
         if not u.RegisterClassW(C.byref(self.wc)):
             raise C.WinError(C.get_last_error())
         self.window = u.CreateWindowExW(0, self.class_name, "Játékidőfigyelő", 0, 0, 0, 0, 0,
@@ -301,7 +315,7 @@ class Tray:
         if not self.window:
             raise C.WinError(C.get_last_error())
         self.data = NOTIFYICONDATA(cbSize=C.sizeof(NOTIFYICONDATA), hWnd=self.window, uID=1,
-                                   uFlags=7, uCallbackMessage=0x8001, hIcon=u.LoadIconW(None, C.c_void_p(32516)))
+                                   uFlags=7 | 0x80, uCallbackMessage=0x8001, hIcon=self.icon)
         self.data.szTip = "Játékidőfigyelő – kattints a megnyitáshoz"
         self._add()
 
@@ -310,15 +324,50 @@ class Tray:
         if not self.available:
             log.warning("A tálcaikon nem adható hozzá; a kezelőablak elérhető marad.")
         self.data.uVersion = 4
-        s.Shell_NotifyIconW(4, C.byref(self.data))
+        self.version4 = bool(s.Shell_NotifyIconW(4, C.byref(self.data)))
+
+    def popup_menu(self, items):
+        """Native context menu; only an explicit returned command can quit."""
+        menu = u.CreatePopupMenu()
+        if not menu:
+            self.menu_pending = False
+            raise C.WinError(C.get_last_error())
+        try:
+            for item in items:
+                command, caption = item if item is not None else (0, None)
+                if not u.AppendMenuW(menu, 0 if caption else 0x800, command, caption):
+                    raise C.WinError(C.get_last_error())
+            u.SetMenuDefaultItem(menu, 1, False)
+            point = W.POINT()
+            u.GetCursorPos(C.byref(point))
+            x, y = self.menu_position or (point.x, point.y)
+            if (x, y) == (-1, -1):
+                x, y = point.x, point.y
+            u.SetForegroundWindow(self.window)
+            # RETURNCMD | NONOTIFY | RIGHTBUTTON | BOTTOMALIGN
+            choice = u.TrackPopupMenuEx(menu, 0x100 | 0x80 | 0x02 | 0x20, x, y, self.window, None)
+            u.PostMessageW(self.window, 0, 0, 0)
+            if not choice:
+                s.Shell_NotifyIconW(3, C.byref(self.data))
+            return choice
+        finally:
+            self.menu_pending = False
+            u.DestroyMenu(menu)
 
     def _message(self, hwnd, msg, wp, lp):
         try:
             if msg == 0x8001:
                 event = lp & 0xFFFF
-                if event in (0x202, 0x203, 0x400, 0x401):
+                if self.version4 and ((lp >> 16) & 0xFFFF) != self.data.uID:
+                    return 0
+                opens = (0x400, 0x401) if self.version4 else (0x202,)
+                menu_event = 0x7B if self.version4 else 0x205
+                if event in opens:
                     self.on_open()
-                elif event in (0x205, 0x7B):
+                elif event == menu_event and not self.menu_pending:
+                    self.menu_pending = True
+                    self.menu_position = ((C.c_short(wp & 0xFFFF).value, C.c_short((wp >> 16) & 0xFFFF).value)
+                                          if self.version4 else None)
                     self.on_menu()
                 return 0
             if msg == self.taskbar_created and hasattr(self, "data"):
@@ -337,3 +386,6 @@ class Tray:
         s.Shell_NotifyIconW(2, C.byref(self.data))
         u.DestroyWindow(self.window)
         u.UnregisterClassW(self.class_name, self.module)
+        if self.owns_icon:
+            u.DestroyIcon(self.icon)
+            self.owns_icon = False

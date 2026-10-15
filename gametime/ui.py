@@ -1,5 +1,6 @@
 """Small dark Tk interface. All state changes go through the main Tk thread."""
 from datetime import datetime
+from dataclasses import replace
 import logging
 import os
 from pathlib import Path
@@ -95,18 +96,18 @@ class App:
         root.protocol("WM_DELETE_WINDOW", root.withdraw)
         self._build()
         dark_title(root)
-        self.menu = tk.Menu(root, tearoff=False, bg=PANEL, fg=FG, activebackground="#345579", activeforeground=FG)
-        self.menu.add_command(label="Játékidő megnyitása", command=self.show)
-        self.menu.add_command(label="Beállítások", command=self.settings_dialog)
-        self.menu.add_separator()
-        self.menu.add_command(label="Kilépés a figyelőből", command=self.close)
+        try:
+            root.iconbitmap(default=str(Path(__file__).with_name("app.ico")))
+        except tk.TclError:
+            log.warning("Az alkalmazásikon nem olvasható")
         self.tray = win32.Tray(lambda: root.after(0, self.show),
                                lambda: root.after(0, self.tray_menu),
                                self.devices_changed)
         if background and self.tray.available:
             root.withdraw()
+        self.refresh_manual_availability()
         self.service.start()
-        root.after(200, self.tick)
+        self.tick_timer = root.after(200, self.tick)
 
     def _build(self):
         frame = ttk.Frame(self.root, padding=22)
@@ -144,6 +145,7 @@ class App:
 
     def show(self):
         self.root.deiconify()
+        self.root.state("normal")
         self.root.lift()
         win32.u.SetForegroundWindow(dark_title(self.root))
 
@@ -154,16 +156,41 @@ class App:
             self.message("A Games mappa még nem érhető el. Ellenőrizd az útvonalat a beállításokban.")
 
     def tray_menu(self):
-        self.root.update_idletasks()
-        win32.u.SetForegroundWindow(self.tray.window)
-        try:
-            self.menu.tk_popup(self.root.winfo_pointerx(), self.root.winfo_pointery())
-        finally:
-            self.menu.grab_release()
+        if self.closed:
+            return
+        choice = self.tray.popup_menu([(1, "Játékidőfigyelő megnyitása"), (2, "Gaming Hub megnyitása"),
+                                       (3, "Beállítások"), (4, "Játéklista és hub frissítése"),
+                                       None, (5, "Kilépés a figyelőből")])
+        action = {1: self.show, 2: self.open_games, 3: self.settings_dialog,
+                  4: self.refresh_sources, 5: self.close}.get(choice)
+        if action:
+            action()
+
+    def refresh_sources(self):
+        self.devices_changed()
+        self.hub_fingerprint = None
+
+    def refresh_manual_availability(self):
+        games = [game for game in self.store.games() if game.source == "Kézi"
+                 and any(gid == game.id for gid in self.catalog.rules.values())]
+        changed = []
+        for game in games:
+            paths = [path for path, gid in self.catalog.rules.items() if gid == game.id]
+            available = any(Path(path).is_file() for path in paths)
+            current = replace(game, installed=available)
+            self.catalog.games[game.id] = current
+            if bool(game.installed) != available:
+                changed.append(current)
+        if changed:
+            self.tracker.flush()
+            self.store.upsert(changed)
+            self.last_rows = None
+        self.service.watch_manual(games, self.catalog.rules)
 
     def devices_changed(self):
         self.service.request("launchers")
         self.service.request("games")
+        self.service.request("manual")
 
     def _dialog(self, title, size="550x250"):
         window = tk.Toplevel(self.root)
@@ -223,6 +250,7 @@ class App:
     def refresh_rules(self):
         self.tracker.flush()
         self.catalog.rules = self.store.rules()
+        self.refresh_manual_availability()
         self.tracker.unclassified.clear()
         self.tracker.previous = None
 
@@ -375,7 +403,12 @@ class App:
             except Empty:
                 break
             kind = result[0]
-            if kind == "shortcuts":
+            if kind == "availability":
+                self.refresh_manual_availability()
+                self.hub_fingerprint = None
+            elif kind == "manual":
+                self.refresh_manual_availability()
+            elif kind == "shortcuts":
                 self.hub_fingerprint = None
             elif kind == "status":
                 self.status.set(result[1])
@@ -387,6 +420,7 @@ class App:
                 self.catalog.ubisoft_libraries = ubisoft_roots
                 self.catalog.riot_hints = riot_hints
                 self.tracker.reconcile(games, lambda g: g.source in LAUNCHER_SOURCES)
+                self.refresh_manual_availability()
                 self.last_rows = None
             elif kind == "games":
                 _, games, group = result
@@ -431,9 +465,10 @@ class App:
             if scroll:
                 self.tree.yview_moveto(scroll[0])
             self.last_rows = rows
-        self.tray.update(f"Játékidő: {duration(total)} · hátra: {duration(self.settings.limit_seconds - total)}")
+        self.tray.update(f"Játékidőfigyelő\nMa: {duration(total)} · hátra: {duration(self.settings.limit_seconds - total)}\nBal kattintás: megnyitás · jobb: menü")
 
     def tick(self):
+        self.tick_timer = None
         if self.closed:
             return
         try:
@@ -463,12 +498,15 @@ class App:
             log.exception("Játékidő-mérési hiba")
             self.status.set("Hiba történt; részletek a monitor.log fájlban: " + str(exc))
             self.tracker.previous = None
-        self.root.after(1000, self.tick)
+        self.tick_timer = self.root.after(1000, self.tick)
 
     def close(self):
         if self.closed:
             return
         self.closed = True
+        if self.tick_timer is not None:
+            self.root.after_cancel(self.tick_timer)
+            self.tick_timer = None
         self.tracker.close()
         self.service.close()
         self.hub.close()

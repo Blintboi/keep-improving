@@ -42,6 +42,12 @@ teszi a programot; tényleges kilépés a tálca jobb gombos menüjében érhet�
 Ha az ikon a Windows rejtett ikonjai között van, a tálca felfelé mutató nyilánál keresd.
 Második indítás a már futó példány ablakát nyitja meg.
 
+A játékfigyelő saját kék játékvezérlő–óra ikont használ. **Bal kattintás**
+megnyitja az ablakot akkor is, ha korábban az X gombbal elrejtetted.
+**Jobb kattintás** natív Windows-menüt nyit: Játékidőfigyelő, Gaming Hub,
+Beállítások, Játéklista és hub frissítése, illetve külön Kilépés.
+A menü elvetése és az ikon fölé vitt egér nem állítja le a figyelőt.
+
 Telepítés nélküli kipróbálás: `py -3 -B main.py`. Ez a forrás melletti `data`
 mappát használja; automatikus indulást csak a telepítő állít be.
 
@@ -135,6 +141,14 @@ ment a `data/backups/hub-links-*` mappába. Egy névütközés vagy kézzel át�
 parancsikon megmarad, a saját új indító egyedi nevet kap. Könyvtárkapcsolatra
 nem ír. A hub kikapcsolása vagy a figyelő eltávolítása megtartja a Games mappát.
 Games-gyökér váltásakor a korábbi mappában lévő fájlokat megtartja.
+
+**Játék eltávolításakor** az automatikusan kezelt indító és mappahivatkozás
+is visszavonódik, a korábbi játékidő megmarad. A launcherindexek mellett az ismert
+telepítési mappák közvetlen szülőjének létrehozás/törlés eseményeit is követi.
+A kézi játékoknál a hozzárendelt EXE-k mappáit célzottan figyeli: ha minden
+hozzárendelt EXE eltűnik, a játék kikerül a hubból akkor is, ha a mappája vagy
+mentései megmaradtak. Ugyanoda visszatelepítve újra bekerül, a régi idővel és
+szabályokkal. A felhasználó által átírt parancsikonokat továbbra is megőrzi.
 
 Más helyre telepített, egyik ismert forrásban sem szereplő játékhoz továbbra is
 az **Új kézi játék** gomb használható; ezután a hub is automatikusan átveszi.
@@ -257,4 +271,5 @@ Műszaki alapok: [előtéri ablak](https://learn.microsoft.com/en-us/windows/win
 [fájlrendszeresemények](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-readdirectorychangesw),
 [registryértesítések](https://learn.microsoft.com/en-us/windows/win32/api/winreg/nf-winreg-regnotifychangekeyvalue),
 [alvást kihagyó időmérés](https://learn.microsoft.com/en-us/windows/win32/sysinfo/interrupt-time),
-[tálcaikon](https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shell_notifyiconw).
+[tálcaikon](https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shell_notifyiconw),
+[natív tálcamenü](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-trackpopupmenuex).
