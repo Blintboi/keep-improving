@@ -62,6 +62,10 @@ class DiscoveryService:
         targets = target if isinstance(target, tuple) else (target,)
         if path is not None and not any(within(path, t) or within(t, path) for t in targets):
             return
+        if kind == "shortcuts":
+            if path is None or Path(path).suffix.lower() in (".lnk", ".url", "") or Path(path).is_dir():
+                self.request("shortcuts")
+            return
         if kind in ("launchers", "riot"):
             suffixes = (".yaml", ".json", "") if kind == "riot" else (".acf", ".vdf", ".item", ".dat", "")
             if (path is None or Path(path).suffix.lower() in suffixes or Path(path).is_dir()
@@ -114,7 +118,9 @@ class DiscoveryService:
 
     def _scan(self, kind, group=""):
         try:
-            if kind == "launchers":
+            if kind == "shortcuts":
+                self.results.put(("shortcuts",))
+            elif kind == "launchers":
                 games = self.discovery.scan_launchers()
                 self.results.put(("launchers", games, list(self.discovery.libraries), list(self.discovery.hints),
                                   list(self.discovery.errors), list(self.discovery.ubisoft_game_roots),

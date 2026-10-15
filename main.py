@@ -21,11 +21,15 @@ def main():
     parser.add_argument("--background", action="store_true")
     parser.add_argument("--configure", action="store_true")
     parser.add_argument("--games-root")
+    parser.add_argument("--enable-hub", action="store_true")
+    parser.add_argument("--sync-hub", action="store_true")
     parser.add_argument("--scan-once", action="store_true")
     parser.add_argument("--stop-wait", type=float)
     parser.add_argument("--diagnose", action="store_true")
     args = parser.parse_args()
-    if args.diagnose and (args.configure or args.scan_once):
+    if args.enable_hub and not args.configure:
+        parser.error("A --enable-hub a --configure kapcsolóval használható.")
+    if args.diagnose and (args.configure or args.scan_once or args.sync_hub):
         parser.error("A --diagnose külön ellenőrző parancs.")
     if os.name != "nt":
         parser.error("Windows 11 szükséges.")
@@ -46,7 +50,7 @@ def main():
         return
     if not instance.acquired and not args.diagnose:
         instance.close()
-        if args.configure or args.scan_once:
+        if args.configure or args.scan_once or args.sync_hub:
             raise RuntimeError("Előbb állítsd le a futó figyelőt a beállítások importálásához.")
         (args.data_dir / "show.request").touch()
         return
@@ -61,6 +65,8 @@ def main():
             settings = store.settings()
             if args.games_root:
                 settings.games_root = str(Path(args.games_root).resolve())
+            if args.enable_hub:
+                settings.hub_enabled = True
             store.save_settings(settings)
         if args.scan_once:
             from gametime.model import LAUNCHER_SOURCES
@@ -71,6 +77,13 @@ def main():
             store.reconcile(launchers, lambda g: g.source in LAUNCHER_SOURCES)
             store.reconcile(games, lambda g: g.source == "Games")
             print(json.dumps({"games": len(launchers) + len(games), "metadata_pending": discovery.errors}, ensure_ascii=False))
+        if args.sync_hub:
+            from gametime.hub import Hub
+            hub = Hub(args.data_dir)
+            try:
+                print(json.dumps(hub.sync(store.settings(), store.games(True), store.rules(), store.overrides()), ensure_ascii=False))
+            finally:
+                hub.bridge.close()
         if args.diagnose:
             from gametime import __version__
             from gametime.win32 import sample
@@ -79,7 +92,7 @@ def main():
                               "interactive": current.interactive, "foreground_readable": bool(current.path),
                               "installed_games": len(store.games(True)),
                               "today_seconds": sum(store.totals(datetime.now().date()).values())}, ensure_ascii=False))
-        if args.configure or args.scan_once or args.diagnose:
+        if args.configure or args.scan_once or args.diagnose or args.sync_hub:
             return
         import tkinter as tk
         from gametime.ui import App

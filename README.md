@@ -26,7 +26,8 @@ Tkinterrel, és indítsd újra a telepítést. Ezen a gépen Python 3.12.10-zel 
 
 A telepítés helye a Windows Dokumentumok mappáján belül `GameTimeMonitor`.
 A forráscsomagot ezután áthelyezheted; a telepített Pythont tartsd meg.
-A Games mappát a program nem hozza létre, és a játékok fájljait nem módosítja.
+A Games mappát az automatikus Gaming Hub bekapcsolásakor létrehozza, ha szükséges.
+A játékok fájljait nem módosítja.
 
 Másik Python vagy telepítési hely megadása PowerShellből:
 
@@ -102,6 +103,45 @@ olvad össze, az addig mért idő megőrzésével.
 A Ubisoft és Riot ideiglenes rekordja ugyanígy a végleges játékazonosítóhoz kerül.
 Ha egy korábban kézzel felvett telepítés később automatikusan felismerhetővé
 válik ugyanazon a helyen, a játékideje, kizárása és EXE-szabályai összeolvadnak.
+
+## Automatikus Gaming Hub
+
+A **Beállítások → Gaming Hub** kapcsolóval a konfigurált Games mappa központi
+indítómappává válik. Telepítéskor PowerShellből az `-EnableHub` kapcsoló is
+bekapcsolja. A **Games mappa** gomb megnyitja a hubot. A Windowsban ehhez a
+mappához készített asztali parancsikon közvetlenül is használható.
+
+- A főmappában a felismert videojátékok indítói jelennek meg. A Steam/Epic/Ubisoft/Riot
+  mellett a Games mappában felismert és a kézzel felvett egyéb játékok is bekerülnek.
+- A `Mappak` almappa az eredeti telepítési helyekre mutat. A `Launcherek` mappában
+  a megtalált Steam-, Epic-, Ubisoft- és Riot-kliensindítók vannak.
+- A sakkprogramok a `Sakk` almappába kerülnek, továbbra is a játékidőkereten kívül.
+
+A meglévő eredeti Windows-indítókat lehetőleg változatlanul másolja: az indítási
+paraméterek, munkamappa és ikon megmaradnak. Steamnél és Ubisoftnál termékazonosítós
+URI-t is tud készíteni, Epicnél a helyi jegyzék adja az indítási azonosítókat,
+Riotnál a termék és a kiadás paramétereit használja. Egyéb játékhoz az ismert,
+hozzárendelt EXE-t vagy az egyértelmű Games-EXE-t használja. Bizonytalan több-EXE-s
+telepítéshez mappahivatkozást készít, amely később pontos EXE-hozzárendeléssel javítható.
+
+A frissítés külön háttérszálon, játéklista- és parancsikonváltozásra fut. Az
+asztal és a Start menü indítóinak változásait Windows-fájleseményekkel követi.
+A játékidő másodpercenkénti változása nem indít parancsikongenerálást. Nincs
+periodikus teljes gépkeresés, és a hub nem indít el játékot.
+
+A hub kizárólag a saját `data/hub-state.json` nyilvántartásában szereplő,
+változatlan `.lnk`/`.url` fájlokat cseréli vagy távolítja el; előbb másolatot
+ment a `data/backups/hub-links-*` mappába. Egy névütközés vagy kézzel átírt
+parancsikon megmarad, a saját új indító egyedi nevet kap. Könyvtárkapcsolatra
+nem ír. A hub kikapcsolása vagy a figyelő eltávolítása megtartja a Games mappát.
+Games-gyökér váltásakor a korábbi mappában lévő fájlokat megtartja.
+
+Más helyre telepített, egyik ismert forrásban sem szereplő játékhoz továbbra is
+az **Új kézi játék** gomb használható; ezután a hub is automatikusan átveszi.
+A hub a már felismert játékokból dolgozik, az EXE-k általános játékként besorolására
+nem használ önálló, teljes lemezt átvizsgáló keresőt. Az asztali egyedi ikonokat
+a program folyamatos működés közben nem törli; az első géprendezés külön,
+mentéssel és a hubban lévő megfelelő ellenőrzésével történt.
 
 ## Mérés és értesítések
 

@@ -61,6 +61,7 @@ class Settings:
     steam_roots: list = field(default_factory=list)
     epic_manifest_dirs: list = field(default_factory=list)
     ubisoft_roots: list = field(default_factory=list)
+    hub_enabled: bool = False
 
     def validate(self):
         if not (0 < self.warning_seconds < self.limit_seconds <= 86400):

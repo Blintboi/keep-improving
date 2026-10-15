@@ -1,6 +1,7 @@
 """Small dark Tk interface. All state changes go through the main Tk thread."""
 from datetime import datetime
 import logging
+import os
 from pathlib import Path
 from queue import Empty
 import tkinter as tk
@@ -68,11 +69,14 @@ def theme(root):
 
 
 class App:
-    def __init__(self, root, store, data_dir, background=False, service=None):
+    def __init__(self, root, store, data_dir, background=False, service=None, hub=None):
         self.root, self.store, self.data_dir = root, store, Path(data_dir)
         self.settings = store.settings()
         self.catalog = Catalog(self.settings, store.games(True), store.overrides(), store.rules())
         self.tracker = Tracker(store, self.catalog)
+        from .hub import HubWorker
+        self.hub = hub or HubWorker(data_dir)
+        self.hub_fingerprint = None
         self.service = service or DiscoveryService(self.settings)
         # Library paths are cheap metadata reads; Games traversal runs on the worker.
         self.catalog.steam_libraries = self.service.discovery.libraries_from_metadata()
@@ -134,6 +138,7 @@ class App:
         bottom.pack(fill="x")
         ttk.Button(bottom, text="Beállítások", command=self.settings_dialog).pack(side="left")
         ttk.Button(bottom, text="Popup próba", command=self.test_popup).pack(side="left", padx=6)
+        ttk.Button(bottom, text="Games mappa", command=self.open_games).pack(side="left", padx=6)
         ttk.Button(bottom, text="Tálcára", command=self.root.withdraw).pack(side="right")
         ttk.Label(frame, textvariable=self.status, style="Muted.TLabel", wraplength=950).pack(anchor="w", pady=(12, 0))
 
@@ -141,6 +146,12 @@ class App:
         self.root.deiconify()
         self.root.lift()
         win32.u.SetForegroundWindow(dark_title(self.root))
+
+    def open_games(self):
+        try:
+            os.startfile(self.settings.games_root)
+        except OSError:
+            self.message("A Games mappa még nem érhető el. Ellenőrizd az útvonalat a beállításokban.")
 
     def tray_menu(self):
         self.root.update_idletasks()
@@ -281,7 +292,7 @@ class App:
         refresh()
 
     def settings_dialog(self):
-        window = self._dialog("Beállítások", "700x560")
+        window = self._dialog("Beállítások", "700x620")
         frame = ttk.Frame(window, padding=20)
         frame.pack(fill="both", expand=True)
         variables = {}
@@ -299,6 +310,9 @@ class App:
             if path:
                 variables["games"].set(path)
         ttk.Button(frame, text="Games mappa tallózása", command=browse).pack(anchor="w", pady=10)
+        hub_enabled = tk.BooleanVar(value=self.settings.hub_enabled)
+        ttk.Checkbutton(frame, text="Gaming Hub: a játékparancsikonok automatikus frissítése",
+                        variable=hub_enabled).pack(anchor="w", pady=6)
         error = tk.StringVar()
         ttk.Label(frame, textvariable=error, foreground="#ffb3b3", wraplength=650).pack(anchor="w")
         def save():
@@ -309,7 +323,8 @@ class App:
                                     float(variables["limit"].get().replace(",", ".")) * 60,
                                     [p.strip() for p in variables["steam"].get().split(";") if p.strip()],
                                     [p.strip() for p in variables["epic"].get().split(";") if p.strip()],
-                                    [p.strip() for p in variables["ubisoft"].get().split(";") if p.strip()]).validate()
+                                    [p.strip() for p in variables["ubisoft"].get().split(";") if p.strip()],
+                                    hub_enabled.get()).validate()
                 self.tracker.flush()
                 self.store.save_settings(settings)
                 self.settings = self.catalog.settings = settings
@@ -360,7 +375,9 @@ class App:
             except Empty:
                 break
             kind = result[0]
-            if kind == "status":
+            if kind == "shortcuts":
+                self.hub_fingerprint = None
+            elif kind == "status":
                 self.status.set(result[1])
             elif kind == "launchers":
                 from .discovery import preserve_unreadable
@@ -377,6 +394,16 @@ class App:
                 self.last_rows = None
 
     def render(self):
+        fingerprint = (self.settings.games_root, self.settings.hub_enabled,
+                       tuple(sorted((g.id, g.name, g.root, g.metadata, g.installed) for g in self.catalog.games.values())),
+                       tuple(sorted(self.catalog.rules.items())), tuple(sorted(self.catalog.overrides.items())))
+        if fingerprint != self.hub_fingerprint:
+            self.hub_fingerprint = fingerprint
+            self.hub.request(self.settings, self.catalog.games.values(), self.catalog.rules, self.catalog.overrides)
+        while not self.hub.results.empty():
+            result = self.hub.results.get_nowait()
+            if result.get("error"):
+                self.status.set("Gaming Hub: " + result["error"])
         day = datetime.now().date().isoformat()
         totals = self.tracker.totals(day)
         total = sum(totals.values())
@@ -444,5 +471,6 @@ class App:
         self.closed = True
         self.tracker.close()
         self.service.close()
+        self.hub.close()
         self.tray.close()
         self.root.destroy()

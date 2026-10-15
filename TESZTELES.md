@@ -44,6 +44,14 @@ indításkor mért idő összevonását és a kézi rekord adatmegőrző átveze
 Két natív teszt valódi fájlrendszer- és registryértesítésekkel követi a telepítési
 adatok változásait, újraindítás nélkül, ideiglenes mappákban és saját HKCU-kulcsban.
 
+A `test_hub.py` külön ellenőrzi a termékazonosítós Steam/Epic/Ubisoft/Riot-indítókat,
+az eredeti indítási paraméterek megőrzését, az egyéb és a sakkjátékokat, a
+névütközést, az idegen és kézzel átírt fájlok megtartását, a saját ikonok mentését,
+a gyökérváltást, a félreérthető EXE-k mappahivatkozását és a könyvtárkapcsolatok
+elutasítását. A két natív próba valódi Windows-parancsikont olvas vissza, illetve
+futó Tk-alkalmazással követi egy új szimulált Steam-telepítés és egy kézi játék
+hubba kerülését, újraindítás nélkül. Az asztali fájlokat ezek a próbák nem törlik.
+
 Telepítési integrációs próba (külön ideiglenes telepítés és egyedi Run-érték):
 
 ```powershell
@@ -88,6 +96,8 @@ használ, nem tényleges játékot.
 | Epic / több meghajtó | Telepíts játékot egy másik meghajtóra. A listában az `.item` szerinti hely és név jelenjen meg. A Launcher kezelőfelülete ne számítson. |
 | Ubisoft Connect | Telepíts egy játékot Connectből, akár egyéni meghajtóra. Újraindítás nélkül jelenjen meg Ubisoft forrással, és az első előtéri indítástól mérjen. A Connect és a UplayWebCore ne fogyasszon időt. Áthelyezés/eltávolítás után frissüljön a lista. |
 | Riot | Telepíts egy Riot-játékot egyéni meghajtóra. Újraindítás nélkül Riot forrással jelenjen meg. A VALORANT vagy a League tényleges játékfolyamata mérjen, a Riot Client, LeagueClient és Vanguard ne. Áthelyezés/eltávolítás után frissüljön a lista. |
+| Gaming Hub | Kapcsold be a beállításokban, majd telepíts új játékot vagy vegyél fel egy kézi játékot. A Games főmappájában jelenjen meg az indító. Az eredeti kliensen keresztül indítson, az EXE munkamappája/paraméterei maradjanak meg. A sakk külön almappába kerüljön. |
+| Hub fájlvédelem | Egy külön tesztmappában hozz létre azonos nevű saját fájlt, majd szerkessz át egy generált ikont. A hub mindkettőt őrizze meg; saját indítója külön nevet kapjon. Eltávolított játék esetén csak a saját változatlan ikonja vonuljon vissza, mentéssel. |
 | Games új játék | Indítsd el a figyelőt, majd telepíts/másolj saját játékot a beállított Games mappa új almappájába, akár `bin` alá. Felismerés újraindítás nélkül. |
 | Első indítás / egyidejű telepítés | Telepítés után azonnal indítsd az új játékot, és maradj benne 30 másodpercig. Körülbelül 30 másodperc gyűljön, külön ellenőrzés nélkül. |
 | Alt+Tab / háttér | Mérj 30 másodpercet a játékban, majd válts más alkalmazásra 30 másodpercre. A háttéridő ne adódjon hozzá; a váltás körül kb. 1 másodperc eltérés elfogadható. |

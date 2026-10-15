@@ -9,7 +9,7 @@ $testStartupName = 'GameTimeMonitor.Test.' + [Guid]::NewGuid().ToString('N')
 $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 $report = [ordered]@{ IsolatedInstallDirectory = $testInstallPath }
 try {
-    & (Join-Path $sourcePath 'install.ps1') -InstallDir $testInstallPath -GamesRoot $testGamesPath -StartupName $testStartupName -NoStart
+    & (Join-Path $sourcePath 'install.ps1') -InstallDir $testInstallPath -GamesRoot $testGamesPath -StartupName $testStartupName -EnableHub -NoStart
     $report.FirstInstall = Test-Path -LiteralPath (Join-Path $testInstallPath 'install.json')
     $manifest = Read-GameTimeManifest $testInstallPath
     $probePath = Join-Path $testBasePath 'seed.py'
@@ -36,11 +36,13 @@ store = Store(pathlib.Path(sys.argv[1]) / 'data' / 'usage.sqlite3')
 assert store.totals('2000-01-01') == {'test:fixture': 123.0}
 assert norm(r'C:\Fixture\chess.exe') in store.rules()
 assert store.rules()[norm(r'C:\Fixture\chess.exe')] is None
+assert store.settings().hub_enabled is True
 store.close()
 '@ | Set-Content -LiteralPath $probeVerifyPath -Encoding UTF8
     & $manifest.Python -B $probeVerifyPath $testInstallPath
     if ($LASTEXITCODE -ne 0) { throw 'Reinstall did not preserve time and exceptions.' }
     $report.TimeAndExceptionsSurviveReinstall = $true
+    $report.HubEnabledSurvivesReinstall = $true
     $report.AutostartMatches = (Get-GameTimeStartupValue $testStartupName) -eq $manifest.StartupCommand
     $argsText = '-B "' + (Join-Path $testInstallPath 'main.py') + '" --background --data-dir "' + (Join-Path $testInstallPath 'data') + '"'
     $process = Start-Process -FilePath $manifest.Pythonw -ArgumentList $argsText -PassThru -WindowStyle Hidden
@@ -53,6 +55,14 @@ store.close()
     $process.Refresh()
     $report.CpuPercentOneCore = [Math]::Round(100 * ($process.TotalProcessorTime.TotalSeconds - $cpuBefore) / ([DateTime]::UtcNow - $measureStart).TotalSeconds, 3)
     $report.WorkingSetMiB = [Math]::Round($process.WorkingSet64 / 1MB, 1)
+    $hubStatePath = Join-Path $testInstallPath 'data\hub-state.json'
+    $hubDeadline = [DateTime]::UtcNow.AddSeconds(45)
+    while (-not (Test-Path -LiteralPath $hubStatePath -PathType Leaf) -and [DateTime]::UtcNow -lt $hubDeadline) {
+        Start-Sleep -Milliseconds 200
+    }
+    if (-not (Test-Path -LiteralPath $hubStatePath -PathType Leaf)) { throw 'Enabled Gaming Hub did not synchronize.' }
+    $hubState = Get-Content -LiteralPath $hubStatePath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $report.HubCreatedAfterBackgroundStart = $hubState.marker -eq 'GameTimeHub.v1'
     & (Join-Path $testInstallPath 'verify.ps1') -InstallDir $testInstallPath
     $report.VerifyWhileRunning = $true
     $report.DiagnosticDidNotOpenUi = -not (Test-Path -LiteralPath (Join-Path $testInstallPath 'data\show.request'))
@@ -68,6 +78,9 @@ store.close()
     & (Join-Path $sourcePath 'uninstall.ps1') -InstallDir $testInstallPath
     $report.IdempotentUninstall = $true
 } finally {
+    if (Test-Path -LiteralPath (Join-Path $testInstallPath 'main.py') -PathType Leaf) {
+        & (Join-Path $sourcePath 'uninstall.ps1') -InstallDir $testInstallPath
+    }
     if (Get-GameTimeStartupValue $testStartupName) {
         Remove-ItemProperty -LiteralPath $runKey -Name $testStartupName
     }

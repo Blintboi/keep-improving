@@ -1,5 +1,5 @@
 param([string]$PythonPath, [string]$GamesRoot, [string]$InstallDir,
-      [string]$StartupName = 'GameTimeMonitor', [switch]$NoStart)
+      [string]$StartupName = 'GameTimeMonitor', [switch]$NoStart, [switch]$EnableHub)
 . "$PSScriptRoot\common.ps1"
 if (-not $InstallDir) { $InstallDir = Get-GameTimeDirectory }
 $InstallDir = [IO.Path]::GetFullPath($InstallDir)
@@ -44,7 +44,9 @@ foreach ($name in Get-GameTimeFiles) {
 $manifest = [ordered]@{ Marker = 'GameTimeMonitor.v1'; InstallDir = $InstallDir; Python = $python.Python;
     Pythonw = $python.Pythonw; StartupName = $StartupName; StartupCommand = $commandLine }
 $manifest | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $InstallDir 'install.json') -Encoding UTF8
-& $python.Python -B (Join-Path $InstallDir 'main.py') --data-dir (Join-Path $InstallDir 'data') --configure --games-root $GamesRoot --scan-once
+$hubArguments = @()
+if ($EnableHub) { $hubArguments += '--enable-hub' }
+& $python.Python -B (Join-Path $InstallDir 'main.py') --data-dir (Join-Path $InstallDir 'data') --configure --games-root $GamesRoot --scan-once @hubArguments
 if ($LASTEXITCODE -ne 0) { throw 'Initial configuration or discovery failed; automatic startup was not enabled.' }
 if (-not (Test-Path -LiteralPath $runKey)) { New-Item -Path $runKey -Force | Out-Null }
 New-ItemProperty -LiteralPath $runKey -Name $StartupName -PropertyType String -Value $commandLine -Force | Out-Null

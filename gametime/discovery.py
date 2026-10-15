@@ -249,6 +249,9 @@ class Discovery:
         wanted += [(root, False, "launchers") for root in self.ubisoft_game_roots]
         if self.riot:
             wanted += self.riot.directory_specs()
+        if self.settings.hub_enabled:
+            from .hub import shortcut_locations
+            wanted += [(item["path"], bool(item["depth"]), "shortcuts") for item in shortcut_locations()]
         specs = {}
         for target, recursive, kind in wanted:
             existing = Path(target)
