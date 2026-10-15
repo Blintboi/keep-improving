@@ -62,8 +62,10 @@ class DiscoveryService:
         targets = target if isinstance(target, tuple) else (target,)
         if path is not None and not any(within(path, t) or within(t, path) for t in targets):
             return
-        if kind == "launchers":
-            if path is None or Path(path).suffix.lower() in (".acf", ".vdf", ".item", ".dat", "") or Path(path).is_dir():
+        if kind in ("launchers", "riot"):
+            suffixes = (".yaml", ".json", "") if kind == "riot" else (".acf", ".vdf", ".item", ".dat", "")
+            if (path is None or Path(path).suffix.lower() in suffixes or Path(path).is_dir()
+                    or (kind == "riot" and norm(Path(path).parent) == norm(self.discovery.riot.metadata_root))):
                 self.request("launchers")
             return
         base = Path(self.discovery.settings.games_root)
@@ -115,7 +117,8 @@ class DiscoveryService:
             if kind == "launchers":
                 games = self.discovery.scan_launchers()
                 self.results.put(("launchers", games, list(self.discovery.libraries), list(self.discovery.hints),
-                                  list(self.discovery.errors), list(self.discovery.ubisoft_game_roots)))
+                                  list(self.discovery.errors), list(self.discovery.ubisoft_game_roots),
+                                  list(self.discovery.riot_hints)))
                 self._watches()
                 if self.discovery.errors:
                     self.results.put(("status", "Jegyzék olvasása késik; újrapróbálás folyamatban."))

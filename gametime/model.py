@@ -20,14 +20,19 @@ BROWSERS = {"chrome.exe", "msedge.exe", "firefox.exe", "opera.exe", "brave.exe",
 CLIENTS = {"steam.exe", "steamwebhelper.exe", "epicgameslauncher.exe", "epicwebhelper.exe"}
 CLIENTS.update({"ubisoftconnect.exe", "ubisoftgamelauncher.exe", "ubisoftgamelauncher64.exe", "upc.exe",
                 "uplay.exe", "uplaywebcore.exe", "uplayservice.exe", "ubisoftextension.exe", "upcelevationservice.exe"})
-LAUNCHER_SOURCES = ("Steam", "Epic", "Ubisoft")
+CLIENTS.update({"riotclientservices.exe", "riotclientux.exe", "riotclientuxrender.exe",
+                "riotclientcrashhandler.exe", "riotclientcrashhandler64.exe", "riotclientcrashhandler32.exe",
+                "vgc.exe", "vgtray.exe", "leagueclient.exe", "leagueclientux.exe", "leagueclientuxrender.exe"})
+LAUNCHER_SOURCES = ("Steam", "Epic", "Ubisoft", "Riot")
 HELPERS = re.compile(r"unins|uninstall|(^|[-_ ])setup|^install|launcher|updater|crash|"
                      r"helper|config|redist|vcredist|dxsetup|benchmark|anticheat|easyanticheat", re.I)
 CHESS = re.compile(r"chess|sakk|stockfish|(^|[\W_])(lc0|fritz|houdini|komodo)([\W_]|$)", re.I)
 
 
 def blocked(path):
-    return ntpath.basename(str(path)).lower() in BROWSERS | CLIENTS
+    parts = norm(path).split("\\")
+    return (parts[-1] in BROWSERS | CLIENTS
+            or any(part in {"riot client", "riot vanguard"} for part in parts[:-1]))
 
 
 def helper(path):
@@ -75,6 +80,7 @@ class Catalog:
         self.steam_libraries = []
         self.epic_hints = []
         self.ubisoft_libraries = []
+        self.riot_hints = []
 
     def apply(self, games, scope):
         for key, game in list(self.games.items()):
@@ -118,6 +124,10 @@ class Catalog:
             game = self._under(path, root, "Ubisoft")
             if game:
                 return game
+        for game in self.riot_hints:
+            if within(path, game.root):
+                self.games[game.id] = game
+                return game if self.enabled(game) else None
         return self._under(path, self.settings.games_root, "Games")
 
     def explicitly_ignored(self, path):

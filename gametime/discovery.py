@@ -61,6 +61,7 @@ def preserve_unreadable(games, previous, errors):
             continue
         if any(within(game.metadata, error) or (game.source == "Steam" and Path(error).name == "libraryfolders.vdf")
                or (game.source == "Ubisoft" and error.startswith("registry:Ubisoft:"))
+               or (game.source == "Riot" and error.startswith("registry:Riot:"))
                for error in errors):
             found[game.id] = game
     return list(found.values())
@@ -89,7 +90,7 @@ def epic_dirs():
 
 
 class Discovery:
-    def __init__(self, settings, steam=None, epic=None, launcher_dat=None, ubisoft=True):
+    def __init__(self, settings, steam=None, epic=None, launcher_dat=None, ubisoft=True, riot=True):
         self.settings = settings
         self.roots = steam if steam is not None else list(dict.fromkeys(steam_roots() + settings.steam_roots))
         self.epic_dirs = epic if epic is not None else list(dict.fromkeys(epic_dirs() + settings.epic_manifest_dirs))
@@ -102,6 +103,9 @@ class Discovery:
         from .ubisoft import UbisoftSource
         self.ubisoft = UbisoftSource(settings.ubisoft_roots) if ubisoft is True else ubisoft or None
         self.ubisoft_game_roots = []
+        from .riot import RiotSource
+        self.riot = RiotSource() if riot is True else riot or None
+        self.riot_hints = []
 
     def _read_vdf(self, path):
         try:
@@ -198,6 +202,10 @@ class Discovery:
             found.update((g.id, g) for g in self.ubisoft.scan())
             self.ubisoft_game_roots = list(self.ubisoft.game_roots)
             self.errors.extend(self.ubisoft.errors)
+        if self.riot:
+            found.update((g.id, g) for g in self.riot.scan())
+            self.riot_hints = list(self.riot.hints)
+            self.errors.extend(self.riot.errors)
         return list(found.values())
 
     def scan_games(self, group=None):
@@ -239,6 +247,8 @@ class Discovery:
         wanted += [(p, False, "launchers") for p in self.epic_dirs]
         wanted += [(str(self.launcher_dat.parent), False, "launchers")]
         wanted += [(root, False, "launchers") for root in self.ubisoft_game_roots]
+        if self.riot:
+            wanted += self.riot.directory_specs()
         specs = {}
         for target, recursive, kind in wanted:
             existing = Path(target)
@@ -251,4 +261,5 @@ class Discovery:
         return {key: tuple(dict.fromkeys(targets)) for key, targets in specs.items()}
 
     def registry_watch_specs(self):
-        return self.ubisoft.watch_specs() if self.ubisoft else set()
+        return ((self.ubisoft.watch_specs() if self.ubisoft else set()) |
+                (self.riot.watch_specs() if self.riot else set()))

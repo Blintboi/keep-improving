@@ -101,7 +101,7 @@ def run(report_path, ui_only=False):
         settings = Settings(games_root=str(games))
         store = Store(data / "usage.sqlite3")
         store.save_settings(settings)
-        service = DiscoveryService(settings, discovery=Discovery(settings, [], [], base / "none.dat", ubisoft=False))
+        service = DiscoveryService(settings, discovery=Discovery(settings, [], [], base / "none.dat", ubisoft=False, riot=False))
         root = tk.Tk()
         app = App(root, store, data, service=service)
         children = []

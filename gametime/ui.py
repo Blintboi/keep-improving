@@ -364,10 +364,11 @@ class App:
                 self.status.set(result[1])
             elif kind == "launchers":
                 from .discovery import preserve_unreadable
-                _, games, libraries, hints, errors, ubisoft_roots = result
+                _, games, libraries, hints, errors, ubisoft_roots, riot_hints = result
                 games = preserve_unreadable(games, self.catalog.games.values(), errors)
                 self.catalog.steam_libraries, self.catalog.epic_hints = libraries, hints
                 self.catalog.ubisoft_libraries = ubisoft_roots
+                self.catalog.riot_hints = riot_hints
                 self.tracker.reconcile(games, lambda g: g.source in LAUNCHER_SOURCES)
                 self.last_rows = None
             elif kind == "games":

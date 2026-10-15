@@ -1,7 +1,7 @@
 # Játékidőfigyelő – Windows 11
 
-Sötét témájú, offline játékidőfigyelő személyes használatra, Steam-, Epic- és
-Ubisoft Connect-támogatással. A napi közös keret
+Sötét témájú, offline játékidőfigyelő személyes használatra, Steam-, Epic-,
+Ubisoft Connect- és Riot-támogatással. A napi közös keret
 alapból **120 perc**, előzetes figyelmeztetés **100 percnél**. Csak az előtérben
 lévő telepített játék ideje számít. A program figyelmeztet, és nem állít le játékot.
 
@@ -58,15 +58,25 @@ mappát használja; automatikus indulást csak a telepítő állít be.
   bejegyzések neve és telepítési helye. Kezeli a felhasználói és a gépszintű,
   32/64 bites adatokat, valamint az egyéni meghajtókat. A Ubisoft Connect,
   `upc.exe` és `UplayWebCore.exe` nem számít játéknak.
+- **Riot:** a ProgramData `Riot Games/Metadata` könyvtárának
+  `*.product_settings.yaml` telepítési adatai és a `Riot Game <termék>.<kiadás>`
+  eltávolítási registrybejegyzések. A `RiotClientInstalls.json` társított
+  telepítési útvonalai tartalék felismerést adnak. A VALORANT, a League of Legends
+  és később telepített, más termékazonosítójú Riot-játékok is támogatottak;
+  az egyéni meghajtók és telepítési helyek automatikusan követhetők.
+  A Riot Client, a League kliensfelülete és a Vanguard nem fogyaszt játékidőt.
+  A pusztán letöltést előnéző `preview.manifest` nem jelent telepített játékot.
 - **Games:** a beállított gyökér minden közvetlen almappája egy játékcsoport;
   az alatta lévő `bin`, `engine` és más alkönyvtárak EXE-fájljai ugyanahhoz a
   játékhoz tartoznak. A gyökérben közvetlenül lévő EXE-k egy közös csoportot alkotnak.
 
 Induláskor összeveti a jegyzékeket a korábbi nyilvántartással. Működés közben
-natív `ReadDirectoryChangesW` fájleseményeket és a Ubisofthoz
+natív `ReadDirectoryChangesW` fájleseményeket és a Ubisofthoz/Riothoz
 `RegNotifyChangeKeyValue` registryértesítéseket használ; nincs rendszeres teljes gép-
 vagy teljes játékkönyvtár-ellenőrzés. Steam/Epic-esemény után a kis méretű
-telepítési jegyzékeket és a Ubisoft kis telepítési indexét olvassa újra.
+telepítési jegyzékeket és a Ubisoft/Riot telepítési indexeit olvassa újra.
+A Riotnál a YAML/JSON telepítési adatok változását figyeli; a nagy játékadatokat,
+adatbázisokat és javítócsomagokat nem olvassa be a felismeréshez.
 A registryfigyelés a kulcsok létrehozását, módosítását és törlését is követi.
 Games-eseménynél csak az érintett játékcsoportot
 ellenőrzi. Teljes Games-bejárás induláskor, Games-gyökér váltásakor és elveszett
@@ -83,11 +93,13 @@ ellenőrzi az ismert Steam-könyvtárak `steamapps/common` alkönyvtáraiban és
 gyökérben. Epicnél az `.item` és a launcher közös indexe adja a telepítési helyet.
 Ubisoftnál a telepítési index mellett az ismert launcher `games` mappája is
 tartalék felismerési gyökér, már az első indításkor.
+Riotnál a kliens társított telepítési indexében szereplő pontos játékmappa
+ad tartalék felismerést, amíg a termék saját telepítési adata megérkezik.
 Ha a jegyzék késik, legfeljebb az utolsó 120 másodperc valóban megfigyelt előtéri
 intervallumát tudja utólag besorolni. Nem talál ki játékidőt a folyamat puszta
 futása alapján. A Steam ideiglenes útvonal alapú rekordja a végleges AppID-hez
 olvad össze, az addig mért idő megőrzésével.
-A Ubisoft ideiglenes rekordja ugyanígy a végleges játékazonosítóhoz kerül.
+A Ubisoft és Riot ideiglenes rekordja ugyanígy a végleges játékazonosítóhoz kerül.
 Ha egy korábban kézzel felvett telepítés később automatikusan felismerhetővé
 válik ugyanazon a helyen, a játékideje, kizárása és EXE-szabályai összeolvadnak.
 
@@ -98,7 +110,7 @@ Az EXE teljes útvonala alapján mér; a játékmappán belüli gyermekfolyamato
 felismerhetők. Alt+Tab után a háttérben maradó játék ideje nem gyűlik tovább.
 Egyszerre mindig egy előtéri folyamat időszaka számít, ezért két futó játék nem
 fogyaszt kétszeres időt. Menüben, kontrollerrel és billentyűzet-/egéraktivitás
-nélkül is mér. Böngészős játékokat és a Steam/Epic/Ubisoft kezelőfelületét kizárja.
+nélkül is mér. Böngészős játékokat és a Steam/Epic/Ubisoft/Riot kezelőfelületét kizárja.
 
 Alváshoz és hibernáláshoz a Windows ébren töltött idejét mérő
 `QueryUnbiasedInterruptTime` számlálót használja. Hosszú mintavételi szünetet,
@@ -132,6 +144,7 @@ is megmaradnak.
 
 Nem alapértelmezett Steam-, Epic- és Ubisoft Connect-helyek a beállításokban
 szintén hozzáadhatók. A korábbi beállítások a frissítéskor megmaradnak.
+A Riot egyéni játékhelyeit a helyi telepítési adatokból veszi át, külön beállítás nélkül.
 
 - **Kizárás / engedélyezés:** a kiválasztott teljes játékot kapcsolja át.
 - **Új kézi játék:** kiválasztasz egy EXE-t, és nevet adsz neki.
@@ -154,7 +167,7 @@ A javítások a következő mintáktól hatnak; korábbi időt nem törölnek.
   nem mindig különíthetők el. Ezeket kézzel ki lehet zárni.
 - Az EXE-nevek alapján kiszűrt konfigurálók, launcherek és segédprogramok között
   lehet valódi játék is. A pontos EXE-hozzárendelés felülírja ezt a heurisztikát.
-  Ismeretlen segédprogramot egyszer kézzel ki kell zárni. Böngészők és a Steam/Epic/Ubisoft
+  Ismeretlen segédprogramot egyszer kézzel ki kell zárni. Böngészők és a Steam/Epic/Ubisoft/Riot
   általános kezelőfelülete kézi hozzárendeléssel sem válik játékká.
 - Egy Games almappa egy játékcsoport. Több, egymásba ágyazott játékot külön
   főmappákba érdemes telepíteni, vagy pontos EXE-hozzárendeléssel elkülöníteni.
@@ -169,6 +182,10 @@ A javítások a következő mintáktól hatnak; korábbi időt nem törölnek.
   Ha ezek hiányoznak, az ismert `games` mappák és az utolsó 120 másodperc
   megfigyelt előtéri időszaka ad tartalék felismerést. Szokatlan, index nélküli
   telepítéshez kézi EXE-hozzárendelés szükséges lehet.
+- Riotnál a szabványos helyi telepítési indexekből és a legfelső szintű YAML
+  telepítési mezőkből dolgozik, fiókadatokat nem olvas. Ha egyik indexben sem
+  szerepel időben a telepítési hely, a besorolás késhet; az utolsó 120 másodperc
+  valóban megfigyelt ideje utólag elszámolható. Új indexformátumhoz frissítés kellhet.
 - Más helyre telepített gyermekfolyamat vagy nem olvasható, védett folyamat kézi
   hozzárendelést igényelhet. Ha a Windows nem engedi lekérdezni az EXE útvonalát,
   a program nem próbál jogosultságot emelni vagy anti-cheat védelmet megkerülni.

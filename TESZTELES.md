@@ -7,6 +7,8 @@ valódi kontrollerhardvert teszteltünk.
 
 A Ubisoft-tesztek elkülönített registryadatokat és ideiglenes könyvtárakat
 használnak; valódi Ubisoft-játékot sem telepítenek vagy indítanak.
+A Riot-tesztek is szintetikus telepítési adatokat használnak; Riot-játékot
+nem telepítenek és nem indítanak.
 
 ## Automatizált tesztek
 
@@ -34,6 +36,13 @@ az egyéni telepítési helyeket, az első indítás tartalék felismerését, a
 nélküli átvezetését Ubisoft-azonosítóra. Egy natív teszt egyedi HKCU-tesztkulcsban
 valódi `RegNotifyChangeKeyValue` értesítésekkel ellenőrzi a futás közbeni
 telepítést, áthelyezést és törlést; a tesztkulcsot utána eltávolítja.
+
+A `test_riot.py` 18 tesztje a YAML/JSON/registry forrásokat, az egyéni helyeket,
+a később telepített új termékazonosítókat, a preview-jegyzék kihagyását, a
+félkész index megőrzését, a Riot/League kliens és Vanguard kizárását, az első
+indításkor mért idő összevonását és a kézi rekord adatmegőrző átvezetését ellenőrzi.
+Két natív teszt valódi fájlrendszer- és registryértesítésekkel követi a telepítési
+adatok változásait, újraindítás nélkül, ideiglenes mappákban és saját HKCU-kulcsban.
 
 Telepítési integrációs próba (külön ideiglenes telepítés és egyedi Run-érték):
 
@@ -78,6 +87,7 @@ használ, nem tényleges játékot.
 | Steam / több könyvtár | Telepíts egy játékot a normál és egy másik meghajtón lévő könyvtárba. Rövid időn belül jelenjenek meg a listában, a Steam kezelőfelülete ne fogyasszon időt. |
 | Epic / több meghajtó | Telepíts játékot egy másik meghajtóra. A listában az `.item` szerinti hely és név jelenjen meg. A Launcher kezelőfelülete ne számítson. |
 | Ubisoft Connect | Telepíts egy játékot Connectből, akár egyéni meghajtóra. Újraindítás nélkül jelenjen meg Ubisoft forrással, és az első előtéri indítástól mérjen. A Connect és a UplayWebCore ne fogyasszon időt. Áthelyezés/eltávolítás után frissüljön a lista. |
+| Riot | Telepíts egy Riot-játékot egyéni meghajtóra. Újraindítás nélkül Riot forrással jelenjen meg. A VALORANT vagy a League tényleges játékfolyamata mérjen, a Riot Client, LeagueClient és Vanguard ne. Áthelyezés/eltávolítás után frissüljön a lista. |
 | Games új játék | Indítsd el a figyelőt, majd telepíts/másolj saját játékot a beállított Games mappa új almappájába, akár `bin` alá. Felismerés újraindítás nélkül. |
 | Első indítás / egyidejű telepítés | Telepítés után azonnal indítsd az új játékot, és maradj benne 30 másodpercig. Körülbelül 30 másodperc gyűljön, külön ellenőrzés nélkül. |
 | Alt+Tab / háttér | Mérj 30 másodpercet a játékban, majd válts más alkalmazásra 30 másodpercre. A háttéridő ne adódjon hozzá; a váltás körül kb. 1 másodperc eltérés elfogadható. |

@@ -1,11 +1,11 @@
-JÁTÉKIDŐFIGYELŐ 1.1.0 – TESZTEREDMÉNYEK
+JÁTÉKIDŐFIGYELŐ 1.2.0 – TESZTEREDMÉNYEK
 Ellenőrzés dátuma: 2026. október 15.
 Környezet: Windows, Python 3.12.10, Tk 8.6, SQLite 3.49.1.
 
-AUTOMATIZÁLT TESZTEK: 72 / 72 sikeres (11,830 másodperc).
+AUTOMATIZÁLT TESZTEK: 90 / 90 sikeres (18,091 másodperc).
   py -3 -B -m unittest discover -s tests -q
 
-64 logikai teszt és 8 natív Windows-teszt. Lefedik a Steam/Epic/Ubisoft/Games
+80 logikai teszt és 10 natív Windows-teszt. Lefedik a Steam/Epic/Ubisoft/Riot/Games
 felismerést, több könyvtárat, új telepítési eseményeket, első indítást,
 versenyhelyzetet és késői besorolást, előtér/háttér mintákat, két játék
 közös keretét, bevitel nélküli mérést, alvást, zárolást, óraugrást,
@@ -15,7 +15,7 @@ sakkot, manuális szabályokat, eltávolítást és áthelyezést.
 A natív tesztek valódi Windows-fájlrendszereseményeket használnak
 ideiglenes tesztmappákban, továbbá valódi folyamatútvonal-lekérdezést
 és mutexet. A Steam/Epic jegyzékek ezekben szimulált tesztadatok.
-Valódi Steam-, Epic- vagy Ubisoft-játékot nem telepítettünk a teszt kedvéért.
+Valódi Steam-, Epic-, Ubisoft- vagy Riot-játékot nem telepítettünk a teszt kedvéért.
 
 A Ubisofthoz 12 új teszt tartozik: saját telepítési helyek, első indítás,
 launcher-kizárás, áthelyezés/eltávolítás, hibás vagy hiányos index és a
@@ -23,6 +23,14 @@ korábbi kézi rekord időadatainak/kivételeinek átvezetése. A natív teszt
 egyedi HKCU-tesztkulcsban, valódi RegNotifyChangeKeyValue értesítésekkel
 vizsgálja a telepítést, áthelyezést és törlést. Éles Ubisoft-kulcsot
 nem módosít; a saját tesztkulcsát eltávolítja.
+
+A Riothoz 18 új teszt tartozik, köztük két natív Windows-próba.
+Lefedik a YAML/JSON/registry telepítési adatokat, az új termékazonosítókat,
+az első indítás tartalék felismerését, a preview-jegyzékek kihagyását,
+a kliens/Vanguard kizárását, az áthelyezést és törlést, valamint a kézi
+rekord játékidejének és kivételeinek átvezetését. A natív próbák valódi
+fájlrendszer- és registryértesítéseket használnak szintetikus adatokkal,
+elkülönített tesztmappákban és saját HKCU-kulcsban, újraindítás nélkül.
 
 FELÜLETI PRÓBA: 5 / 5 ellenőrzés sikeres.
   py -3 -B tests\gui_smoke.py --ui-only --report <jelentés.json>
@@ -51,7 +59,7 @@ megismételhető eltávolítás. A teszt saját Run-bejegyzése nem maradt meg.
 A telepítő a meglévő helyi launcherjegyzékeket is beolvasta; ez nem
 jelentett új játék telepítését vagy játék tényleges használatát.
 
-Rövid, hat másodperces háttérmérési minta: körülbelül 42,4 MiB memória,
+Rövid, hat másodperces háttérmérési minta: körülbelül 41,3 MiB memória,
 0,26% CPU egy processzormagra vetítve. Ez pillanatnyi próba, nem
 általános teljesítménygarancia. Nincs periodikus teljes gépkeresés.
 
