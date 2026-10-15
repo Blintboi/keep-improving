@@ -1,5 +1,7 @@
 import os
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import threading
 import unittest
@@ -28,9 +30,12 @@ class TrayTests(unittest.TestCase):
         self.assertEqual(opened, [])
         event(0x400)
         event(0x401)
+        self.assertEqual(opened, [])  # Native callbacks must never call Tk.
+        tray.dispatch_pending()
         self.assertEqual(len(opened), 2)
         event(0x7B, point=(200 << 16) | (0xFFFF & -100))
         event(0x7B)
+        tray.dispatch_pending()
         self.assertEqual(len(menus), 1)
         self.assertEqual(tray.menu_position, (-100, 200))
 
@@ -41,6 +46,7 @@ class TrayTests(unittest.TestCase):
         tray.version4 = False
         tray._message(tray.window, 0x8001, 1, 0x202)
         tray._message(tray.window, 0x8001, 1, 0x205)
+        tray.dispatch_pending()
         self.assertEqual((len(opened), len(menus)), (1, 1))
 
     def test_native_context_menu_cancels_without_running_any_command(self):
@@ -81,6 +87,7 @@ class TrayTests(unittest.TestCase):
                 self.assertFalse(app.closed)
                 for _ in range(2):
                     app.tray._message(app.tray.window, 0x8001, 0, (1 << 16) | 0x400)
+                    app.tray.dispatch_pending()
                     root.update()
                     self.assertEqual(root.state(), "normal")
                     self.assertFalse(app.closed)
@@ -99,6 +106,13 @@ class TrayTests(unittest.TestCase):
             finally:
                 app.close()
                 store.close()
+
+    def test_posted_shell_notifications_survive_real_tk_mainloop(self):
+        probe = Path(__file__).with_name("tray_message_probe.py")
+        result = subprocess.run([sys.executable, "-B", "-X", "faulthandler", str(probe)],
+                                cwd=probe.parent.parent, capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("TRAY_MAINLOOP_OK", result.stdout)
 
 
 if __name__ == "__main__":

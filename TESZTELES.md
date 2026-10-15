@@ -60,6 +60,13 @@ A `test_tray.py` saját Windows-ablakokkal és valódi tálcaikonnal ellenőrzi 
 modern és tartalék kattintási eseményeket, a saját ikon betöltését, a natív menü
 elvetését, az X gomb utáni újbóli megnyitást és a külön kilépési parancsot.
 Nem küld általános billentyű- vagy egéreseményeket más alkalmazásoknak.
+Egy külön alfolyamatos regressziós próba a Windows `PostMessageW` hívásával
+küldi a saját rejtett ablaknak az eseményeket, miközben a valódi Tk `mainloop`
+fut. Ellenőrzi a látható, rejtett és minimalizált ablak megnyitását, a gyorsan
+ismételt és billentyűzetes aktiválást, a hover eseményeket, a natív menü
+elvetését és a külön kilépési parancsot. Az 1.3.1 korábbi tesztjei közvetlenül
+hívták a Python-kezelőt, ezért a natív eseményhurokból eredő összeomlást nem
+fedték fel. A regressziós próba nem fizikai egérkattintás a Windows tálcáján.
 
 Telepítési integrációs próba (külön ideiglenes telepítés és egyedi Run-érték):
 

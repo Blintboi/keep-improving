@@ -44,6 +44,7 @@ Második indítás a már futó példány ablakát nyitja meg.
 
 A játékfigyelő saját kék játékvezérlő–óra ikont használ. **Bal kattintás**
 megnyitja az ablakot akkor is, ha korábban az X gombbal elrejtetted.
+Ha az ablak már nyitva van, előtérbe hozza; újabb kattintás nem rejti el.
 **Jobb kattintás** natív Windows-menüt nyit: Játékidőfigyelő, Gaming Hub,
 Beállítások, Játéklista és hub frissítése, illetve külön Kilépés.
 A menü elvetése és az ikon fölé vitt egér nem állítja le a figyelőt.

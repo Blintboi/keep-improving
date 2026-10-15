@@ -100,14 +100,24 @@ class App:
             root.iconbitmap(default=str(Path(__file__).with_name("app.ico")))
         except tk.TclError:
             log.warning("Az alkalmazásikon nem olvasható")
-        self.tray = win32.Tray(lambda: root.after(0, self.show),
-                               lambda: root.after(0, self.tray_menu),
-                               self.devices_changed)
+        self.tray = win32.Tray(self.show, self.tray_menu, self.devices_changed)
         if background and self.tray.available:
             root.withdraw()
         self.refresh_manual_availability()
         self.service.start()
         self.tick_timer = root.after(200, self.tick)
+        self.tray_timer = root.after(75, self.poll_tray)
+
+    def poll_tray(self):
+        self.tray_timer = None
+        if self.closed:
+            return
+        try:
+            self.tray.dispatch_pending()
+        except Exception:
+            log.exception("Tálcaesemény feldolgozási hiba")
+        if not self.closed:
+            self.tray_timer = self.root.after(75, self.poll_tray)
 
     def _build(self):
         frame = ttk.Frame(self.root, padding=22)
@@ -507,6 +517,9 @@ class App:
         if self.tick_timer is not None:
             self.root.after_cancel(self.tick_timer)
             self.tick_timer = None
+        if self.tray_timer is not None:
+            self.root.after_cancel(self.tray_timer)
+            self.tray_timer = None
         self.tracker.close()
         self.service.close()
         self.hub.close()

@@ -6,6 +6,7 @@ import hashlib
 import logging
 import os
 from pathlib import Path
+from queue import Empty, SimpleQueue
 import struct
 import threading
 from .tracker import Sample
@@ -295,9 +296,11 @@ api(s, "Shell_NotifyIconW", [W.DWORD, C.POINTER(NOTIFYICONDATA)], W.BOOL)
 
 
 class Tray:
-    """Hidden Win32 window; Tk's message loop dispatches its callbacks."""
+    """Queue Win32 notifications; dispatch UI callbacks from a Tk timer only."""
     def __init__(self, on_open, on_menu, on_devices):
         self.on_open, self.on_menu, self.on_devices = on_open, on_menu, on_devices
+        self.events = SimpleQueue()
+        self.closed = False
         self.taskbar_created = u.RegisterWindowMessageW("TaskbarCreated")
         self.proc = WNDPROC(self._message)
         self.class_name = f"GameTimeTray-{os.getpid()}-{id(self)}"
@@ -363,26 +366,40 @@ class Tray:
                 opens = (0x400, 0x401) if self.version4 else (0x202,)
                 menu_event = 0x7B if self.version4 else 0x205
                 if event in opens:
-                    self.on_open()
+                    self.events.put("open")
                 elif event == menu_event and not self.menu_pending:
                     self.menu_pending = True
                     self.menu_position = ((C.c_short(wp & 0xFFFF).value, C.c_short((wp >> 16) & 0xFFFF).value)
                                           if self.version4 else None)
-                    self.on_menu()
+                    self.events.put("menu")
                 return 0
             if msg == self.taskbar_created and hasattr(self, "data"):
                 self._add()
             if msg == 0x219:
-                self.on_devices()
+                self.events.put("devices")
         except Exception:
             log.exception("Tálcaesemény kezelési hiba")
         return u.DefWindowProcW(hwnd, msg, wp, lp)
+
+    def dispatch_pending(self):
+        # WNDPROC runs inside Tcl's native event loop with Tcl's Python thread
+        # state released. Even root.after() there can fatally abort CPython.
+        # A Tk timer calls this method after Tcl has restored that state.
+        while not self.closed:
+            try:
+                event = self.events.get_nowait()
+            except Empty:
+                break
+            {"open": self.on_open, "menu": self.on_menu, "devices": self.on_devices}[event]()
 
     def update(self, text):
         self.data.szTip = text[:127]
         s.Shell_NotifyIconW(1, C.byref(self.data))
 
     def close(self):
+        if self.closed:
+            return
+        self.closed = True
         s.Shell_NotifyIconW(2, C.byref(self.data))
         u.DestroyWindow(self.window)
         u.UnregisterClassW(self.class_name, self.module)
