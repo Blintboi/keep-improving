@@ -1,5 +1,7 @@
 """Event-driven Gaming Hub. Own only recorded shortcuts; never modify a game."""
 from dataclasses import asdict
+from contextlib import contextmanager
+from collections import Counter
 from datetime import datetime
 import hashlib
 import json
@@ -20,6 +22,30 @@ from .model import CHESS, blocked, helper, norm, within
 
 log = logging.getLogger(__name__)
 MARKER = "GameTimeHub.v1"
+
+
+@contextmanager
+def hub_lock(root):
+    path = Path(root) / ".gametime-hub.lock"
+    with path.open("a+b") as handle:
+        if handle.tell() == 0:
+            handle.write(b"0")
+            handle.flush()
+        handle.seek(0)
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            yield
+        finally:
+            handle.seek(0)
+            if os.name == "nt":
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(handle, fcntl.LOCK_UN)
 
 
 def shortcut_locations():
@@ -161,10 +187,11 @@ class Hub:
         self.locations = shortcut_locations() if locations is None else locations
         self.state_path = self.data_dir / "hub-state.json"
 
-    def _load(self):
-        if not self.state_path.exists():
+    def _load(self, path=None):
+        path = path or self.state_path
+        if not path.exists():
             return {"marker": MARKER, "links": []}
-        state = json.loads(self.state_path.read_text(encoding="utf-8"))
+        state = json.loads(path.read_text(encoding="utf-8"))
         if state.get("marker") != MARKER or not isinstance(state.get("links"), list):
             raise ValueError("A Gaming Hub nyilvántartása nem olvasható; a meglévő fájlokat megtartottuk.")
         return state
@@ -174,6 +201,14 @@ class Hub:
         temp = self.state_path.with_suffix(".tmp")
         temp.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(temp, self.state_path)
+        authority = Path(state["root"]) / ".gametime-hub.json"
+        scratch = authority.with_suffix(".tmp")
+        scratch.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(scratch, authority)
+        if os.name == "nt":
+            import ctypes
+            for path in (authority, authority.with_name(".gametime-hub.lock")):
+                ctypes.windll.kernel32.SetFileAttributesW(str(path), 2)
 
     @staticmethod
     def _safe(root, path):
@@ -191,7 +226,8 @@ class Hub:
 
     def _recipe(self, game, inventory, rules, root):
         candidates = [link for link in inventory if same_game_link(link, game, rules)]
-        candidates += [link for link in inventory if link.get("owned_game") == game.id
+        candidates += [link for link in inventory if (link.get("owned_game") == game.id or
+                       (link.get("owned_game", "").startswith("manual:") and game.source in {"Minecraft", "Steam", "Epic", "Ubisoft", "Riot"}))
                        and norm(link.get("owned_root", "")) == norm(game.root)
                        and (url_value(link.get("contents")) or Path(link.get("target", "")).is_file())]
         # Existing, explicitly collected special launchers (e.g. Minecraft or a
@@ -205,6 +241,11 @@ class Hub:
         if candidates:
             link = candidates[0]
             return {"kind": "copy", "source": link["path"], "extension": Path(link["path"]).suffix.lower()}
+        if game.source == "Minecraft":
+            from .minecraft import launcher
+            target = launcher()
+            if target:
+                return {"kind": "link", "extension": ".lnk", "target": target, "working": str(Path(target).parent)}
         appid = game.id.partition(":")[2]
         if game.source == "Steam" and appid.isdigit():
             return {"kind": "url", "url": "steam://rungameid/" + appid, "extension": ".url"}
@@ -244,7 +285,17 @@ class Hub:
         root = Path(settings.games_root)
         self._safe(root, root / "probe.lnk")
         root.mkdir(parents=True, exist_ok=True)
+        with hub_lock(root):
+            return self._sync_locked(settings, tuple(games), rules, overrides, root)
+
+    def _sync_locked(self, settings, games, rules, overrides, root):
         state = self._load()
+        authority = root / ".gametime-hub.json"
+        self._safe(root, authority)
+        if authority.exists():
+            state = self._load(authority)
+            if norm(state.get("owner", "")) != norm(self.data_dir.resolve()):
+                raise OSError("Ezt a Gaming Hubot már egy másik adatbázis kezeli. Indítsd a telepített játékfigyelőt.")
         # Never mutate a previous Games root after the user changes the setting.
         prior = {norm(item["path"]): item for item in state["links"]
                  if within(item["path"], root) and norm(item["path"]) != norm(root)}
@@ -259,6 +310,7 @@ class Hub:
         eligible = [g for g in games if g.installed and not g.id.startswith("pending:") and Path(g.root).is_dir()
                     and (overrides.get(g.id, g.default_enabled) or CHESS.search(g.name + " " + g.root))]
         recipes, names = [], set()
+        name_counts = Counter(safe_name(game.name).casefold() for game in eligible)
         for game in sorted(eligible, key=lambda g: g.id):
             base = root / "Sakk" if CHESS.search(game.name + " " + game.root) else root
             recipe = self._recipe(game, inventory, rules, root)
@@ -267,6 +319,8 @@ class Hub:
                 if kind == "folder" and norm(game.root) == norm(root):
                     continue
                 stem = safe_name(game.name)
+                if name_counts[stem.casefold()] > 1:
+                    stem += " (" + safe_name(game.source) + ")"
                 suffix = hashlib.sha256(game.id.encode()).hexdigest()[:8]
                 path = folder / (stem + spec["extension"])
                 for attempt in range(100):
@@ -355,7 +409,7 @@ class Hub:
                     shutil.copy2(path, backup / (hashlib.sha256(str(path).encode()).hexdigest()[:8] + "-" + path.name))
                     path.unlink()
                     modified += 1
-        state = {"marker": MARKER, "root": str(root), "links": written}
+        state = {"marker": MARKER, "root": str(root), "owner": str(self.data_dir.resolve()), "links": written}
         self._save(state)
         return {"enabled": True, "games": len(eligible), "links": len(written), "changed": modified,
                 "folder_fallbacks": sum(r["role"] == "launch" and r["fallback"] for r in recipes)}

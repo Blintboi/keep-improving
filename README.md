@@ -41,6 +41,9 @@ Indítás telepítés után: **Inditas.cmd**, illetve a tálcaikon. Az X gomb a 
 teszi a programot; tényleges kilépés a tálca jobb gombos menüjében érhető el.
 Ha az ikon a Windows rejtett ikonjai között van, a tálca felfelé mutató nyilánál keresd.
 Második indítás a már futó példány ablakát nyitja meg.
+Telepítés után a kibontott csomag `Inditas.cmd` fájlja is a telepített példányt
+nyitja meg, ugyanazzal az adatbázissal. Külön fejlesztői próbaadatokhoz
+explicit `--data-dir` szükséges. Két háttérindításból egy figyelő marad futva.
 
 A játékfigyelő saját kék játékvezérlő–óra ikont használ. **Bal kattintás**
 megnyitja az ablakot akkor is, ha korábban az X gombbal elrejtetted.
@@ -49,8 +52,9 @@ Ha az ablak már nyitva van, előtérbe hozza; újabb kattintás nem rejti el.
 Beállítások, Játéklista és hub frissítése, illetve külön Kilépés.
 A menü elvetése és az ikon fölé vitt egér nem állítja le a figyelőt.
 
-Telepítés nélküli kipróbálás: `py -3 -B main.py`. Ez a forrás melletti `data`
-mappát használja; automatikus indulást csak a telepítő állít be.
+Telepítés nélküli kipróbálás: `py -3 -B main.py`. Telepített példány hiányában
+a forrás melletti `data` mappát használja; automatikus indulást a telepítő állít be.
+Meglévő telepítésnél a normál indítás annak közös adatbázisát használja.
 
 ## Játékfelismerés
 
@@ -77,6 +81,10 @@ mappát használja; automatikus indulást csak a telepítő állít be.
 - **Games:** a beállított gyökér minden közvetlen almappája egy játékcsoport;
   az alatta lévő `bin`, `engine` és más alkönyvtárak EXE-fájljai ugyanahhoz a
   játékhoz tartoznak. A gyökérben közvetlenül lévő EXE-k egy közös csoportot alkotnak.
+- **Minecraft Java:** a helyi `.minecraft/versions` telepítés és a hivatalos
+  launcher saját `runtime` könyvtárai alapján felismeri a játék Java-folyamatát,
+  új runtime-verziónál is. A launcher és a más programokhoz tartozó általános
+  Java nem számít. Egyéni, külső Java-runtime kézzel rendelhető hozzá.
 
 Induláskor összeveti a jegyzékeket a korábbi nyilvántartással. Működés közben
 natív `ReadDirectoryChangesW` fájleseményeket és a Ubisofthoz/Riothoz
@@ -184,6 +192,11 @@ Nem számol időt arra az időszakra, amikor a figyelő nem futott.
 120 percnél: „Lejárt a mai 2 órás játékidőd. Ideje befejezni a játékot.”
 
 A sötét popup a normál ablakok fölé kerül, és értesítési hang is megszólal.
+Az értesítő a főablaktól független, ezért kicsinyített és tálcára rejtett
+főablak mellett is megjelenik. Figyelt játék előterében előbb egyszer Esc-et
+küld, majd 200 ms múlva megjelenik. A folyamat azonosságát és az előteret
+közvetlenül a billentyűküldés előtt ellenőrzi; lenyomott módosítóbillentyű
+mellett kihagyja az Esc-et. Egy értesítés újrapróbálása nem küld újabb Esc-et.
 A küszöb napi értesítését tartósan jelöli. Lejárt keret után egy másik játékfolyamat
 első előtérbe kerülése újra figyelmeztet; ugyanarra a folyamatra az Alt+Tab
 nem generál állandó figyelmeztetést. A PID mellett a folyamat létrehozási idejét
@@ -258,6 +271,9 @@ lefekvési emlékeztetőt nem módosítja. Újratelepítéskor az adatok újra h
 
 Automatikus indítás: `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`,
 értéknév: `GameTimeMonitor`. Nincs szolgáltatás vagy új ütemezett feladat.
+Az Indítópultban saját `GameTimeMonitor.lnk` tartalék indító is van, ugyanarra
+a háttérparancsra. A két bejelentkezési út ugyanazt az egypéldányos figyelőt
+használja; eltávolításkor mindkét saját indítási bejegyzés megszűnik.
 A `.cmd` indítók csak a saját PowerShell-folyamatuk végrehajtási házirendjét
 állítják `Bypass` módba; a gép tartós beállításait nem változtatják meg.
 

@@ -90,7 +90,7 @@ def epic_dirs():
 
 
 class Discovery:
-    def __init__(self, settings, steam=None, epic=None, launcher_dat=None, ubisoft=True, riot=True):
+    def __init__(self, settings, steam=None, epic=None, launcher_dat=None, ubisoft=True, riot=True, minecraft=False):
         self.settings = settings
         self.roots = steam if steam is not None else list(dict.fromkeys(steam_roots() + settings.steam_roots))
         self.epic_dirs = epic if epic is not None else list(dict.fromkeys(epic_dirs() + settings.epic_manifest_dirs))
@@ -107,6 +107,7 @@ class Discovery:
         self.riot = RiotSource() if riot is True else riot or None
         self.riot_hints = []
         self.install_roots = set()
+        self.minecraft = minecraft
 
     def _read_vdf(self, path):
         try:
@@ -207,6 +208,9 @@ class Discovery:
             found.update((g.id, g) for g in self.riot.scan())
             self.riot_hints = list(self.riot.hints)
             self.errors.extend(self.riot.errors)
+        if self.minecraft:
+            from .minecraft import scan
+            found.update((g.id, g) for g in scan())
         self.install_roots.update(game.root for game in found.values())
         return list(found.values())
 
@@ -249,6 +253,9 @@ class Discovery:
         wanted += [(p, False, "launchers") for p in self.epic_dirs]
         wanted += [(str(self.launcher_dat.parent), False, "launchers")]
         wanted += [(root, False, "launchers") for root in self.ubisoft_game_roots]
+        if self.minecraft:
+            from .minecraft import runtime_roots
+            wanted += [(root, False, "launchers") for root in runtime_roots()]
         if self.riot:
             wanted += self.riot.directory_specs()
         if self.settings.hub_enabled:

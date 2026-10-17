@@ -33,7 +33,7 @@ class DiscoveryService:
             watcher_factory = DirectoryWatcher
         self.factory = watcher_factory
         self.registry_factory = registry_factory
-        self.discovery = discovery or Discovery(settings)
+        self.discovery = discovery or Discovery(settings, minecraft=True)
         self.results = Queue()
         self.condition = threading.Condition()
         self.debounce = Debouncer()
@@ -207,7 +207,7 @@ class DiscoveryService:
                         self.manual_specs, self.manual_pending = self.manual_pending, None
                         self.debounce.add(("manual", ""), time.monotonic() - 2)
                     if self.reconfigure:
-                        self.discovery = Discovery(self.reconfigure)
+                        self.discovery = Discovery(self.reconfigure, minecraft=True)
                         self.reconfigure = None
                         self.debounce.jobs.clear()
                         self.known_game_roots.clear()

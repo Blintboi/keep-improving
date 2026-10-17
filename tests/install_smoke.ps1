@@ -44,6 +44,7 @@ store.close()
     $report.TimeAndExceptionsSurviveReinstall = $true
     $report.HubEnabledSurvivesReinstall = $true
     $report.AutostartMatches = (Get-GameTimeStartupValue $testStartupName) -eq $manifest.StartupCommand
+    $report.StartupFolderShortcutCreated = Test-Path -LiteralPath $manifest.StartupShortcut
     $argsText = '-B "' + (Join-Path $testInstallPath 'main.py') + '" --background --data-dir "' + (Join-Path $testInstallPath 'data') + '"'
     $process = Start-Process -FilePath $manifest.Pythonw -ArgumentList $argsText -PassThru -WindowStyle Hidden
     Start-Sleep -Seconds 4
@@ -66,12 +67,16 @@ store.close()
     & (Join-Path $testInstallPath 'verify.ps1') -InstallDir $testInstallPath
     $report.VerifyWhileRunning = $true
     $report.DiagnosticDidNotOpenUi = -not (Test-Path -LiteralPath (Join-Path $testInstallPath 'data\show.request'))
+    $duplicate = Start-Process -FilePath $manifest.Pythonw -ArgumentList $argsText -PassThru -WindowStyle Hidden
+    if (-not $duplicate.WaitForExit(10000)) { throw 'Duplicate background launch did not exit.' }
+    $report.DuplicateBackgroundDidNotOpenUi = -not (Test-Path -LiteralPath (Join-Path $testInstallPath 'data\show.request'))
     # The uninstaller must preserve unrelated user files as well as the database.
     'unrelated sentinel' | Set-Content -LiteralPath (Join-Path $testInstallPath 'user-sentinel.txt')
     & (Join-Path $sourcePath 'uninstall.ps1') -InstallDir $testInstallPath
     $process.WaitForExit(10000) | Out-Null
     $report.GracefulBackgroundStop = $process.HasExited
     $report.AutostartRemoved = -not (Get-GameTimeStartupValue $testStartupName)
+    $report.StartupFolderShortcutRemoved = -not (Test-Path -LiteralPath $manifest.StartupShortcut)
     $report.DatabasePreserved = Test-Path -LiteralPath (Join-Path $testInstallPath 'data\usage.sqlite3')
     $report.UserFilesPreserved = Test-Path -LiteralPath (Join-Path $testInstallPath 'user-sentinel.txt')
     $report.OwnedCodeRemoved = -not (Test-Path -LiteralPath (Join-Path $testInstallPath 'main.py'))

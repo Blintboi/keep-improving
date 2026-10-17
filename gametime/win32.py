@@ -41,6 +41,67 @@ api(u, "OpenInputDesktop", [W.DWORD, W.BOOL, W.DWORD], W.HANDLE)
 api(u, "CloseDesktop", [W.HANDLE], W.BOOL)
 api(u, "GetUserObjectInformationW", [W.HANDLE, C.c_int, C.c_void_p, W.DWORD, C.POINTER(W.DWORD)], W.BOOL)
 api(u, "SetForegroundWindow", [W.HWND], W.BOOL)
+api(u, "SetWindowPos", [W.HWND, W.HWND, C.c_int, C.c_int, C.c_int, C.c_int, W.UINT], W.BOOL)
+api(u, "IsWindowVisible", [W.HWND], W.BOOL)
+api(u, "GetAsyncKeyState", [C.c_int], W.SHORT)
+
+
+class MOUSEINPUT(C.Structure):
+    _fields_ = [("dx", W.LONG), ("dy", W.LONG), ("mouseData", W.DWORD),
+                ("dwFlags", W.DWORD), ("time", W.DWORD), ("dwExtraInfo", C.c_size_t)]
+
+
+class KEYBDINPUT(C.Structure):
+    _fields_ = [("wVk", W.WORD), ("wScan", W.WORD), ("dwFlags", W.DWORD),
+                ("time", W.DWORD), ("dwExtraInfo", C.c_size_t)]
+
+
+class HARDWAREINPUT(C.Structure):
+    _fields_ = [("uMsg", W.DWORD), ("wParamL", W.WORD), ("wParamH", W.WORD)]
+
+
+class INPUTDATA(C.Union):
+    _fields_ = [("mi", MOUSEINPUT), ("ki", KEYBDINPUT), ("hi", HARDWAREINPUT)]
+
+
+class INPUT(C.Structure):
+    _anonymous_ = ("data",)
+    _fields_ = [("type", W.DWORD), ("data", INPUTDATA)]
+
+
+api(u, "SendInput", [W.UINT, C.POINTER(INPUT), C.c_int], W.UINT)
+
+
+def escape_game(expected_path, expected_identity):
+    """One Escape press, only while the sampled game still owns the foreground."""
+    if not expected_identity or not interactive_desktop():
+        return False
+    hwnd = u.GetForegroundWindow()
+    pid = W.DWORD()
+    if not hwnd or not u.GetWindowThreadProcessId(hwnd, C.byref(pid)):
+        return False
+    path, identity = process_image(pid.value)
+    if (identity != expected_identity or os.path.normcase(path) != os.path.normcase(expected_path)
+            or any(u.GetAsyncKeyState(key) & 0x8000 for key in (0x1B, 0x10, 0x11, 0x12, 0x5B, 0x5C))
+            or u.GetForegroundWindow() != hwnd):
+        return False
+    keys = (INPUT * 2)(INPUT(type=1, ki=KEYBDINPUT(wVk=0x1B)),
+                       INPUT(type=1, ki=KEYBDINPUT(wVk=0x1B, dwFlags=2)))
+    sent = u.SendInput(2, keys, C.sizeof(INPUT))
+    if sent == 1:
+        # Complete a partially accepted key pair; never leave Escape held down.
+        u.SendInput(1, C.byref(keys[1]), C.sizeof(INPUT))
+    if sent != 2:
+        log.warning("Az Esc nem küldhető el teljesen a játéknak: %s/2", sent)
+    return sent == 2
+
+
+def present_notification(hwnd):
+    # Show in the topmost group even when Windows refuses foreground focus.
+    # NOMOVE | NOSIZE | NOACTIVATE | SHOWWINDOW | NOOWNERZORDER
+    if not u.SetWindowPos(hwnd, W.HWND(-1), 0, 0, 0, 0, 0x253):
+        raise C.WinError(C.get_last_error())
+    return bool(u.SetForegroundWindow(hwnd))
 
 
 def awake_seconds():

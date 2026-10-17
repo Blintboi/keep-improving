@@ -83,6 +83,8 @@ class App:
         self.catalog.steam_libraries = self.service.discovery.libraries_from_metadata()
         self.popup_window = None
         self.popup_day = None
+        self.notification_timer = None
+        self.escape_attempts = set()
         self.closed = False
         self.last_rows = None
         self.status = tk.StringVar(value="Játékok felismerése…")
@@ -202,12 +204,12 @@ class App:
         self.service.request("games")
         self.service.request("manual")
 
-    def _dialog(self, title, size="550x250"):
+    def _dialog(self, title, size="550x250", transient=True):
         window = tk.Toplevel(self.root)
         window.configure(bg=BG)
         window.title(title)
         window.geometry(size)
-        if self.root.state() != "withdrawn":
+        if transient and self.root.state() != "withdrawn":
             window.transient(self.root)
         dark_title(window)
         return window
@@ -377,7 +379,9 @@ class App:
     def popup(self, alert):
         if self.popup_window:
             return False
-        window = self._dialog("Játékidő – figyelmeztetés", "590x260")
+        # A transient of an iconic main window is withdrawn by Tk/Windows.
+        # Alerts must remain independent even if the main window is hidden later.
+        window = self._dialog("Játékidő – figyelmeztetés", "590x260", transient=False)
         self.popup_window, self.popup_day = window, alert.day
         window.attributes("-topmost", True)
         title = "Mára elég volt" if alert.kind in ("limit", "session") else "Játékidő emlékeztető"
@@ -395,16 +399,61 @@ class App:
         x = (window.winfo_screenwidth() - 590) // 2
         y = (window.winfo_screenheight() - 260) // 2
         window.geometry(f"+{max(0, x)}+{max(0, y)}")
+        window.deiconify()
         window.lift()
         hwnd = dark_title(window)
-        win32.u.SetForegroundWindow(hwnd)
-        window.focus_force()
-        winsound.PlaySound("SystemExclamation", winsound.SND_ALIAS | winsound.SND_ASYNC)
+        try:
+            foreground = win32.present_notification(hwnd)
+            window.focus_force()
+            window.update_idletasks()
+            if not window.winfo_viewable() or not win32.u.IsWindowVisible(hwnd):
+                raise RuntimeError("Az értesítőablak nem vált láthatóvá")
+        except Exception:
+            log.exception("Az értesítés megjelenítése nem sikerült; újrapróbáljuk")
+            dismiss()
+            return False
+        log.info("Értesítés megjelent: kind=%s day=%s main=%s foreground=%s",
+                 alert.kind, alert.day, self.root.state(), foreground)
+        try:
+            winsound.PlaySound("SystemExclamation", winsound.SND_ALIAS | winsound.SND_ASYNC)
+        except RuntimeError:
+            log.warning("Az értesítési hang nem játszható le; az ablak látható marad")
         return True
 
     def test_popup(self):
         self.popup(Alert(datetime.now().date().isoformat(), (), "limit",
                          "Próba: Lejárt a mai 2 órás játékidőd. Ideje befejezni a játékot.", "Rendben, befejezem"))
+
+    def notify(self, alert):
+        """Let the current game process Escape before mapping the alert window."""
+        escaped = False
+        self.escape_attempts = {prior for prior in self.escape_attempts if prior.day == alert.day}
+        if self.tracker.active and alert not in self.escape_attempts:
+            self.escape_attempts.add(alert)
+            try:
+                current = win32.sample()
+                if self.catalog.resolve(current.path) and current.interactive and current.identity == self.tracker.identity:
+                    escaped = win32.escape_game(current.path, current.identity)
+            except Exception:
+                log.exception("Az értesítés előtti Esc nem sikerült")
+        if escaped:
+            log.info("Esc elküldve a figyelt játéknak; értesítés 200 ms múlva")
+            self.notification_timer = self.root.after(200, lambda: self.finish_notification(alert))
+        else:
+            self.finish_notification(alert)
+
+    def finish_notification(self, alert):
+        self.notification_timer = None
+        if self.closed or alert.day != datetime.now().date().isoformat():
+            return
+        if not self.tracker.alerts or self.tracker.alerts[0] != alert:
+            return
+        try:
+            if self.popup(alert):
+                self.tracker.delivered(alert)
+                self.tracker.alerts.popleft()
+        except Exception:
+            log.exception("Értesítési hiba")
 
     def drain_discovery(self):
         while True:
@@ -495,11 +544,10 @@ class App:
             if self.popup_window and self.popup_day != today:
                 self.popup_window.destroy()
                 self.popup_window = self.popup_day = None
-            if not self.popup_window and self.tracker.alerts:
+            if not self.popup_window and self.notification_timer is None and self.tracker.alerts:
                 alert = self.tracker.alerts[0]
-                if alert.day == today and self.popup(alert):
-                    self.tracker.delivered(alert)
-                    self.tracker.alerts.popleft()
+                if alert.day == today:
+                    self.notify(alert)
                 elif alert.day != today:
                     self.tracker.alerts.popleft()
                     self.tracker.queued.difference_update((alert.day, key) for key in alert.keys)
@@ -520,6 +568,9 @@ class App:
         if self.tray_timer is not None:
             self.root.after_cancel(self.tray_timer)
             self.tray_timer = None
+        if self.notification_timer is not None:
+            self.root.after_cancel(self.notification_timer)
+            self.notification_timer = None
         self.tracker.close()
         self.service.close()
         self.hub.close()

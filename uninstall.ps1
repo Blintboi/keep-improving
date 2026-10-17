@@ -16,6 +16,14 @@ if ($current -eq $manifest.StartupCommand) {
     throw 'The startup entry was changed by another application; it was preserved.'
 }
 # Fixed file list only. No recursive deletion, games and usage data are preserved.
+if ($manifest.PSObject.Properties['StartupShortcut'] -and (Test-Path -LiteralPath $manifest.StartupShortcut)) {
+    $shell = New-Object -ComObject WScript.Shell
+    $link = $shell.CreateShortcut($manifest.StartupShortcut)
+    if ($link.Description -eq 'GameTimeMonitor.v1 startup' -and
+        ('"' + $link.TargetPath + '" ' + $link.Arguments) -ceq $manifest.StartupCommand) {
+        Remove-Item -LiteralPath $manifest.StartupShortcut
+    } else { throw 'A changed startup shortcut was preserved.' }
+}
 foreach ($name in Get-GameTimeFiles) {
     $target = [IO.Path]::GetFullPath((Join-Path $InstallDir $name))
     if (-not $target.StartsWith($InstallDir.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) {

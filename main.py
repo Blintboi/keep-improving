@@ -11,7 +11,19 @@ import time
 
 
 def default_data():
-    # Matches the reminder project's per-user Documents deployment convention.
+    # An unpacked source launcher must reuse the installed user's catalog.
+    if os.name == "nt":
+        import ctypes
+        buffer = ctypes.create_unicode_buffer(32768)
+        if ctypes.windll.shell32.SHGetFolderPathW(None, 5, None, 0, buffer) == 0:
+            installed = Path(buffer.value) / "GameTimeMonitor"
+            try:
+                manifest = json.loads((installed / "install.json").read_text(encoding="utf-8-sig"))
+                if (manifest.get("Marker") == "GameTimeMonitor.v1" and
+                        Path(manifest["InstallDir"]).resolve() == installed.resolve() and (installed / "main.py").is_file()):
+                    return installed / "data"
+            except (OSError, ValueError, KeyError):
+                pass
     return Path(__file__).resolve().parent / "data"
 
 
@@ -52,7 +64,8 @@ def main():
         instance.close()
         if args.configure or args.scan_once or args.sync_hub:
             raise RuntimeError("Előbb állítsd le a futó figyelőt a beállítások importálásához.")
-        (args.data_dir / "show.request").touch()
+        if not args.background:
+            (args.data_dir / "show.request").touch()
         return
     if instance.acquired:
         (args.data_dir / "stop.request").unlink(missing_ok=True)
@@ -71,7 +84,7 @@ def main():
         if args.scan_once:
             from gametime.model import LAUNCHER_SOURCES
             from gametime.discovery import Discovery, preserve_unreadable
-            discovery = Discovery(store.settings())
+            discovery = Discovery(store.settings(), minecraft=True)
             launchers = preserve_unreadable(discovery.scan_launchers(), store.games(True), discovery.errors)
             games = discovery.scan_games()
             store.reconcile(launchers, lambda g: g.source in LAUNCHER_SOURCES)
@@ -98,6 +111,7 @@ def main():
         from gametime.ui import App
         root = tk.Tk()
         app = App(root, store, args.data_dir, args.background)
+        logging.info("Figyelő elindult: pid=%s data=%s background=%s", os.getpid(), args.data_dir, args.background)
         try:
             root.mainloop()
         finally:

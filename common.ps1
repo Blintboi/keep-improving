@@ -15,6 +15,30 @@ function Get-GameTimeStartupValue([string]$Name) {
     }
 }
 
+function Get-GameTimeStartupLink([string]$Name) {
+    Join-Path ([Environment]::GetFolderPath('Startup')) ($Name + '.lnk')
+}
+
+function Set-GameTimeStartupLink([string]$Name, [string]$Pythonw, [string]$Arguments, [string]$Directory) {
+    $path = Get-GameTimeStartupLink $Name
+    $shell = New-Object -ComObject WScript.Shell
+    $link = $shell.CreateShortcut($path)
+    if ((Test-Path -LiteralPath $path) -and $link.Description -ne 'GameTimeMonitor.v1 startup') {
+        throw 'An unrelated startup shortcut was preserved.'
+    }
+    $link.TargetPath = $Pythonw
+    $link.Arguments = $Arguments
+    $link.WorkingDirectory = $Directory
+    $link.Description = 'GameTimeMonitor.v1 startup'
+    $link.WindowStyle = 7
+    $link.Save()
+    $check = $shell.CreateShortcut($path)
+    if ($check.TargetPath -ine $Pythonw -or $check.Arguments -cne $Arguments) {
+        throw 'Startup shortcut readback failed.'
+    }
+    return $path
+}
+
 function Get-GameTimePython([string]$PythonPath) {
     $probe = 'import sys,tkinter,sqlite3,pathlib; assert sys.version_info >= (3,9); tkinter.Tcl(); print(pathlib.Path(sys.executable).resolve())'
     $candidates = @()
@@ -48,7 +72,7 @@ function Get-GameTimePython([string]$PythonPath) {
 function Get-GameTimeFiles {
     @('main.py','gametime\__init__.py','gametime\model.py','gametime\discovery.py',
       'gametime\store.py','gametime\tracker.py','gametime\service.py','gametime\win32.py',
-      'gametime\ui.py','gametime\ubisoft.py','gametime\riot.py','gametime\hub.py','gametime\hub_links.ps1','gametime\app.ico','common.ps1','install.ps1','uninstall.ps1','launch.ps1','verify.ps1',
+      'gametime\ui.py','gametime\ubisoft.py','gametime\riot.py','gametime\minecraft.py','gametime\hub.py','gametime\hub_links.ps1','gametime\app.ico','common.ps1','install.ps1','uninstall.ps1','launch.ps1','verify.ps1',
       'Telepites.cmd','Eltavolitas.cmd','Inditas.cmd','Ellenorzes.cmd','README.md','TESZTELES.md','TESZTEREDMENYEK.txt')
 }
 

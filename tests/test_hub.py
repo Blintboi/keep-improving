@@ -243,6 +243,39 @@ class HubTests(unittest.TestCase):
                 worker.request(self.settings, [], {}, {})
         self.assertEqual(worker.due, 5)
 
+    def test_another_data_directory_cannot_duplicate_the_same_hub(self):
+        game = self.game()
+        self.hub.sync(self.settings, [game], {}, {})
+        original = self.launch(game.id)
+        before = digest(original)
+        other = Hub(self.base / "other-data", FakeLinks(), [])
+        with self.assertRaisesRegex(OSError, "másik adatbázis"):
+            other.sync(self.settings, [game], {}, {})
+        self.assertEqual(digest(original), before)
+        self.assertEqual(len(list(self.root.glob("*.url"))), 1)
+
+    def test_same_named_separate_installations_have_clear_source_labels(self):
+        games = [self.game("steam:123", "Same Game", "Steam", "Steam Game"),
+                 self.game("manual:1", "Same Game", "Kézi", "Standalone Game")]
+        self.hub.sync(self.settings, games, {}, {})
+        self.assertEqual(self.launch("steam:123").name, "Same Game (Steam).url")
+        self.assertEqual(self.launch("manual:1").name, "Same Game (Kézi).lnk")
+
+    def test_minecraft_migration_preserves_owned_special_launcher(self):
+        manual = self.game("manual:minecraft", "Minecraft", "Kézi", ".minecraft")
+        launcher = self.base / "MinecraftLauncher.exe"
+        launcher.write_bytes(b"MZ fixture")
+        original = self.root / "Inditas/Minecraft.lnk"
+        original.parent.mkdir(parents=True)
+        original.write_text(json.dumps({"target": str(launcher), "arguments": "--profile original"}))
+        self.hub.sync(self.settings, [manual], {}, {})
+        before = self.launch(manual.id).read_bytes()
+        original.unlink()
+        automatic = Game("minecraft:java", manual.name, "Minecraft", manual.root)
+        self.hub.sync(self.settings, [automatic], {}, {})
+        self.assertEqual(self.launch(automatic.id).read_bytes(), before)
+        self.assertEqual(len(list(self.root.glob("Minecraft*.lnk"))), 1)
+
 
 @unittest.skipUnless(os.name == "nt", "Windows required")
 class HubNativeTests(unittest.TestCase):

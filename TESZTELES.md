@@ -12,6 +12,16 @@ nem telepítenek és nem indítanak.
 
 ## Automatizált tesztek
 
+A `test_notifications.py` a valódi küszöbkezelésből indít értesítést minimalizált
+és tálcára rejtett főablaknál, valamint szintetikus, keret nélküli, teljes képernyős
+topmost tesztablak fölött. Ellenőrzi az elutasított fókuszkérést, a sikertelen
+megjelenítés újrapróbálását és az Esc utáni 200 ms sorrendet. A SendInput hívás
+ezekben helyettesített: nincs billentyűküldés a felhasználó játékába a tesztekből.
+A `test_minecraft.py` ellenőrzi az új runtime-útvonalakat, az általános Java és
+a launcher kizárását, az adatmegőrző átvezetést és az előtér/háttér elszámolást.
+A hubtesztek két külön adatbázis ugyanarra a Games mappára irányított szinkronját
+is ellenőrzik: a második tulajdonos visszautasítást kap, másolatok létrehozása nélkül.
+
 A csomag gyökérmappájában:
 
 ```powershell

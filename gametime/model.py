@@ -23,7 +23,7 @@ CLIENTS.update({"ubisoftconnect.exe", "ubisoftgamelauncher.exe", "ubisoftgamelau
 CLIENTS.update({"riotclientservices.exe", "riotclientux.exe", "riotclientuxrender.exe",
                 "riotclientcrashhandler.exe", "riotclientcrashhandler64.exe", "riotclientcrashhandler32.exe",
                 "vgc.exe", "vgtray.exe", "leagueclient.exe", "leagueclientux.exe", "leagueclientuxrender.exe"})
-LAUNCHER_SOURCES = ("Steam", "Epic", "Ubisoft", "Riot")
+LAUNCHER_SOURCES = ("Steam", "Epic", "Ubisoft", "Riot", "Minecraft")
 HELPERS = re.compile(r"unins|uninstall|(^|[-_ ])setup|^install|launcher|updater|crash|"
                      r"helper|config|redist|vcredist|dxsetup|benchmark|anticheat|easyanticheat", re.I)
 CHESS = re.compile(r"chess|sakk|stockfish|(^|[\W_])(lc0|fritz|houdini|komodo)([\W_]|$)", re.I)
@@ -100,6 +100,11 @@ class Catalog:
             gid = self.rules[key]
             game = self.games.get(gid) if gid else None
             return game if game and self.enabled(game) else None
+        from .minecraft import is_runtime
+        if is_runtime(path):
+            game = next((g for g in self.games.values() if g.source == "Minecraft" and g.installed), None)
+            if game:
+                return game if self.enabled(game) else None
         if helper(path) or CHESS.search(ntpath.basename(path)):
             return None
         # A more specific installation wins over a containing custom Games folder.
@@ -138,6 +143,9 @@ class Catalog:
         if key in self.rules:
             game = self.games.get(self.rules[key])
             return not game or not self.enabled(game)
+        from .minecraft import is_runtime
+        if is_runtime(path) and any(g.source == "Minecraft" and not self.enabled(g) for g in self.games.values()):
+            return True
         return any(g.source != "Kézi" and within(path, g.root) and not self.enabled(g)
                    for g in self.games.values())
 

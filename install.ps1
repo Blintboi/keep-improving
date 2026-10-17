@@ -23,7 +23,8 @@ if ((Test-Path -LiteralPath $InstallDir) -and -not $old) {
     if ($other.Count) { throw 'The destination contains files from another application. Choose a separate directory.' }
 }
 $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
-$commandLine = '"' + $python.Pythonw + '" -B "' + (Join-Path $InstallDir 'main.py') + '" --background --data-dir "' + (Join-Path $InstallDir 'data') + '"'
+$backgroundArguments = '-B "' + (Join-Path $InstallDir 'main.py') + '" --background --data-dir "' + (Join-Path $InstallDir 'data') + '"'
+$commandLine = '"' + $python.Pythonw + '" ' + $backgroundArguments
 $existing = Get-GameTimeStartupValue $StartupName
 if ($existing -and $existing -ne $commandLine -and (-not $old -or $existing -ne $old.StartupCommand)) {
     throw 'This startup entry belongs to a different installation; it was not changed.'
@@ -50,6 +51,9 @@ if ($EnableHub) { $hubArguments += '--enable-hub' }
 if ($LASTEXITCODE -ne 0) { throw 'Initial configuration or discovery failed; automatic startup was not enabled.' }
 if (-not (Test-Path -LiteralPath $runKey)) { New-Item -Path $runKey -Force | Out-Null }
 New-ItemProperty -LiteralPath $runKey -Name $StartupName -PropertyType String -Value $commandLine -Force | Out-Null
+$startupLink = Set-GameTimeStartupLink $StartupName $python.Pythonw $backgroundArguments $InstallDir
+$manifest.StartupShortcut = $startupLink
+$manifest | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $InstallDir 'install.json') -Encoding UTF8
 if ($old -and $old.StartupName -ne $StartupName) {
     $oldCommand = Get-GameTimeStartupValue $old.StartupName
     if ($oldCommand -eq $old.StartupCommand) { Remove-ItemProperty -LiteralPath $runKey -Name $old.StartupName }
