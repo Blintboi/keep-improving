@@ -61,6 +61,7 @@ class App(QMainWindow,MonitorActions):
         self.catalog.steam_libraries=self.service.discovery.libraries_from_metadata()
         self.popup_window=self.popup_day=self.notification_timer=None; self.escape_attempts=set(); self.closed=False
         self.launcher=None; self.launching=None; self.last_rows=None
+        self.clients=[]; self.client_worker=None; self._clients_busy=False; self._clients_refreshed=0
         self.tick_timer=self.tray_timer=None; self._timers=set(); self._dialogs=[]
         self.hidden_ids=store.hidden_ids(); self.selected_id=None; self.show_hidden=False; self.cards={}
         self.status_key='Discovering games…'; self.status_values={}; self.status_text=self.t(self.status_key)
@@ -80,6 +81,7 @@ class App(QMainWindow,MonitorActions):
         self.refresh_manual_availability(); self.service.start(); self.render()
         if not background or not self.tray.available: self.show()
         self.overlay_timer=QTimer(self); self.overlay_timer.setInterval(200); self.overlay_timer.timeout.connect(self.update_overlay); self.overlay_timer.start()
+        self.assets_timer=QTimer(self); self.assets_timer.setInterval(100); self.assets_timer.timeout.connect(self.poll_assets); self.assets_timer.start()
         self.tick_timer=self.call_later(200,self.tick); self.tray_timer=self.call_later(75,self.poll_tray)
 
     def t(self,text,**values): return tr(text,self.settings.language,**values)
@@ -100,10 +102,10 @@ class App(QMainWindow,MonitorActions):
         brand_text=QVBoxLayout(); brand_text.setSpacing(3); name=label('Gaming Hub'); name.setFont(QFont('Segoe UI',13,QFont.Bold)); brand_text.addWidget(name)
         small=label(self.t('Game Time Monitor'),'muted'); small.setStyleSheet('font-size:10px;'); brand_text.addWidget(small); brand.addLayout(brand_text); side.addLayout(brand)
         side.addSpacing(32); side.addWidget(label(self.t('YOUR SPACE'),'eyebrow')); side.addSpacing(4)
-        self.nav=[]
-        for index,text,icon in ((0,'Library','library'),(1,'Statistics','stats'),(2,'Settings','settings')):
+        self.nav={}
+        for index,text,icon in ((0,'Library','library'),(3,'Launchers','clients'),(1,'Statistics','stats'),(2,'Settings','settings')):
             item=button(self.t(text),lambda checked=False,n=index:self.switch_page(n),'nav'); item.setCheckable(True); item.setIcon(glyph(icon)); item.setMinimumHeight(45)
-            self.nav.append(item); side.addWidget(item)
+            self.nav[index]=item; side.addWidget(item)
         side.addStretch()
         monitoring=panel(); monitoring.setStyleSheet('QFrame#Panel {background:#13211d; border:1px solid #284339; border-radius:13px;}')
         monitor_layout=QVBoxLayout(monitoring); monitor_layout.setContentsMargins(13,13,13,13); monitor_layout.setSpacing(7)
@@ -127,6 +129,7 @@ class App(QMainWindow,MonitorActions):
         self.hub_page=self._build_library(state); self.pages.addWidget(self.hub_page)
         self.statistics=StatisticsPage(self); self.pages.addWidget(self.statistics)
         self.settings_page=self._build_settings(); self.pages.addWidget(self.settings_page)
+        self.clients_page=self._build_clients(); self.pages.addWidget(self.clients_page)
         self.status_label=label(self.status_text,'muted'); self.status_label.setSizePolicy(QSizePolicy.Ignored,QSizePolicy.Fixed)
         self.status_label.setStyleSheet('font-size:11px; padding:8px 32px 12px; color:#7d9395;'); right.addWidget(self.status_label)
         row.addLayout(right,1)
@@ -137,7 +140,74 @@ class App(QMainWindow,MonitorActions):
         self.statistics.start.setText(state.get('start',self.statistics.start.text())); self.statistics.end.setText(state.get('end',self.statistics.end.text()))
         self.statistics.selected_day=state.get('day')
         self.pages.setCurrentIndex(state.get('page',0))
-        for i,item in enumerate(self.nav): item.setChecked(i==self.pages.currentIndex())
+        for i,item in self.nav.items(): item.setChecked(i==self.pages.currentIndex())
+
+    def _build_clients(self):
+        page=QWidget(); layout=QVBoxLayout(page); layout.setContentsMargins(32,25,32,22); layout.setSpacing(18)
+        row=QHBoxLayout(); row.addWidget(label(self.t('Launchers'),'title'),1)
+        self.clients_refresh=button(self.t('Refresh'),self.refresh_clients); row.addWidget(self.clients_refresh); layout.addLayout(row)
+        note=label(self.t('Open your installed game clients here. Launcher time does not count as gameplay.'),'muted'); note.setWordWrap(True); layout.addWidget(note)
+        self.clients_status=label('','muted'); self.clients_status.setWordWrap(True); layout.addWidget(self.clients_status)
+        scroll=QScrollArea(); scroll.setWidgetResizable(True); content=QWidget(); self.clients_layout=QGridLayout(content)
+        self.clients_layout.setContentsMargins(0,0,8,0); self.clients_layout.setSpacing(16); self.clients_layout.setAlignment(Qt.AlignTop)
+        scroll.setWidget(content); layout.addWidget(scroll,1); self.render_clients(); return page
+
+    def refresh_clients(self):
+        if self.closed or self._clients_busy: return
+        if self.client_worker is None:
+            from .clients import ClientWorker
+            self.client_worker=ClientWorker(self.data_dir)
+        self._clients_busy=True; self.clients_refresh.setEnabled(False); self.clients_status.setText(self.t('Finding installed launchers…'))
+        self.client_worker.request(self.settings)
+
+    def render_clients(self):
+        if not hasattr(self,'clients_layout'): return
+        while self.clients_layout.count():
+            item=self.clients_layout.takeAt(0)
+            if item.widget(): item.widget().deleteLater()
+        self.client_buttons={}
+        for index,client in enumerate(self.clients):
+            card=panel(); body=QVBoxLayout(card); body.setContentsMargins(22,22,22,22); body.setSpacing(15)
+            head=QHBoxLayout(); icon=QLabel(); icon.setFixedSize(52,52)
+            from PySide6.QtCore import QFileInfo
+            pix=self.art.provider.icon(QFileInfo(client.target)).pixmap(48,48); pix.setDevicePixelRatio(1)
+            icon.setPixmap(pix.scaled(48,48,Qt.KeepAspectRatio,Qt.SmoothTransformation)); head.addWidget(icon)
+            head.addWidget(label(client.name,'section'),1); body.addLayout(head)
+            detail=label(self.t('Client library, updates and installation'),'muted'); detail.setWordWrap(True); body.addWidget(detail)
+            launch=button(self.t('Open launcher'),lambda checked=False,c=client:self.open_client(c),'primary'); body.addWidget(launch)
+            self.client_buttons[client.id]=launch; self.clients_layout.addWidget(card,index//2,index%2)
+        for column in range(2): self.clients_layout.setColumnStretch(column,1)
+        self.clients_status.setText(self.t('Finding installed launchers…') if self._clients_busy else self.t('No supported launcher found. Install a client, then refresh.') if not self.clients else self.t('{count} installed launchers',count=len(self.clients)))
+        self.clients_refresh.setEnabled(not self._clients_busy)
+
+    def open_client(self,client):
+        try:
+            from .clients import start_client
+            start_client(client); self.set_status('Opened {name}.',name=client.name)
+        except (OSError,ValueError) as exc:
+            self.set_status('Could not open {name}. Refresh the launcher list.',name=client.name); self.message(self.t(str(exc)))
+
+    def poll_assets(self):
+        if self.closed: return
+        try:
+            changed=self.art.poll()
+            for key in changed:
+                card=self.cards.get(key[0])
+                if card and self.art.key(card.game)==key: card.art=self.art.cache[key]; card.update()
+            if changed: self.update_launch_button()
+            if self.client_worker:
+                while not self.client_worker.results.empty():
+                    clients,warning=self.client_worker.results.get_nowait(); self._clients_busy=False; self._clients_refreshed=time.monotonic()
+                    if clients is not None: self.clients=clients
+                    self.render_clients()
+                    if warning: self.clients_status.setText(self.t(warning))
+                if self.pages.currentIndex()==3 and not self._clients_busy and time.monotonic()-self._clients_refreshed>=60: self.refresh_clients()
+        except (OSError,ValueError,RuntimeError): log.warning('Optional assets/launchers unavailable',exc_info=True)
+
+    def refresh_sources(self):
+        self.art.invalidate(); self._art_queue=list(self.cards); self.call_later(10,self.load_next_art)
+        if self.client_worker: self.refresh_clients()
+        MonitorActions.refresh_sources(self)
 
     def _build_library(self,state):
         page=QWidget(); layout=QVBoxLayout(page); layout.setContentsMargins(32,25,24,17); layout.setSpacing(17)
@@ -307,7 +377,8 @@ class App(QMainWindow,MonitorActions):
                 restriction_enabled=self.restriction_enabled.isChecked(),restriction_seconds=self.restriction_minutes.value()*60,**self.overlay_values()).validate()
             self.tracker.flush(); self.store.save_settings(settings); self.settings=self.catalog.settings=settings
             self.tracker.unclassified.clear(); self.tracker.previous=None; self.service.configure(settings)
-            self.art.roots=list(dict.fromkeys(self.art.roots+settings.steam_roots)); self.art.cache.clear(); self.art.refresh_links(settings.games_root)
+            self.art.roots=list(dict.fromkeys(self.art.roots+settings.steam_roots)); self.art.invalidate(); self.art.refresh_links(settings.games_root)
+            self._art_queue=list(self.cards); self.call_later(10,self.load_next_art)
             self.settings_error.setText(''); self.last_rows=None; self.set_status('Settings saved.'); self._overlay_preview_until=0; self.update_overlay(); self.render()
         except (ValueError,OSError) as exc: self.settings_error.setText(self.t(str(exc)))
 
@@ -325,8 +396,9 @@ class App(QMainWindow,MonitorActions):
 
     def switch_page(self,index):
         self.pages.setCurrentIndex(index)
-        for n,item in enumerate(self.nav): item.setChecked(n==index)
+        for n,item in self.nav.items(): item.setChecked(n==index)
         if index==1: self.statistics.refresh()
+        if index==3: self.refresh_clients()
     def settings_dialog(self): self.switch_page(2); self.show()
     def show(self):
         if self.closed: return
@@ -512,6 +584,8 @@ class App(QMainWindow,MonitorActions):
         for timer in list(self._timers): timer.stop(); timer.deleteLater()
         self._timers.clear(); self.dismiss_popup()
         self.overlay_timer.stop()
+        self.assets_timer.stop(); self.art.close()
+        if self.client_worker: self.client_worker.close()
         if self.overlay: self.overlay.close(); self.overlay.deleteLater()
         for signal in (QApplication.instance().screenAdded,QApplication.instance().screenRemoved):
             try: signal.disconnect(self.refresh_overlay_screens)

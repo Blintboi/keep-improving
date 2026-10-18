@@ -2,13 +2,13 @@
 
 An offline Windows 11 Gaming Hub and game-time monitor in one app. Launch games from a searchable library, measure foreground gameplay against a shared daily budget, and follow daily statistics in a dark English/Hungarian interface.
 
-**Private preview 2.2.0.** The repository and release downloads remain private. Sign into GitHub with an account that has access on your other PC. Each PC keeps its own history; there is no cloud synchronization. [Magyar útmutató](README.hu.md).
+**Private preview 2.3.0.** The repository and release downloads remain private. Sign into GitHub with an account that has access on your other PC. Each PC keeps its own history; there is no cloud synchronization. [Magyar útmutató](README.hu.md).
 
-The 2.0 interface uses Qt Widgets: a dark sidebar, responsive game cards, a daily-budget ring, contextual game actions and a redesigned statistics page. Artwork is read from existing local Steam caches or installed-game icons; no image service, launcher credentials or artwork downloads are used. Artwork and icons keep their original aspect ratios; complete cover images fit inside the card with dark padding where needed. Missing art has a colored monogram fallback. The shared controller/clock application icon remains unchanged.
+The 2.0 interface uses Qt Widgets: a dark sidebar, responsive game cards, a daily-budget ring, contextual game actions and a redesigned statistics page. Artwork is read from existing local Steam caches, installed-game image files or game icons; no image service, launcher credentials or artwork downloads are used. Artwork and icons keep their original aspect ratios; complete cover images fit inside the card with dark padding where needed. Missing art has a colored monogram fallback. The shared controller/clock application icon remains unchanged.
 
 ## Install
 
-1. Open this repository's **Releases**, download `GameTimeMonitor-2.2.0-Setup.exe`, and run it as your normal Windows user.
+1. Open this repository's **Releases**, download `GameTimeMonitor-2.3.0-Setup.exe`, and run it as your normal Windows user.
 2. Python, Qt/PySide6 and SQLite are included. No separate Python, pip packages, administrator account or launcher login is needed by the monitor.
 3. The app opens and discovers installed games. It starts in the tray when you sign into Windows. Open **Settings** to change your daily limit or Gaming Hub location.
 
@@ -25,6 +25,16 @@ The **Library** page is the home screen, with artwork cards, quick Play buttons,
 If the executable is ambiguous, use **Assign EXE** to choose it once. The app saves the choice and its tracking rule. **Add game** also remembers the executable. Choices survive upgrades and discovery ID merges. Excluding a game's time does not prevent launching it. Removed games cannot launch. Preparation runs on a worker, keeping measurement and reminders responsive; opening a launcher alone does not count as gameplay.
 
 Select a card and use its **…** menu for Hide / restore, Exclude / track, Assign EXE, EXE rules, Open game folder and Uninstall game. Statistics and Settings have their own pages in the left sidebar. **Open game folder** opens the selected installation when you need its files. The desktop Gaming Hub icon and tray's Open Gaming Hub return to this page without opening a separate folder or another monitor.
+
+## Launcher clients and local artwork
+
+Open **Launchers** in the sidebar for a separate client library: installed **Steam, Epic Games Launcher, Riot Client, Ubisoft Connect and Minecraft Launcher** appear with their own icons and Open launcher buttons. Detection uses local Start menu/Desktop shortcut targets, known installation roots and installation-only registry/index records. Shortcuts with game-specific arguments are ignored for generic client opening; the executable path is rechecked before opening without shell command text or extra arguments. No client opens automatically. Refresh repeats detection, and the visible page refreshes about once a minute. A missing client shows a clear message.
+
+Launcher clients remain accessible when the voluntary game restriction is active, so libraries, downloads and updates still work. Their foreground time does not consume the game budget. Starting an actual tracked game, including through a client, still follows the normal time/restriction policy.
+
+Artwork discovery runs on a background worker for each library card. It tries the exact Steam app's local cache (including hashed filenames), an installed game's `steam_appid.txt` when available, and named cover/header/banner/splash/title/logo/icon files in the recognized installation. A bounded search prefers artwork/resource/content folders and skips saves, screenshots, mods, backups, logs, engine folders and reparse points. It does not scan whole drives or read launcher accounts. Minecraft can use its known title-logo PNG directly from a local version JAR, without extraction or execution. Images are decoded at thumbnail size with file/dimension/memory limits; corrupt/unsupported files are skipped. Only ordinary image files and that specific Minecraft image entry are supported; proprietary/encrypted game packs are not unpacked.
+
+If no cover exists locally, the app uses a local game icon or the actual game's executable icon, then a monogram if neither is available. It does not invent or download covers. Images keep their complete aspect ratio with dark padding. **Refresh games and hub** repeats the artwork search, for example after an update adds new assets. This feature does not move/change game files, upload local images or change tracking history.
 
 ## Language and statistics
 
@@ -89,7 +99,7 @@ Fresh installs count chess normally. **Exclude chess games by default** is optio
 
 ## Privacy and removing the monitor
 
-The app has no telemetry, online account, data upload or cloud component. It reads local installation metadata, foreground process paths, game directories and shortcut metadata. It does not read launcher tokens, browser history, messages or save contents. GitHub downloads are separate from the offline monitor.
+The app has no telemetry, online account, data upload or cloud component. It reads local installation metadata, foreground process paths, game directories, local artwork assets and shortcut metadata. It does not read launcher tokens, browser history, messages or save contents. GitHub downloads are separate from the offline monitor.
 
 Data includes `usage.sqlite3` (history, configuration including language, rules, visibility and alert markers), rotating `monitor.log`, `hub-state.json`, and the Hub icon under `assets`. Logs may contain local paths. Data, installed manifests and logs are excluded from Git. Stop the app before backing up the data folder. Whole-profile transfer is not automatic multi-PC sync: paths, EXE rules and Hub ownership are machine-specific.
 

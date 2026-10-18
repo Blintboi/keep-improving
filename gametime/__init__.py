@@ -1,2 +1,2 @@
 """Offline, per-user Windows game time monitor with a Qt Gaming Hub."""
-__version__ = "2.2.0"
+__version__ = "2.3.0"

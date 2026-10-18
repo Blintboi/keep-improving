@@ -1,6 +1,18 @@
 """Small explicit English/Hungarian catalog. Stored IDs and paths never translate."""
 LANGUAGES = {"English": "en", "Magyar": "hu"}
 HU = {
+    'Launchers': 'Játékkliensek',
+    'Open your installed game clients here. Launcher time does not count as gameplay.': 'Itt nyithatod meg a telepített játékklienseket. A kliensben töltött idő nem számít játékidőnek.',
+    'Client library, updates and installation': 'Játékkönyvtár, frissítések és telepítés',
+    'Open launcher': 'Kliens megnyitása',
+    'Finding installed launchers…': 'Telepített játékkliensek keresése…',
+    'No supported launcher found. Install a client, then refresh.': 'Nem található támogatott játékkliens. Telepítés után frissítsd a listát.',
+    '{count} installed launchers': '{count} telepített játékkliens',
+    'Opened {name}.': '{name} megnyitva.',
+    'Could not open {name}. Refresh the launcher list.': 'Nem sikerült megnyitni: {name}. Frissítsd a klienslistát.',
+    'This launcher is no longer available. Refresh the launcher list.': 'Ez a játékkliens már nem elérhető. Frissítsd a klienslistát.',
+    'Some launcher shortcuts could not be read. Refresh to try again.': 'Egyes kliensparancsikonok nem olvashatók. Próbáld meg újra a Frissítés gombbal.',
+    'Could not refresh launchers. Try again.': 'Nem sikerült frissíteni a klienslistát. Próbáld meg újra.',
     'Play restriction': 'Játék korlátozása',
     'Prevent further tracked gameplay after a daily threshold': 'További figyelt játék megakadályozása a napi határ után',
     'Restrict after (total daily minutes)': 'Korlátozás ennyi napi játékperc után',

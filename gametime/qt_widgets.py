@@ -3,6 +3,7 @@ import configparser
 import hashlib
 import json
 from pathlib import Path
+from queue import Empty
 from .model import within, helper
 from PySide6.QtCore import Qt, QRectF, QPointF, Signal, QTimer, QFileInfo
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap, QLinearGradient, QRegion
@@ -114,6 +115,9 @@ def glyph(name, color=ACCENT, size=20):
     elif name=='play':
         p.setBrush(QColor(color)); p.setPen(Qt.NoPen)
         path=QPainterPath(); path.moveTo(8,5); path.lineTo(20,12); path.lineTo(8,19); path.closeSubpath(); p.drawPath(path)
+    elif name=='clients':
+        p.drawRoundedRect(QRectF(3,4,18,14),3,3); p.drawLine(8,21,16,21); p.drawLine(12,18,12,21)
+        p.drawLine(7,9,11,9); p.drawLine(9,7,9,11); p.drawEllipse(QRectF(15,9,1,1))
     p.end()
     return QIcon(pix)
 
@@ -132,29 +136,51 @@ class LocalArtwork:
     def __init__(self, data_dir, roots):
         self.data_dir=Path(data_dir); self.roots=list(roots); self.cache={}; self.links={}
         self.provider=QFileIconProvider()
+        self.worker=None; self.pending={}; self.tokens=0; self.fingerprints={}; self.origins={}
+    def key(self,game): return (game.id,game.root,game.metadata,self.links.get(game.id))
+    def request(self,game,rules):
+        key=self.key(game); signature=tuple(sorted((p,gid) for p,gid in rules.items() if gid==game.id))
+        if self.fingerprints.get(key)==signature: return
+        self.cache.pop(key,None); self.origins.pop(key,None)
+        self.fingerprints[key]=signature; self.tokens+=1; self.pending[key]=self.tokens
+        if self.worker is None:
+            from .artwork import ArtworkWorker
+            self.worker=ArtworkWorker()
+        self.worker.request(self.tokens,key,game,self.roots,rules)
+    def invalidate(self):
+        self.cache.clear(); self.pending.clear(); self.fingerprints.clear(); self.origins.clear()
+        if self.worker: self.worker.generation+=1
+    def poll(self):
+        changed=[]
+        if not self.worker: return changed
+        for _ in range(3):
+            try: token,key,poster,icon,executables,origin,icon_origin=self.worker.results.get_nowait()
+            except Empty: break
+            if self.pending.get(key)!=token: continue
+            self.pending.pop(key,None)
+            old_poster,old_icon=self.cache.get(key,(None,None))
+            pix=QPixmap.fromImage(icon) if icon is not None else old_icon
+            if icon is None and executables:
+                try:
+                    candidate=self.provider.icon(QFileInfo(executables[0])).pixmap(96,96)
+                    if not candidate.isNull(): pix=candidate; pix.setDevicePixelRatio(1)
+                except (OSError,RuntimeError): pass
+            self.cache[key]=(QPixmap.fromImage(poster) if poster is not None else old_poster,pix)
+            self.origins[key]=origin or icon_origin or (executables[0] if executables and pix is not None else '')
+            changed.append(key)
+        return changed
+    def close(self):
+        if self.worker: self.worker.close()
     def refresh_links(self, root):
         try:
             state=json.loads((Path(root)/'.gametime-hub.json').read_text(encoding='utf-8'))
             self.links={row['gid']:row['path'] for row in state.get('links',[]) if row.get('role')=='launch'}
         except (OSError,ValueError,KeyError,TypeError,AttributeError): self.links={}
     def artwork(self,game,rules):
-        key=(game.id,game.root,game.metadata,self.links.get(game.id))
+        key=self.key(game)
+        self.request(game,rules)
         if key in self.cache: return self.cache[key]
         poster=None
-        if game.source=='Steam':
-            appid=game.id.partition(':')[2]
-            if appid.isascii() and appid.isdigit():
-                for root in self.roots:
-                    folder=Path(root)/'appcache/librarycache'
-                    candidates=[folder/(appid+'_header.jpg'),folder/(appid+'_library_hero.jpg'),folder/(appid+'_library_600x900.jpg')]
-                    nested=folder/appid
-                    if nested.is_dir():
-                        candidates+=list(nested.glob('*header*'))[:8]+list(nested.glob('*library_600x900*'))[:8]
-                    for path in candidates:
-                        if path.is_file():
-                            image=QPixmap(str(path))
-                            if not image.isNull(): poster=image.scaled(640,420,Qt.KeepAspectRatio,Qt.SmoothTransformation); break
-                    if poster: break
         icon=QIcon()
         # Prefer real game artwork to a generic Windows internet-shortcut icon.
         executable=next((p for p,gid in rules.items() if gid==game.id and Path(p).is_file()),None)
@@ -162,7 +188,7 @@ class LocalArtwork:
             try:
                 manifest=json.loads(Path(game.metadata).read_text(encoding='utf-8-sig'))
                 candidate=Path(game.root)/manifest.get('LaunchExecutable','')
-                if within(candidate.resolve(),Path(game.root).resolve()) and candidate.suffix.lower()=='.exe' and not helper(candidate) and candidate.is_file(): executable=str(candidate)
+                if within(candidate.resolve(),Path(game.root).resolve()) and candidate.suffix.lower()=='.exe' and not helper(candidate) and 'bootstrap' not in candidate.stem.lower() and candidate.is_file(): executable=str(candidate)
             except (OSError,ValueError,TypeError,AttributeError): pass
         if executable: icon=self.provider.icon(QFileInfo(executable))
         source=self.links.get(game.id)

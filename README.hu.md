@@ -1,12 +1,12 @@
-# Játékidőfigyelő — 2.2.0
+# Játékidőfigyelő — 2.3.0
 
 Windows 11-en futó, sötét felületű Gaming Hub és játékidőfigyelő egy alkalmazásban. A játékgyűjteményből közvetlenül indíthatod a játékokat, követheted az idődet és megnézheted a napi statisztikákat. A repó és a kiadások egyelőre **privátak**. A másik gépen is hozzáférő GitHub-fiókkal jelentkezz be a letöltéshez.
 
-A 2.0-s felület Qt-ra váltott: letisztult sötét oldalsáv, átrendeződő játékkártyák, kör alakú napi keretjelző és új statisztikaoldal került bele. A kártyák meglévő helyi Steam-borítóképeket és játékikonokat használnak, képletöltés nélkül. A borítóképek teljes egészükben, az eredeti oldalarányukat megtartva férnek a képmezőbe; a szabad hely sötét marad. A közös kontrolleres-órás alkalmazásikon megmaradt. A kijelölt játék kezelését az alsó **…** menüben találod; a nyelvválasztó az oldalsáv alján van.
+A 2.0-s felület Qt-ra váltott: letisztult sötét oldalsáv, átrendeződő játékkártyák, kör alakú napi keretjelző és új statisztikaoldal került bele. A kártyák meglévő helyi Steam-borítóképeket, telepített játékképeket és játékikonokat használnak, képletöltés nélkül. A borítóképek teljes egészükben, az eredeti oldalarányukat megtartva férnek a képmezőbe; a szabad hely sötét marad. A közös kontrolleres-órás alkalmazásikon megmaradt. A kijelölt játék kezelését az alsó **…** menüben találod; a nyelvválasztó az oldalsáv alján van.
 
 ## Telepítés
 
-Töltsd le a Kiadások / Releases oldalról a `GameTimeMonitor-2.2.0-Setup.exe` fájlt, és indítsd el. A Python, a Qt/PySide6 és az SQLite benne van: semmit nem kell külön telepíteni. A program megnyílik, felismeri a játékokat, és a következő Windows-bejelentkezéskor a tálcán indul. A telepítő jelenleg nincs digitálisan aláírva.
+Töltsd le a Kiadások / Releases oldalról a `GameTimeMonitor-2.3.0-Setup.exe` fájlt, és indítsd el. A Python, a Qt/PySide6 és az SQLite benne van: semmit nem kell külön telepíteni. A program megnyílik, felismeri a játékokat, és a következő Windows-bejelentkezéskor a tálcán indul. A telepítő jelenleg nincs digitálisan aláírva.
 
 A program helye: `%LOCALAPPDATA%\Programs\GameTimeMonitor`. Az előzmények és beállítások a Windows Dokumentumok mappájában, a `GameTimeMonitor\data` alatt maradnak. A frissítés mentést készít, és megtartja az eddigi keretet, kizárásokat, EXE-szabályokat, rejtett játékokat és Hub-mappát.
 
@@ -19,6 +19,18 @@ A **Játéktár** a kezdőlap: színes játékcsempék, helyi borítóképek és
 Ha több EXE közül kell választani, az **EXE hozzárendelése** gombbal egyszer jelöld ki a játék tényleges futtatható fájlját. Ezt az indításhoz és a méréshez is megjegyzi. A **Játék hozzáadása** is elmenti a választást. Az indítás előkészítése közben folytatódik az időmérés; a launcher megnyitása önmagában nem fogyasztja a keretet. A mérésből kizárt játékot is indíthatod, az eltávolítottat nem.
 
 Az elrejtés, eltávolítás és időmérési beállítás ugyanebben a gyűjteményben érhető el; a **Statisztikák** külön oldal az oldalsávban. A **Játékmappa megnyitása** a kiválasztott játék fájljaihoz vezet. Az asztali ikon és a tálcamenü Gaming Hub pontja mindig a beépített játéklistához tér vissza.
+
+## Játékkliensek és helyi képek
+
+Az oldalsáv **Játékkliensek** oldalán külön nyitható a telepített **Steam, Epic Games Launcher, Riot Client, Ubisoft Connect és Minecraft Launcher**. Mindegyik saját ikont és **Kliens megnyitása** gombot kap. A keresés a helyi parancsikonokból és telepítési adatokból dolgozik; egy játék indítására szolgáló argumentumokat nem használ fel általános kliensnyitásra. Indítás előtt újra ellenőrzi a program helyét. Egyetlen klienst sem indít el magától. A **Frissítés** újrakeresi a klienseket; a látható oldal körülbelül percenként is frissül.
+
+A kliensek az aktív játékkorlát mellett is megnyithatók, így a könyvtár, telepítés és frissítés elérhető. A kliensben töltött idő nem fogyasztja a játékkeretet. A belőle indított tényleges, figyelt játékra továbbra is érvényes az időmérés és a beállított korlátozás.
+
+Minden játékkártyához háttérben keres helyi képet: az adott játék Steam-gyorsítótárában, a telepítési mappában és annak kép-, splash-, resource- és content-mappáiban. Az önálló játék `steam_appid.txt` fájlját is használhatja a megfelelő helyi Steam-kép azonosítására. Borítót, fejlécet, bannert, splash képet, címlogót vagy ikont keres. Minecraftnál a telepített verzió JAR-jából is beolvashatja az ismert címlogót, kicsomagolás és programfuttatás nélkül.
+
+A keresés korlátozott mélységű és idejű, nem járja be az egész meghajtót, nem követ mappahivatkozásokat, nem olvas launcherfiókokat, és kihagyja a mentéseket, képernyőképeket, modokat és naplókat. A sérült vagy túl nagy képeket átugorja. A saját/titkosított játékcsomagokat nem bontja ki. Ha nincs megfelelő helyi borító, játékikont vagy a tényleges EXE ikonját használja; végső esetben marad a monogram. Nem tölt le és nem talál ki borítókat. Az oldalarány megmarad, a szabad hely sötét marad.
+
+A tálcamenü **Játékok és Hub frissítése** pontja a képkeresést is újraindítja. A játékfájlokat és előzményeket nem módosítja, a képeket nem tölti fel.
 
 ## Magyar vagy angol felület
 
