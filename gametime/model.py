@@ -63,8 +63,11 @@ class Settings:
     ubisoft_roots: list = field(default_factory=list)
     hub_enabled: bool = False
     exclude_chess: bool = False
+    language: str = "en"
 
     def validate(self):
+        if self.language not in ("en", "hu"):
+            raise ValueError("Unsupported language")
         if not (0 < self.warning_seconds < self.limit_seconds <= 86400):
             raise ValueError("Thresholds must be: 0 < warning < daily limit ≤ 1440 minutes.")
         root = Path(self.games_root)

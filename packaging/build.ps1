@@ -16,7 +16,7 @@ if (-not $SkipFreeze) {
 }
 $bundle = Join-Path $BuildDir 'frozen\GameTimeMonitor'
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'uninstall-bundled.ps1') -Destination $bundle
-foreach ($name in @('README.md','TESTING.md','ARCHITECTURE.md','THIRD-PARTY-NOTICES.md')) {
+foreach ($name in @('README.md','README.hu.md','TESTING.md','ARCHITECTURE.md','THIRD-PARTY-NOTICES.md')) {
     Copy-Item -LiteralPath (Join-Path $repo $name) -Destination $bundle
 }
 $licenseDir = Join-Path $bundle 'licenses'

@@ -84,6 +84,14 @@ class Store:
     def totals(self, day):
         return dict(self.db.execute("SELECT game_id,seconds FROM usage WHERE day=?", (str(day),)))
 
+    def history(self, start, end):
+        """Recorded time includes hidden, excluded and removed games, even orphans."""
+        return list(self.db.execute(
+            "SELECT u.day,u.game_id,COALESCE(g.name,u.game_id),COALESCE(g.source,''),u.seconds "
+            "FROM usage u LEFT JOIN games g ON g.id=u.game_id "
+            "WHERE u.day>=? AND u.day<=? AND u.seconds>0 ORDER BY u.day,u.game_id",
+            (str(start), str(end))))
+
     def add_usage(self, entries):
         with self.db:
             self.db.executemany("INSERT INTO usage VALUES (?,?,?) ON CONFLICT(day,game_id) "

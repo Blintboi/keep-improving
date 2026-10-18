@@ -1,12 +1,12 @@
 # Game Time Monitor
 
-An offline Windows 11 tray app that measures foreground gameplay, shares one daily budget across games, and reminds you to stop. Includes a dark English interface and an automatically maintained Gaming Hub.
+An offline Windows 11 tray app that measures foreground gameplay, shares one daily budget across games, and reminds you to stop. Includes a dark English/Hungarian interface, daily statistics and an automatically maintained Gaming Hub.
 
-**Private preview 1.4.0.** The repository and release downloads remain private. Sign into GitHub with an account that has access on your other PC. Each PC keeps its own history; there is no cloud synchronization.
+**Private preview 1.5.0.** The repository and release downloads remain private. Sign into GitHub with an account that has access on your other PC. Each PC keeps its own history; there is no cloud synchronization. [Magyar útmutató](README.hu.md).
 
 ## Install
 
-1. Open this repository's **Releases**, download `GameTimeMonitor-1.4.0-Setup.exe`, and run it as your normal Windows user.
+1. Open this repository's **Releases**, download `GameTimeMonitor-1.5.0-Setup.exe`, and run it as your normal Windows user.
 2. Python, Tk and SQLite are included. No separate Python, pip packages, administrator account or launcher login is needed by the monitor.
 3. The app opens and discovers installed games. It starts in the tray when you sign into Windows. Open **Settings** to change your daily limit or Gaming Hub location.
 
@@ -14,7 +14,15 @@ The current installer is unsigned; Windows may show an unknown-publisher/SmartSc
 
 Program files go under `%LOCALAPPDATA%\Programs\GameTimeMonitor`. Data goes in Windows Documents under `GameTimeMonitor\data`, including redirected Documents folders. A fresh install creates `Documents\Gaming Hub`. Upgrades preserve the existing Hub location, thresholds, history, executable rules, exclusions and hidden games, and back up the data before migration.
 
-Setup adds Start menu and desktop app shortcuts, a desktop Gaming Hub shortcut, Windows startup entries and an Installed apps entry. A fallback Startup shortcut and the Run entry share a per-profile mutex, so only one monitor runs. A restart is not required.
+Setup adds Start menu and desktop app shortcuts, a desktop Gaming Hub shortcut with the same controller/clock icon as the app, Windows startup entries and an Installed apps entry. The Hub icon is kept with user data so it survives removing the monitor. A fallback Startup shortcut and the Run entry share a per-profile mutex, so only one monitor runs. A restart is not required.
+
+## Language and statistics
+
+Choose **English** or **Magyar** from **Language / Nyelv** at the top of the window. The main interface changes immediately and the choice is saved. New dialogs, tray menus and game-time reminders use that language. English remains the default for new installations.
+
+Open the **Statistics / Statisztikák** tab to see recorded play time by day and by game. Choose the last 7 days, last 30 days, this month, or enter an inclusive date range in `YYYY-MM-DD` format (up to 366 days). Click a chart bar or a date row to inspect that day's games; **Whole period** returns to the range-wide breakdown. The table shows play time and each game's percentage of the selected total. The summary shows total time, daily average and the most-played game. The visible page refreshes roughly every 10 seconds; Refresh also saves pending time before reading history.
+
+Statistics include existing history, hidden/excluded games and removed installations. Hiding or uninstalling does not erase past time. Days without recorded time appear as zero; the average uses every calendar day in the selected range. No activity before tracking began can be reconstructed, and the monitor does not infer unrecorded gameplay. Language changes preserve the selected date range.
 
 ## Daily use
 
@@ -55,7 +63,7 @@ Fresh installs count chess normally. **Exclude chess games by default** is optio
 
 The app has no telemetry, online account, data upload or cloud component. It reads local installation metadata, foreground process paths, game directories and shortcut metadata. It does not read launcher tokens, browser history, messages or save contents. GitHub downloads are separate from the offline monitor.
 
-Data includes `usage.sqlite3` (history, configuration, rules, visibility and alert markers), rotating `monitor.log`, and `hub-state.json`. Logs may contain local paths. Data, installed manifests and logs are excluded from Git. Stop the app before backing up the data folder. Whole-profile transfer is not automatic multi-PC sync: paths, EXE rules and Hub ownership are machine-specific.
+Data includes `usage.sqlite3` (history, configuration including language, rules, visibility and alert markers), rotating `monitor.log`, `hub-state.json`, and the Hub icon under `assets`. Logs may contain local paths. Data, installed manifests and logs are excluded from Git. Stop the app before backing up the data folder. Whole-profile transfer is not automatic multi-PC sync: paths, EXE rules and Hub ownership are machine-specific.
 
 Remove the monitor via **Windows Settings → Apps → Installed apps → Game Time Monitor → Uninstall**. Its uninstaller removes owned program files, app shortcuts and startup entries, preserving games, Hub links and data. To erase history afterwards, check your backup and delete the data folder manually. Removing the monitor never uninstalls games.
 

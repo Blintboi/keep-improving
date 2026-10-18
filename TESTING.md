@@ -12,6 +12,8 @@ Tests cover metadata/multiple libraries, watcher races, foreground/background ti
 
 Version 1.4 adds hidden-row persistence/migration and independent history/tracking checks, fresh/legacy chess policy, validated Steam IDs, launcher fallback, exact-root MSI selection, registry command rejection, portable-file preservation and mocked interactive uninstall execution.
 
+Version 1.5 adds English/Hungarian language persistence and placeholder parity, translated reminders/removal guidance, strict inclusive statistics date ranges, zero-day averages, per-game/day totals, hidden/removed/orphan history and flush/reopen accounting. GUI checks cover immediate language switching, the daily breakdown, translated date errors and preservation of the selected period across language changes. The bundled upgrade checks language preservation and retention of the Gaming Hub icon after monitor removal.
+
 The GUI smoke creates real Tk windows with synthetic fixtures. Inspect dark widgets, settings, hidden/minimized-root notifications, hide → Show hidden → restore, and removal guide Cancel/Close behavior. The legacy source smoke checks install/upgrade/history/startup/background-single-instance/uninstall behavior.
 
 `tests/bundled_install_smoke.ps1` tests the standalone payload using isolated paths and uniquely named startup/Installed apps registrations, checking fresh install, upgrade, runtime diagnosis, uninstall and preservation of history/foreign files. Check real Setup extraction/launch before release, too.
@@ -38,3 +40,9 @@ The second physical PC, ARM64 and other games' fullscreen modes still require us
 150 automated tests passed in 58.746 seconds; 9 GUI checks, 18 legacy source-installer checks, and 14 bundled-runtime install/upgrade/uninstall checks passed. The Hub suite was rerun after its final directory-inventory change: 25 tests passed. All game-removal executions were mocked; no real games were uninstalled.
 
 The standalone installer also preserves unrelated Windows startup values across fresh install, upgrade and uninstall. Final bootstrap was checked with paths containing spaces; the actual icon-branded Setup was installed on the development PC with its existing data.
+
+## 1.5.0 validation on 2026-10-18
+
+159 automated tests passed in 57.956 seconds. All 14 GUI smoke checks, 18 legacy source-installer checks and 17 bundled-runtime install/upgrade/uninstall checks passed. The bundled checks verify that the retained Hub icon matches the application icon byte for byte, and that Hungarian selection survives an upgrade. GUI screenshots were inspected in Hungarian and English. All game-removal execution tests used mocks.
+
+The first bundled upgrade attempt was interrupted by an Explorer-launched test instance. The fixture was stopped and uninstalled, and the complete check passed with desktop shortcut creation disabled for that isolated test. Normal installation still creates the requested desktop shortcuts.

@@ -71,9 +71,9 @@ function Get-GameTimePython([string]$PythonPath) {
 
 function Get-GameTimeFiles {
     @('main.py','gametime\__init__.py','gametime\model.py','gametime\discovery.py',
-      'gametime\store.py','gametime\tracker.py','gametime\service.py','gametime\win32.py',
+      'gametime\store.py','gametime\tracker.py','gametime\service.py','gametime\win32.py','gametime\i18n.py','gametime\statistics.py','gametime\statistics_ui.py',
       'gametime\ui.py','gametime\removal.py','gametime\ubisoft.py','gametime\riot.py','gametime\minecraft.py','gametime\hub.py','gametime\hub_links.ps1','gametime\app.ico','gametime\app.png','common.ps1','install.ps1','uninstall.ps1','launch.ps1','verify.ps1',
-      'Telepites.cmd','Eltavolitas.cmd','Inditas.cmd','Ellenorzes.cmd','README.md','TESTING.md','ARCHITECTURE.md','THIRD-PARTY-NOTICES.md','TESZTELES.md','TESZTEREDMENYEK.txt')
+      'Telepites.cmd','Eltavolitas.cmd','Inditas.cmd','Ellenorzes.cmd','README.md','README.hu.md','TESTING.md','ARCHITECTURE.md','THIRD-PARTY-NOTICES.md','TESZTELES.md','TESZTEREDMENYEK.txt')
 }
 
 function Read-GameTimeManifest([string]$Directory) {

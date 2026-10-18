@@ -183,8 +183,43 @@ def run(report_path, ui_only=False):
             settings_window = [w for w in root.winfo_children() if isinstance(w, tk.Toplevel)][-1]
             capture(dark_title(settings_window), report_path.with_name("dark-settings.png"))
             settings_window.destroy()
+            if ui_only:
+                from datetime import timedelta
+                from gametime.model import Game
+                yesterday = (datetime.now().date()-timedelta(days=1)).isoformat()
+                today_key = datetime.now().date().isoformat()
+                retired = Game("fixture:retired", "Earlier game", "Epic", str(base/"Removed"), installed=False)
+                store.upsert([retired])
+                store.add_usage({(yesterday,game.id):900,(yesterday,retired.id):3600,(today_key,game.id):120})
+                store.set_hidden(game.id,True)
+                app.tracker.cache.clear()
+                app.set_language("hu")
+                root.update()
+                report["checks"]["hungarian_switch_saved_without_restart"] = root.title() == "Játékidőfigyelő" and store.settings().language == "hu"
+                app.settings_dialog(); root.update()
+                settings_window = [w for w in root.winfo_children() if isinstance(w,tk.Toplevel)][-1]
+                capture(dark_title(settings_window),report_path.with_name("hungarian-settings.png"))
+                settings_window.destroy()
+                app.notebook.select(app.statistics)
+                app.statistics.refresh(); root.update()
+                report["checks"]["statistics_totals_include_hidden_and_removed"] = app.statistics.report.total == 4620 and len(app.statistics.report.games) == 2
+                capture(dark_title(root),report_path.with_name("statistics-hungarian.png"))
+                app.statistics.days_tree.selection_set(yesterday)
+                app.statistics.select_day(); root.update()
+                report["checks"]["statistics_day_breakdown"] = len(app.statistics.games_tree.get_children()) == 2 and app.statistics.selected_day == yesterday
+                app.statistics.start.set("bad"); app.statistics.refresh()
+                report["checks"]["statistics_date_error_in_hungarian"] = "formátuma" in app.statistics.error.get()
+                app.statistics.preset(7)
+                start, end = app.statistics.start.get(), app.statistics.end.get()
+                app.set_language("en"); root.update()
+                report["checks"]["language_switch_preserves_statistics_period"] = app.statistics.start.get()==start and app.statistics.end.get()==end and root.title()=="Game Time Monitor"
+                app.statistics.refresh()
+                capture(dark_title(root),report_path.with_name("statistics-english.png"))
+                app.set_language("hu"); root.update()
+                app.notebook.select(0)
+                capture(dark_title(root),report_path.with_name("hungarian-games.png"))
             today = datetime.now().date().isoformat()
-            assert app.popup(Alert(today, (), "warning", "You have 20 minutes of game time left today.", "OK"))
+            assert app.popup(Alert(today, (), "warning", app.t("You have {remaining} minutes of game time left today.",remaining=20), app.t("OK")))
             report["checks"]["popup_topmost"] = bool(app.popup_window.attributes("-topmost"))
             schedule(400, warning_popup)
         def dismiss():

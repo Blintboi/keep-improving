@@ -1,10 +1,11 @@
 """Plan user initiated removals. Never delete a game or run registry command text."""
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import os
 from pathlib import Path
 import re
 import subprocess
 from .model import norm, within
+from .i18n import tr
 
 APPS = "ms-settings:appsfeatures"
 GUID = re.compile(r"\{[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\}", re.I)
@@ -148,3 +149,24 @@ def execute(plan):
             os.startfile(plan.target)
     else:
         raise ValueError("Unsupported removal action")
+
+
+def localize_plan(plan, game, language):
+    """Translate presentation only; the approved target/arguments remain identical."""
+    if language != "hu":
+        return plan
+    title = tr(plan.title, language)
+    if plan.title.endswith(" launcher"):
+        title = tr("Open {source} launcher", language, source=game.source)
+    if plan.title == "Open Steam uninstall":
+        instructions = f'A Steam megnyitja a(z) „{game.name}” eltávolítását. A törlést a Steamben erősítsd meg. Előtte készíts másolatot a felhőbe nem szinkronizált mentésekről.'
+    elif plan.title.endswith(" launcher"):
+        steps = "Könyvtár → a játék ⋯ menüje → Eltávolítás" if game.source == "Epic" else "Játékok → a játék → Kezelés → Eltávolítás"
+        instructions = f'A {game.source} kliensben keresd a(z) „{game.name}” játékot. Lépések: {steps}. Az eltávolítást a kiadó felületén fejezd be. Előtte mentsd a helyi játékállásokat.'
+    elif plan.target == APPS:
+        instructions = f'A Gépház → Alkalmazások → Telepített alkalmazások oldalon keresd: „{game.name}”. A menüjében válaszd az Eltávolítást. Riot-játék előtt zárd be a Riot klienst is. Minecraftnál a Minecraft Launcher bejegyzését keresd; a világok és játékfájlok megmaradhatnak.'
+    elif plan.kind == "folder":
+        instructions = f'A(z) „{game.name}” játékhoz nem találtunk támogatott eltávolítót. Előbb ellenőrizd a Telepített alkalmazásokat vagy a kiadó kliensét. Hordozható játéknál zárd be a játékot, mentsd a játékállásokat, majd kézzel töröld kizárólag a játékmappát: {game.root}. A figyelő nem törli helyetted ezeket a fájlokat.'
+    else:
+        instructions = f'Megnyílik a(z) „{game.name}” saját eltávolítója. Ellenőrizd a kiadó megerősítését, és előtte mentsd a helyi játékállásokat. Telepítési hely: {game.root}.'
+    return replace(plan, title=title, instructions=instructions)

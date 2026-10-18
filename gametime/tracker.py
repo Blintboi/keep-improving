@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 import math
 from .model import blocked
+from .i18n import tr
 
 
 @dataclass(frozen=True)
@@ -132,15 +133,15 @@ class Tracker:
             if limit not in delivered:
                 keys = (limit, warning, session) if self.identity else (limit, warning)
                 minutes = settings.limit_seconds / 60
-                text = ("Your daily 2-hour game time limit has been reached. Time to finish playing." if minutes == 120 else
-                        f"Your daily {minutes:g}-minute game time limit has been reached. Time to finish playing.")
-                self._queue(Alert(day, keys, "limit", text, "OK, I’ll stop"))
+                text = (tr("Your daily 2-hour game time limit has been reached. Time to finish playing.", settings.language) if minutes == 120 else
+                        tr("Your daily {minutes:g}-minute game time limit has been reached. Time to finish playing.", settings.language, minutes=minutes))
+                self._queue(Alert(day, keys, "limit", text, tr("OK, I’ll stop", settings.language)))
             elif self.identity and session not in delivered:
                 self._queue(Alert(day, (session,), "session",
-                                  "Your daily game time limit has already been reached. Time to finish playing.", "OK, I’ll stop"))
+                                  tr("Your daily game time limit has already been reached. Time to finish playing.", settings.language), tr("OK, I’ll stop", settings.language)))
         elif total >= settings.warning_seconds and warning not in delivered:
             remaining = math.ceil((settings.limit_seconds - total) / 60)
-            self._queue(Alert(day, (warning,), "warning", f"You have {remaining} minutes of game time left today.", "OK"))
+            self._queue(Alert(day, (warning,), "warning", tr("You have {remaining} minutes of game time left today.", settings.language, remaining=remaining), tr("OK", settings.language)))
 
     def _queue(self, alert):
         self.alerts.append(alert)

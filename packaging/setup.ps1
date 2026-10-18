@@ -4,6 +4,7 @@ param(
     [string]$StartupName = 'GameTimeMonitor',
     [string]$GamesRoot,
     [switch]$NoHubShortcut,
+    [switch]$NoDesktopShortcut,
     [switch]$NoStart,
     [switch]$Quiet
 )
@@ -51,7 +52,7 @@ try {
     $stageExe = Join-Path $taskStage 'GameTimeMonitor.exe'
     $process = Start-Process -FilePath $stageExe -ArgumentList @('--stop-wait','20','--data-dir',('"' + $DataDir + '"')) -WindowStyle Hidden -Wait -PassThru
     if ($process.ExitCode -ne 0) { throw 'The running monitor could not be stopped. Close it from its tray menu and retry.' }
-    $backup = Join-Path $DataDir ('backups\before-1.4.0-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+    $backup = Join-Path $DataDir ('backups\before-' + $payload.Version + '-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
     New-Item -ItemType Directory -Path $backup -Force | Out-Null
     foreach ($name in @('usage.sqlite3','usage.sqlite3-wal','usage.sqlite3-shm','hub-state.json')) {
         $item = Join-Path $DataDir $name
@@ -93,6 +94,7 @@ try {
     $shell = New-Object -ComObject WScript.Shell
     $links = @()
     foreach ($directory in @([Environment]::GetFolderPath('Startup'),[Environment]::GetFolderPath('Programs'),[Environment]::GetFolderPath('Desktop'))) {
+        if ($NoDesktopShortcut -and $directory -eq [Environment]::GetFolderPath('Desktop')) { continue }
         $linkPath = Join-Path $directory ($StartupName + '.lnk')
         $link = $shell.CreateShortcut($linkPath)
         $link.TargetPath = $exe
@@ -103,12 +105,19 @@ try {
         $link.Save()
         $links += $linkPath
     }
-    if ($diagnostic.hub_enabled -and -not $NoHubShortcut) {
-        New-Item -ItemType Directory -Path $diagnostic.games_root -Force | Out-Null
-        $hubLink = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath('Desktop')) 'Gaming Hub.lnk'))
-        $hubLink.TargetPath = $diagnostic.games_root
-        $hubLink.Description = 'Game Time Monitor Gaming Hub'
-        $hubLink.Save()
+    if ($diagnostic.hub_enabled) {
+        $hubAssets = Join-Path $DataDir 'assets'
+        New-Item -ItemType Directory -Path $hubAssets -Force | Out-Null
+        $hubIcon = Join-Path $hubAssets 'gaming-hub.ico'
+        Copy-Item -LiteralPath (Join-Path $InstallDir '_internal\gametime\app.ico') -Destination $hubIcon -Force
+        if (-not $NoHubShortcut) {
+            New-Item -ItemType Directory -Path $diagnostic.games_root -Force | Out-Null
+            $hubLink = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath('Desktop')) 'Gaming Hub.lnk'))
+            $hubLink.TargetPath = $diagnostic.games_root
+            $hubLink.Description = 'Game Time Monitor Gaming Hub'
+            $hubLink.IconLocation = $hubIcon + ',0'
+            $hubLink.Save()
+        }
     }
     $uninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\' + $StartupName
     $uninstall = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + (Join-Path $InstallDir 'uninstall-bundled.ps1') + '"'

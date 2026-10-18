@@ -35,6 +35,7 @@ def main():
     parser.add_argument("--background", action="store_true")
     parser.add_argument("--configure", action="store_true")
     parser.add_argument("--games-root")
+    parser.add_argument("--language", choices=("en", "hu"))
     parser.add_argument("--enable-hub", action="store_true")
     parser.add_argument("--sync-hub", action="store_true")
     parser.add_argument("--scan-once", action="store_true")
@@ -44,6 +45,8 @@ def main():
     args = parser.parse_args()
     if args.enable_hub and not args.configure:
         parser.error("Use --enable-hub with --configure.")
+    if args.language and not args.configure:
+        parser.error("Use --language with --configure.")
     if args.diagnose and (args.configure or args.scan_once or args.sync_hub):
         parser.error("Run --diagnose separately from configuration and scanning.")
     if os.name != "nt":
@@ -89,6 +92,8 @@ def main():
                 settings.games_root = str(Path(args.games_root).resolve())
             if args.enable_hub:
                 settings.hub_enabled = True
+            if args.language:
+                settings.language = args.language
             store.save_settings(settings)
         if args.scan_once:
             from gametime.model import LAUNCHER_SOURCES
@@ -114,6 +119,7 @@ def main():
                               "interactive": current.interactive, "foreground_readable": bool(current.path),
                               "installed_games": len(store.games(True)),
                               "games_root": store.settings().games_root, "hub_enabled": store.settings().hub_enabled,
+                              "language": store.settings().language,
                               "today_seconds": sum(store.totals(datetime.now().date()).values())})
         if args.configure or args.scan_once or args.diagnose or args.sync_hub:
             return

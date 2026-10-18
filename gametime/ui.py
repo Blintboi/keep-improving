@@ -3,6 +3,7 @@ from datetime import datetime
 from dataclasses import replace
 import logging
 import os
+import time
 from pathlib import Path
 from queue import Empty
 import tkinter as tk
@@ -10,10 +11,12 @@ from tkinter import ttk, filedialog
 import uuid
 import winsound
 import ctypes
+import gc
 from .model import Catalog, Game, norm, LAUNCHER_SOURCES
 from .service import DiscoveryService
 from .tracker import Tracker, Alert
 from . import win32
+from .i18n import tr, LANGUAGES
 
 log = logging.getLogger(__name__)
 BG, PANEL, FG, MUTED, BLUE = "#15171b", "#23262d", "#f1f2f5", "#aeb5c2", "#86b9ff"
@@ -50,6 +53,9 @@ def theme(root):
     style.theme_use("clam")
     style.configure(".", background=BG, foreground=FG, font=("Segoe UI", 10), bordercolor="#414752")
     style.configure("TFrame", background=BG)
+    style.configure("TNotebook", background=BG, borderwidth=0)
+    style.configure("TNotebook.Tab", background=PANEL, foreground=FG, padding=(18, 9))
+    style.map("TNotebook.Tab", background=[("selected", "#345579"), ("active", "#354760")])
     style.configure("TLabel", background=BG, foreground=FG)
     style.configure("Muted.TLabel", foreground=MUTED)
     style.configure("Title.TLabel", font=("Segoe UI", 19, "bold"))
@@ -89,11 +95,12 @@ class App:
         self.last_rows = None
         self.hidden_ids = store.hidden_ids()
         self.show_hidden = tk.BooleanVar(value=False)
-        self.status = tk.StringVar(value="Discovering games…")
+        self.status_key = "Discovering games…"
+        self.status = tk.StringVar(value=self.t(self.status_key))
         self.total_text = tk.StringVar(value="00:00:00")
         self.remaining_text = tk.StringVar()
-        self.active_text = tk.StringVar(value="Active game: none")
-        root.title("Game Time Monitor")
+        self.active_text = tk.StringVar(value=self.t("Active game: none"))
+        root.title(self.t("Game Time Monitor"))
         root.geometry(f"{min(1100, root.winfo_screenwidth() - 80)}x{min(760, root.winfo_screenheight() - 100)}")
         root.minsize(850, 600)
         theme(root)
@@ -124,9 +131,25 @@ class App:
             self.tray_timer = self.root.after(75, self.poll_tray)
 
     def _build(self):
-        frame = ttk.Frame(self.root, padding=22)
-        frame.pack(fill="both", expand=True)
-        ttk.Label(frame, text="Today’s game time", style="Title.TLabel").pack(anchor="w")
+        self.main_frame = ttk.Frame(self.root)
+        self.main_frame.pack(fill="both", expand=True)
+        bar = ttk.Frame(self.main_frame, padding=(18, 8))
+        bar.pack(fill="x")
+        ttk.Label(bar, text=self.t("Game Time Monitor")).pack(side="left")
+        self.language_choice = tk.StringVar(value=next(name for name, code in LANGUAGES.items() if code == self.settings.language))
+        language = ttk.Combobox(bar, textvariable=self.language_choice, values=list(LANGUAGES), state="readonly", width=10)
+        language.pack(side="right")
+        language.bind("<<ComboboxSelected>>", lambda e: self.set_language(LANGUAGES[self.language_choice.get()]))
+        ttk.Label(bar, text=self.t("Language / Nyelv")).pack(side="right", padx=8)
+        self.notebook = ttk.Notebook(self.main_frame)
+        self.notebook.pack(fill="both", expand=True, padx=8, pady=(0, 8))
+        frame = ttk.Frame(self.notebook, padding=18)
+        self.notebook.add(frame, text=self.t("Games"))
+        from .statistics_ui import StatisticsView
+        self.statistics = StatisticsView(self.notebook, self)
+        self.notebook.add(self.statistics, text=self.t("Statistics"))
+        self.notebook.bind("<<NotebookTabChanged>>", self.tab_changed)
+        ttk.Label(frame, text=self.t("Today’s game time"), style="Title.TLabel").pack(anchor="w")
         ttk.Label(frame, textvariable=self.total_text, style="Total.TLabel").pack(anchor="w", pady=(8, 0))
         ttk.Label(frame, textvariable=self.remaining_text).pack(anchor="w")
         self.progress = ttk.Progressbar(frame, maximum=self.settings.limit_seconds)
@@ -135,9 +158,9 @@ class App:
         table = ttk.Frame(frame)
         table.pack(fill="both", expand=True)
         self.tree = ttk.Treeview(table, columns=("name", "source", "today", "state", "path"), show="headings", selectmode="browse", height=5)
-        for key, label, width in [("name", "Game", 200), ("source", "Source", 65), ("today", "Today", 90),
+        for key, label, width in [("name", "Game", 200), ("source", "Source", 100), ("today", "Today", 90),
                                   ("state", "Tracking", 110), ("path", "Installation folder", 310)]:
-            self.tree.heading(key, text=label)
+            self.tree.heading(key, text=self.t(label))
             self.tree.column(key, width=width, minwidth=60, stretch=key in ("name", "path"))
         self.tree.tag_configure("excluded", foreground=MUTED)
         self.tree.pack(side="left", fill="both", expand=True)
@@ -146,20 +169,56 @@ class App:
         self.tree.configure(yscrollcommand=scrollbar.set)
         actions = ttk.Frame(frame)
         actions.pack(fill="x", pady=(14, 8))
-        for label, command in [("Exclude / track", self.toggle_game), ("Add game", self.add_manual),
-                               ("Assign EXE", self.assign_exe), ("EXE rules", self.rules_dialog)]:
-            ttk.Button(actions, text=label, command=command).pack(side="left", padx=(0, 6))
-        ttk.Button(actions, text="Hide / restore", command=self.toggle_hidden).pack(side="left", padx=(0, 6))
-        ttk.Button(actions, text="Uninstall game…", command=self.uninstall_game).pack(side="left")
-        ttk.Checkbutton(frame, text="Show hidden games (hiding does not stop tracking)",
+        for index, (label, command) in enumerate([("Exclude / track", self.toggle_game), ("Add game", self.add_manual),
+                               ("Assign EXE", self.assign_exe), ("EXE rules", self.rules_dialog),
+                               ("Hide / restore", self.toggle_hidden), ("Uninstall game…", self.uninstall_game)]):
+            ttk.Button(actions, text=self.t(label), command=command).grid(row=index//3, column=index%3, sticky="ew", padx=3, pady=3)
+        for column in range(3):
+            actions.columnconfigure(column, weight=1)
+        ttk.Checkbutton(frame, text=self.t("Show hidden games (hiding does not stop tracking)"),
                         variable=self.show_hidden, command=self.refresh_view).pack(anchor="w", pady=(0, 8))
         bottom = ttk.Frame(frame)
         bottom.pack(fill="x")
-        ttk.Button(bottom, text="Settings", command=self.settings_dialog).pack(side="left")
-        ttk.Button(bottom, text="Test alert", command=self.test_popup).pack(side="left", padx=6)
-        ttk.Button(bottom, text="Gaming Hub", command=self.open_games).pack(side="left", padx=6)
-        ttk.Button(bottom, text="Hide to tray", command=self.root.withdraw).pack(side="right")
+        ttk.Button(bottom, text=self.t("Settings"), command=self.settings_dialog).pack(side="left")
+        ttk.Button(bottom, text=self.t("Test alert"), command=self.test_popup).pack(side="left", padx=6)
+        ttk.Button(bottom, text=self.t("Gaming Hub"), command=self.open_games).pack(side="left", padx=6)
+        ttk.Button(bottom, text=self.t("Hide to tray"), command=self.root.withdraw).pack(side="right")
         ttk.Label(frame, textvariable=self.status, style="Muted.TLabel", wraplength=950).pack(anchor="w", pady=(12, 0))
+
+    def t(self, text, **values):
+        return tr(text, self.settings.language, **values)
+
+    def set_status(self, text):
+        self.status_key = text
+        self.status.set(self.t(text))
+
+    def set_language(self, language):
+        if language == self.settings.language:
+            return
+        current_tab = self.notebook.index(self.notebook.select())
+        dates = self.statistics.start.get(), self.statistics.end.get(), self.statistics.selected_day
+        self.tracker.flush()
+        settings = replace(self.settings, language=language).validate()
+        self.store.save_settings(settings)
+        self.settings = self.catalog.settings = settings
+        self.main_frame.destroy()
+        self.root.title(self.t("Game Time Monitor"))
+        self.status.set(self.t(self.status_key))
+        self.last_rows = None
+        self._build()
+        self.statistics.start.set(dates[0])
+        self.statistics.end.set(dates[1])
+        self.statistics.selected_day = dates[2]
+        self.notebook.select(current_tab)
+        self.render()
+        # Retired widgets contain Tcl variables in Python reference cycles.
+        # Finalize them here, before a discovery worker could trigger GC.
+        gc.collect()
+        self.root.after_idle(gc.collect)
+
+    def tab_changed(self, event=None):
+        if self.notebook.select() == str(self.statistics):
+            self.statistics.refresh()
 
     def show(self):
         self.root.deiconify()
@@ -176,9 +235,10 @@ class App:
     def tray_menu(self):
         if self.closed:
             return
-        choice = self.tray.popup_menu([(1, "Open Game Time Monitor"), (2, "Open Gaming Hub"),
+        items = [(1, "Open Game Time Monitor"), (2, "Open Gaming Hub"),
                                        (3, "Settings"), (4, "Refresh games and hub"),
-                                       None, (5, "Exit monitor")])
+                                       None, (5, "Exit monitor")]
+        choice = self.tray.popup_menu([(item[0], self.t(item[1])) if item else None for item in items])
         action = {1: self.show, 2: self.open_games, 3: self.settings_dialog,
                   4: self.refresh_sources, 5: self.close}.get(choice)
         if action:
@@ -213,7 +273,7 @@ class App:
     def _dialog(self, title, size="550x250", transient=True):
         window = tk.Toplevel(self.root)
         window.configure(bg=BG)
-        window.title(title)
+        window.title(self.t(title))
         window.geometry(size)
         if transient and self.root.state() != "withdrawn":
             window.transient(self.root)
@@ -222,20 +282,20 @@ class App:
 
     def message(self, text):
         window = self._dialog("Game Time Monitor", "560x220")
-        ttk.Label(window, text=text, wraplength=510, padding=20).pack(fill="both", expand=True)
-        ttk.Button(window, text="OK", command=window.destroy).pack(pady=(0, 20))
+        ttk.Label(window, text=self.t(text), wraplength=510, padding=20).pack(fill="both", expand=True)
+        ttk.Button(window, text=self.t("OK"), command=window.destroy).pack(pady=(0, 20))
 
     def prompt(self, title, label, initial=""):
         window = self._dialog(title)
         value, result = tk.StringVar(value=initial), []
-        ttk.Label(window, text=label, padding=18, wraplength=500).pack(anchor="w")
+        ttk.Label(window, text=self.t(label), padding=18, wraplength=500).pack(anchor="w")
         entry = ttk.Entry(window, textvariable=value)
         entry.pack(fill="x", padx=18)
         def accept():
             if value.get().strip():
                 result.append(value.get().strip())
                 window.destroy()
-        ttk.Button(window, text="Save", command=accept).pack(pady=20)
+        ttk.Button(window, text=self.t("Save"), command=accept).pack(pady=20)
         window.bind("<Return>", lambda e: accept())
         window.bind("<Escape>", lambda e: window.destroy())
         entry.focus_set()
@@ -267,14 +327,14 @@ class App:
         if not game:
             self.message("Select a game in the list first.")
             return
-        from .removal import plan_removal, execute
-        plan = plan_removal(game)
-        window = self._dialog("Uninstall game — " + game.name, "640x400")
+        from .removal import plan_removal, execute, localize_plan
+        plan = localize_plan(plan_removal(game), game, self.settings.language)
+        window = self._dialog(self.t("Uninstall game — {name}", name=game.name), "680x440")
         frame = ttk.Frame(window, padding=22)
         frame.pack(fill="both", expand=True)
         ttk.Label(frame, text=plan.title, style="Title.TLabel", wraplength=590).pack(anchor="w")
         ttk.Label(frame, text=plan.instructions, wraplength=590).pack(fill="x", pady=14)
-        ttk.Label(frame, text="Your play history will be kept. Hiding a game does not uninstall it.",
+        ttk.Label(frame, text=self.t("Your play history will be kept. Hiding a game does not uninstall it."),
                   wraplength=590, style="Muted.TLabel").pack(anchor="w")
         status = tk.StringVar()
         ttk.Label(frame, textvariable=status, wraplength=590).pack(fill="x", pady=10)
@@ -284,20 +344,20 @@ class App:
             try:
                 execute(plan)
                 launch.configure(state="disabled")
-                status.set("Opened. Complete the steps above in the publisher's window. You can then close this guide.")
+                status.set(self.t("Opened. Complete the steps above in the publisher's window. You can then close this guide."))
                 self.devices_changed()
             except (OSError, ValueError) as exc:
-                status.set("Could not open the removal tool. Use Installed apps below. " + str(exc))
+                status.set(self.t("Could not open the removal tool. Use Installed apps below. ") + str(exc))
         def installed_apps():
             try:
                 from .removal import apps_plan
                 execute(apps_plan(game))
             except OSError as exc:
-                status.set("Open Windows Settings → Apps → Installed apps manually. " + str(exc))
-        launch = ttk.Button(buttons, text="Continue…", command=proceed)
+                status.set(self.t("Open Windows Settings → Apps → Installed apps manually. ") + str(exc))
+        launch = ttk.Button(buttons, text=self.t("Continue…"), command=proceed)
         launch.pack(side="left")
-        ttk.Button(buttons, text="Installed apps", command=installed_apps).pack(side="left", padx=8)
-        ttk.Button(buttons, text="Close", command=window.destroy).pack(side="right")
+        ttk.Button(buttons, text=self.t("Installed apps"), command=installed_apps).pack(side="left", padx=8)
+        ttk.Button(buttons, text=self.t("Close"), command=window.destroy).pack(side="right")
         window.bind("<Escape>", lambda e: window.destroy())
         window.grab_set()
 
@@ -316,8 +376,8 @@ class App:
         self.render()
 
     def pick_exe(self):
-        return filedialog.askopenfilename(parent=self.root, title="Choose application",
-                                           filetypes=[("Windows application", "*.exe")])
+        return filedialog.askopenfilename(parent=self.root, title=self.t("Choose application"),
+                                           filetypes=[(self.t("Windows application"), "*.exe")])
 
     def refresh_rules(self):
         self.tracker.flush()
@@ -361,10 +421,10 @@ class App:
         window = self._dialog("Executable exclusions and assignments", "850x440")
         frame = ttk.Frame(window, padding=18)
         frame.pack(fill="both", expand=True)
-        ttk.Label(frame, text="Use Exclude / track in the main list to change tracking for an entire game.").pack(anchor="w", pady=(0, 12))
+        ttk.Label(frame, text=self.t("Use Exclude / track in the main list to change tracking for an entire game.")).pack(anchor="w", pady=(0, 12))
         tree = ttk.Treeview(frame, columns=("path", "target"), show="headings")
-        tree.heading("path", text="Application path")
-        tree.heading("target", text="Tracking")
+        tree.heading("path", text=self.t("Application path"))
+        tree.heading("target", text=self.t("Tracking"))
         tree.column("path", width=540)
         tree.column("target", width=230)
         tree.pack(fill="both", expand=True)
@@ -372,9 +432,9 @@ class App:
             tree.delete(*tree.get_children())
             for index, (path, gid) in enumerate(self.store.rules().items()):
                 name = self.catalog.games[gid].name if gid in self.catalog.games else gid
-                tree.insert("", "end", iid=str(index), values=(path, name or "Excluded"))
+                tree.insert("", "end", iid=str(index), values=(path, name or self.t("Excluded")))
         def exclude():
-            path = filedialog.askopenfilename(parent=window, title="Exclude application", filetypes=[("Application", "*.exe")])
+            path = filedialog.askopenfilename(parent=window, title=self.t("Exclude application"), filetypes=[(self.t("Application"), "*.exe")])
             if path:
                 self.store.set_rule(path, None)
                 self.refresh_rules()
@@ -387,8 +447,8 @@ class App:
                 refresh()
         buttons = ttk.Frame(frame)
         buttons.pack(fill="x", pady=12)
-        ttk.Button(buttons, text="Exclude EXE", command=exclude).pack(side="left")
-        ttk.Button(buttons, text="Remove selected rule", command=remove).pack(side="left", padx=8)
+        ttk.Button(buttons, text=self.t("Exclude EXE"), command=exclude).pack(side="left")
+        ttk.Button(buttons, text=self.t("Remove selected rule"), command=remove).pack(side="left", padx=8)
         refresh()
 
     def settings_dialog(self):
@@ -402,19 +462,19 @@ class App:
                                     ("steam", "Additional Steam installations (separated by semicolons)", ";".join(self.settings.steam_roots)),
                                     ("epic", "Additional Epic manifest folders (separated by semicolons)", ";".join(self.settings.epic_manifest_dirs)),
                                     ("ubisoft", "Additional Ubisoft Connect installations (separated by semicolons)", ";".join(self.settings.ubisoft_roots))]:
-            ttk.Label(frame, text=label).pack(anchor="w", pady=(7, 3))
+            ttk.Label(frame, text=self.t(label)).pack(anchor="w", pady=(7, 3))
             variables[key] = tk.StringVar(value=f"{initial:g}" if isinstance(initial, float) else initial)
             ttk.Entry(frame, textvariable=variables[key]).pack(fill="x")
         def browse():
-            path = filedialog.askdirectory(parent=window, title="Gaming Hub")
+            path = filedialog.askdirectory(parent=window, title=self.t("Gaming Hub"))
             if path:
                 variables["games"].set(path)
-        ttk.Button(frame, text="Browse Gaming Hub folder", command=browse).pack(anchor="w", pady=10)
+        ttk.Button(frame, text=self.t("Browse Gaming Hub folder"), command=browse).pack(anchor="w", pady=10)
         hub_enabled = tk.BooleanVar(value=self.settings.hub_enabled)
-        ttk.Checkbutton(frame, text="Gaming Hub: automatically maintain game shortcuts",
+        ttk.Checkbutton(frame, text=self.t("Gaming Hub: automatically maintain game shortcuts"),
                         variable=hub_enabled).pack(anchor="w", pady=6)
         exclude_chess = tk.BooleanVar(value=self.settings.exclude_chess)
-        ttk.Checkbutton(frame, text="Exclude chess games by default (optional personal preference)",
+        ttk.Checkbutton(frame, text=self.t("Exclude chess games by default (optional personal preference)"),
                         variable=exclude_chess).pack(anchor="w", pady=6)
         error = tk.StringVar()
         ttk.Label(frame, textvariable=error, foreground="#ffb3b3", wraplength=650).pack(anchor="w")
@@ -427,7 +487,7 @@ class App:
                                     [p.strip() for p in variables["steam"].get().split(";") if p.strip()],
                                     [p.strip() for p in variables["epic"].get().split(";") if p.strip()],
                                     [p.strip() for p in variables["ubisoft"].get().split(";") if p.strip()],
-                                    hub_enabled.get(), exclude_chess.get()).validate()
+                                    hub_enabled.get(), exclude_chess.get(), self.settings.language).validate()
                 self.tracker.flush()
                 self.store.save_settings(settings)
                 self.settings = self.catalog.settings = settings
@@ -436,8 +496,9 @@ class App:
                 self.service.configure(settings)
                 window.destroy()
             except (ValueError, OSError) as exc:
-                error.set(str(exc))
-        ttk.Button(frame, text="Save", command=save).pack(anchor="e", pady=8)
+                error.set(self.t("Enter valid numbers for the warning and limit.")
+                          if str(exc).startswith("could not convert string to float") else self.t(str(exc)))
+        ttk.Button(frame, text=self.t("Save"), command=save).pack(anchor="e", pady=8)
 
     def popup(self, alert):
         if self.popup_window:
@@ -448,13 +509,13 @@ class App:
         self.popup_window, self.popup_day = window, alert.day
         window.attributes("-topmost", True)
         title = "Time to stop playing" if alert.kind in ("limit", "session") else "Game time reminder"
-        ttk.Label(window, text=title, style="Title.TLabel", padding=(22, 18, 22, 4)).pack(anchor="w")
+        ttk.Label(window, text=self.t(title), style="Title.TLabel", padding=(22, 18, 22, 4)).pack(anchor="w")
         ttk.Label(window, text=alert.text, wraplength=540, padding=(22, 10)).pack(fill="x")
         def dismiss():
             self.popup_window = None
             self.popup_day = None
             window.destroy()
-        ttk.Button(window, text=alert.button, command=dismiss).pack(pady=18)
+        ttk.Button(window, text=self.t(alert.button), command=dismiss).pack(pady=18)
         window.protocol("WM_DELETE_WINDOW", dismiss)
         window.bind("<Return>", lambda e: dismiss())
         window.bind("<Escape>", lambda e: dismiss())
@@ -485,7 +546,7 @@ class App:
 
     def test_popup(self):
         self.popup(Alert(datetime.now().date().isoformat(), (), "limit",
-                         "Test: Your daily game time limit has been reached. Time to finish playing.", "OK, I’ll stop"))
+                         self.t("Test: Your daily game time limit has been reached. Time to finish playing."), self.t("OK, I’ll stop")))
 
     def notify(self, alert):
         """Let the current game process Escape before mapping the alert window."""
@@ -533,7 +594,7 @@ class App:
             elif kind == "shortcuts":
                 self.hub_fingerprint = None
             elif kind == "status":
-                self.status.set(result[1])
+                self.set_status(result[1])
             elif kind == "launchers":
                 from .discovery import preserve_unreadable
                 _, games, libraries, hints, errors, ubisoft_roots, riot_hints = result
@@ -559,13 +620,14 @@ class App:
         while not self.hub.results.empty():
             result = self.hub.results.get_nowait()
             if result.get("error"):
-                self.status.set("Gaming Hub: " + result["error"])
+                self.set_status("Gaming Hub: " + result["error"])
         day = datetime.now().date().isoformat()
         totals = self.tracker.totals(day)
         total = sum(totals.values())
         self.total_text.set(duration(total))
-        self.remaining_text.set(f"Time remaining: {duration(self.settings.limit_seconds - total)}  ·  Daily limit: {self.settings.limit_seconds / 60:g} min")
-        self.active_text.set("Active game: " + (self.tracker.active.name if self.tracker.active else "none"))
+        self.remaining_text.set(self.t("Time remaining: {remaining}  ·  Daily limit: {minutes:g} min",
+                                       remaining=duration(self.settings.limit_seconds-total), minutes=self.settings.limit_seconds/60))
+        self.active_text.set(self.t("Active game: {name}", name=self.tracker.active.name if self.tracker.active else self.t("none")))
         self.progress.configure(maximum=self.settings.limit_seconds, value=min(total, self.settings.limit_seconds))
         games = dict((g.id, g) for g in self.store.games())
         games.update(self.catalog.games)
@@ -577,23 +639,26 @@ class App:
             if not game.installed and game.id not in totals:
                 continue
             enabled = self.catalog.enabled(game)
-            state = ("Tracked" if enabled else "Excluded") if game.installed else "Removed"
+            state = self.t(("Tracked" if enabled else "Excluded") if game.installed else "Removed")
             if game.id in self.hidden_ids:
-                state += " · hidden"
-            rows.append((game.id, game.name, "Manual" if game.source == "Kézi" else game.source,
+                state += " · " + self.t("hidden")
+            rows.append((game.id, game.name, self.t("Manual") if game.source == "Kézi" else self.t("Games folder") if game.source == "Games" else game.source,
                          duration(totals.get(game.id, 0)), state, game.root))
         if rows != self.last_rows:
             selected = self.tree.selection()
             scroll = self.tree.yview()
             self.tree.delete(*self.tree.get_children())
             for gid, *values in rows:
-                self.tree.insert("", "end", iid=gid, values=values, tags=("excluded",) if values[3] != "Tracked" else ())
+                self.tree.insert("", "end", iid=gid, values=values, tags=("excluded",) if values[3] != self.t("Tracked") else ())
             if selected and self.tree.exists(selected[0]):
                 self.tree.selection_set(selected[0])
             if scroll:
                 self.tree.yview_moveto(scroll[0])
             self.last_rows = rows
-        self.tray.update(f"Game Time Monitor\nToday: {duration(total)} · remaining: {duration(self.settings.limit_seconds - total)}\nLeft click: open · right click: menu")
+        self.tray.update(self.t("Game Time Monitor\nToday: {total} · remaining: {remaining}\nLeft click: open · right click: menu",
+                                total=duration(total), remaining=duration(self.settings.limit_seconds-total)))
+        if self.notebook.select() == str(self.statistics) and time.monotonic()-self.statistics.last_refresh >= 10:
+            self.statistics.refresh()
 
     def tick(self):
         self.tick_timer = None
@@ -623,7 +688,7 @@ class App:
             self.render()
         except Exception as exc:
             log.exception("Game time measurement failed")
-            self.status.set("An error occurred; see monitor.log: " + str(exc))
+            self.set_status("An error occurred; see monitor.log: " + str(exc))
             self.tracker.previous = None
         self.tick_timer = self.root.after(1000, self.tick)
 
