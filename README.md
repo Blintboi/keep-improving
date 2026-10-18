@@ -2,13 +2,13 @@
 
 An offline Windows 11 Gaming Hub and game-time monitor in one app. Launch games from a searchable library, measure foreground gameplay against a shared daily budget, and follow daily statistics in a dark English/Hungarian interface.
 
-**Private preview 2.4.0.** The repository and release downloads remain private. Sign into GitHub with an account that has access on your other PC. Each PC keeps its own history; there is no cloud synchronization. [Magyar útmutató](README.hu.md).
+**Private preview 2.4.1.** The repository and release downloads remain private. Sign into GitHub with an account that has access on your other PC. Each PC keeps its own history; there is no cloud synchronization. [Magyar útmutató](README.hu.md).
 
 The 2.0 interface uses Qt Widgets: a dark sidebar, responsive game cards, a daily-budget ring, contextual game actions and a redesigned statistics page. Artwork is read from existing local Steam caches, installed-game image files or game icons; no image service, launcher credentials or artwork downloads are used. Artwork and icons keep their original aspect ratios; complete cover images fit inside the card with dark padding where needed. Missing art has a colored monogram fallback. The shared controller/clock application icon remains unchanged.
 
 ## Install
 
-1. Open this repository's **Releases**, download `GameTimeMonitor-2.4.0-Setup.exe`, and run it as your normal Windows user.
+1. Open this repository's **Releases**, download `GameTimeMonitor-2.4.1-Setup.exe`, and run it as your normal Windows user.
 2. Python, Qt/PySide6 and SQLite are included. No separate Python, pip packages, administrator account or launcher login is needed by the monitor.
 3. The app opens and discovers installed games. It starts in the tray when you sign into Windows. Open **Settings** to change your daily limit or Gaming Hub location.
 
@@ -70,7 +70,7 @@ This is a Windows desktop overlay, without game injection. Exclusive fullscreen 
 
 Enable **Settings → Play restriction → Enable play restriction**, choose the total daily minutes, and save. It is off by default on fresh installs and upgrades; the initial threshold is **125 minutes**. This threshold is independent of the reminder budget (initially 120 minutes).
 
-At or above the threshold, the monitor tries a guarded Escape for the recognized foreground game, waits 200 ms, then requests minimization of that exact process/window and opens the Hub. Returning to a tracked game triggers minimization again, with a two-second retry interval; Escape is attempted once per running process/day in the resident session so retries do not keep toggling its menu. The Hub blocks Play too, including already-prepared launch requests. External launcher starts are detected through foreground tracking. The shared total survives restarts, resets at local midnight, and includes hidden games; excluded games/apps remain outside this policy. A persistent banner explains the restriction and keeps Settings accessible. Disable it or change the threshold there at any time.
+At or above the threshold, the monitor allows **10 seconds to save and quit** before intervening. The grace starts when a tracked game is observed in the foreground, including the first threshold crossing and every return to the game. Only after that grace does it try a guarded Escape, wait 200 ms, and request minimization of that exact process/window before opening the Hub. Every retry, including after a failed minimization, gets a fresh full grace. Switching away, locking Windows, sleep, a clock jump or a stalled monitor restarts the grace; normal foreground time still counts. Escape is attempted once per running process/day in the resident session so retries do not keep toggling its menu. The Hub blocks Play too, including already-prepared launch requests. External launcher starts are detected through foreground tracking. The shared total survives restarts, resets at local midnight, and includes hidden games; excluded games/apps remain outside this policy. A persistent banner explains the restriction and keeps Settings accessible. Disable it or change the threshold there at any time.
 
 This is a voluntary interruption tool, not tamper-resistant parental control. It does not terminate/suspend processes, delete saves, block the keyboard/mouse, lock Windows or require admin rights. Minimizing may not pause a game, especially online play. Save/leave matches before the threshold. Unknown, elevated or protected games may need manual handling. Input/window actions are rechecked against the current interactive foreground process identity; switching apps, locking Windows or disabling the option during the delay cancels the pending action. If minimization is refused, a status message explains it and the monitor retries only on tracked foreground gameplay. After restriction, its banner replaces queued reminder popups.
 

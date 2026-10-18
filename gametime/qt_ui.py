@@ -275,7 +275,7 @@ class App(QMainWindow,MonitorActions):
         card=panel(); layout=QVBoxLayout(card); layout.setContentsMargins(22,20,22,22); layout.setSpacing(12)
         layout.addWidget(label(self.t('Play restriction'),'section'))
         self.restriction_enabled=QCheckBox(self.t('Enable play restriction'))
-        self.restriction_enabled.setToolTip(self.t('At the threshold, tracked games receive one guarded Escape and are minimized when they return to the foreground. The Hub also blocks launching them until the next day. Games are not closed; online games may continue in the background. You can disable this here.'))
+        self.restriction_enabled.setToolTip(self.t('After the threshold, each return to a tracked game allows 10 seconds to save and quit before minimization. Escape is attempted once per process per day. The Hub blocks launching tracked games until the next day. Games are not closed; online games may continue in the background. You can disable this here.'))
         self.restriction_enabled.setChecked(self.settings.restriction_enabled); layout.addWidget(self.restriction_enabled)
         row=QHBoxLayout(); row.addWidget(label(self.t('Daily threshold (minutes)'),'muted'),1)
         self.restriction_minutes=QDoubleSpinBox(); self.restriction_minutes.setRange(.01,1440); self.restriction_minutes.setDecimals(2)
@@ -283,7 +283,7 @@ class App(QMainWindow,MonitorActions):
         self.restriction_minutes.setSingleStep(5); self.restriction_minutes.setValue(self.settings.restriction_seconds/60)
         self.restriction_minutes.setEnabled(self.restriction_enabled.isChecked()); self.restriction_enabled.toggled.connect(self.restriction_minutes.setEnabled)
         row.addWidget(self.restriction_minutes); layout.addLayout(row)
-        note=label(self.t('Escape, then minimize. Online games may continue in the background.'),'muted')
+        note=label(self.t('10 seconds to save and quit before each minimization.'),'muted')
         note.setWordWrap(True); layout.addWidget(note); return card
 
     def build_overlay_settings(self):

@@ -11,6 +11,8 @@ HU = {
     'Enable play restriction': 'Korlátozás bekapcsolása',
     'Daily threshold (minutes)': 'Napi határ (perc)',
     'Escape, then minimize. Online games may continue in the background.': 'Esc, majd tálcára. Az online játék a háttérben tovább futhat.',
+    '10 seconds to save and quit before each minimization.': 'Minden tálcára tétel előtt 10 másodperc a mentésre és kilépésre.',
+    'After the threshold, each return to a tracked game allows 10 seconds to save and quit before minimization. Escape is attempted once per process per day. The Hub blocks launching tracked games until the next day. Games are not closed; online games may continue in the background. You can disable this here.': 'A határ után minden visszatéréskor 10 másodperc marad mentésre és kilépésre a tálcára tétel előtt. Az Esc-et folyamatonként naponta egyszer próbálja. A Hubból a következő napig nem indítható figyelt játék. A játékot nem zárja be; az online játék a háttérben tovább futhat. Itt bármikor kikapcsolhatod.',
     'Countdown': 'Visszaszámláló',
     'Text opacity': 'Szöveg fedettsége',
     'Show while gaming': 'Megjelenítés játék közben',

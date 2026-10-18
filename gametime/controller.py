@@ -12,6 +12,8 @@ from . import win32
 log=logging.getLogger(__name__)
 
 class MonitorActions:
+    RESTRICTION_GRACE_SECONDS = 10
+
     def sync_hub(self):
         fingerprint = (self.settings.games_root, self.settings.hub_enabled, self.settings.exclude_chess,
                        tuple(sorted((g.id, g.name, g.root, g.metadata, g.installed) for g in self.catalog.games.values())),
@@ -275,17 +277,29 @@ class MonitorActions:
 
     def enforce_gameplay(self, current):
         if not self.restriction_reached(current.wall.date()) or not current.interactive:
+            self._restriction_grace = None
             return False
         game = self.catalog.resolve(current.path)
         if not game or not current.identity or current.identity != self.tracker.identity:
+            self._restriction_grace = None
             return False
         if getattr(self, "restriction_timer", None) is not None:
             return True
         key = (current.wall.date().isoformat(), current.identity)
-        previous = getattr(self, "_restriction_attempt", None)
-        if previous and previous[:2] == key and 0 <= current.awake-previous[2] < 2:
+        target = (*key, norm(current.path))
+        previous = getattr(self, "_restriction_grace", None)
+        if previous:
+            elapsed = current.awake-previous[2].awake
+            wall = current.wall.timestamp()-previous[2].wall.timestamp()
+        if (not previous or previous[0] != target or not 0 <= elapsed <= 3
+                or abs(wall-elapsed) > 1.5):
+            # A fresh foreground visit gets its own save/quit window. Do not
+            # consume that grace while away, locked, asleep or the GUI is stalled.
+            self._restriction_grace = (target, current.awake, current)
             return True
-        self._restriction_attempt = (*key, current.awake)
+        self._restriction_grace = (target, previous[1], current)
+        if current.awake-previous[1] < self.RESTRICTION_GRACE_SECONDS:
+            return True
         escaped = getattr(self, "_restriction_escaped", set())
         self._restriction_escaped = {item for item in escaped if item[0] == key[0]}
         if key not in self._restriction_escaped:
@@ -300,6 +314,8 @@ class MonitorActions:
 
     def finish_restriction(self, path, identity, day):
         self.restriction_timer = None
+        # A return to the game, or a failed minimize, must allow a new full grace.
+        self._restriction_grace = None
         if self.closed or day != datetime.now().date().isoformat() or not self.restriction_reached(day):
             return
         try:

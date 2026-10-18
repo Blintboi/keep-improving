@@ -62,6 +62,10 @@ A copied-profile preview discovered Steam, Epic, Riot, Ubisoft and Minecraft Lau
 
 The user-reported tiny VALORANT icon came from the asynchronous shell-icon fallback replacing a normalized icon with an uncropped native bitmap. The actual shell bitmap was 256×256 at DPR 256/96, with the visible mark occupying only 43×43 pixels. The shared normalizer now crops transparent bounds and resets DPR for initial icons, asynchronous results and launcher cards. A regression exercises the actual result-queue path with that bitmap geometry, checks the cropped size/DPR and measures a readable card mark instead of the former tiny dot. A fresh copied-profile VALORANT card capture was inspected; no real game was started.
 
+## 2.4.1 save/quit grace
+
+All 239 automated tests passed in 88.617 seconds, including 13 restriction regressions. The threshold-crossing case verifies no Escape or minimization at 9.999 seconds, first action at ten seconds, the retained 200 ms Escape/minimize separation, and a fresh ten-second grace before a retry without repeated Escape. Other cases cover returning after focus/identity/lock changes, a stalled monitor, sleep, clock jumps, disabling the restriction, failed minimization, hidden games, new process identities and launch blocking. Time is advanced through synthetic samples; all game-input and execution boundaries remain mocked. No real game was started, minimized or closed by these tests.
+
 ## 2.4 minimal interface and text-only countdown
 
 All 58 focused Qt, local-artwork/client, overlay and restriction tests passed in 27.900 seconds after the final card alignment and text-opacity changes. Existing persistence checks now include 100% text opacity; invalid values above 100% remain rejected. The overlay still changes color at the configured shared-budget warning threshold, preserves independent expiry popups, and uses the same input/focus guards.
