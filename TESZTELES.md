@@ -116,6 +116,12 @@ használ, nem tényleges játékot.
 
 ## Kézi ellenőrzési lista
 
+2026. október 18-án a valódi Minecraft 26.3 fullscreen módjában, külön
+adatbázis 20/30 másodperces küszöbeivel mindkét értesítés megjelent.
+Az Esc előtti és utáni sorrendet a napló, a láthatóságot a felhasználó is
+igazolta. A normál napi küszöbök megmaradtak. Más játék fullscreen módját
+külön is ellenőrizni kell a kiadás előtt.
+
 | Eset | Lépés és elvárt eredmény |
 | --- | --- |
 | Steam / több könyvtár | Telepíts egy játékot a normál és egy másik meghajtón lévő könyvtárba. Rövid időn belül jelenjenek meg a listában, a Steam kezelőfelülete ne fogyasszon időt. |

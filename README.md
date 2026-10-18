@@ -12,6 +12,12 @@ automatikus indítási bejegyzést használ. Lefekvési értesítést és ahhoz 
 
 ## Telepítés és indítás
 
+A jelenlegi kiadás személyes használatra tesztelt változat. Nyilvános kiadás
+előtt angol felület és dokumentáció, önálló telepítő és további gépeken végzett
+próbák szükségesek. A nyilvános alapbeállításban a sakkjátékok is számítsanak;
+a sakk kizárása egyéni, választható beállítás legyen. Ez kiadási követelmény,
+nem a jelenlegi személyes sakk-kivétel módosítása.
+
 1. A teljes csomagot bontsd ki egy mappába.
 2. Kattints duplán a **Telepites.cmd** fájlra, normál felhasználóként.
 3. Add meg a saját Games mappádat. Enterrel a `C:\Games` marad.
