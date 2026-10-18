@@ -299,6 +299,18 @@ class Hub:
         # Never mutate a previous Games root after the user changes the setting.
         prior = {norm(item["path"]): item for item in state["links"]
                  if within(item["path"], root) and norm(item["path"]) != norm(root)}
+        inventory = self._inventory(root, prior)
+        return self._write_links(settings, games, rules, overrides, root, prior, inventory)
+
+    def launch_recipe(self, game, settings, rules):
+        """Read launch information without creating or changing any shortcuts."""
+        root = Path(settings.games_root)
+        authority = root / ".gametime-hub.json"
+        state = self._load(authority if authority.exists() else None)
+        prior = {norm(item["path"]): item for item in state["links"] if within(item["path"], root)}
+        return self._recipe(game, self._inventory(root, prior), rules, root)
+
+    def _inventory(self, root, prior):
         locations = self.locations + [{"path": str(root), "depth": 0},
                      {"path": str(root / "Inditas"), "depth": 0}, {"path": str(root / "Sakk"), "depth": 2},
                      {"path": str(root / "Launcherek"), "depth": 0}, {"path": str(root / "Chess"), "depth": 2},
@@ -308,6 +320,9 @@ class Hub:
             old = prior.get(norm(link["path"]))
             if old and old.get("role") == "launch" and Path(link["path"]).is_file() and digest(link["path"]) == old.get("hash"):
                 link["owned_game"], link["owned_root"] = old["gid"], old.get("game_root", "")
+        return inventory
+
+    def _write_links(self, settings, games, rules, overrides, root, prior, inventory):
         eligible = [g for g in games if g.installed and not g.id.startswith("pending:") and Path(g.root).is_dir()
                     and (overrides.get(g.id, g.default_enabled if settings.exclude_chess else True)
                          or CHESS.search(g.name + " " + g.root))]

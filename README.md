@@ -1,12 +1,12 @@
 # Game Time Monitor
 
-An offline Windows 11 tray app that measures foreground gameplay, shares one daily budget across games, and reminds you to stop. Includes a dark English/Hungarian interface, daily statistics and an automatically maintained Gaming Hub.
+An offline Windows 11 Gaming Hub and game-time monitor in one app. Launch games from a searchable library, measure foreground gameplay against a shared daily budget, and follow daily statistics in a dark English/Hungarian interface.
 
-**Private preview 1.5.0.** The repository and release downloads remain private. Sign into GitHub with an account that has access on your other PC. Each PC keeps its own history; there is no cloud synchronization. [Magyar útmutató](README.hu.md).
+**Private preview 1.6.0.** The repository and release downloads remain private. Sign into GitHub with an account that has access on your other PC. Each PC keeps its own history; there is no cloud synchronization. [Magyar útmutató](README.hu.md).
 
 ## Install
 
-1. Open this repository's **Releases**, download `GameTimeMonitor-1.5.0-Setup.exe`, and run it as your normal Windows user.
+1. Open this repository's **Releases**, download `GameTimeMonitor-1.6.0-Setup.exe`, and run it as your normal Windows user.
 2. Python, Tk and SQLite are included. No separate Python, pip packages, administrator account or launcher login is needed by the monitor.
 3. The app opens and discovers installed games. It starts in the tray when you sign into Windows. Open **Settings** to change your daily limit or Gaming Hub location.
 
@@ -14,7 +14,15 @@ The current installer is unsigned; Windows may show an unknown-publisher/SmartSc
 
 Program files go under `%LOCALAPPDATA%\Programs\GameTimeMonitor`. Data goes in Windows Documents under `GameTimeMonitor\data`, including redirected Documents folders. A fresh install creates `Documents\Gaming Hub`. Upgrades preserve the existing Hub location, thresholds, history, executable rules, exclusions and hidden games, and back up the data before migration.
 
-Setup adds Start menu and desktop app shortcuts, a desktop Gaming Hub shortcut with the same controller/clock icon as the app, Windows startup entries and an Installed apps entry. The Hub icon is kept with user data so it survives removing the monitor. A fallback Startup shortcut and the Run entry share a per-profile mutex, so only one monitor runs. A restart is not required.
+Setup adds one shared desktop **Gaming Hub** icon, a Start menu shortcut, Windows startup entries and an Installed apps entry. The desktop icon opens the integrated library in the running monitor, including when Statistics was open. The controller/clock icon stays the same. Upgrades consolidate and back up the previous owned monitor/Hub desktop entries. A fallback Startup shortcut and the Run entry share a per-profile mutex, so only one monitor runs. A restart is not required.
+
+## Launch games
+
+The **Gaming Hub** tab is the home page. Search by name or filter by source, select a game and click **Play**, double-click its row or press Enter. Play uses Steam, Epic, Ubisoft and Riot launch routes, the Minecraft launcher or an existing shortcut with its original arguments. Standalone games with one executable can start directly. Discovery keeps the library up to date.
+
+If the executable is ambiguous, use **Assign EXE** to choose it once. The app saves the choice and its tracking rule. **Add game** also remembers the executable. Choices survive upgrades and discovery ID merges. Excluding a game's time does not prevent launching it. Removed games cannot launch. Preparation runs on a worker, keeping measurement and reminders responsive; opening a launcher alone does not count as gameplay.
+
+Hide/restore and uninstall work in this library; Statistics is the second tab. **Open game folder** opens the selected installation when you need its files. The desktop Gaming Hub icon and tray's Open Gaming Hub return to this page without opening a separate folder or another monitor.
 
 ## Language and statistics
 
@@ -38,9 +46,9 @@ Minecraft Java in fullscreen was successfully tested on one Windows 11 PC at rea
 
 Sources: **Steam, Epic Games, Ubisoft Connect, Riot including VALORANT, Minecraft Java**, and standalone games under the configured Games/Hub folder. Installation metadata and file/registry events update the catalog and shortcuts; repair scans cover missed events. Multiple Steam libraries and extra launcher locations can be configured.
 
-Games outside known locations cannot always be recognized safely. Use **Add game** to select the game's actual EXE and name it; this also enables a Hub shortcut. **Assign EXE** maps an extra executable to an existing game. Browsers and launcher clients are blocked. Shared `javaw.exe` is not globally treated as Minecraft; known Minecraft runtime locations or an exact manual rule are required.
+Games outside known locations cannot always be recognized safely. Use **Add game** to select the actual game EXE and name it. **Assign EXE** maps an executable to an existing game and remembers it for Play. Browsers and launcher clients are blocked. Shared `javaw.exe` is not globally treated as Minecraft; known Minecraft runtime locations or an exact manual rule are required.
 
-Hub entries are links: installations and saves are not moved. Original launcher shortcuts retain arguments, working directory and icons. Without a reliable launch command, a folder link is used. `Folders` contains installation-folder links; `Launchers` contains client shortcuts. Separate real installations of the same title are labeled by source.
+The existing shortcuts folder is an optional companion, controlled by **Also maintain a shortcuts folder (optional)** in Settings. The integrated library and Play work with this option off too. Installations and saves are not moved. In the companion folder, original shortcuts retain arguments, working directory and icons; an unknown launch command produces a folder link. `Folders` contains installation links and `Launchers` contains client shortcuts. Separate real installations of the same title are labeled by source.
 
 Only unchanged shortcuts recorded as owned are removed when a game disappears. Edited/unowned files are preserved. A disconnected/unreadable library is kept until a successful scan. A Hub root has one authoritative profile owner and a lock to prevent duplication; do not delete `.gametime-hub.json` or share one Hub between independent profiles.
 
@@ -48,7 +56,7 @@ Only unchanged shortcuts recorded as owned are removed when a game disappears. E
 
 | Action | Result |
 | --- | --- |
-| **Hide / restore** | Hides the selected row. Tracking, history and Hub links stay. Enable Show hidden games, select it and click again to restore. Survives restart and discovery. |
+| **Hide / restore** | Hides the selected game from the integrated Hub. Tracking, history and optional folder links stay. Enable Show hidden games, select it and click again to restore. Survives restart and discovery. |
 | **Exclude / track** | Changes whether future time counts; history stays. |
 | **EXE rules** | Excludes or maps an individual executable. |
 | **Uninstall game…** | Shows a guide, then opens an external removal tool only after Continue. |
@@ -65,7 +73,7 @@ The app has no telemetry, online account, data upload or cloud component. It rea
 
 Data includes `usage.sqlite3` (history, configuration including language, rules, visibility and alert markers), rotating `monitor.log`, `hub-state.json`, and the Hub icon under `assets`. Logs may contain local paths. Data, installed manifests and logs are excluded from Git. Stop the app before backing up the data folder. Whole-profile transfer is not automatic multi-PC sync: paths, EXE rules and Hub ownership are machine-specific.
 
-Remove the monitor via **Windows Settings → Apps → Installed apps → Game Time Monitor → Uninstall**. Its uninstaller removes owned program files, app shortcuts and startup entries, preserving games, Hub links and data. To erase history afterwards, check your backup and delete the data folder manually. Removing the monitor never uninstalls games.
+Remove the monitor via **Windows Settings → Apps → Installed apps → Game Time Monitor → Uninstall**. Its uninstaller removes owned program files, app shortcuts including the integrated Hub desktop icon, and startup entries. Games, companion-folder links and data stay. To erase history afterwards, check your backup and delete the data folder manually. Removing the monitor never uninstalls games.
 
 ## Troubleshooting
 

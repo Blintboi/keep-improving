@@ -176,6 +176,38 @@ def run(report_path, ui_only=False):
                 app.show_hidden.set(False)
                 app.refresh_view()
                 report["checks"]["hidden_row_restored"] = app.tree.exists(game.id) and game.id not in store.hidden_ids()
+                from queue import Queue
+                from types import SimpleNamespace
+                from unittest.mock import Mock, patch
+                from gametime.launch import LaunchPlan
+                app.tree.selection_set(game.id)
+                app.search.set("no matching fixture")
+                report["checks"]["hub_search_filters_and_disables_play"] = not app.tree.get_children() and str(app.launch_button['state']) == 'disabled'
+                app.search.set(game.name.lower())
+                report["checks"]["hub_search_finds_game_case_insensitively"] = app.tree.exists(game.id)
+                app.search.set("")
+                app.source_filter.set(app.t("Games folder")); app.refresh_view()
+                report["checks"]["hub_source_filter"] = all(app.catalog.games[gid].source == 'Games' for gid in app.tree.get_children()) and app.tree.exists(game.id)
+                app.source_filter.set(app.t("All sources")); app.refresh_view()
+                app.tree.selection_set(game.id)
+                app.launcher = SimpleNamespace(results=Queue(), request=Mock(), close=Mock())
+                tracker, before = app.tracker, total()
+                app.launch_selected(); app.launch_selected()
+                report["checks"]["hub_play_deduplicates_while_preparing"] = app.launcher.request.call_count == 1 and str(app.launch_button['state']) == 'disabled'
+                with patch('gametime.launch.execute') as execute:
+                    app.launcher.results.put((game,LaunchPlan('uri','steam://rungameid/42'),None))
+                    app.poll_launch()
+                    report["checks"]["hub_play_executes_explicit_request_once"] = execute.call_count == 1 and app.launching is None
+                report["checks"]["hub_launch_preserves_tracker_and_time"] = app.tracker is tracker and total() == before and not app.closed
+                app.notebook.select(app.statistics); root.withdraw()
+                with patch('gametime.ui.os.startfile') as folder:
+                    app.open_games()
+                    report["checks"]["hub_opens_inside_monitor_instead_of_explorer"] = app.notebook.index(app.notebook.select()) == 0 and root.state() == 'normal' and not folder.called
+                app.search.set(game.name)
+                app.set_language('hu'); root.update()
+                report["checks"]["hub_language_switch_preserves_search"] = app.search.get() == game.name and app.tree.exists(game.id)
+                report["checks"]["hub_launch_status_changes_language"] = app.status.get().startswith('Indítás:')
+                app.search.set(""); app.set_language('en'); root.update()
             report["checks"]["native_tray_icon_added"] = app.tray.available
             capture(dark_title(root), report_path.with_name("dark-main.png"))
             app.settings_dialog()
@@ -218,6 +250,8 @@ def run(report_path, ui_only=False):
                 capture(dark_title(root),report_path.with_name("statistics-english.png"))
                 app.set_language("hu"); root.update()
                 app.notebook.select(0)
+                store.set_hidden(game.id,False); app.refresh_view()
+                app.tree.selection_set(game.id); root.update()
                 capture(dark_title(root),report_path.with_name("hungarian-games.png"))
             today = datetime.now().date().isoformat()
             assert app.popup(Alert(today, (), "warning", app.t("You have {remaining} minutes of game time left today.",remaining=20), app.t("OK")))

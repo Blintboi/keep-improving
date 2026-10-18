@@ -3,6 +3,7 @@ param(
     [string]$DataDir = (Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'GameTimeMonitor\data'),
     [string]$StartupName = 'GameTimeMonitor',
     [string]$GamesRoot,
+    [string]$DesktopDir = ([Environment]::GetFolderPath('Desktop')),
     [switch]$NoHubShortcut,
     [switch]$NoDesktopShortcut,
     [switch]$NoStart,
@@ -93,8 +94,7 @@ try {
     finally { $runRegistry.Dispose() }
     $shell = New-Object -ComObject WScript.Shell
     $links = @()
-    foreach ($directory in @([Environment]::GetFolderPath('Startup'),[Environment]::GetFolderPath('Programs'),[Environment]::GetFolderPath('Desktop'))) {
-        if ($NoDesktopShortcut -and $directory -eq [Environment]::GetFolderPath('Desktop')) { continue }
+    foreach ($directory in @([Environment]::GetFolderPath('Startup'),[Environment]::GetFolderPath('Programs'))) {
         $linkPath = Join-Path $directory ($StartupName + '.lnk')
         $link = $shell.CreateShortcut($linkPath)
         $link.TargetPath = $exe
@@ -105,18 +105,46 @@ try {
         $link.Save()
         $links += $linkPath
     }
-    if ($diagnostic.hub_enabled) {
-        $hubAssets = Join-Path $DataDir 'assets'
-        New-Item -ItemType Directory -Path $hubAssets -Force | Out-Null
-        $hubIcon = Join-Path $hubAssets 'gaming-hub.ico'
-        Copy-Item -LiteralPath (Join-Path $InstallDir '_internal\gametime\app.ico') -Destination $hubIcon -Force
+    $hubAssets = Join-Path $DataDir 'assets'
+    New-Item -ItemType Directory -Path $hubAssets -Force | Out-Null
+    $hubIcon = Join-Path $hubAssets 'gaming-hub.ico'
+    Copy-Item -LiteralPath (Join-Path $InstallDir '_internal\gametime\app.ico') -Destination $hubIcon -Force
+    if (-not $NoDesktopShortcut) {
+        $DesktopDir = [IO.Path]::GetFullPath($DesktopDir)
+        New-Item -ItemType Directory -Path $DesktopDir -Force | Out-Null
+        $legacyDesktop = Join-Path $DesktopDir ($StartupName + '.lnk')
+        if (Test-Path -LiteralPath $legacyDesktop) {
+            $legacyLink = $shell.CreateShortcut($legacyDesktop)
+            if ($legacyLink.TargetPath -eq $exe -and $legacyLink.Description -eq 'Game Time Monitor - GameTimeMonitor.bundle.v1') {
+                Copy-Item -LiteralPath $legacyDesktop -Destination (Join-Path $backup 'previous-monitor-desktop.lnk')
+                Remove-Item -LiteralPath $legacyDesktop
+            }
+        }
         if (-not $NoHubShortcut) {
-            New-Item -ItemType Directory -Path $diagnostic.games_root -Force | Out-Null
-            $hubLink = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath('Desktop')) 'Gaming Hub.lnk'))
-            $hubLink.TargetPath = $diagnostic.games_root
-            $hubLink.Description = 'Game Time Monitor Gaming Hub'
+            $hubPath = Join-Path $DesktopDir 'Gaming Hub.lnk'
+            if (Test-Path -LiteralPath $hubPath) {
+                $previousHub = $shell.CreateShortcut($hubPath)
+                if ($previousHub.Description -eq 'Game Time Monitor Gaming Hub' -or
+                    ($previousHub.TargetPath -eq $exe -and $previousHub.Description -eq 'Game Time Monitor - GameTimeMonitor.bundle.v1')) {
+                    Copy-Item -LiteralPath $hubPath -Destination (Join-Path $backup 'previous-hub-desktop.lnk')
+                } else {
+                    $hubPath = Join-Path $DesktopDir ($StartupName + ' Hub.lnk')
+                    if (Test-Path -LiteralPath $hubPath) {
+                        $alternate = $shell.CreateShortcut($hubPath)
+                        if ($alternate.TargetPath -ne $exe -or $alternate.Description -ne 'Game Time Monitor - GameTimeMonitor.bundle.v1') {
+                            throw 'Unrelated Gaming Hub desktop shortcuts were preserved.'
+                        }
+                    }
+                }
+            }
+            $hubLink = $shell.CreateShortcut($hubPath)
+            $hubLink.TargetPath = $exe
+            $hubLink.Arguments = '--hub --data-dir "' + $DataDir + '"'
+            $hubLink.WorkingDirectory = $InstallDir
+            $hubLink.Description = 'Game Time Monitor - GameTimeMonitor.bundle.v1'
             $hubLink.IconLocation = $hubIcon + ',0'
             $hubLink.Save()
+            $links += $hubPath
         }
     }
     $uninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\' + $StartupName

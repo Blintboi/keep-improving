@@ -33,6 +33,7 @@ def main():
     parser = argparse.ArgumentParser(description="Windows 11 Game Time Monitor")
     parser.add_argument("--data-dir", type=Path, default=default_data())
     parser.add_argument("--background", action="store_true")
+    parser.add_argument("--hub", action="store_true", help="Open the integrated Gaming Hub, reusing the running monitor")
     parser.add_argument("--configure", action="store_true")
     parser.add_argument("--games-root")
     parser.add_argument("--language", choices=("en", "hu"))
@@ -71,7 +72,7 @@ def main():
         if args.configure or args.scan_once or args.sync_hub:
             raise RuntimeError("Stop the running monitor before changing configuration.")
         if not args.background:
-            (args.data_dir / "show.request").touch()
+            (args.data_dir / ("show-hub.request" if args.hub else "show.request")).touch()
         return
     if instance.acquired:
         (args.data_dir / "stop.request").unlink(missing_ok=True)

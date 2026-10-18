@@ -99,6 +99,10 @@ class Store:
         return aliases
 
     def _merge(self, old_id, new_id):
+        preferred = self.launch_executable(old_id)
+        if preferred and not self.launch_executable(new_id):
+            self.db.execute("INSERT INTO settings VALUES (?,?)", ('launch_exe:' + new_id, preferred))
+        self.db.execute("DELETE FROM settings WHERE key=?", ('launch_exe:' + old_id,))
         rows = list(self.db.execute("SELECT day,seconds FROM usage WHERE game_id=?", (old_id,)))
         self.db.executemany("INSERT INTO usage VALUES (?,?,?) ON CONFLICT(day,game_id) "
                             "DO UPDATE SET seconds=seconds+excluded.seconds",
@@ -119,6 +123,15 @@ class Store:
             "FROM usage u LEFT JOIN games g ON g.id=u.game_id "
             "WHERE u.day>=? AND u.day<=? AND u.seconds>0 ORDER BY u.day,u.game_id",
             (str(start), str(end))))
+
+    def launch_executable(self, game_id):
+        row = self.db.execute("SELECT value FROM settings WHERE key=?", ('launch_exe:' + game_id,)).fetchone()
+        return row[0] if row else ""
+
+    def set_launch_executable(self, game_id, path):
+        # Callers also record the exact tracking rule; never interpret command text.
+        with self.db:
+            self.db.execute("INSERT OR REPLACE INTO settings VALUES (?,?)", ('launch_exe:' + game_id, str(path)))
 
     def add_usage(self, entries):
         with self.db:
@@ -145,11 +158,21 @@ class Store:
 
     def set_rule(self, path, gid):
         with self.db:
+            old = self.db.execute("SELECT game_id FROM rules WHERE path=?", (norm(path),)).fetchone()
+            if old and old[0] != gid:
+                self._forget_launch_rule(path, old[0])
             self.db.execute("INSERT OR REPLACE INTO rules VALUES (?,?)", (norm(path), gid))
 
     def delete_rule(self, path):
         with self.db:
+            old = self.db.execute("SELECT game_id FROM rules WHERE path=?", (norm(path),)).fetchone()
+            if old:
+                self._forget_launch_rule(path, old[0])
             self.db.execute("DELETE FROM rules WHERE path=?", (norm(path),))
+
+    def _forget_launch_rule(self, path, gid):
+        if gid and norm(self.launch_executable(gid)) == norm(path):
+            self.db.execute("DELETE FROM settings WHERE key=?", ('launch_exe:' + gid,))
 
     def alert_keys(self, day):
         return {r[0] for r in self.db.execute("SELECT key FROM alerts WHERE day=?", (str(day),))}

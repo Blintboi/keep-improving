@@ -1,14 +1,22 @@
-# Játékidőfigyelő — 1.5.0
+# Játékidőfigyelő — 1.6.0
 
-Windows 11-en futó, sötét felületű, helyi játékidőfigyelő és automatikusan karbantartott Gaming Hub. A repó és a kiadások egyelőre **privátak**. A másik gépen is hozzáférő GitHub-fiókkal jelentkezz be a letöltéshez.
+Windows 11-en futó, sötét felületű Gaming Hub és játékidőfigyelő egy alkalmazásban. A játékgyűjteményből közvetlenül indíthatod a játékokat, követheted az idődet és megnézheted a napi statisztikákat. A repó és a kiadások egyelőre **privátak**. A másik gépen is hozzáférő GitHub-fiókkal jelentkezz be a letöltéshez.
 
 ## Telepítés
 
-Töltsd le a Kiadások / Releases oldalról a `GameTimeMonitor-1.5.0-Setup.exe` fájlt, és indítsd el. A Python, a Tk és az SQLite benne van: semmit nem kell külön telepíteni. A program megnyílik, felismeri a játékokat, és a következő Windows-bejelentkezéskor a tálcán indul. A telepítő jelenleg nincs digitálisan aláírva.
+Töltsd le a Kiadások / Releases oldalról a `GameTimeMonitor-1.6.0-Setup.exe` fájlt, és indítsd el. A Python, a Tk és az SQLite benne van: semmit nem kell külön telepíteni. A program megnyílik, felismeri a játékokat, és a következő Windows-bejelentkezéskor a tálcán indul. A telepítő jelenleg nincs digitálisan aláírva.
 
 A program helye: `%LOCALAPPDATA%\Programs\GameTimeMonitor`. Az előzmények és beállítások a Windows Dokumentumok mappájában, a `GameTimeMonitor\data` alatt maradnak. A frissítés mentést készít, és megtartja az eddigi keretet, kizárásokat, EXE-szabályokat, rejtett játékokat és Hub-mappát.
 
-Az asztali Gaming Hub parancsikon ugyanazt a kontrolleres-órás ikont kapja, mint az alkalmazás. Az ikon az adatkönyvtárban marad, így a figyelő eltávolítása után is használható.
+Az asztalon egy közös **Gaming Hub** parancsikon marad a megszokott kontrolleres-órás ikonnal. Ez a már futó figyelő játékgyűjteményét nyitja meg. A frissítés a régi, saját monitor- és Hub-parancsikont összevonja, és előtte menti őket.
+
+## Játékok indítása
+
+A **Gaming Hub** az alkalmazás kezdőlapja. Keress játéknevet, vagy szűrj forrásra, válassz ki egy játékot, majd kattints a **Játék indítása** gombra. A soron dupla kattintás vagy Enter is indít. A Steam-, Epic-, Ubisoft- és Riot-játékot a megfelelő kliensen át, Minecraftot a launcherével vagy a meglévő hivatkozásával indítja; az eredeti parancsikon argumentumai megmaradnak. Egyértelmű, önálló EXE közvetlenül is indulhat.
+
+Ha több EXE közül kell választani, az **EXE hozzárendelése** gombbal egyszer jelöld ki a játék tényleges futtatható fájlját. Ezt az indításhoz és a méréshez is megjegyzi. A **Játék hozzáadása** is elmenti a választást. Az indítás előkészítése közben folytatódik az időmérés; a launcher megnyitása önmagában nem fogyasztja a keretet. A mérésből kizárt játékot is indíthatod, az eltávolítottat nem.
+
+Az elrejtés, eltávolítás és időmérési beállítás ugyanebben a gyűjteményben érhető el; a **Statisztikák** a másik fül. A **Játékmappa megnyitása** a kiválasztott játék fájljaihoz vezet. Az asztali ikon és a tálcamenü Gaming Hub pontja mindig a beépített játéklistához tér vissza.
 
 ## Magyar vagy angol felület
 
@@ -16,7 +24,7 @@ A felső **Nyelv / Language** listában válassz **Magyar** vagy **English** nye
 
 ## Napi játékidő
 
-A **Játékok** oldalon látszik a mai összes játékidő, a hátralévő keret és az aktív játék. Alapból napi 120 perc a keret, és 100 percnél jön az előzetes jelzés. A Beállításokban módosíthatod őket.
+A **Gaming Hub** oldalon látszik a mai összes játékidő, a hátralévő keret és az aktív játék. Alapból napi 120 perc a keret, és 100 percnél jön az előzetes jelzés. A Beállításokban módosíthatod őket.
 
 Csak az előtérben lévő, figyelt játék ideje számít. A böngésző, a játékkezelő kliens, a háttérben futó játék, az alvás és a zárolt munkamenet nem számít. Játékon belüli átvezetők közben is mér; a billentyűzet tétlensége önmagában nem szüneteltet. Éjfélkor új napi összesítés kezdődik.
 
@@ -37,7 +45,7 @@ A már meglévő előzményeket használja, az elrejtett, kizárt és eltávolí
 
 ## Gaming Hub és játékkezelés
 
-Steam, Epic, Ubisoft Connect, Riot, Minecraft Java és a beállított játékmappában lévő önálló játékok támogatottak. A Hub parancsikonokat tartalmaz: a játékfájlok és mentések nem költöznek. Az új és eltávolított játékok követése automatikus; más, ismeretlen helyen lévő játékot a **Játék hozzáadása** gombbal vehetsz fel a tényleges EXE kiválasztásával.
+Steam, Epic, Ubisoft Connect, Riot, Minecraft Java és a beállított játékmappában lévő önálló játékok támogatottak. A játékfájlok és mentések nem költöznek. Az új és eltávolított játékok követése automatikus; más, ismeretlen helyen lévő játékot a **Játék hozzáadása** gombbal vehetsz fel. A régi parancsikonmappa megmarad választható kiegészítőként; a Beállításokban a **Parancsikonmappa karbantartása is** jelöléssel vezérelhető. A beépített játéklista és indítás ettől függetlenül működik.
 
 Az **Elrejtés / visszaállítás** csak a főlistát módosítja: a mérés, az előzmény és a Hub-parancsikon megmarad. A **Rejtett játékok mutatása** jelöléssel visszahozhatod a sort. A **Kizárás / mérés** külön szabályozza, számítson-e a játék jövőbeli ideje.
 
@@ -49,4 +57,4 @@ A sakk új telepítésben rendesen számít; az alapértelmezett kizárása vál
 
 Nincs telemetria vagy automatikus feltöltés. A program helyi telepítési jegyzékeket, folyamatútvonalakat és parancsikonokat olvas. Előzménymentés előtt lépj ki a tálcamenüből, majd másold ki az adatkönyvtárat.
 
-A figyelőt a Windows **Gépház → Alkalmazások → Telepített alkalmazások → Game Time Monitor → Eltávolítás** útvonalon távolíthatod el. A játékok, Hub-parancsikonok és az előzmények megmaradnak. A részletes fejlesztői, hibakeresési és tesztleírás az [angol dokumentációban](README.md) található.
+A figyelőt a Windows **Gépház → Alkalmazások → Telepített alkalmazások → Game Time Monitor → Eltávolítás** útvonalon távolíthatod el. Az alkalmazás saját asztali ikonja eltűnik, a játékok, a kiegészítő mappa parancsikonjai és az előzmények megmaradnak. A részletes fejlesztői, hibakeresési és tesztleírás az [angol dokumentációban](README.md) található.

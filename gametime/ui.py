@@ -62,6 +62,8 @@ def theme(root):
     style.configure("Total.TLabel", font=("Segoe UI", 25, "bold"), foreground=BLUE)
     style.configure("TButton", background=PANEL, foreground=FG, padding=(10, 7), borderwidth=1)
     style.map("TButton", background=[("active", "#354760"), ("pressed", "#293d59")])
+    style.configure("Play.TButton", background="#63e2ca", foreground="#10211e", font=("Segoe UI", 11, "bold"))
+    style.map("Play.TButton", background=[("disabled", "#303540"), ("active", "#8aefdc")], foreground=[("disabled", MUTED)])
     style.configure("TEntry", fieldbackground=PANEL, foreground=FG, insertcolor=FG, padding=6)
     style.configure("TCombobox", fieldbackground=PANEL, background=PANEL, foreground=FG, arrowcolor=FG)
     style.map("TCombobox", fieldbackground=[("readonly", PANEL)], foreground=[("readonly", FG)],
@@ -93,9 +95,12 @@ class App:
         self.escape_attempts = set()
         self.closed = False
         self.last_rows = None
+        self.launcher = None
+        self.launching = None
         self.hidden_ids = store.hidden_ids()
         self.show_hidden = tk.BooleanVar(value=False)
         self.status_key = "Discovering games…"
+        self.status_values = {}
         self.status = tk.StringVar(value=self.t(self.status_key))
         self.total_text = tk.StringVar(value="00:00:00")
         self.remaining_text = tk.StringVar()
@@ -125,6 +130,7 @@ class App:
             return
         try:
             self.tray.dispatch_pending()
+            self.poll_launch()
         except Exception:
             log.exception("Tray event dispatch failed")
         if not self.closed:
@@ -144,17 +150,38 @@ class App:
         self.notebook = ttk.Notebook(self.main_frame)
         self.notebook.pack(fill="both", expand=True, padx=8, pady=(0, 8))
         frame = ttk.Frame(self.notebook, padding=18)
-        self.notebook.add(frame, text=self.t("Games"))
+        self.notebook.add(frame, text="Gaming Hub")
         from .statistics_ui import StatisticsView
         self.statistics = StatisticsView(self.notebook, self)
         self.notebook.add(self.statistics, text=self.t("Statistics"))
         self.notebook.bind("<<NotebookTabChanged>>", self.tab_changed)
-        ttk.Label(frame, text=self.t("Today’s game time"), style="Title.TLabel").pack(anchor="w")
-        ttk.Label(frame, textvariable=self.total_text, style="Total.TLabel").pack(anchor="w", pady=(8, 0))
+        hero = ttk.Frame(frame)
+        hero.pack(fill="x")
+        title = ttk.Frame(hero)
+        title.pack(side="left", anchor="n")
+        ttk.Label(title, text="Gaming Hub", style="Title.TLabel").pack(anchor="w")
+        ttk.Label(title, text=self.t("Your games, play time and reminders in one place."), style="Muted.TLabel").pack(anchor="w", pady=(5, 0))
+        budget = ttk.Frame(hero)
+        budget.pack(side="right")
+        ttk.Label(budget, text=self.t("Today’s game time"), style="Muted.TLabel").pack(anchor="e")
+        ttk.Label(budget, textvariable=self.total_text, style="Total.TLabel").pack(anchor="e")
         ttk.Label(frame, textvariable=self.remaining_text).pack(anchor="w")
         self.progress = ttk.Progressbar(frame, maximum=self.settings.limit_seconds)
         self.progress.pack(fill="x", pady=12)
         ttk.Label(frame, textvariable=self.active_text).pack(anchor="w", pady=(0, 12))
+        library = ttk.Frame(frame)
+        library.pack(fill="x", pady=(0, 10))
+        self.search = tk.StringVar()
+        ttk.Label(library, text=self.t("Search")).pack(side="left", padx=(0, 8))
+        ttk.Entry(library, textvariable=self.search).pack(side="left", fill="x", expand=True)
+        self.source_filter = tk.StringVar(value=self.t("All sources"))
+        self.source_choices = {self.t("All sources"): None}
+        self.source_menu = ttk.Combobox(library, textvariable=self.source_filter, values=list(self.source_choices), state="readonly", width=17)
+        self.source_menu.pack(side="left", padx=10)
+        self.source_menu.bind("<<ComboboxSelected>>", lambda e: self.refresh_view())
+        self.launch_button = ttk.Button(library, text=self.t("▶ Play"), command=self.launch_selected,
+                                        style="Play.TButton", width=16, state="disabled")
+        self.launch_button.pack(side="right")
         table = ttk.Frame(frame)
         table.pack(fill="both", expand=True)
         self.tree = ttk.Treeview(table, columns=("name", "source", "today", "state", "path"), show="headings", selectmode="browse", height=5)
@@ -167,6 +194,10 @@ class App:
         scrollbar = ttk.Scrollbar(table, orient="vertical", command=self.tree.yview)
         scrollbar.pack(side="right", fill="y")
         self.tree.configure(yscrollcommand=scrollbar.set)
+        self.tree.bind("<<TreeviewSelect>>", lambda e: self.update_launch_button())
+        self.tree.bind("<Return>", lambda e: self.launch_selected())
+        self.tree.bind("<Double-1>", self.double_click_game)
+        self.search.trace_add("write", lambda *args: self.refresh_view())
         actions = ttk.Frame(frame)
         actions.pack(fill="x", pady=(14, 8))
         for index, (label, command) in enumerate([("Exclude / track", self.toggle_game), ("Add game", self.add_manual),
@@ -181,29 +212,31 @@ class App:
         bottom.pack(fill="x")
         ttk.Button(bottom, text=self.t("Settings"), command=self.settings_dialog).pack(side="left")
         ttk.Button(bottom, text=self.t("Test alert"), command=self.test_popup).pack(side="left", padx=6)
-        ttk.Button(bottom, text=self.t("Gaming Hub"), command=self.open_games).pack(side="left", padx=6)
+        ttk.Button(bottom, text=self.t("Open game folder"), command=self.open_game_folder).pack(side="left", padx=6)
         ttk.Button(bottom, text=self.t("Hide to tray"), command=self.root.withdraw).pack(side="right")
         ttk.Label(frame, textvariable=self.status, style="Muted.TLabel", wraplength=950).pack(anchor="w", pady=(12, 0))
 
     def t(self, text, **values):
         return tr(text, self.settings.language, **values)
 
-    def set_status(self, text):
+    def set_status(self, text, **values):
         self.status_key = text
-        self.status.set(self.t(text))
+        self.status_values = values
+        self.status.set(self.t(text, **values))
 
     def set_language(self, language):
         if language == self.settings.language:
             return
         current_tab = self.notebook.index(self.notebook.select())
         dates = self.statistics.start.get(), self.statistics.end.get(), self.statistics.selected_day
+        search, source, selection = self.search.get(), self.source_choices.get(self.source_filter.get()), self.tree.selection()
         self.tracker.flush()
         settings = replace(self.settings, language=language).validate()
         self.store.save_settings(settings)
         self.settings = self.catalog.settings = settings
         self.main_frame.destroy()
         self.root.title(self.t("Game Time Monitor"))
-        self.status.set(self.t(self.status_key))
+        self.status.set(self.t(self.status_key, **self.status_values))
         self.last_rows = None
         self._build()
         self.statistics.start.set(dates[0])
@@ -211,6 +244,12 @@ class App:
         self.statistics.selected_day = dates[2]
         self.notebook.select(current_tab)
         self.render()
+        self.search.set(search)
+        self.source_filter.set(next((label for label, value in self.source_choices.items() if value == source), self.t("All sources")))
+        self.refresh_view()
+        if selection and self.tree.exists(selection[0]):
+            self.tree.selection_set(selection[0])
+        self.update_launch_button()
         # Retired widgets contain Tcl variables in Python reference cycles.
         # Finalize them here, before a discovery worker could trigger GC.
         gc.collect()
@@ -227,10 +266,71 @@ class App:
         win32.u.SetForegroundWindow(dark_title(self.root))
 
     def open_games(self):
+        self.notebook.select(0)
+        self.show()
+
+    def open_game_folder(self):
+        game = self.selected()
+        if not game:
+            self.message("Select a game in the list first.")
+            return
         try:
-            os.startfile(self.settings.games_root)
+            os.startfile(game.root)
         except OSError:
-            self.message("The Gaming Hub folder is unavailable. Check its path in Settings.")
+            self.message("The game's installation folder is unavailable.")
+
+    def update_launch_button(self):
+        game = self.selected()
+        self.launch_button.configure(text=self.t("Starting…" if self.launching else "▶ Play"),
+                                      state="normal" if game and game.installed and not self.launching else "disabled")
+
+    def double_click_game(self, event):
+        row = self.tree.identify_row(event.y)
+        if row:
+            self.tree.selection_set(row)
+            self.launch_selected()
+        return "break"
+
+    def launch_selected(self):
+        game = self.selected()
+        if self.launching:
+            return "break"
+        if not game:
+            self.message("Select a game in the list first.")
+            return "break"
+        if not game.installed:
+            self.message("This game is no longer installed. Refresh the library.")
+            return "break"
+        if self.launcher is None:
+            from .launch import LaunchWorker
+            self.launcher = LaunchWorker(self.data_dir)
+        self.launching = game.id
+        self.launcher.request(game, self.settings, self.catalog.rules, self.store.launch_executable(game.id))
+        self.set_status("Preparing {name}…", name=game.name)
+        self.update_launch_button()
+        return "break"
+
+    def poll_launch(self):
+        if self.closed or self.launcher is None:
+            return
+        while not self.launcher.results.empty():
+            game, plan, error = self.launcher.results.get_nowait()
+            self.launching = None
+            self.update_launch_button()
+            if not error:
+                try:
+                    from .launch import execute
+                    current = self.catalog.games.get(game.id)
+                    if not current or not current.installed:
+                        raise ValueError("This game is no longer installed. Refresh the library.")
+                    execute(plan)
+                    log.info("Game launch requested: game=%s kind=%s", game.id, plan.kind)
+                    self.set_status("Launch requested: {name}. Play time starts when the game is in the foreground.", name=game.name)
+                except (OSError, ValueError) as exc:
+                    error = str(exc)
+            if error:
+                self.set_status("Could not start {name}.", name=game.name)
+                self.message(self.t(error))
 
     def tray_menu(self):
         if self.closed:
@@ -400,6 +500,7 @@ class App:
             self.catalog.games[game.id] = game
             self.store.upsert([game])
             self.store.set_rule(path, game.id)
+            self.store.set_launch_executable(game.id, path)
             self.refresh_rules()
             self.last_rows = None
 
@@ -415,6 +516,7 @@ class App:
                 self.message("Browsers and launcher clients do not count as game time.")
                 return
             self.store.set_rule(path, game.id)
+            self.store.set_launch_executable(game.id, path)
             self.refresh_rules()
 
     def rules_dialog(self):
@@ -458,7 +560,7 @@ class App:
         variables = {}
         for key, label, initial in [("limit", "Daily limit (minutes)", self.settings.limit_seconds / 60),
                                     ("warning", "Warn after (minutes)", self.settings.warning_seconds / 60),
-                                    ("games", "Gaming Hub folder (full path)", self.settings.games_root),
+                                    ("games", "Games and optional shortcuts folder (full path)", self.settings.games_root),
                                     ("steam", "Additional Steam installations (separated by semicolons)", ";".join(self.settings.steam_roots)),
                                     ("epic", "Additional Epic manifest folders (separated by semicolons)", ";".join(self.settings.epic_manifest_dirs)),
                                     ("ubisoft", "Additional Ubisoft Connect installations (separated by semicolons)", ";".join(self.settings.ubisoft_roots))]:
@@ -471,7 +573,7 @@ class App:
                 variables["games"].set(path)
         ttk.Button(frame, text=self.t("Browse Gaming Hub folder"), command=browse).pack(anchor="w", pady=10)
         hub_enabled = tk.BooleanVar(value=self.settings.hub_enabled)
-        ttk.Checkbutton(frame, text=self.t("Gaming Hub: automatically maintain game shortcuts"),
+        ttk.Checkbutton(frame, text=self.t("Also maintain a shortcuts folder (optional)"),
                         variable=hub_enabled).pack(anchor="w", pady=6)
         exclude_chess = tk.BooleanVar(value=self.settings.exclude_chess)
         ttk.Checkbutton(frame, text=self.t("Exclude chess games by default (optional personal preference)"),
@@ -633,10 +735,25 @@ class App:
         games.update(self.catalog.games)
         self.hidden_ids = self.store.hidden_ids()  # Also follows discovery's ID merges.
         rows = []
+        selected_source = self.source_choices.get(self.source_filter.get())
+        self.source_choices = {self.t("All sources"): None}
+        for source in sorted({game.source for game in games.values()}):
+            label = self.t("Manual") if source == "Kézi" else self.t("Games folder") if source == "Games" else source
+            self.source_choices[label] = source
+        self.source_menu.configure(values=list(self.source_choices))
+        if selected_source not in self.source_choices.values():
+            selected_source = None
+            self.source_filter.set(self.t("All sources"))
+        query = self.search.get().strip().casefold()
         for game in sorted(games.values(), key=lambda g: g.name.casefold()):
             if game.id in self.hidden_ids and not self.show_hidden.get():
                 continue
             if not game.installed and game.id not in totals:
+                continue
+            if selected_source and game.source != selected_source:
+                continue
+            source_label = self.t("Manual") if game.source == "Kézi" else self.t("Games folder") if game.source == "Games" else game.source
+            if query and query not in (game.name + " " + game.source + " " + source_label).casefold():
                 continue
             enabled = self.catalog.enabled(game)
             state = self.t(("Tracked" if enabled else "Excluded") if game.installed else "Removed")
@@ -655,6 +772,7 @@ class App:
             if scroll:
                 self.tree.yview_moveto(scroll[0])
             self.last_rows = rows
+        self.update_launch_button()
         self.tray.update(self.t("Game Time Monitor\nToday: {total} · remaining: {remaining}\nLeft click: open · right click: menu",
                                 total=duration(total), remaining=duration(self.settings.limit_seconds-total)))
         if self.notebook.select() == str(self.statistics) and time.monotonic()-self.statistics.last_refresh >= 10:
@@ -669,7 +787,10 @@ class App:
                 (self.data_dir / "stop.request").unlink(missing_ok=True)
                 self.close()
                 return
-            if (self.data_dir / "show.request").exists():
+            if (self.data_dir / "show-hub.request").exists():
+                (self.data_dir / "show-hub.request").unlink(missing_ok=True)
+                self.open_games()
+            elif (self.data_dir / "show.request").exists():
                 (self.data_dir / "show.request").unlink(missing_ok=True)
                 self.show()
             self.drain_discovery()
@@ -708,5 +829,7 @@ class App:
         self.tracker.close()
         self.service.close()
         self.hub.close()
+        if self.launcher is not None:
+            self.launcher.close()
         self.tray.close()
         self.root.destroy()

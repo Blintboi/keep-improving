@@ -10,6 +10,8 @@ python -B tests\gui_smoke.py --ui-only --report test-reports\gui.json
 
 Tests cover metadata/multiple libraries, watcher races, foreground/background time, sleep/lock/clock changes, midnight, persistence, ID migration, shared budgets, alerts, native tray behavior and Hub foreign-file preservation. Windows tests use actual temporary directory notifications, process queries and mutexes.
 
+Version 1.6 adds integrated Play preparation for Steam/Epic/Ubisoft/Riot/Minecraft and standalone games, original shortcut arguments, canonical launch-only URIs, changed-link rejection, explicit EXE persistence and transactional ID migration, stale-choice cleanup and background-worker shutdown. Real UI smoke covers search/source filters, duplicate-click suppression, queued launch execution, uninterrupted tracker identity/time, language switching and returning from Statistics to the Hub inside the same window. Game execution is mocked. A real mutex/subprocess check verifies `--hub` requests the Hub page in the existing profile instead of starting another monitor.
+
 Version 1.4 adds hidden-row persistence/migration and independent history/tracking checks, fresh/legacy chess policy, validated Steam IDs, launcher fallback, exact-root MSI selection, registry command rejection, portable-file preservation and mocked interactive uninstall execution.
 
 Version 1.5 adds English/Hungarian language persistence and placeholder parity, translated reminders/removal guidance, strict inclusive statistics date ranges, per-game/day totals, hidden/removed/orphan history and flush/reopen accounting. Average tests cover installation-day migration/persistence, idle days since installation, custom ranges and exclusion of pre-installation/future days. GUI checks cover immediate language switching, the daily breakdown, the installation-based average, translated date errors and preservation of the selected period across language changes. The bundled upgrade checks language/installation-date preservation and retention of the Gaming Hub icon after monitor removal.
@@ -17,6 +19,8 @@ Version 1.5 adds English/Hungarian language persistence and placeholder parity, 
 The GUI smoke creates real Tk windows with synthetic fixtures. Inspect dark widgets, settings, hidden/minimized-root notifications, hide → Show hidden → restore, and removal guide Cancel/Close behavior. The legacy source smoke checks install/upgrade/history/startup/background-single-instance/uninstall behavior.
 
 `tests/bundled_install_smoke.ps1` tests the standalone payload using isolated paths and uniquely named startup/Installed apps registrations, checking fresh install, upgrade, runtime diagnosis, uninstall and preservation of history/foreign files. Check real Setup extraction/launch before release, too.
+
+The 1.6 bundled test redirects desktop shortcut creation into its own temporary Desktop fixture, exercises the old separate monitor/Hub-folder shortcut migration and checks one shared app icon and owned-shortcut removal during uninstall. It does not create test shortcuts on the user's actual desktop.
 
 ## Fullscreen evidence
 
@@ -46,3 +50,9 @@ The standalone installer also preserves unrelated Windows startup values across 
 163 automated tests passed in 62.232 seconds after the installation-based average change. All 15 GUI smoke checks, 18 legacy source-installer checks and 18 bundled-runtime install/upgrade/uninstall checks passed. The bundled checks verify that the retained Hub icon matches the application icon byte for byte, and that Hungarian selection and the original installation day survive an upgrade. GUI screenshots were inspected in Hungarian and English. All game-removal execution tests used mocks.
 
 The first bundled upgrade attempt was interrupted by an Explorer-launched test instance. The fixture was stopped and uninstalled, and the complete check passed with desktop shortcut creation disabled for that isolated test. Normal installation still creates the requested desktop shortcuts.
+
+## 1.6.0 validation on 2026-10-18
+
+179 automated tests passed in 61.245 seconds. All 24 GUI checks and 23 bundled install/upgrade/uninstall checks passed. Hungarian and English Hub screenshots were inspected. The packaged archive includes the new launch module. Read-only launch planning also resolved all 19 installed catalog entries on the development PC, without starting those games. Actual game execution in launch tests was mocked; launcher sign-in, updates and each game's own startup behavior remain publisher-controlled.
+
+The desktop migration test used a temporary desktop directory. It checked a fresh shared app icon, conversion of the old Hub-folder link, removal of the old owned duplicate monitor icon, preservation of an unrelated file and removal of the integrated app shortcut during uninstall. History, hidden rows, language, installation day, unrelated startup entries and companion icon data survived the upgrade/uninstall checks.

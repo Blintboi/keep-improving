@@ -1,9 +1,9 @@
-Game Time Monitor 1.5.0 — validation
+Game Time Monitor 1.6.0 — validation
 
-163 automated tests passed on Windows 11, Python 3.12.10 (62.232 seconds).
-15 GUI smoke checks passed, including Hungarian language switching, historical daily/game statistics, an average measured since installation, date validation, hide/show/restore, a non-destructive removal guide, dark settings, native tray and topmost alerts with a hidden main window.
-18 legacy source install checks passed, including preserved data, startup, background single instance and uninstall.
-18 bundled-runtime install/upgrade/uninstall checks passed, including original installation day/language/hidden/history preservation, the shared application/Hub icon, startup/Installed apps entries, backups, and data/foreign-file preservation.
+179 automated tests passed on Windows 11, Python 3.12.10 (61.245 seconds).
+24 GUI checks passed, including integrated Play, search/source filters, duplicate-click suppression, preserved measurement state, Hungarian language switching, daily/game statistics, installation-based average, hide/show/restore, guided removal, tray and topmost alerts.
+23 bundled-runtime install/upgrade/uninstall checks passed, including one shared desktop app icon, migration of the old separate icons, original installation day/language/hidden/history preservation, startup/Installed apps entries, backups, and data/foreign-file preservation.
+Read-only launch planning resolved all 19 installed catalog entries on the development PC. Game execution in tests was mocked.
 
 See TESTING.md for scope and limits, including the successful Minecraft Java fullscreen trial on 2026-10-18. A second physical PC has not yet been tested.
 

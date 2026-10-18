@@ -1,6 +1,20 @@
 """Small explicit English/Hungarian catalog. Stored IDs and paths never translate."""
 LANGUAGES = {"English": "en", "Magyar": "hu"}
 HU = {
+    "Your games, play time and reminders in one place.": "Játékok, játékidő és emlékeztetők egy helyen.",
+    "Search": "Keresés", "All sources": "Minden forrás", "▶ Play": "▶ Játék indítása",
+    "Starting…": "Indítás…", "Preparing {name}…": "Indítás előkészítése: {name}…",
+    "Launch requested: {name}. Play time starts when the game is in the foreground.": "Indítás: {name}. A mérés az előtérbe kerülő játékban indul.",
+    "Could not start {name}.": "Nem sikerült elindítani: {name}.",
+    "This game is no longer installed. Refresh the library.": "Ez a játék már nincs telepítve. Frissítsd a játéklistát.",
+    "Choose the game's executable with Assign EXE, then try Play again.": "Az EXE hozzárendelése gombbal válaszd ki a játék futtatható fájlját, majd indítsd újra.",
+    "The game launch link is invalid. Refresh the library or assign its EXE.": "A játék indítási hivatkozása érvénytelen. Frissítsd a listát, vagy rendeld hozzá a játék EXE-jét.",
+    "The game's executable is unavailable. Refresh the library or assign its EXE.": "A játék futtatható fájlja nem érhető el. Frissítsd a listát, vagy rendeld hozzá az EXE-jét.",
+    "The launch shortcut changed. Try Play again.": "Az indító parancsikon közben megváltozott. Próbáld újra elindítani a játékot.",
+    "The game's installation folder is unavailable.": "A játék telepítési mappája nem érhető el.",
+    "Unsupported game launcher": "Nem támogatott játékindító",
+    "Also maintain a shortcuts folder (optional)": "Parancsikonmappa karbantartása is (választható)",
+    "Games and optional shortcuts folder (full path)": "Játékok és választható parancsikonmappa (teljes útvonal)",
     "Game Time Monitor": "Játékidőfigyelő",
     "Games": "Játékok", "Statistics": "Statisztikák",
     "Today’s game time": "Mai játékidő", "Discovering games…": "Játékok felismerése…",

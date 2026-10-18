@@ -6,6 +6,7 @@ $taskRoot = Join-Path $env:TEMP ('GameTimeMonitor-bundle-test-' + [guid]::NewGui
 $app = Join-Path $taskRoot 'App with spaces'
 $data = Join-Path $taskRoot 'Profile with spaces'
 $games = Join-Path $taskRoot 'Games with spaces'
+$desktop = Join-Path $taskRoot 'Desktop fixture'
 $name = 'GameTimeMonitor-Test-' + [guid]::NewGuid().ToString('N')
 $report = [ordered]@{}
 $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
@@ -21,7 +22,7 @@ $startupRegistry.Dispose()
 New-Item -ItemType Directory -Path $taskRoot -Force | Out-Null
 try {
     $setup = Join-Path ([IO.Path]::GetFullPath($PackageDir)) 'setup.ps1'
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $setup -InstallDir $app -DataDir $data -GamesRoot $games -StartupName $name -Quiet -NoStart -NoHubShortcut -NoDesktopShortcut
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $setup -InstallDir $app -DataDir $data -GamesRoot $games -DesktopDir $desktop -StartupName $name -Quiet -NoStart
     if ($LASTEXITCODE -ne 0) { throw 'Fresh install failed.' }
     $exe = Join-Path $app 'GameTimeMonitor.exe'
     $report.bundled_runtime_installed = Test-Path -LiteralPath $exe
@@ -31,6 +32,11 @@ try {
     $report.runtime_and_profile_verified = $process.ExitCode -eq 0 -and $first.data -eq $data -and $first.games_root -eq $games -and $first.hub_enabled -and $first.language -eq 'en'
     $hubIcon = Join-Path $data 'assets\gaming-hub.ico'
     $report.hub_icon_installed = (Test-Path -LiteralPath $hubIcon) -and (Get-FileHash -LiteralPath $hubIcon).Hash -eq (Get-FileHash -LiteralPath (Join-Path $app '_internal\gametime\app.ico')).Hash
+    $shell = New-Object -ComObject WScript.Shell
+    $hubPath = Join-Path $desktop 'Gaming Hub.lnk'
+    $hubLink = $shell.CreateShortcut($hubPath)
+    $report.desktop_hub_opens_integrated_app = $hubLink.TargetPath -eq $exe -and $hubLink.Arguments -eq ('--hub --data-dir "' + $data + '"') -and $hubLink.IconLocation -eq ($hubIcon + ',0')
+    $report.single_shared_desktop_icon = @(Get-ChildItem -LiteralPath $desktop -Filter '*.lnk').Count -eq 1
     $process = Start-Process -FilePath $exe -ArgumentList @('--configure','--language','hu','--data-dir',('"' + $data + '"')) -WindowStyle Hidden -Wait -PassThru
     if ($process.ExitCode -ne 0) { throw 'Language selection failed.' }
     $trackingStart = 'import sqlite3,sys; d=sqlite3.connect(sys.argv[1]); print(d.execute("SELECT value FROM settings WHERE key=?",("tracking_started_on",)).fetchone()[0])' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
@@ -44,12 +50,23 @@ try {
     'save data' | Set-Content -LiteralPath (Join-Path $data 'keep.txt')
     'import sqlite3,sys; from datetime import date; d=sqlite3.connect(sys.argv[1]); d.execute("INSERT INTO game_preferences VALUES (?,?)",("test:hidden",1)); d.execute("INSERT INTO usage VALUES (?,?,?)",(date.today().isoformat(),"test:hidden",123)); d.commit()' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     if ($LASTEXITCODE -ne 0) { throw 'Fixture write failed.' }
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $setup -InstallDir $app -DataDir $data -GamesRoot $games -StartupName $name -Quiet -NoStart -NoHubShortcut -NoDesktopShortcut
+    # Reproduce the old separate monitor icon and old Hub-folder shortcut.
+    $legacyDesktop = Join-Path $desktop ($name + '.lnk')
+    $oldMonitor = $shell.CreateShortcut($legacyDesktop)
+    $oldMonitor.TargetPath = $exe; $oldMonitor.Description = 'Game Time Monitor - GameTimeMonitor.bundle.v1'; $oldMonitor.Save()
+    $oldHub = $shell.CreateShortcut($hubPath)
+    $oldHub.TargetPath = $games; $oldHub.Arguments = ''; $oldHub.Description = 'Game Time Monitor Gaming Hub'; $oldHub.Save()
+    $foreign = Join-Path $desktop 'unrelated.txt'
+    'preserve' | Set-Content -LiteralPath $foreign
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $setup -InstallDir $app -DataDir $data -GamesRoot $games -DesktopDir $desktop -StartupName $name -Quiet -NoStart
     if ($LASTEXITCODE -ne 0) { throw 'Upgrade failed.' }
     $process = Start-Process -FilePath $exe -ArgumentList @('--diagnose','--data-dir',('"' + $data + '"'),'--report',('"' + $diag + '"')) -WindowStyle Hidden -Wait -PassThru
     $report.language_preserved_on_upgrade = (Get-Content -LiteralPath $diag -Raw -Encoding UTF8 | ConvertFrom-Json).language -eq 'hu'
     $trackingStartAfter = 'import sqlite3,sys; d=sqlite3.connect(sys.argv[1]); print(d.execute("SELECT value FROM settings WHERE key=?",("tracking_started_on",)).fetchone()[0])' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     $report.tracking_start_preserved_on_upgrade = $trackingStartAfter -eq $trackingStart
+    $upgradedHub = $shell.CreateShortcut($hubPath)
+    $report.old_desktop_entries_consolidated = -not (Test-Path -LiteralPath $legacyDesktop) -and $upgradedHub.TargetPath -eq $exe -and $upgradedHub.Arguments.StartsWith('--hub ')
+    $report.foreign_desktop_file_preserved = (Get-Content -LiteralPath $foreign) -eq 'preserve'
     $value = 'import sqlite3,sys; d=sqlite3.connect(sys.argv[1]); print(d.execute("SELECT hidden FROM game_preferences WHERE game_id=?",("test:hidden",)).fetchone()[0]); print(d.execute("SELECT seconds FROM usage WHERE game_id=?",("test:hidden",)).fetchone()[0])' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     $report.upgrade_preserves_hidden_and_history = $value[0] -eq '1' -and [double]$value[1] -eq 123
     $report.backup_created = @(Get-ChildItem -LiteralPath (Join-Path $data 'backups') -Filter 'before-*' -Directory).Count -gt 0
@@ -62,6 +79,7 @@ try {
     $report.apps_and_shortcut_removed = -not (Test-Path -LiteralPath $programLink) -and -not (Test-Path -LiteralPath ('HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\' + $name))
     $report.data_and_foreign_files_preserved = (Test-Path -LiteralPath (Join-Path $data 'usage.sqlite3')) -and (Test-Path -LiteralPath (Join-Path $data 'keep.txt')) -and (Test-Path -LiteralPath (Join-Path $app 'user-note.txt'))
     $report.hub_icon_kept_after_monitor_uninstall = Test-Path -LiteralPath $hubIcon
+    $report.integrated_app_shortcut_removed_on_uninstall = -not (Test-Path -LiteralPath $hubPath) -and (Test-Path -LiteralPath $foreign)
     if (@($report.Values | Where-Object { $_ -ne $true }).Count) { throw 'One or more bundle checks failed.' }
 } catch {
     $report.error = $_ | Out-String
