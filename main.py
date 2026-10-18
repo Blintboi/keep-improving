@@ -121,6 +121,9 @@ def main():
                               "installed_games": len(store.games(True)),
                               "games_root": store.settings().games_root, "hub_enabled": store.settings().hub_enabled,
                               "language": store.settings().language,
+                              "overlay_enabled": store.settings().overlay_enabled,
+                              "overlay_replace_warning": store.settings().overlay_replace_warning,
+                              "limit_popup_enabled": store.settings().limit_popup_enabled,
                               "tracking_started_on": store.tracking_started_on(),
                               "today_seconds": sum(store.totals(datetime.now().date()).values())})
         if args.configure or args.scan_once or args.diagnose or args.sync_hub:

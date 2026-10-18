@@ -6,6 +6,7 @@ Use isolated temporary profiles and synthetic game installations. Never uninstal
 python -B -m unittest discover -s tests -v
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\install_smoke.ps1 -ReportPath test-reports\source-install.json
 python -B -m unittest discover -s tests -p test_qt_ui.py -v
+python -B tests/overlay_smoke.py test-reports/overlay
 ```
 
 Tests cover metadata/multiple libraries, watcher races, foreground/background time, sleep/lock/clock changes, midnight, persistence, ID migration, shared budgets, alerts, native tray behavior and Hub foreign-file preservation. Windows tests use actual temporary directory notifications, process queries and mutexes.
@@ -38,6 +39,12 @@ This verifies that setup, not every exclusive fullscreen engine, display layout,
 - Verify private visibility and absence of data/logs/installed manifests from archives.
 
 The second physical PC, ARM64 and other games' fullscreen modes still require user testing. Preview installers are unsigned.
+
+## 2.1 countdown validation
+
+212 automated tests passed in 73.942 seconds. The 18 overlay tests cover opt-in legacy defaults, independent warning/expiry policies, actual tracker threshold crossing without Escape/popup/sound, retained delayed expiry popups, renderer-error fallback, shared-budget display interpolation without duplicate usage writes, hiding on process changes/other apps/exclusion/lock, hidden games/Hub, native no-focus/input flags, preview isolation, persisted placement/opacity/monitor choices, keyboard/drag placement and disconnected/negative-coordinate/small-screen fallback.
+
+The separate `overlay_smoke.py` opt-in test passed seven checks with a real synthetic WinForms process: the visible translucent renderer retained the existing foreground, and native WindowFromPoint hit-testing through its center returned the other process's window. Normal/red timer and Hungarian settings captures were inspected. It does not force user focus or inject input. This verifies native window behavior, not real gameplay or exclusive fullscreen. The new overlay still needs a real Minecraft fullscreen/borderless trial and second-PC testing. The installer upgrade fixture also checks all overlay preferences survive.
 
 ## 1.4.0 validation on 2026-10-18
 

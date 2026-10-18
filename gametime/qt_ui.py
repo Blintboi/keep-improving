@@ -12,7 +12,7 @@ from PySide6.QtCore import Qt,QTimer,QPoint,QEventLoop
 from PySide6.QtGui import QIcon,QFont,QAction
 from PySide6.QtWidgets import (QApplication,QMainWindow,QWidget,QFrame,QLabel,QVBoxLayout,QHBoxLayout,
     QGridLayout,QStackedWidget,QScrollArea,QLineEdit,QComboBox,QCheckBox,QDoubleSpinBox,QDialog,
-    QFileDialog,QInputDialog,QMenu,QAbstractSpinBox,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,QSizePolicy)
+    QFileDialog,QInputDialog,QMenu,QAbstractSpinBox,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,QSizePolicy,QSlider)
 from .controller import MonitorActions
 from .model import Catalog,Game,Settings,norm,blocked
 from .service import DiscoveryService
@@ -22,6 +22,7 @@ from .i18n import tr,LANGUAGES
 from . import win32,__version__
 from .qt_widgets import STYLE,ACCENT,MUTED,label,button,panel,glyph,duration,BudgetRing,LocalArtwork,CardGrid,GameCard
 from .qt_statistics import StatisticsPage
+from .overlay import CountdownOverlay,PositionPicker,choose_screen,foreground_screen_name
 
 log=logging.getLogger(__name__)
 
@@ -67,10 +68,18 @@ class App(QMainWindow,MonitorActions):
         self.setWindowTitle('Gaming Hub'); self.setWindowIcon(QIcon(str(Path(__file__).with_name('app.ico'))))
         screen=QApplication.primaryScreen().availableGeometry()
         self.resize(min(1380,screen.width()-60),min(920,screen.height()-60)); self.setMinimumSize(1000,700)
+        self.overlay_failed=False; self.overlay=None; self._overlay_preview_until=0
         self._build(); dark_window(self)
+        try: self.overlay=CountdownOverlay(self)
+        except Exception:
+            self.overlay_failed=True; log.exception('Countdown initialization failed')
+            self.set_status('Countdown unavailable; early warning popups remain active.')
+        QApplication.instance().screenAdded.connect(self.refresh_overlay_screens)
+        QApplication.instance().screenRemoved.connect(self.refresh_overlay_screens)
         self.tray=win32.Tray(self.show,self.tray_menu,self.devices_changed)
         self.refresh_manual_availability(); self.service.start(); self.render()
         if not background or not self.tray.available: self.show()
+        self.overlay_timer=QTimer(self); self.overlay_timer.setInterval(200); self.overlay_timer.timeout.connect(self.update_overlay); self.overlay_timer.start()
         self.tick_timer=self.call_later(200,self.tick); self.tray_timer=self.call_later(75,self.poll_tray)
 
     def t(self,text,**values): return tr(text,self.settings.language,**values)
@@ -174,6 +183,7 @@ class App(QMainWindow,MonitorActions):
         limits_layout.addLayout(fields)
         self.chess=QCheckBox(self.t('Exclude chess games by default (optional personal preference)')); self.chess.setChecked(self.settings.exclude_chess); limits_layout.addWidget(self.chess)
         limits_layout.addWidget(label(self.t('Reminders let you decide when to finish. Games are never closed for you.'),'muted')); body_layout.addWidget(limits)
+        body_layout.addWidget(self.build_overlay_settings())
         locations=panel(); places=QVBoxLayout(locations); places.setContentsMargins(22,20,22,22); places.setSpacing(12)
         places.addWidget(label(self.t('Games and discovery'),'section')); places.addWidget(label(self.t('Games and optional shortcuts folder (full path)'),'muted'))
         browse=QHBoxLayout(); self.games_path=QLineEdit(self.settings.games_root); browse.addWidget(self.games_path,1); browse.addWidget(button(self.t('Browse…'),self.browse_root)); places.addLayout(browse)
@@ -186,6 +196,83 @@ class App(QMainWindow,MonitorActions):
         footer.addWidget(button(self.t('Save settings'),self.save_settings,'primary')); outer.addLayout(footer)
         return page
 
+    def build_overlay_settings(self):
+        card=panel(); layout=QVBoxLayout(card); layout.setContentsMargins(22,20,22,22); layout.setSpacing(12)
+        layout.addWidget(label(self.t('In-game countdown'),'section'))
+        self.overlay_enabled=QCheckBox(self.t('Show a click-through countdown while gaming')); self.overlay_enabled.setChecked(self.settings.overlay_enabled); layout.addWidget(self.overlay_enabled)
+        self.overlay_warning=QCheckBox(self.t('Use a red countdown instead of the early warning popup')); self.overlay_warning.setChecked(self.settings.overlay_replace_warning); layout.addWidget(self.overlay_warning)
+        self.limit_popup=QCheckBox(self.t('Show a popup when the daily time limit expires')); self.limit_popup.setChecked(self.settings.limit_popup_enabled); layout.addWidget(self.limit_popup)
+        self.overlay_controls=QWidget(); controls=QVBoxLayout(self.overlay_controls); controls.setContentsMargins(0,4,0,0); controls.setSpacing(10)
+        fields=QHBoxLayout(); fields.addWidget(label(self.t('Monitor'),'muted')); self.overlay_screen=QComboBox(); fields.addWidget(self.overlay_screen,1); controls.addLayout(fields)
+        self.overlay_picker=PositionPicker(self.settings.overlay_x,self.settings.overlay_y,QApplication.primaryScreen())
+        self.overlay_picker.setAccessibleName(self.t('Countdown position'))
+        self.overlay_screen.currentIndexChanged.connect(self.overlay_screen_changed)
+        self.refresh_overlay_screens()
+        self.overlay_screen.setCurrentIndex(max(0,self.overlay_screen.findData(self.settings.overlay_screen)))
+        controls.addWidget(label(self.t('Drag the timer below to set its position. Arrow keys also work.'),'muted')); controls.addWidget(self.overlay_picker)
+        self.overlay_picker.positionChanged.connect(lambda x,y:self.update_overlay())
+        opacity=QHBoxLayout(); opacity.addWidget(label(self.t('Background opacity'),'muted'))
+        self.overlay_opacity=QSlider(Qt.Horizontal); self.overlay_opacity.setRange(25,95); self.overlay_opacity.setValue(round(self.settings.overlay_opacity*100)); opacity.addWidget(self.overlay_opacity,1)
+        self.overlay_opacity_label=label(str(self.overlay_opacity.value())+'%'); self.overlay_opacity.valueChanged.connect(lambda value:self.overlay_opacity_label.setText(str(value)+'%')); self.overlay_opacity.valueChanged.connect(lambda value:self.update_overlay()); opacity.addWidget(self.overlay_opacity_label); controls.addLayout(opacity)
+        actions=QHBoxLayout(); actions.addWidget(button(self.t('Preview for 10 seconds'),self.preview_overlay)); actions.addWidget(button(self.t('Reset position'),lambda:self.overlay_picker.set_position(1,0))); actions.addStretch(); controls.addLayout(actions)
+        note=label(self.t('The countdown never takes focus or mouse input. Exclusive fullscreen may hide desktop overlays; windowed or borderless mode is more reliable.'),'muted'); note.setWordWrap(True); controls.addWidget(note)
+        layout.addWidget(self.overlay_controls)
+        self.overlay_enabled.toggled.connect(self.overlay_controls.setEnabled); self.overlay_enabled.toggled.connect(self.overlay_warning.setEnabled)
+        self.overlay_controls.setEnabled(self.overlay_enabled.isChecked()); self.overlay_warning.setEnabled(self.overlay_enabled.isChecked())
+        return card
+
+    def refresh_overlay_screens(self,*args):
+        if not hasattr(self,'overlay_screen'): return
+        wanted=self.overlay_screen.currentData()
+        if wanted is None: wanted=self.settings.overlay_screen
+        self.overlay_screen.blockSignals(True); self.overlay_screen.clear(); self.overlay_screen.addItem(self.t('Automatic (active game monitor)'),'')
+        for screen in QApplication.screens():
+            rect=screen.geometry(); self.overlay_screen.addItem(f'{screen.name()} · {rect.width()} × {rect.height()}',screen.name())
+        if wanted and self.overlay_screen.findData(wanted)<0: self.overlay_screen.addItem(self.t('{name} (not connected)',name=wanted),wanted)
+        self.overlay_screen.setCurrentIndex(max(0,self.overlay_screen.findData(wanted))); self.overlay_screen.blockSignals(False); self.overlay_screen_changed()
+
+    def overlay_screen_changed(self,*args):
+        if hasattr(self,'overlay_picker'):
+            self.overlay_picker.screen=choose_screen(self.overlay_screen.currentData() or '',self.screen().name() if self.screen() else '')
+            self.overlay_picker.update()
+
+    def overlay_values(self):
+        return dict(overlay_enabled=self.overlay_enabled.isChecked(),overlay_replace_warning=self.overlay_warning.isChecked(),limit_popup_enabled=self.limit_popup.isChecked(),
+                    overlay_opacity=self.overlay_opacity.value()/100,overlay_x=self.overlay_picker.x_ratio,overlay_y=self.overlay_picker.y_ratio,overlay_screen=self.overlay_screen.currentData() or '')
+
+    def preview_overlay(self):
+        self._overlay_preview_until=time.monotonic()+10; self.update_overlay()
+
+    def update_overlay(self):
+        if self.closed or not self.overlay: return
+        preview=time.monotonic()<self._overlay_preview_until
+        settings=replace(self.settings,**self.overlay_values()) if preview else self.settings
+        if not settings.overlay_enabled:
+            self.overlay.hide(); return
+        try:
+            current=win32.sample()
+            if not current.interactive:
+                self.overlay.hide(); return
+            if preview:
+                total=settings.warning_seconds; remaining=settings.limit_seconds-total
+                automatic=self.screen().name() if self.screen() else ''
+            else:
+                active=self.tracker.active
+                game=self.catalog.resolve(current.path)
+                if not active or not game or game.id!=active.id or current.identity!=self.tracker.identity:
+                    self.overlay.hide(); return
+                total=sum(self.tracker.totals(current.wall.date()).values())
+                previous=self.tracker.previous
+                if previous and previous.identity==current.identity:
+                    elapsed=current.awake-previous.awake
+                    if 0<elapsed<=1.5 and abs((current.wall-previous.wall).total_seconds()-elapsed)<1.5 and previous.wall.date()==current.wall.date(): total+=elapsed
+                remaining=settings.limit_seconds-total; automatic=foreground_screen_name()
+            self.overlay.present(remaining,total,settings,choose_screen(settings.overlay_screen,automatic),preview)
+            self.overlay_failed=False
+        except Exception:
+            if not self.overlay_failed: log.exception('Countdown presentation failed')
+            self.overlay_failed=True; self.overlay.hide(); self.set_status('Countdown unavailable; early warning popups remain active.')
+
     def browse_root(self):
         value=QFileDialog.getExistingDirectory(self,self.t('Gaming Hub'),self.games_path.text())
         if value: self.games_path.setText(value)
@@ -196,11 +283,11 @@ class App(QMainWindow,MonitorActions):
                 steam_roots=[p.strip() for p in self.paths['steam'].text().split(';') if p.strip()],
                 epic_manifest_dirs=[p.strip() for p in self.paths['epic'].text().split(';') if p.strip()],
                 ubisoft_roots=[p.strip() for p in self.paths['ubisoft'].text().split(';') if p.strip()],
-                hub_enabled=self.hub_enabled.isChecked(),exclude_chess=self.chess.isChecked()).validate()
+                hub_enabled=self.hub_enabled.isChecked(),exclude_chess=self.chess.isChecked(),**self.overlay_values()).validate()
             self.tracker.flush(); self.store.save_settings(settings); self.settings=self.catalog.settings=settings
             self.tracker.unclassified.clear(); self.tracker.previous=None; self.service.configure(settings)
             self.art.roots=list(dict.fromkeys(self.art.roots+settings.steam_roots)); self.art.cache.clear(); self.art.refresh_links(settings.games_root)
-            self.settings_error.setText(''); self.last_rows=None; self.set_status('Settings saved.'); self.render()
+            self.settings_error.setText(''); self.last_rows=None; self.set_status('Settings saved.'); self._overlay_preview_until=0; self.update_overlay(); self.render()
         except (ValueError,OSError) as exc: self.settings_error.setText(self.t(str(exc)))
 
     def set_status(self,text,**values):
@@ -401,6 +488,11 @@ class App(QMainWindow,MonitorActions):
         self.closed=True
         for timer in list(self._timers): timer.stop(); timer.deleteLater()
         self._timers.clear(); self.dismiss_popup()
+        self.overlay_timer.stop()
+        if self.overlay: self.overlay.close(); self.overlay.deleteLater()
+        for signal in (QApplication.instance().screenAdded,QApplication.instance().screenRemoved):
+            try: signal.disconnect(self.refresh_overlay_screens)
+            except (RuntimeError,TypeError): pass
         for window in list(self._dialogs): window.close()
         self.tracker.close(); self.service.close(); self.hub.close()
         if self.launcher: self.launcher.close()

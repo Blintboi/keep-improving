@@ -5,7 +5,7 @@ import logging
 import os
 from pathlib import Path
 from queue import Empty
-from .model import norm, LAUNCHER_SOURCES
+from .model import norm, LAUNCHER_SOURCES, popup_required
 from .tracker import Alert
 from . import win32
 
@@ -171,8 +171,23 @@ class MonitorActions:
                          self.t("Test: Your daily game time limit has been reached. Time to finish playing."), self.t("OK, I’ll stop")))
 
 
+    def consume_silent_alert(self, alert):
+        # A color warning counts as delivered without Escape, sound or a popup.
+        # Keep the original warning if the optional renderer failed to initialize.
+        required = popup_required(self.settings, alert.kind)
+        if alert.kind == "warning" and getattr(self, "overlay_failed", False):
+            required = True
+        if required:
+            return False
+        if self.tracker.alerts and self.tracker.alerts[0] == alert:
+            self.tracker.delivered(alert)
+            self.tracker.alerts.popleft()
+        return True
+
     def notify(self, alert):
         """Let the current game process Escape before mapping the alert window."""
+        if self.consume_silent_alert(alert):
+            return
         escaped = False
         self.escape_attempts = {prior for prior in self.escape_attempts if prior.day == alert.day}
         if self.tracker.active and alert not in self.escape_attempts:
@@ -195,6 +210,8 @@ class MonitorActions:
         if self.closed or alert.day != datetime.now().date().isoformat():
             return
         if not self.tracker.alerts or self.tracker.alerts[0] != alert:
+            return
+        if self.consume_silent_alert(alert):
             return
         try:
             if self.popup(alert):

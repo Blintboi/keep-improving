@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from pathlib import Path
+import math
 import ntpath
 import os
 import re
@@ -64,12 +65,27 @@ class Settings:
     hub_enabled: bool = False
     exclude_chess: bool = False
     language: str = "en"
+    overlay_enabled: bool = False
+    overlay_replace_warning: bool = True
+    limit_popup_enabled: bool = True
+    overlay_opacity: float = .72
+    overlay_x: float = 1.0
+    overlay_y: float = 0.0
+    overlay_screen: str = ""
 
     def validate(self):
         if self.language not in ("en", "hu"):
             raise ValueError("Unsupported language")
         if not (0 < self.warning_seconds < self.limit_seconds <= 86400):
             raise ValueError("Thresholds must be: 0 < warning < daily limit ≤ 1440 minutes.")
+        for value in (self.overlay_enabled, self.overlay_replace_warning, self.limit_popup_enabled):
+            if not isinstance(value, bool):
+                raise ValueError("Overlay switches must be on or off.")
+        for value, minimum, maximum in ((self.overlay_opacity,.25,.95), (self.overlay_x,0,1), (self.overlay_y,0,1)):
+            if isinstance(value,bool) or not isinstance(value,(int,float)) or not math.isfinite(value) or not minimum <= value <= maximum:
+                raise ValueError("Invalid countdown opacity or position.")
+        if not isinstance(self.overlay_screen,str) or len(self.overlay_screen)>200:
+            raise ValueError("Invalid countdown monitor.")
         root = Path(self.games_root)
         if not root.is_absolute() or root.parent == root:
             raise ValueError("The Gaming Hub needs an absolute folder path, not a drive root.")
@@ -166,3 +182,11 @@ class Catalog:
         game = Game(gid, name, source, game_root)
         self.games[gid] = game
         return game if self.enabled(game) else None
+
+
+def popup_required(settings, kind):
+    if kind == "warning":
+        return not (settings.overlay_enabled and settings.overlay_replace_warning)
+    if kind in ("limit", "session"):
+        return settings.limit_popup_enabled
+    return True

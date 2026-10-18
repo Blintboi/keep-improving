@@ -2,13 +2,13 @@
 
 An offline Windows 11 Gaming Hub and game-time monitor in one app. Launch games from a searchable library, measure foreground gameplay against a shared daily budget, and follow daily statistics in a dark English/Hungarian interface.
 
-**Private preview 2.0.1.** The repository and release downloads remain private. Sign into GitHub with an account that has access on your other PC. Each PC keeps its own history; there is no cloud synchronization. [Magyar útmutató](README.hu.md).
+**Private preview 2.1.0.** The repository and release downloads remain private. Sign into GitHub with an account that has access on your other PC. Each PC keeps its own history; there is no cloud synchronization. [Magyar útmutató](README.hu.md).
 
 The 2.0 interface uses Qt Widgets: a dark sidebar, responsive game cards, a daily-budget ring, contextual game actions and a redesigned statistics page. Artwork is read from existing local Steam caches or installed-game icons; no image service, launcher credentials or artwork downloads are used. Artwork and icons keep their original aspect ratios; complete cover images fit inside the card with dark padding where needed. Missing art has a colored monogram fallback. The shared controller/clock application icon remains unchanged.
 
 ## Install
 
-1. Open this repository's **Releases**, download `GameTimeMonitor-2.0.1-Setup.exe`, and run it as your normal Windows user.
+1. Open this repository's **Releases**, download `GameTimeMonitor-2.1.0-Setup.exe`, and run it as your normal Windows user.
 2. Python, Qt/PySide6 and SQLite are included. No separate Python, pip packages, administrator account or launcher login is needed by the monitor.
 3. The app opens and discovers installed games. It starts in the tray when you sign into Windows. Open **Settings** to change your daily limit or Gaming Hub location.
 
@@ -40,9 +40,19 @@ Left click the tray icon to open the app. Right click for Open, Gaming Hub, Sett
 
 Only a tracked game in the foreground counts. Browsers, launcher clients, background games, locked sessions and sleep do not count. Cutscenes still count; keyboard inactivity alone does not pause a game. Samples are taken once a second and saved regularly to SQLite. Midnight starts a new daily total.
 
-The initial daily limit is **120 minutes**, with a warning at **100 minutes**. Alerts are reminders: they do not kill games or enforce a lockout. At a threshold, the app tries one Escape in the currently tracked game, waits 200 ms, then displays an independent topmost alert. It verifies the foreground process identity and avoids sending Escape with modifier keys held. Hidden/minimized main windows do not suppress alerts. **Test alert** checks the popup itself, without simulating a gameplay threshold.
+The initial daily limit is **120 minutes**, with a warning at **100 minutes**. Alerts are reminders: they do not kill games or enforce a lockout. For an enabled popup at a threshold, the app tries one Escape in the currently tracked game, waits 200 ms, then displays an independent topmost alert. It verifies the foreground process identity and avoids sending Escape with modifier keys held. Hidden/minimized main windows do not suppress alerts. **Test alert** checks the popup itself, without simulating a gameplay threshold.
 
 The earlier Tk version was confirmed over Minecraft Java fullscreen at real 20/30-second thresholds. The Qt version retains the guarded Escape/topmost mechanism and has independent hidden/minimized-window integration tests; repeat the real Minecraft trial before treating this preview as fullscreen-validated. Other fullscreen engines or elevated games may behave differently; see [testing](TESTING.md).
+
+## In-game countdown (optional)
+
+In **Settings → In-game countdown**, enable **Show a click-through countdown while gaming**, then save. Fresh installs and older profiles keep it off until you enable it. The small translucent timer appears only during tracked foreground gameplay, counts the remaining shared daily budget, and disappears when you switch to another app or lock Windows. Hiding the Hub does not hide the timer. The timer never accepts mouse/keyboard input or takes focus.
+
+By default, enabling it replaces the early warning popup with a reddish timer at your configured warning threshold (20 minutes remaining with the initial 100/120-minute settings). No Escape, sound or focus change occurs for that color warning. You can retain the early popup instead. **Show a popup when the daily budget expires** is a separate switch, on by default, and controls later over-budget session reminders too. The timer stays at zero after expiry. Popups keep the existing guarded Escape behavior; they do not stop games.
+
+Drag the miniature timer inside Settings to choose its position, or use the arrow keys. Choose the active game's monitor automatically or a specific display; a disconnected display falls back to the primary monitor. Adjust background opacity from 25–95%; the digits stay readable. **Preview for 10 seconds** shows your unsaved placement without changing time/history. Click **Save settings** to keep changes.
+
+This is a Windows desktop overlay, without game injection. Exclusive fullscreen or elevated/protected games may hide it. Borderless/windowed mode is more reliable; test visibility in your game before relying on the color warning. The app does not force fullscreen changes. Turn off the replacement option to retain the early popup if needed. A renderer error restores early popup delivery, but an exclusive-fullscreen game hiding an otherwise healthy desktop window cannot always be detected.
 
 ## Discovery and Gaming Hub
 

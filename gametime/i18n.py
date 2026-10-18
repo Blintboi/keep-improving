@@ -1,6 +1,26 @@
 """Small explicit English/Hungarian catalog. Stored IDs and paths never translate."""
 LANGUAGES = {"English": "en", "Magyar": "hu"}
 HU = {
+    'In-game countdown': 'Játék közbeni visszaszámláló',
+    'Show a click-through countdown while gaming': 'Átkattintható visszaszámláló játék közben',
+    'Use a red countdown instead of the early warning popup': 'Korai felugró figyelmeztetés helyett piros visszaszámláló',
+    'Show a popup when the daily time limit expires': 'Felugró figyelmeztetés a napi keret lejáratakor',
+    'Monitor': 'Kijelző',
+    'Countdown position': 'Visszaszámláló pozíciója',
+    'Automatic (active game monitor)': 'Automatikus (az aktív játék kijelzője)',
+    '{name} (not connected)': '{name} (nincs csatlakoztatva)',
+    'Drag the timer below to set its position. Arrow keys also work.': 'Húzd a lenti számlálót a kívánt helyre. A nyílbillentyűkkel is mozgathatod.',
+    'Background opacity': 'Háttér fedettsége',
+    'Preview for 10 seconds': 'Előnézet 10 másodpercig',
+    'Reset position': 'Pozíció visszaállítása',
+    'The countdown never takes focus or mouse input. Exclusive fullscreen may hide desktop overlays; windowed or borderless mode is more reliable.': 'A számláló nem veszi el a fókuszt, és átengedi az egérműveleteket. A kizárólagos fullscreen elrejtheti; ablakos vagy keret nélküli módban megbízhatóbb.',
+    'PREVIEW': 'ELŐNÉZET',
+    'GAME TIME LEFT': 'HÁTRALÉVŐ JÁTÉKIDŐ',
+    'Countdown unavailable; early warning popups remain active.': 'A visszaszámláló nem elérhető; a korai felugró figyelmeztetés aktív marad.',
+    'Overlay switches must be on or off.': 'A visszaszámláló kapcsolói csak be- vagy kikapcsoltak lehetnek.',
+    'Invalid countdown opacity or position.': 'Érvénytelen fedettség vagy visszaszámláló-pozíció.',
+    'Invalid countdown monitor.': 'Érvénytelen kijelző a visszaszámlálóhoz.',
+
     'YOUR SPACE': 'SAJÁT TÉR',
     'Library': 'Játéktár',
     'Your library': 'Játékaid',

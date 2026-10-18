@@ -30,6 +30,7 @@ try {
     $process = Start-Process -FilePath $exe -ArgumentList @('--diagnose','--data-dir',('"' + $data + '"'),'--report',('"' + $diag + '"')) -WindowStyle Hidden -Wait -PassThru
     $first = Get-Content -LiteralPath $diag -Raw -Encoding UTF8 | ConvertFrom-Json
     $report.runtime_and_profile_verified = $process.ExitCode -eq 0 -and $first.data -eq $data -and $first.games_root -eq $games -and $first.hub_enabled -and $first.language -eq 'en'
+    $report.fresh_overlay_is_opt_in = -not $first.overlay_enabled -and $first.overlay_replace_warning -and $first.limit_popup_enabled
     $hubIcon = Join-Path $data 'assets\gaming-hub.ico'
     $report.hub_icon_installed = (Test-Path -LiteralPath $hubIcon) -and (Get-FileHash -LiteralPath $hubIcon).Hash -eq (Get-FileHash -LiteralPath (Join-Path $app '_internal\gametime\app.ico')).Hash
     $shell = New-Object -ComObject WScript.Shell
@@ -61,6 +62,8 @@ try {
     }
     $process = Start-Process -FilePath $exe -ArgumentList @('--configure','--language','hu','--data-dir',('"' + $data + '"')) -WindowStyle Hidden -Wait -PassThru
     if ($process.ExitCode -ne 0) { throw 'Language selection failed.' }
+    'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); c.update(overlay_enabled=True,overlay_replace_warning=True,limit_popup_enabled=False,overlay_opacity=0.55,overlay_x=0.2,overlay_y=0.8,overlay_screen="missing-fixture-monitor"); d.execute("UPDATE settings SET value=? WHERE key=?",(json.dumps(c),"config")); d.commit()' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    if ($LASTEXITCODE -ne 0) { throw 'Overlay fixture settings failed.' }
     $trackingStart = 'import sqlite3,sys; d=sqlite3.connect(sys.argv[1]); print(d.execute("SELECT value FROM settings WHERE key=?",("tracking_started_on",)).fetchone()[0])' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
     $report.startup_registered = (Get-ItemPropertyValue -LiteralPath $runKey -Name $name) -like ('"' + $exe + '" --background*')
@@ -96,6 +99,8 @@ try {
     $report.obsolete_owned_file_removed = -not (Test-Path -LiteralPath $obsoleteOwned)
     $report.modified_obsolete_file_preserved = (Get-Content -LiteralPath $obsoleteEdited) -eq 'user modified document'
     $report.language_preserved_on_upgrade = (Get-Content -LiteralPath $diag -Raw -Encoding UTF8 | ConvertFrom-Json).language -eq 'hu'
+    $overlayConfig = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); print(c["overlay_enabled"] and c["overlay_replace_warning"] and not c["limit_popup_enabled"] and c["overlay_opacity"]==0.55 and c["overlay_x"]==0.2 and c["overlay_y"]==0.8 and c["overlay_screen"]=="missing-fixture-monitor")' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    $report.overlay_preferences_preserved_on_upgrade = $overlayConfig -eq 'True'
     $trackingStartAfter = 'import sqlite3,sys; d=sqlite3.connect(sys.argv[1]); print(d.execute("SELECT value FROM settings WHERE key=?",("tracking_started_on",)).fetchone()[0])' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     $report.tracking_start_preserved_on_upgrade = $trackingStartAfter -eq $trackingStart
     $upgradedHub = $shell.CreateShortcut($hubPath)
