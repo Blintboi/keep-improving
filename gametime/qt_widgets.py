@@ -179,6 +179,9 @@ class LocalArtwork:
         if pix and not pix.isNull():
             bounds=QRegion(pix.mask()).boundingRect()
             if not bounds.isEmpty(): pix=pix.copy(bounds)
+            # Shell pixmaps can carry a size-dependent DPR (e.g. 256/96).
+            # Normalize pixels before sizing them into our logical icon area.
+            pix.setDevicePixelRatio(1.0)
         result=(poster,pix)
         self.cache[key]=result
         return result

@@ -70,3 +70,7 @@ The first full Qt package exposed two issues that CLI-only installation checks c
 Bundled integration now opens the actual frozen Qt interface after a hidden/background launch, requests the existing Hub and checks graceful shutdown. Upgrade cases retire and back up only unchanged obsolete owned files, preserve edited files and reject obsolete paths escaping the application directory. This prevents old runtime DLLs from shadowing a new runtime after an upgrade.
 
 Final packaging validation passed all 30 bundled checks, including the visible native Qt window from a hidden/background launch, single-instance Hub request, graceful stop, obsolete owned-file retirement, edited-file preservation and rejection of an escaping obsolete path. A fresh standalone GUI probe also confirmed that no app-local ICU is present. The final source-installer run passed all 18 checks.
+
+## 2.0.1 icon scaling
+
+All 15 Qt integration cases passed in 5.560 seconds. The added case reproduces a native Windows shell pixmap with DPR 256/96 and verifies that the icon still occupies the intended 80 logical pixels. Shell-image DPR is normalized before scaling, preserving proportions and preventing tiny icons on scaled Windows displays. The 2.0.0 packaging/startup and 30-case installer validation above remain applicable; this patch changes icon sizing only.

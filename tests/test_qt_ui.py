@@ -159,6 +159,20 @@ class QtInterfaceTests(unittest.TestCase):
             self.app.finish_notification(alert)
         self.assertEqual(list(tracker.alerts),[alert]); self.assertIsNone(self.app.popup_window)
 
+    def test_shell_icon_dpi_does_not_shrink_its_display_area(self):
+        from PySide6.QtGui import QPixmap,QColor
+        native=QPixmap(256,256); native.fill(QColor('#00ff00')); native.setDevicePixelRatio(256/96)
+        class ShellIcon:
+            def isNull(me): return False
+            def pixmap(me,*args): return native
+        self.app.art.cache.clear()
+        with patch.object(self.app.art.provider,'icon',return_value=ShellIcon()):
+            _,pix=self.app.art.artwork(self.games[0],{str(self.exe):self.games[0].id})
+        self.assertEqual(pix.devicePixelRatio(),1.0)
+        scaled=pix.scaled(80,80)
+        self.assertEqual(scaled.deviceIndependentSize().width(),80)
+        self.assertEqual(scaled.deviceIndependentSize().height(),80)
+
     def test_corrupt_optional_artwork_does_not_break_library(self):
         from gametime.model import Game
         self.base.joinpath('.gametime-hub.json').write_text('[]')
