@@ -5,7 +5,7 @@ Use isolated temporary profiles and synthetic game installations. Never uninstal
 ```powershell
 python -B -m unittest discover -s tests -v
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\install_smoke.ps1 -ReportPath test-reports\source-install.json
-python -B tests\gui_smoke.py --ui-only --report test-reports\gui.json
+python -B -m unittest discover -s tests -p test_qt_ui.py -v
 ```
 
 Tests cover metadata/multiple libraries, watcher races, foreground/background time, sleep/lock/clock changes, midnight, persistence, ID migration, shared budgets, alerts, native tray behavior and Hub foreign-file preservation. Windows tests use actual temporary directory notifications, process queries and mutexes.
@@ -16,7 +16,7 @@ Version 1.4 adds hidden-row persistence/migration and independent history/tracki
 
 Version 1.5 adds English/Hungarian language persistence and placeholder parity, translated reminders/removal guidance, strict inclusive statistics date ranges, per-game/day totals, hidden/removed/orphan history and flush/reopen accounting. Average tests cover installation-day migration/persistence, idle days since installation, custom ranges and exclusion of pre-installation/future days. GUI checks cover immediate language switching, the daily breakdown, the installation-based average, translated date errors and preservation of the selected period across language changes. The bundled upgrade checks language/installation-date preservation and retention of the Gaming Hub icon after monitor removal.
 
-The GUI smoke creates real Tk windows with synthetic fixtures. Inspect dark widgets, settings, hidden/minimized-root notifications, hide → Show hidden → restore, and removal guide Cancel/Close behavior. The legacy source smoke checks install/upgrade/history/startup/background-single-instance/uninstall behavior.
+The retained legacy GUI smoke creates real Tk windows with synthetic fixtures. Inspect dark widgets, settings, hidden/minimized-root notifications, hide → Show hidden → restore, and removal guide Cancel/Close behavior. The legacy source smoke checks install/upgrade/history/startup/background-single-instance/uninstall behavior.
 
 `tests/bundled_install_smoke.ps1` tests the standalone payload using isolated paths and uniquely named startup/Installed apps registrations, checking fresh install, upgrade, runtime diagnosis, uninstall and preservation of history/foreign files. Check real Setup extraction/launch before release, too.
 
@@ -32,7 +32,7 @@ This verifies that setup, not every exclusive fullscreen engine, display layout,
 
 - Run relevant tests; record actual results rather than reusing an old count.
 - Check fresh installation and upgrade with history/hidden rows, and chess policy migration.
-- Check the frozen runtime without Python on PATH, including Tk, icon and PowerShell bridge resources.
+- Check the frozen runtime without Python on PATH, including Qt platform/image plugins, icon and PowerShell bridge resources.
 - Check startup entries, data location, uninstall and foreign-file preservation.
 - Check real fullscreen gameplay using a temporary short limit; restore settings afterwards.
 - Verify private visibility and absence of data/logs/installed manifests from archives.
@@ -56,3 +56,11 @@ The first bundled upgrade attempt was interrupted by an Explorer-launched test i
 179 automated tests passed in 61.245 seconds. All 24 GUI checks and 23 bundled install/upgrade/uninstall checks passed. Hungarian and English Hub screenshots were inspected. The packaged archive includes the new launch module. Read-only launch planning also resolved all 19 installed catalog entries on the development PC, without starting those games. Actual game execution in launch tests was mocked; launcher sign-in, updates and each game's own startup behavior remain publisher-controlled.
 
 The desktop migration test used a temporary desktop directory. It checked a fresh shared app icon, conversion of the old Hub-folder link, removal of the old owned duplicate monitor icon, preservation of an unrelated file and removal of the integrated app shortcut during uninstall. History, hidden rows, language, installation day, unrelated startup entries and companion icon data survived the upgrade/uninstall checks.
+
+## 2.0 Qt interface validation
+
+The shared-controller refactor passed the existing 179 regression tests. Fourteen Qt integration tests cover card search/source/sort/keyboard selection, hide/restore versus exclusion, language/state preservation, settings validation, installation-based averages/day drilldown, real posted native tray activation, close-to-tray/Exit, existing-window Hub requests, queued launch preparation with mocked execution, removal-guide cancellation, independent topmost alerts with hidden/minimized main windows, guarded Escape/delayed delivery/presentation retry responsive 1000×700 layouts, corrupt optional-artwork recovery and pixel-level aspect-ratio checks for wide/portrait artwork. Synthetic tests never launch or uninstall real games.
+
+Hungarian/English library, statistics and settings widget captures were inspected, including a copied local catalog and existing local artwork. The original profile was not used as a UI fixture. Real Minecraft fullscreen validation above belongs to the earlier Tk version; the Qt preview still needs a repeat gameplay trial and second-PC testing.
+
+The final Qt suite passed all 14 cases (6.345 seconds); the existing 179-case regression suite passed after the controller refactor, and the combined 191-case run before the added image geometry case passed in 67.085 seconds. All 18 source-installation and 23 bundled install/upgrade/uninstall checks passed against the Qt runtime. The frozen archive includes Qt/controller modules and does not contain the legacy Tk UI or tkinter.

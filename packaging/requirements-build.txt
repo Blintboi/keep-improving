@@ -1,3 +1,4 @@
+-r ../requirements-runtime.txt
 altgraph==0.17.5
 packaging==26.3
 pefile==2024.8.26

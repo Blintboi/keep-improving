@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$ReportPath)
+﻿param([Parameter(Mandatory=$true)][string]$ReportPath, [string]$PythonPath)
 $ErrorActionPreference = 'Stop'
 $sourcePath = Split-Path -Parent $PSScriptRoot
 . (Join-Path $sourcePath 'common.ps1')
@@ -9,7 +9,7 @@ $testStartupName = 'GameTimeMonitor.Test.' + [Guid]::NewGuid().ToString('N')
 $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 $report = [ordered]@{ IsolatedInstallDirectory = $testInstallPath }
 try {
-    & (Join-Path $sourcePath 'install.ps1') -InstallDir $testInstallPath -GamesRoot $testGamesPath -StartupName $testStartupName -EnableHub -NoStart
+    & (Join-Path $sourcePath 'install.ps1') -PythonPath $PythonPath -InstallDir $testInstallPath -GamesRoot $testGamesPath -StartupName $testStartupName -EnableHub -NoStart
     $report.FirstInstall = Test-Path -LiteralPath (Join-Path $testInstallPath 'install.json')
     $manifest = Read-GameTimeManifest $testInstallPath
     $probePath = Join-Path $testBasePath 'seed.py'
@@ -24,7 +24,7 @@ store.close()
 '@ | Set-Content -LiteralPath $probePath -Encoding UTF8
     & $manifest.Python -B $probePath $testInstallPath
     if ($LASTEXITCODE -ne 0) { throw 'Database seed failed.' }
-    & (Join-Path $sourcePath 'install.ps1') -InstallDir $testInstallPath -GamesRoot $testGamesPath -StartupName $testStartupName -NoStart
+    & (Join-Path $sourcePath 'install.ps1') -PythonPath $PythonPath -InstallDir $testInstallPath -GamesRoot $testGamesPath -StartupName $testStartupName -NoStart
     $report.RepeatedInstall = $true
     $probeVerifyPath = Join-Path $testBasePath 'check.py'
     @'

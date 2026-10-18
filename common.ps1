@@ -1,4 +1,4 @@
-Set-StrictMode -Version Latest
+﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 function Get-GameTimeDirectory {
@@ -40,7 +40,7 @@ function Set-GameTimeStartupLink([string]$Name, [string]$Pythonw, [string]$Argum
 }
 
 function Get-GameTimePython([string]$PythonPath) {
-    $probe = 'import sys,tkinter,sqlite3,pathlib; assert sys.version_info >= (3,9); tkinter.Tcl(); print(pathlib.Path(sys.executable).resolve())'
+    $probe = 'import sys,sqlite3,pathlib; from PySide6.QtWidgets import QApplication; assert sys.version_info >= (3,10); print(pathlib.Path(sys.executable).resolve())'
     $candidates = @()
     if ($PythonPath) {
         $candidates += [PSCustomObject]@{ Path = (Resolve-Path -LiteralPath $PythonPath).Path; Args = @() }
@@ -66,11 +66,11 @@ function Get-GameTimePython([string]$PythonPath) {
             }
         } catch { continue }
     }
-    throw 'Python 3.9+ with Tkinter and SQLite is required. Install it from python.org, or pass -PythonPath C:\path\python.exe. No pip packages are required.'
+    throw 'Python 3.10+ with PySide6 is required. Run python -m pip install -r requirements-runtime.txt, or use the standalone Setup. Pass -PythonPath to select a prepared environment.'
 }
 
 function Get-GameTimeFiles {
-    @('main.py','gametime\__init__.py','gametime\model.py','gametime\discovery.py',
+    @('requirements-runtime.txt','gametime\controller.py','gametime\qt_ui.py','gametime\qt_widgets.py','gametime\qt_statistics.py','gametime\icons\chevron.svg','gametime\icons\check.svg','main.py','gametime\__init__.py','gametime\model.py','gametime\discovery.py',
       'gametime\store.py','gametime\tracker.py','gametime\service.py','gametime\win32.py','gametime\i18n.py','gametime\statistics.py','gametime\statistics_ui.py',
       'gametime\ui.py','gametime\launch.py','gametime\removal.py','gametime\ubisoft.py','gametime\riot.py','gametime\minecraft.py','gametime\hub.py','gametime\hub_links.ps1','gametime\app.ico','gametime\app.png','common.ps1','install.ps1','uninstall.ps1','launch.ps1','verify.ps1',
       'Telepites.cmd','Eltavolitas.cmd','Inditas.cmd','Ellenorzes.cmd','README.md','README.hu.md','TESTING.md','ARCHITECTURE.md','THIRD-PARTY-NOTICES.md','TESZTELES.md','TESZTEREDMENYEK.txt')

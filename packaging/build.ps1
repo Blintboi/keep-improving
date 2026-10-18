@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$PythonPath = 'python.exe',
     [string]$OutputDir = (Join-Path $PSScriptRoot '..\dist'),
     [string]$BuildDir = (Join-Path $PSScriptRoot '..\build'),
@@ -11,7 +11,7 @@ $BuildDir = [IO.Path]::GetFullPath($BuildDir)
 New-Item -ItemType Directory -Path $OutputDir,$BuildDir -Force | Out-Null
 $version = (& $PythonPath -B -c "import sys; sys.path.insert(0,sys.argv[1]); from gametime import __version__; print(__version__)" $repo).Trim()
 if (-not $SkipFreeze) {
-    & $PythonPath -B -m PyInstaller --noconfirm --clean --onedir --windowed --name GameTimeMonitor --icon (Join-Path $repo 'gametime\app.ico') --add-data ((Join-Path $repo 'gametime\app.ico') + ':gametime') --add-data ((Join-Path $repo 'gametime\hub_links.ps1') + ':gametime') --distpath (Join-Path $BuildDir 'frozen') --workpath (Join-Path $BuildDir 'pyinstaller') --specpath $BuildDir (Join-Path $repo 'main.py')
+    & $PythonPath -B -m PyInstaller --noconfirm --clean --onedir --windowed --name GameTimeMonitor --icon (Join-Path $repo 'gametime\app.ico') --add-data ((Join-Path $repo 'gametime\app.ico') + ':gametime') --add-data ((Join-Path $repo 'gametime\hub_links.ps1') + ':gametime') --add-data ((Join-Path $repo 'gametime\icons') + ':gametime/icons') --distpath (Join-Path $BuildDir 'frozen') --workpath (Join-Path $BuildDir 'pyinstaller') --specpath $BuildDir (Join-Path $repo 'main.py')
     if ($LASTEXITCODE -ne 0) { throw 'PyInstaller build failed.' }
 }
 $bundle = Join-Path $BuildDir 'frozen\GameTimeMonitor'
@@ -23,8 +23,7 @@ $licenseDir = Join-Path $bundle 'licenses'
 New-Item -ItemType Directory -Path $licenseDir -Force | Out-Null
 $pythonBase = (& $PythonPath -c 'import sys; print(sys.base_prefix)').Trim()
 Copy-Item -LiteralPath (Join-Path $pythonBase 'LICENSE.txt') -Destination (Join-Path $licenseDir 'Python-LICENSE.txt')
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'licenses\Tcl-license.terms') -Destination $licenseDir
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'licenses\Tk-license.terms') -Destination $licenseDir
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'licenses\Qt') -Destination $licenseDir -Recurse -Force
 $licenseQuery = 'import importlib.metadata as m; print(m.distribution("pyinstaller").locate_file("pyinstaller-6.22.0.dist-info/licenses/COPYING.txt"))'
 $pyinstallerLicense = ($licenseQuery | & $PythonPath -).Trim()
 if (-not (Test-Path -LiteralPath $pyinstallerLicense)) { throw 'PyInstaller license was not found.' }

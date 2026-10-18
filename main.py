@@ -125,15 +125,9 @@ def main():
                               "today_seconds": sum(store.totals(datetime.now().date()).values())})
         if args.configure or args.scan_once or args.diagnose or args.sync_hub:
             return
-        import tkinter as tk
-        from gametime.ui import App
-        root = tk.Tk()
-        app = App(root, store, args.data_dir, args.background)
+        from gametime.qt_ui import run
         logging.info("Monitor started: pid=%s data=%s background=%s", os.getpid(), args.data_dir, args.background)
-        try:
-            root.mainloop()
-        finally:
-            app.close()
+        run(store, args.data_dir, args.background)
     finally:
         store.close()
         instance.close()

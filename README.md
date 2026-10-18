@@ -2,12 +2,14 @@
 
 An offline Windows 11 Gaming Hub and game-time monitor in one app. Launch games from a searchable library, measure foreground gameplay against a shared daily budget, and follow daily statistics in a dark English/Hungarian interface.
 
-**Private preview 1.6.0.** The repository and release downloads remain private. Sign into GitHub with an account that has access on your other PC. Each PC keeps its own history; there is no cloud synchronization. [Magyar útmutató](README.hu.md).
+**Private preview 2.0.0.** The repository and release downloads remain private. Sign into GitHub with an account that has access on your other PC. Each PC keeps its own history; there is no cloud synchronization. [Magyar útmutató](README.hu.md).
+
+The 2.0 interface uses Qt Widgets: a dark sidebar, responsive game cards, a daily-budget ring, contextual game actions and a redesigned statistics page. Artwork is read from existing local Steam caches or installed-game icons; no image service, launcher credentials or artwork downloads are used. Artwork and icons keep their original aspect ratios; complete cover images fit inside the card with dark padding where needed. Missing art has a colored monogram fallback. The shared controller/clock application icon remains unchanged.
 
 ## Install
 
-1. Open this repository's **Releases**, download `GameTimeMonitor-1.6.0-Setup.exe`, and run it as your normal Windows user.
-2. Python, Tk and SQLite are included. No separate Python, pip packages, administrator account or launcher login is needed by the monitor.
+1. Open this repository's **Releases**, download `GameTimeMonitor-2.0.0-Setup.exe`, and run it as your normal Windows user.
+2. Python, Qt/PySide6 and SQLite are included. No separate Python, pip packages, administrator account or launcher login is needed by the monitor.
 3. The app opens and discovers installed games. It starts in the tray when you sign into Windows. Open **Settings** to change your daily limit or Gaming Hub location.
 
 The current installer is unsigned; Windows may show an unknown-publisher/SmartScreen prompt. Use the private release or a build you made yourself. A SHA-256 checksum accompanies the download.
@@ -18,17 +20,17 @@ Setup adds one shared desktop **Gaming Hub** icon, a Start menu shortcut, Window
 
 ## Launch games
 
-The **Gaming Hub** tab is the home page. Search by name or filter by source, select a game and click **Play**, double-click its row or press Enter. Play uses Steam, Epic, Ubisoft and Riot launch routes, the Minecraft launcher or an existing shortcut with its original arguments. Standalone games with one executable can start directly. Discovery keeps the library up to date.
+The **Library** page is the home screen, with artwork cards, quick Play buttons, search, source filters and sorting by name or today’s time. Search by name or filter by source, select a game and click **Play**, double-click its card or press Enter. Play uses Steam, Epic, Ubisoft and Riot launch routes, the Minecraft launcher or an existing shortcut with its original arguments. Standalone games with one executable can start directly. Discovery keeps the library up to date.
 
 If the executable is ambiguous, use **Assign EXE** to choose it once. The app saves the choice and its tracking rule. **Add game** also remembers the executable. Choices survive upgrades and discovery ID merges. Excluding a game's time does not prevent launching it. Removed games cannot launch. Preparation runs on a worker, keeping measurement and reminders responsive; opening a launcher alone does not count as gameplay.
 
-Hide/restore and uninstall work in this library; Statistics is the second tab. **Open game folder** opens the selected installation when you need its files. The desktop Gaming Hub icon and tray's Open Gaming Hub return to this page without opening a separate folder or another monitor.
+Select a card and use its **…** menu for Hide / restore, Exclude / track, Assign EXE, EXE rules, Open game folder and Uninstall game. Statistics and Settings have their own pages in the left sidebar. **Open game folder** opens the selected installation when you need its files. The desktop Gaming Hub icon and tray's Open Gaming Hub return to this page without opening a separate folder or another monitor.
 
 ## Language and statistics
 
-Choose **English** or **Magyar** from **Language / Nyelv** at the top of the window. The main interface changes immediately and the choice is saved. New dialogs, tray menus and game-time reminders use that language. English remains the default for new installations.
+Choose **English** or **Magyar** from **Language / Nyelv** at the bottom of the sidebar. The main interface changes immediately and the choice is saved. New dialogs, tray menus and game-time reminders use that language. English remains the default for new installations.
 
-Open the **Statistics / Statisztikák** tab to see recorded play time by day and by game. Choose the last 7 days, last 30 days, this month, or enter an inclusive date range in `YYYY-MM-DD` format (up to 366 days). Click a chart bar or a date row to inspect that day's games; **Whole period** returns to the range-wide breakdown. The table shows play time and each game's percentage of the selected total. The summary shows total time, daily average and the most-played game. The visible page refreshes roughly every 10 seconds; Refresh also saves pending time before reading history.
+Open the **Statistics / Statisztikák** page to see recorded play time by day and by game. Choose the last 7 days, last 30 days, this month, or enter an inclusive date range in `YYYY-MM-DD` format (up to 366 days). Click a chart bar or a date row to inspect that day's games; **Whole period** returns to the range-wide breakdown. The table shows play time and each game's percentage of the selected total. The summary shows total time, daily average and the most-played game. The visible page refreshes roughly every 10 seconds; Refresh also saves pending time before reading history.
 
 Statistics include existing history, hidden/excluded games and removed installations. Hiding or uninstalling does not erase past time. Days without recorded time appear as zero. The daily average uses elapsed calendar days within the selected range, starting no earlier than installation; idle days after installation count, but days before installation and future dates do not. The footer shows the installation date and number of days used. That date survives upgrades; older profiles use the earlier available database creation date or first recorded activity. No activity before tracking began can be reconstructed, and the monitor does not infer unrecorded gameplay. Language changes preserve the selected date range.
 
@@ -40,7 +42,7 @@ Only a tracked game in the foreground counts. Browsers, launcher clients, backgr
 
 The initial daily limit is **120 minutes**, with a warning at **100 minutes**. Alerts are reminders: they do not kill games or enforce a lockout. At a threshold, the app tries one Escape in the currently tracked game, waits 200 ms, then displays an independent topmost alert. It verifies the foreground process identity and avoids sending Escape with modifier keys held. Hidden/minimized main windows do not suppress alerts. **Test alert** checks the popup itself, without simulating a gameplay threshold.
 
-Minecraft Java in fullscreen was successfully tested on one Windows 11 PC at real 20/30-second thresholds. Other fullscreen engines or elevated games may behave differently; see [testing](TESTING.md).
+The earlier Tk version was confirmed over Minecraft Java fullscreen at real 20/30-second thresholds. The Qt version retains the guarded Escape/topmost mechanism and has independent hidden/minimized-window integration tests; repeat the real Minecraft trial before treating this preview as fullscreen-validated. Other fullscreen engines or elevated games may behave differently; see [testing](TESTING.md).
 
 ## Discovery and Gaming Hub
 
@@ -85,16 +87,17 @@ Remove the monitor via **Windows Settings → Apps → Installed apps → Game T
 
 ## Develop and build
 
-Source uses Python 3.9+ with Tk and no third-party runtime Python packages. The standalone build targets **Windows 11 x64**, tested with CPython 3.12.10. ARM64 and 32-bit builds are not provided/tested.
+Source uses Python 3.10+ and Qt for Python, pinned in `requirements-runtime.txt`. The standalone build targets **Windows 11 x64**, tested with CPython 3.12.10. ARM64 and 32-bit builds are not provided/tested.
 
 ```powershell
+python -m pip install -r requirements-runtime.txt
 python -B main.py
 python -B -m unittest discover -s tests -v
 ```
 
 Always use temporary `--data-dir` paths for testing. Source launchers reuse an installed profile to prevent split catalogs. Commands include `--diagnose --report report.json`, `--configure`, `--scan-once`, `--sync-hub` and `--stop-wait 20`. Stop the resident app before configuration commands. Never point test Hubs at real game folders.
 
-Build on Windows x64 with Python/Tk, PowerShell and built-in IExpress:
+Build on Windows x64 with Python, PowerShell and built-in IExpress:
 
 ```powershell
 python -m venv .venv
