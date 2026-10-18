@@ -26,6 +26,7 @@ class StatisticsView(ttk.Frame):
         self.top_game = tk.StringVar()
         self.error = tk.StringVar()
         self.breakdown_title = tk.StringVar()
+        self.average_note = tk.StringVar()
         controls = ttk.Frame(self)
         controls.pack(fill="x")
         for label, count in (("Last 7 days", 7), ("Last 30 days", 30), ("This month", 0)):
@@ -77,7 +78,7 @@ class StatisticsView(ttk.Frame):
         self.games_tree.pack(fill="both", expand=True, padx=(12, 0), pady=(6, 0))
         ttk.Label(self, text=t("Only recorded play time is available. Hidden and removed games are included."),
                   style="Muted.TLabel", wraplength=950).pack(anchor="w")
-        ttk.Label(self, text=t("Daily average includes every calendar day in the selected period."),
+        ttk.Label(self, textvariable=self.average_note,
                   style="Muted.TLabel", wraplength=950).pack(anchor="w")
 
     def preset(self, count):
@@ -96,7 +97,11 @@ class StatisticsView(ttk.Frame):
             return
         self.error.set("")
         self.app.tracker.flush()
-        self.report = summarize(self.app.store.history(self.start.get(), self.end.get()), self.start.get(), self.end.get())
+        started_on = self.app.store.tracking_started_on()
+        self.report = summarize(self.app.store.history(self.start.get(), self.end.get()), self.start.get(), self.end.get(),
+                                started_on=started_on, as_of=date.today().isoformat())
+        self.average_note.set(self.app.t("Average uses {days} elapsed days in the selected period, no earlier than installation ({date}).",
+                                         days=self.report.average_days, date=started_on))
         self.last_refresh = time.monotonic()
         self.summary.set(self.app.t("Total: {total}  ·  Daily average: {average}",
                                     total=duration(self.report.total), average=duration(self.report.average)))

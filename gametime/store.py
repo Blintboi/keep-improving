@@ -1,11 +1,14 @@
 from dataclasses import asdict
+from datetime import date, datetime
 import json
+from pathlib import Path
 import sqlite3
 from .model import Game, Settings, norm, LAUNCHER_SOURCES
 
 
 class Store:
     def __init__(self, path):
+        self.path = Path(path)
         self.db = sqlite3.connect(str(path), timeout=5)
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA synchronous=FULL")
@@ -24,6 +27,31 @@ class Store:
             CREATE TABLE IF NOT EXISTS game_preferences (game_id TEXT PRIMARY KEY, hidden INTEGER NOT NULL);
             PRAGMA user_version=2;
         """)
+        self.tracking_started_on()
+
+    def tracking_started_on(self):
+        """Preserve the profile's first installation day, including legacy history."""
+        row = self.db.execute("SELECT value FROM settings WHERE key='tracking_started_on'").fetchone()
+        try:
+            started = date.fromisoformat(row[0])
+        except (TypeError, ValueError):
+            try:
+                info = self.path.stat()
+                started = datetime.fromtimestamp(getattr(info, 'st_birthtime', info.st_ctime)).date()
+            except OSError:
+                started = date.today()
+        # Restored/imported old history must retain its original recording period.
+        earliest = self.db.execute("SELECT MIN(day) FROM usage WHERE seconds>0").fetchone()[0]
+        if earliest:
+            try:
+                started = min(started, date.fromisoformat(earliest))
+            except ValueError:
+                pass
+        value = started.isoformat()
+        if not row or row[0] != value:
+            with self.db:
+                self.db.execute("INSERT OR REPLACE INTO settings VALUES ('tracking_started_on',?)", (value,))
+        return value
 
     def settings(self):
         row = self.db.execute("SELECT value FROM settings WHERE key='config'").fetchone()

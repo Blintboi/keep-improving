@@ -23,6 +23,8 @@ class Report:
     days: dict
     games: list
     by_day: dict
+    average_days: int
+    average_seconds: float
 
     @property
     def total(self):
@@ -30,10 +32,10 @@ class Report:
 
     @property
     def average(self):
-        return self.total / len(self.days) if self.days else 0
+        return self.average_seconds / self.average_days if self.average_days else 0
 
 
-def summarize(rows, start, end):
+def summarize(rows, start, end, started_on=None, as_of=None):
     days = {day.isoformat(): 0.0 for day in date_range(start, end)}
     games, by_day = {}, defaultdict(dict)
     for day, gid, name, source, seconds in rows:
@@ -43,5 +45,8 @@ def summarize(rows, start, end):
         games.setdefault(gid, [gid, name, source, 0.0])[3] += seconds
         by_day[day].setdefault(gid, [gid, name, source, 0.0])[3] += seconds
     key = lambda row: (-row[3], row[1].casefold(), row[0])
+    average_values = [seconds for day, seconds in days.items()
+                      if (not started_on or day >= str(started_on)) and (not as_of or day <= str(as_of))]
     return Report(days, sorted(games.values(), key=key),
-                  {day: sorted(values.values(), key=key) for day, values in by_day.items()})
+                  {day: sorted(values.values(), key=key) for day, values in by_day.items()},
+                  len(average_values), sum(average_values))

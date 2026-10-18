@@ -3,6 +3,7 @@ from datetime import datetime
 from pathlib import Path
 from string import Formatter
 import tempfile
+import sqlite3
 import unittest
 from gametime.i18n import HU, tr
 from gametime.model import Game, Settings, Catalog
@@ -66,6 +67,48 @@ class HistoryTests(unittest.TestCase):
         for start,end in [('2026-10-19','2026-10-18'),('2026-02-30','2026-03-01'),
                           ('20261001','2026-10-18'),('2024-01-01','2025-01-01'),('bad','2026-10-18')]:
             with self.subTest(start=start),self.assertRaises(ValueError): date_range(start,end)
+
+    def test_average_excludes_days_before_installation_and_future_days(self):
+        rows = [('2026-10-16','x','Example','Steam',600)]
+        report = summarize(rows,'2026-10-01','2026-10-31',started_on='2026-10-15',as_of='2026-10-18')
+        self.assertEqual(report.average_days,4)
+        self.assertEqual(report.average,150)
+        partial = summarize(rows,'2026-10-16','2026-10-17',started_on='2026-10-15',as_of='2026-10-18')
+        self.assertEqual(partial.average_days,2)
+        self.assertEqual(partial.average,300)
+
+    def test_period_outside_monitored_days_has_zero_average(self):
+        for start,end in [('2026-10-01','2026-10-14'),('2026-10-19','2026-10-31')]:
+            with self.subTest(start=start):
+                report=summarize([],start,end,started_on='2026-10-15',as_of='2026-10-18')
+                self.assertEqual((report.average_days,report.average),(0,0))
+        report=summarize([('2026-10-31','x','X','Steam',600)],'2026-10-01','2026-10-31',
+                         started_on='2026-10-15',as_of='2026-10-18')
+        self.assertEqual(report.average,0)  # Future dated data is not elapsed play time.
+
+    def test_new_install_day_is_saved_and_survives_reopen(self):
+        from datetime import date
+        with tempfile.TemporaryDirectory() as temp:
+            path=Path(temp)/'new.sqlite3'
+            store=Store(path)
+            self.assertEqual(store.tracking_started_on(),date.today().isoformat())
+            store.db.execute("UPDATE settings SET value='2026-10-15' WHERE key='tracking_started_on'")
+            store.db.commit(); store.close()
+            store=Store(path)
+            self.assertEqual(store.tracking_started_on(),'2026-10-15')
+            store.close()
+
+    def test_legacy_profile_uses_existing_history_and_keeps_it(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path=Path(temp)/'legacy.sqlite3'
+            db=sqlite3.connect(path)
+            db.execute('CREATE TABLE usage (day TEXT,game_id TEXT,seconds REAL,PRIMARY KEY(day,game_id))')
+            db.execute("INSERT INTO usage VALUES ('2026-10-15','x',600)")
+            db.commit(); db.close()
+            store=Store(path)
+            self.assertEqual(store.tracking_started_on(),'2026-10-15')
+            self.assertEqual(store.totals('2026-10-15'),{'x':600})
+            store.close()
 
 
 class LanguageTests(unittest.TestCase):

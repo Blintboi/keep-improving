@@ -203,6 +203,7 @@ def run(report_path, ui_only=False):
                 app.notebook.select(app.statistics)
                 app.statistics.refresh(); root.update()
                 report["checks"]["statistics_totals_include_hidden_and_removed"] = app.statistics.report.total == 4620 and len(app.statistics.report.games) == 2
+                report["checks"]["statistics_average_starts_at_installation"] = app.statistics.report.average_days == 2 and app.statistics.report.average == 2310
                 capture(dark_title(root),report_path.with_name("statistics-hungarian.png"))
                 app.statistics.days_tree.selection_set(yesterday)
                 app.statistics.select_day(); root.update()

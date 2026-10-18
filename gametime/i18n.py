@@ -69,7 +69,7 @@ HU = {
     "Date": "Dátum", "Time": "Idő", "Share": "Arány", "Whole period": "Teljes időszak",
     "Breakdown — {period}": "Játékonként — {period}", "No recorded time for this day.": "Erre a napra nincs rögzített játékidő.",
     "Only recorded play time is available. Hidden and removed games are included.": "Csak a rögzített játékidő látszik. A rejtett és eltávolított játékok is szerepelnek benne.",
-    "Daily average includes every calendar day in the selected period.": "A napi átlag a kiválasztott időszak összes naptári napjára vonatkozik.",
+    "Average uses {days} elapsed days in the selected period, no earlier than installation ({date}).": "Az átlag a kijelölt időszak {days} eltelt napjából készül, legkorábban a telepítéstől ({date}).",
     "Use dates in YYYY-MM-DD format.": "A dátum formátuma ÉÉÉÉ-HH-NN legyen.",
     "The start date must not be after the end date.": "A kezdőnap nem lehet későbbi a zárónapnál.",
     "Choose a period of up to 366 days.": "Legfeljebb 366 napos időszakot válassz.",
