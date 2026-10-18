@@ -152,7 +152,7 @@ class DiscoveryService:
                 self.registry_watchers[spec] = self.registry_factory(*spec, lambda: self.request("launchers"))
         errors = [f"{key[0]}: {w.error}" for key, (w, _) in self.watchers.items() if w.error]
         if errors:
-            self.results.put(("status", "Fájlrendszerfigyelési hiba: " + "; ".join(errors)))
+            self.results.put(("status", "File watcher error: " + "; ".join(errors)))
 
     def _scan(self, kind, group=""):
         try:
@@ -171,7 +171,7 @@ class DiscoveryService:
                                   list(self.discovery.riot_hints)))
                 self._watches()
                 if self.discovery.errors:
-                    self.results.put(("status", "Jegyzék olvasása késik; újrapróbálás folyamatban."))
+                    self.results.put(("status", "Installation metadata is temporarily unavailable; retrying."))
                     # Retry only after a failing read, with a bounded rate.
                     self.retry_count += 1
                     if self.retry_count <= 6:
@@ -180,7 +180,7 @@ class DiscoveryService:
                             self.debounce.jobs[("launchers", "")] = (now, now + min(2 ** self.retry_count, 30))
                 else:
                     self.retry_count = 0
-                    self.results.put(("status", "A játékfelismerés naprakész."))
+                    self.results.put(("status", "Game discovery is up to date."))
             elif kind == "games":
                 games = self.discovery.scan_games(group or None)
                 if not group:
@@ -191,8 +191,8 @@ class DiscoveryService:
                 self.results.put(("games", games, group))
                 self._watches()
         except Exception as exc:
-            log.exception("Játékfelismerési hiba")
-            self.results.put(("status", "Játékfelismerési hiba: " + str(exc)))
+            log.exception("Game discovery failed")
+            self.results.put(("status", "Game discovery failed: " + str(exc)))
 
     def _run(self):
         try:

@@ -72,8 +72,8 @@ function Get-GameTimePython([string]$PythonPath) {
 function Get-GameTimeFiles {
     @('main.py','gametime\__init__.py','gametime\model.py','gametime\discovery.py',
       'gametime\store.py','gametime\tracker.py','gametime\service.py','gametime\win32.py',
-      'gametime\ui.py','gametime\ubisoft.py','gametime\riot.py','gametime\minecraft.py','gametime\hub.py','gametime\hub_links.ps1','gametime\app.ico','common.ps1','install.ps1','uninstall.ps1','launch.ps1','verify.ps1',
-      'Telepites.cmd','Eltavolitas.cmd','Inditas.cmd','Ellenorzes.cmd','README.md','TESZTELES.md','TESZTEREDMENYEK.txt')
+      'gametime\ui.py','gametime\removal.py','gametime\ubisoft.py','gametime\riot.py','gametime\minecraft.py','gametime\hub.py','gametime\hub_links.ps1','gametime\app.ico','gametime\app.png','common.ps1','install.ps1','uninstall.ps1','launch.ps1','verify.ps1',
+      'Telepites.cmd','Eltavolitas.cmd','Inditas.cmd','Ellenorzes.cmd','README.md','TESTING.md','ARCHITECTURE.md','THIRD-PARTY-NOTICES.md','TESZTELES.md','TESZTEREDMENYEK.txt')
 }
 
 function Read-GameTimeManifest([string]$Directory) {
@@ -85,4 +85,16 @@ function Read-GameTimeManifest([string]$Directory) {
         throw 'Installation marker is invalid; nothing was changed.'
     }
     return $manifest
+}
+
+function Get-GameTimeBundle([string]$DataDir) {
+    $entry = Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\GameTimeMonitor' -ErrorAction SilentlyContinue
+    if (-not $entry -or -not $entry.PSObject.Properties['InstallLocation']) { return $null }
+    $root = $entry.InstallLocation
+    $path = Join-Path $root 'bundle-install.json'
+    if (-not (Test-Path -LiteralPath $path)) { return $null }
+    $bundle = Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($bundle.Marker -eq 'GameTimeMonitor.bundle.v1' -and [IO.Path]::GetFullPath($bundle.InstallDir) -eq [IO.Path]::GetFullPath($root) -and
+        [IO.Path]::GetFullPath($bundle.DataDir) -eq [IO.Path]::GetFullPath($DataDir)) { return $bundle }
+    return $null
 }

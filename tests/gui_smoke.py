@@ -157,6 +157,25 @@ def run(report_path, ui_only=False):
             schedule(500, capture_main)
         def capture_main():
             root.update()
+            if ui_only:
+                game = next(g for g in app.catalog.games.values() if g.source == "Games")
+                app.tree.selection_set(game.id)
+                app.toggle_hidden()
+                report["checks"]["hidden_row_removed_without_excluding"] = not app.tree.exists(game.id) and app.catalog.enabled(game)
+                app.show_hidden.set(True)
+                app.refresh_view()
+                report["checks"]["hidden_row_can_be_shown"] = app.tree.exists(game.id) and "hidden" in app.tree.item(game.id, "values")[3]
+                app.tree.selection_set(game.id)
+                app.uninstall_game()
+                root.update()
+                guide = [w for w in root.winfo_children() if isinstance(w, tk.Toplevel)][-1]
+                capture(dark_title(guide), report_path.with_name("dark-uninstall-guide.png"))
+                report["checks"]["removal_guide_opens_without_deleting_game"] = guide.winfo_viewable() and example.is_file()
+                guide.destroy()  # No Continue: never start a real remover in UI tests.
+                app.toggle_hidden()
+                app.show_hidden.set(False)
+                app.refresh_view()
+                report["checks"]["hidden_row_restored"] = app.tree.exists(game.id) and game.id not in store.hidden_ids()
             report["checks"]["native_tray_icon_added"] = app.tray.available
             capture(dark_title(root), report_path.with_name("dark-main.png"))
             app.settings_dialog()
@@ -165,7 +184,7 @@ def run(report_path, ui_only=False):
             capture(dark_title(settings_window), report_path.with_name("dark-settings.png"))
             settings_window.destroy()
             today = datetime.now().date().isoformat()
-            assert app.popup(Alert(today, (), "warning", "Már csak 20 perc játékidőd maradt mára.", "Rendben"))
+            assert app.popup(Alert(today, (), "warning", "You have 20 minutes of game time left today.", "OK"))
             report["checks"]["popup_topmost"] = bool(app.popup_window.attributes("-topmost"))
             schedule(400, warning_popup)
         def dismiss():

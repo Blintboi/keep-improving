@@ -92,7 +92,7 @@ def escape_game(expected_path, expected_identity):
         # Complete a partially accepted key pair; never leave Escape held down.
         u.SendInput(1, C.byref(keys[1]), C.sizeof(INPUT))
     if sent != 2:
-        log.warning("Az Esc nem küldhető el teljesen a játéknak: %s/2", sent)
+        log.warning("Escape could not be fully sent to the game: %s/2", sent)
     return sent == 2
 
 
@@ -239,7 +239,7 @@ class DirectoryWatcher:
                         self.callback(self.directory / name)
         except Exception as exc:
             self.error = str(exc)
-            log.exception("A könyvtárfigyelés megszakadt: %s", self.directory)
+            log.exception("Directory watcher interrupted: %s", self.directory)
             self.callback(None)
         finally:
             self.ready.set()
@@ -298,7 +298,7 @@ class RegistryWatcher:
                 self.callback()
         except Exception as exc:
             self.error = str(exc)
-            log.warning("A registry figyelése megszakadt: %s\\%s: %s", self.hive, self.key_path, exc)
+            log.warning("Registry watcher interrupted: %s\\%s: %s", self.hive, self.key_path, exc)
             self.callback()
         finally:
             self.ready.set()
@@ -344,6 +344,7 @@ api(u, "CreateWindowExW", [W.DWORD, W.LPCWSTR, W.LPCWSTR, W.DWORD, C.c_int, C.c_
 api(u, "DefWindowProcW", [W.HWND, W.UINT, WPARAM, LPARAM], LRESULT)
 api(u, "DestroyWindow", [W.HWND], W.BOOL)
 api(u, "LoadIconW", [W.HINSTANCE, C.c_void_p], W.HICON)
+api(u, "GetSystemMetrics", [C.c_int], C.c_int)
 api(u, "LoadImageW", [W.HINSTANCE, W.LPCWSTR, W.UINT, C.c_int, C.c_int, W.UINT], W.HANDLE)
 api(u, "DestroyIcon", [W.HICON], W.BOOL)
 api(u, "CreatePopupMenu", [], W.HMENU)
@@ -366,7 +367,8 @@ class Tray:
         self.proc = WNDPROC(self._message)
         self.class_name = f"GameTimeTray-{os.getpid()}-{id(self)}"
         self.module = k.GetModuleHandleW(None)
-        self.icon = u.LoadImageW(None, str(Path(__file__).with_name("app.ico")), 1, 32, 32, 0x10)
+        self.icon = u.LoadImageW(None, str(Path(__file__).with_name("app.ico")), 1,
+                                u.GetSystemMetrics(49), u.GetSystemMetrics(50), 0x10)
         self.owns_icon = bool(self.icon)
         self.icon = self.icon or u.LoadIconW(None, C.c_void_p(32512))
         self.menu_pending = False
@@ -374,19 +376,19 @@ class Tray:
         self.wc = WNDCLASS(lpfnWndProc=self.proc, hInstance=self.module, hIcon=self.icon, lpszClassName=self.class_name)
         if not u.RegisterClassW(C.byref(self.wc)):
             raise C.WinError(C.get_last_error())
-        self.window = u.CreateWindowExW(0, self.class_name, "Játékidőfigyelő", 0, 0, 0, 0, 0,
+        self.window = u.CreateWindowExW(0, self.class_name, "Game Time Monitor", 0, 0, 0, 0, 0,
                                         None, None, self.module, None)
         if not self.window:
             raise C.WinError(C.get_last_error())
         self.data = NOTIFYICONDATA(cbSize=C.sizeof(NOTIFYICONDATA), hWnd=self.window, uID=1,
                                    uFlags=7 | 0x80, uCallbackMessage=0x8001, hIcon=self.icon)
-        self.data.szTip = "Játékidőfigyelő – kattints a megnyitáshoz"
+        self.data.szTip = "Game Time Monitor – click to open"
         self._add()
 
     def _add(self):
         self.available = bool(s.Shell_NotifyIconW(0, C.byref(self.data)))
         if not self.available:
-            log.warning("A tálcaikon nem adható hozzá; a kezelőablak elérhető marad.")
+            log.warning("Tray icon unavailable; main window remains accessible.")
         self.data.uVersion = 4
         self.version4 = bool(s.Shell_NotifyIconW(4, C.byref(self.data)))
 
@@ -439,7 +441,7 @@ class Tray:
             if msg == 0x219:
                 self.events.put("devices")
         except Exception:
-            log.exception("Tálcaesemény kezelési hiba")
+            log.exception("Tray event handler failed")
         return u.DefWindowProcW(hwnd, msg, wp, lp)
 
     def dispatch_pending(self):

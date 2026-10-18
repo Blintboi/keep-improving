@@ -17,6 +17,8 @@ def default_data():
         buffer = ctypes.create_unicode_buffer(32768)
         if ctypes.windll.shell32.SHGetFolderPathW(None, 5, None, 0, buffer) == 0:
             installed = Path(buffer.value) / "GameTimeMonitor"
+            if getattr(sys, "frozen", False):
+                return installed / "data"
             try:
                 manifest = json.loads((installed / "install.json").read_text(encoding="utf-8-sig"))
                 if (manifest.get("Marker") == "GameTimeMonitor.v1" and
@@ -28,7 +30,7 @@ def default_data():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Windows 11 játékidőfigyelő")
+    parser = argparse.ArgumentParser(description="Windows 11 Game Time Monitor")
     parser.add_argument("--data-dir", type=Path, default=default_data())
     parser.add_argument("--background", action="store_true")
     parser.add_argument("--configure", action="store_true")
@@ -38,13 +40,14 @@ def main():
     parser.add_argument("--scan-once", action="store_true")
     parser.add_argument("--stop-wait", type=float)
     parser.add_argument("--diagnose", action="store_true")
+    parser.add_argument("--report", type=Path, help="Write command results as JSON (also works without a console)")
     args = parser.parse_args()
     if args.enable_hub and not args.configure:
-        parser.error("A --enable-hub a --configure kapcsolóval használható.")
+        parser.error("Use --enable-hub with --configure.")
     if args.diagnose and (args.configure or args.scan_once or args.sync_hub):
-        parser.error("A --diagnose külön ellenőrző parancs.")
+        parser.error("Run --diagnose separately from configuration and scanning.")
     if os.name != "nt":
-        parser.error("Windows 11 szükséges.")
+        parser.error("Windows 11 is required.")
     args.data_dir.mkdir(parents=True, exist_ok=True)
     from gametime.win32 import Instance
     instance = Instance(args.data_dir)
@@ -54,7 +57,7 @@ def main():
             (args.data_dir / "stop.request").touch()
             instance.close()
             if time.monotonic() >= deadline:
-                raise RuntimeError("A figyelő nem állt le időben. Zárd be a tálcamenü Kilépés parancsával.")
+                raise RuntimeError("The monitor did not stop in time. Use Exit monitor in the tray menu.")
             time.sleep(0.2)
             instance = Instance(args.data_dir)
         instance.close()
@@ -63,7 +66,7 @@ def main():
     if not instance.acquired and not args.diagnose:
         instance.close()
         if args.configure or args.scan_once or args.sync_hub:
-            raise RuntimeError("Előbb állítsd le a futó figyelőt a beállítások importálásához.")
+            raise RuntimeError("Stop the running monitor before changing configuration.")
         if not args.background:
             (args.data_dir / "show.request").touch()
         return
@@ -73,6 +76,12 @@ def main():
     logging.basicConfig(level=logging.INFO, handlers=[handler], format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     from gametime.store import Store
     store = Store(args.data_dir / "usage.sqlite3")
+    def report(value):
+        content = json.dumps(value, ensure_ascii=False)
+        if sys.stdout is not None:
+            print(content)
+        if args.report:
+            args.report.write_text(content, encoding="utf-8")
     try:
         if args.configure:
             settings = store.settings()
@@ -89,29 +98,30 @@ def main():
             games = discovery.scan_games()
             store.reconcile(launchers, lambda g: g.source in LAUNCHER_SOURCES)
             store.reconcile(games, lambda g: g.source == "Games")
-            print(json.dumps({"games": len(launchers) + len(games), "metadata_pending": discovery.errors}, ensure_ascii=False))
+            report({"games": len(launchers) + len(games), "metadata_pending": discovery.errors})
         if args.sync_hub:
             from gametime.hub import Hub
             hub = Hub(args.data_dir)
             try:
-                print(json.dumps(hub.sync(store.settings(), store.games(True), store.rules(), store.overrides()), ensure_ascii=False))
+                report(hub.sync(store.settings(), store.games(True), store.rules(), store.overrides()))
             finally:
                 hub.bridge.close()
         if args.diagnose:
             from gametime import __version__
             from gametime.win32 import sample
             current = sample()
-            print(json.dumps({"version": __version__, "python": sys.version, "data": str(args.data_dir),
+            report({"version": __version__, "python": sys.version, "data": str(args.data_dir),
                               "interactive": current.interactive, "foreground_readable": bool(current.path),
                               "installed_games": len(store.games(True)),
-                              "today_seconds": sum(store.totals(datetime.now().date()).values())}, ensure_ascii=False))
+                              "games_root": store.settings().games_root, "hub_enabled": store.settings().hub_enabled,
+                              "today_seconds": sum(store.totals(datetime.now().date()).values())})
         if args.configure or args.scan_once or args.diagnose or args.sync_hub:
             return
         import tkinter as tk
         from gametime.ui import App
         root = tk.Tk()
         app = App(root, store, args.data_dir, args.background)
-        logging.info("Figyelő elindult: pid=%s data=%s background=%s", os.getpid(), args.data_dir, args.background)
+        logging.info("Monitor started: pid=%s data=%s background=%s", os.getpid(), args.data_dir, args.background)
         try:
             root.mainloop()
         finally:
@@ -125,9 +135,9 @@ if __name__ == "__main__":
     try:
         main()
     except Exception:
-        logging.exception("A játékidőfigyelő nem indítható")
+        logging.exception("Game Time Monitor could not start")
         if os.name == "nt":
             import ctypes
-            ctypes.windll.user32.MessageBoxW(None, "A játékidőfigyelő hibába ütközött. Részletek a data/monitor.log fájlban.",
-                                            "Játékidőfigyelő", 0x10)
+            ctypes.windll.user32.MessageBoxW(None, "Game Time Monitor encountered an error. See monitor.log in your data folder.",
+                                            "Game Time Monitor", 0x10)
         raise

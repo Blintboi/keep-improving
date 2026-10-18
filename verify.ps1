@@ -1,6 +1,17 @@
 param([string]$InstallDir)
 . "$PSScriptRoot\common.ps1"
 if (-not $InstallDir) { $InstallDir = $PSScriptRoot }
+$bundle = Get-GameTimeBundle (Join-Path $InstallDir 'data')
+if ($bundle) {
+    if ((Get-GameTimeStartupValue $bundle.StartupName) -ne $bundle.Startup) { throw 'Bundled startup entry does not match.' }
+    $report = Join-Path $env:TEMP ('GameTimeMonitor-diagnose-' + [guid]::NewGuid().ToString('N') + '.json')
+    $process = Start-Process -FilePath (Join-Path $bundle.InstallDir 'GameTimeMonitor.exe') -ArgumentList @('--diagnose','--data-dir',('"' + $bundle.DataDir + '"'),'--report',('"' + $report + '"')) -WindowStyle Hidden -Wait -PassThru
+    if ($process.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $report)) { throw 'Bundled runtime diagnosis failed.' }
+    Get-Content -LiteralPath $report
+    Remove-Item -LiteralPath $report
+    Write-Host 'Verified bundled runtime, profile and automatic startup.'
+    return
+}
 $manifest = Read-GameTimeManifest $InstallDir
 if (-not $manifest) { throw 'Installation marker is missing. Run Telepites.cmd first.' }
 foreach ($file in Get-GameTimeFiles) {

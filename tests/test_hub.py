@@ -121,10 +121,11 @@ class HubTests(unittest.TestCase):
         self.assertEqual(exe.read_bytes(), b"MZ fixture")
 
     def test_chess_separate_and_excluded_utility_omitted(self):
+        self.settings.exclude_chess = True
         chess = self.game("manual:chess", "BanksiaGUI (sakk)", "Kézi", "Chess")
         utility = self.game("steam:228980", "Steamworks Common Redistributables", "Steam", "Redist")
         self.hub.sync(self.settings, [chess, utility], {}, {chess.id: False, utility.id: False})
-        self.assertEqual(self.launch(chess.id).parent, self.root / "Sakk")
+        self.assertEqual(self.launch(chess.id).parent, self.root / "Chess")
         self.assertFalse(any(row["gid"] == utility.id for row in self.state()["links"]))
 
     def test_reserved_path_characters_and_same_named_games(self):
@@ -249,7 +250,7 @@ class HubTests(unittest.TestCase):
         original = self.launch(game.id)
         before = digest(original)
         other = Hub(self.base / "other-data", FakeLinks(), [])
-        with self.assertRaisesRegex(OSError, "másik adatbázis"):
+        with self.assertRaisesRegex(OSError, "another profile"):
             other.sync(self.settings, [game], {}, {})
         self.assertEqual(digest(original), before)
         self.assertEqual(len(list(self.root.glob("*.url"))), 1)
@@ -259,7 +260,7 @@ class HubTests(unittest.TestCase):
                  self.game("manual:1", "Same Game", "Kézi", "Standalone Game")]
         self.hub.sync(self.settings, games, {}, {})
         self.assertEqual(self.launch("steam:123").name, "Same Game (Steam).url")
-        self.assertEqual(self.launch("manual:1").name, "Same Game (Kézi).lnk")
+        self.assertEqual(self.launch("manual:1").name, "Same Game (Manual).lnk")
 
     def test_minecraft_migration_preserves_owned_special_launcher(self):
         manual = self.game("manual:minecraft", "Minecraft", "Kézi", ".minecraft")

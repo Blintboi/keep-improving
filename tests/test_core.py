@@ -199,6 +199,7 @@ class ClassificationTests(unittest.TestCase):
         self.assertEqual(self.catalog.resolve(path), self.game)
 
     def test_chess_auto_exclusion_and_persistent_override(self):
+        self.catalog.settings.exclude_chess = True
         game = Game("games:chess", "Chess Ultra", "Games", r"C:\Games\ChessUltra")
         self.catalog.games[game.id] = game
         self.assertIsNone(self.catalog.resolve(game.root + r"\game.exe"))
@@ -366,6 +367,7 @@ class TrackerTests(unittest.TestCase):
         self.assertLessEqual(self.total(), 121)
 
     def test_excluded_chess_does_not_count_or_backfill(self):
+        self.catalog.settings.exclude_chess = True
         chess = Game("chess", "Chess Ultra", "Games", r"C:\Games\Chess")
         self.catalog.games[chess.id] = chess
         for sec in range(11):
@@ -378,12 +380,12 @@ class TrackerTests(unittest.TestCase):
         self.sample(0, self.a)
         self.sample(1, self.a)
         warnings = self.acknowledge()
-        self.assertEqual([a.text for a in warnings], ["Már csak 20 perc játékidőd maradt mára."])
+        self.assertEqual([a.text for a in warnings], ["You have 20 minutes of game time left today."])
         self.store.add_usage({(self.day, self.a.id): 1199})
         self.tracker.cache.clear()
         self.sample(2, self.a)
         limits = self.acknowledge()
-        self.assertEqual([a.text for a in limits], ["Lejárt a mai 2 órás játékidőd. Ideje befejezni a játékot."])
+        self.assertEqual([a.text for a in limits], ["Your daily 2-hour game time limit has been reached. Time to finish playing."])
         self.sample(3, self.a)
         self.assertFalse(self.tracker.alerts)
 

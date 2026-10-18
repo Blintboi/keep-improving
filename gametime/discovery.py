@@ -228,7 +228,7 @@ class Discovery:
                 continue
             shallow = norm(root) == norm(base)
             if self._has_exe(root, shallow):
-                result.append(Game("games:" + norm(root), "Games (gyökér)" if shallow else root.name,
+                result.append(Game("games:" + norm(root), "Games (root)" if shallow else root.name,
                                    "Games", str(root)))
         return result
 

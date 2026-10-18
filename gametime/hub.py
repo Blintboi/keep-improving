@@ -151,7 +151,7 @@ class PowerShellLinks:
                        "-File", str(Path(__file__).with_name("hub_links.ps1")), "-RequestPath", str(request_path)]
             with self.lock:
                 if self.closed:
-                    raise OSError("Gaming Hub leállt")
+                    raise OSError("Gaming Hub stopped")
                 process = self.process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             try:
@@ -162,7 +162,7 @@ class PowerShellLinks:
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.communicate()
-                raise OSError("A parancsikonok feldolgozása túllépte az időkorlátot")
+                raise OSError("Shortcut processing timed out")
             finally:
                 with self.lock:
                     self.process = None
@@ -193,7 +193,7 @@ class Hub:
             return {"marker": MARKER, "links": []}
         state = json.loads(path.read_text(encoding="utf-8"))
         if state.get("marker") != MARKER or not isinstance(state.get("links"), list):
-            raise ValueError("A Gaming Hub nyilvántartása nem olvasható; a meglévő fájlokat megtartottuk.")
+            raise ValueError("Gaming Hub ownership data is unreadable; existing files were preserved.")
         return state
 
     def _save(self, state):
@@ -214,11 +214,11 @@ class Hub:
     def _safe(root, path):
         root, path = Path(root), Path(path)
         if norm(root) == norm(path) or not within(path, root) or not within(path.resolve(), root.resolve()):
-            raise ValueError("A parancsikon útvonala a Games mappán kívülre mutat")
+            raise ValueError("Shortcut path is outside the Gaming Hub folder")
         current = path
         while within(current, root):
             if current.exists() and (current.is_symlink() or getattr(current.stat(), "st_file_attributes", 0) & 0x400):
-                raise ValueError("A hub célútvonala nem lehet könyvtárkapcsolat")
+                raise ValueError("Hub destination cannot be a directory junction")
             if current == root:
                 break
             current = current.parent
@@ -295,32 +295,34 @@ class Hub:
         if authority.exists():
             state = self._load(authority)
             if norm(state.get("owner", "")) != norm(self.data_dir.resolve()):
-                raise OSError("Ezt a Gaming Hubot már egy másik adatbázis kezeli. Indítsd a telepített játékfigyelőt.")
+                raise OSError("This Gaming Hub is managed by another profile. Open the installed monitor.")
         # Never mutate a previous Games root after the user changes the setting.
         prior = {norm(item["path"]): item for item in state["links"]
                  if within(item["path"], root) and norm(item["path"]) != norm(root)}
         locations = self.locations + [{"path": str(root), "depth": 0},
                      {"path": str(root / "Inditas"), "depth": 0}, {"path": str(root / "Sakk"), "depth": 2},
-                     {"path": str(root / "Launcherek"), "depth": 0}]
+                     {"path": str(root / "Launcherek"), "depth": 0}, {"path": str(root / "Chess"), "depth": 2},
+                     {"path": str(root / "Launchers"), "depth": 0}]
         inventory = self.bridge.inventory(locations)
         for link in inventory:
             old = prior.get(norm(link["path"]))
             if old and old.get("role") == "launch" and Path(link["path"]).is_file() and digest(link["path"]) == old.get("hash"):
                 link["owned_game"], link["owned_root"] = old["gid"], old.get("game_root", "")
         eligible = [g for g in games if g.installed and not g.id.startswith("pending:") and Path(g.root).is_dir()
-                    and (overrides.get(g.id, g.default_enabled) or CHESS.search(g.name + " " + g.root))]
+                    and (overrides.get(g.id, g.default_enabled if settings.exclude_chess else True)
+                         or CHESS.search(g.name + " " + g.root))]
         recipes, names = [], set()
         name_counts = Counter(safe_name(game.name).casefold() for game in eligible)
         for game in sorted(eligible, key=lambda g: g.id):
-            base = root / "Sakk" if CHESS.search(game.name + " " + game.root) else root
+            base = root / "Chess" if settings.exclude_chess and CHESS.search(game.name + " " + game.root) else root
             recipe = self._recipe(game, inventory, rules, root)
             for kind, folder, spec in [("launch", base, recipe),
-                                       ("folder", base / "Mappak", {"kind": "link", "extension": ".lnk", "target": game.root})]:
+                                       ("folder", base / "Folders", {"kind": "link", "extension": ".lnk", "target": game.root})]:
                 if kind == "folder" and norm(game.root) == norm(root):
                     continue
                 stem = safe_name(game.name)
                 if name_counts[stem.casefold()] > 1:
-                    stem += " (" + safe_name(game.source) + ")"
+                    stem += " (" + safe_name("Manual" if game.source == "Kézi" else game.source) + ")"
                 suffix = hashlib.sha256(game.id.encode()).hexdigest()[:8]
                 path = folder / (stem + spec["extension"])
                 for attempt in range(100):
@@ -331,7 +333,7 @@ class Hub:
                         break
                     path = folder / (stem + " (" + suffix + ("-" + str(attempt) if attempt else "") + ")" + spec["extension"])
                 else:
-                    raise OSError("Túl sok azonos nevű parancsikon")
+                    raise OSError("Too many shortcuts with the same name")
                 names.add(norm(path))
                 recipes.append(dict(spec, path=str(path), gid=game.id, game_root=game.root,
                                     role=kind, fallback=bool(spec.get("folder"))))
@@ -344,7 +346,7 @@ class Hub:
             if not name or name in client_names or link.get("arguments") or not Path(link["target"]).is_file():
                 continue
             client_names.add(name)
-            path = root / "Launcherek" / (name + ".lnk")
+            path = root / "Launchers" / (name + ".lnk")
             self._safe(root, path)
             old = prior.get(norm(path))
             if path.exists() and (not old or digest(path) != old.get("hash")):
@@ -384,7 +386,7 @@ class Hub:
                 old = prior.get(norm(path))
                 if path.exists():
                     if not old or digest(path) != old.get("hash"):
-                        raise OSError("Egy parancsikon közben megváltozott; megtartottuk: " + str(path))
+                        raise OSError("A shortcut changed while processing; it was preserved: " + str(path))
                     if digest(path) != expected:
                         backup.mkdir(parents=True, exist_ok=True)
                         shutil.copy2(path, backup / (hashlib.sha256(str(path).encode()).hexdigest()[:8] + "-" + path.name))
@@ -451,11 +453,11 @@ class HubWorker:
                 result = self.hub.sync(*job)
                 self.failures = 0
                 if result.get("enabled"):
-                    log.info("Gaming Hub frissítve: %d játék, %d parancsikon, %d változás",
+                    log.info("Gaming Hub updated: %d games, %d shortcuts, %d changes",
                              result["games"], result["links"], result["changed"])
                 self.results.put(result)
             except Exception as exc:
-                log.exception("Gaming Hub frissítési hiba")
+                log.exception("Gaming Hub update failed")
                 self.results.put({"error": str(exc)})
                 with self.condition:
                     self.failures += 1

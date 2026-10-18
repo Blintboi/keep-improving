@@ -132,15 +132,15 @@ class Tracker:
             if limit not in delivered:
                 keys = (limit, warning, session) if self.identity else (limit, warning)
                 minutes = settings.limit_seconds / 60
-                text = ("Lejárt a mai 2 órás játékidőd. Ideje befejezni a játékot." if minutes == 120 else
-                        f"Lejárt a mai {minutes:g} perces játékidőd. Ideje befejezni a játékot.")
-                self._queue(Alert(day, keys, "limit", text, "Rendben, befejezem"))
+                text = ("Your daily 2-hour game time limit has been reached. Time to finish playing." if minutes == 120 else
+                        f"Your daily {minutes:g}-minute game time limit has been reached. Time to finish playing.")
+                self._queue(Alert(day, keys, "limit", text, "OK, I’ll stop"))
             elif self.identity and session not in delivered:
                 self._queue(Alert(day, (session,), "session",
-                                  "A mai játékidőkereted már lejárt. Ideje befejezni a játékot.", "Rendben, befejezem"))
+                                  "Your daily game time limit has already been reached. Time to finish playing.", "OK, I’ll stop"))
         elif total >= settings.warning_seconds and warning not in delivered:
             remaining = math.ceil((settings.limit_seconds - total) / 60)
-            self._queue(Alert(day, (warning,), "warning", f"Már csak {remaining} perc játékidőd maradt mára.", "Rendben"))
+            self._queue(Alert(day, (warning,), "warning", f"You have {remaining} minutes of game time left today.", "OK"))
 
     def _queue(self, alert):
         self.alerts.append(alert)

@@ -6,3 +6,6 @@ install.json
 *.sqlite3*
 .venv/
 test-reports/
+build/
+dist/
+*.spec

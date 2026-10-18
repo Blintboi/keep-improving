@@ -21,12 +21,19 @@ class Store:
             CREATE TABLE IF NOT EXISTS rules (path TEXT PRIMARY KEY, game_id TEXT);
             CREATE TABLE IF NOT EXISTS alerts (day TEXT NOT NULL, key TEXT NOT NULL,
               PRIMARY KEY(day, key));
-            PRAGMA user_version=1;
+            CREATE TABLE IF NOT EXISTS game_preferences (game_id TEXT PRIMARY KEY, hidden INTEGER NOT NULL);
+            PRAGMA user_version=2;
         """)
 
     def settings(self):
         row = self.db.execute("SELECT value FROM settings WHERE key='config'").fetchone()
-        return Settings(**json.loads(row[0])) if row else Settings()
+        if not row:
+            return Settings()
+        config = json.loads(row[0])
+        # Existing profiles had automatic chess exclusions. Preserve that choice;
+        # a fresh installation counts chess just like any other game.
+        config.setdefault("exclude_chess", True)
+        return Settings(**config)
 
     def save_settings(self, settings):
         settings.validate()
@@ -70,6 +77,7 @@ class Store:
                             [(day, new_id, seconds) for day, seconds in rows])
         self.db.execute("DELETE FROM usage WHERE game_id=?", (old_id,))
         self.db.execute("UPDATE OR IGNORE overrides SET game_id=? WHERE game_id=?", (new_id, old_id))
+        self.db.execute("UPDATE OR IGNORE game_preferences SET game_id=? WHERE game_id=?", (new_id, old_id))
         self.db.execute("UPDATE rules SET game_id=? WHERE game_id=?", (new_id, old_id))
         self.db.execute("UPDATE games SET installed=0 WHERE id=?", (old_id,))
 
@@ -84,6 +92,13 @@ class Store:
 
     def overrides(self):
         return {key: bool(val) for key, val in self.db.execute("SELECT * FROM overrides")}
+
+    def hidden_ids(self):
+        return {gid for gid, hidden in self.db.execute("SELECT * FROM game_preferences") if hidden}
+
+    def set_hidden(self, gid, hidden):
+        with self.db:
+            self.db.execute("INSERT OR REPLACE INTO game_preferences VALUES (?,?)", (gid, int(hidden)))
 
     def set_enabled(self, gid, enabled):
         with self.db:

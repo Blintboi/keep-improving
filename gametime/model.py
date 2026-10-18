@@ -62,13 +62,14 @@ class Settings:
     epic_manifest_dirs: list = field(default_factory=list)
     ubisoft_roots: list = field(default_factory=list)
     hub_enabled: bool = False
+    exclude_chess: bool = False
 
     def validate(self):
         if not (0 < self.warning_seconds < self.limit_seconds <= 86400):
-            raise ValueError("A küszöbök sorrendje: 0 < előzetes figyelmeztetés < napi keret ≤ 1440 perc.")
+            raise ValueError("Thresholds must be: 0 < warning < daily limit ≤ 1440 minutes.")
         root = Path(self.games_root)
         if not root.is_absolute() or root.parent == root:
-            raise ValueError("A Games mappa teljes útvonal legyen, és ne legyen meghajtógyökér.")
+            raise ValueError("The Gaming Hub needs an absolute folder path, not a drive root.")
         return self
 
 
@@ -90,7 +91,7 @@ class Catalog:
         self.games.update((g.id, g) for g in games)
 
     def enabled(self, game):
-        return self.overrides.get(game.id, game.default_enabled)
+        return self.overrides.get(game.id, game.default_enabled if self.settings.exclude_chess else True)
 
     def resolve(self, path, fallback=True):
         if not path or blocked(path):
@@ -105,7 +106,7 @@ class Catalog:
             game = next((g for g in self.games.values() if g.source == "Minecraft" and g.installed), None)
             if game:
                 return game if self.enabled(game) else None
-        if helper(path) or CHESS.search(ntpath.basename(path)):
+        if helper(path) or (self.settings.exclude_chess and CHESS.search(ntpath.basename(path))):
             return None
         # A more specific installation wins over a containing custom Games folder.
         candidates = sorted((g for g in self.games.values() if g.installed and g.source != "Kézi" and within(path, g.root)
@@ -137,7 +138,7 @@ class Catalog:
         return self._under(path, self.settings.games_root, "Games")
 
     def explicitly_ignored(self, path):
-        if not path or helper(path) or CHESS.search(ntpath.basename(path)):
+        if not path or helper(path) or (self.settings.exclude_chess and CHESS.search(ntpath.basename(path))):
             return True
         key = norm(path)
         if key in self.rules:
@@ -156,7 +157,7 @@ class Catalog:
         parts = relative.split("\\")
         if not parts or not parts[-1].endswith(".exe"):
             return None
-        name = parts[0] if len(parts) > 1 else "Games (gyökér)"
+        name = parts[0] if len(parts) > 1 else "Games (root)"
         game_root = os.path.join(root, parts[0]) if len(parts) > 1 else str(root)
         gid = ("games:" if source == "Games" else f"pending:{source.lower()}:") + norm(game_root)
         game = Game(gid, name, source, game_root)

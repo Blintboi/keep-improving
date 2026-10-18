@@ -1,298 +1,91 @@
-# Játékidőfigyelő – Windows 11
+# Game Time Monitor
 
-Sötét témájú, offline játékidőfigyelő személyes használatra, Steam-, Epic-,
-Ubisoft Connect- és Riot-támogatással. A napi közös keret
-alapból **120 perc**, előzetes figyelmeztetés **100 percnél**. Csak az előtérben
-lévő telepített játék ideje számít. A program figyelmeztet, és nem állít le játékot.
+An offline Windows 11 tray app that measures foreground gameplay, shares one daily budget across games, and reminds you to stop. Includes a dark English interface and an automatically maintained Gaming Hub.
 
-Ez a meglévő Python/Tkinter alapú projekt önálló játékfigyelő modulja.
-A lefekvési emlékeztetővel együtt használható: külön fájlokat, adatbázist és
-automatikus indítási bejegyzést használ. Lefekvési értesítést és ahhoz tartozó
-ütemezett feladatot nem hoz létre, a meglévő emlékeztetőt nem módosítja.
+**Private preview 1.4.0.** The repository and release downloads remain private. Sign into GitHub with an account that has access on your other PC. Each PC keeps its own history; there is no cloud synchronization.
 
-## Telepítés és indítás
+## Install
 
-A jelenlegi kiadás személyes használatra tesztelt változat. Nyilvános kiadás
-előtt angol felület és dokumentáció, önálló telepítő és további gépeken végzett
-próbák szükségesek. A nyilvános alapbeállításban a sakkjátékok is számítsanak;
-a sakk kizárása egyéni, választható beállítás legyen. Ez kiadási követelmény,
-nem a jelenlegi személyes sakk-kivétel módosítása.
+1. Open this repository's **Releases**, download `GameTimeMonitor-1.4.0-Setup.exe`, and run it as your normal Windows user.
+2. Python, Tk and SQLite are included. No separate Python, pip packages, administrator account or launcher login is needed by the monitor.
+3. The app opens and discovers installed games. It starts in the tray when you sign into Windows. Open **Settings** to change your daily limit or Gaming Hub location.
 
-1. A teljes csomagot bontsd ki egy mappába.
-2. Kattints duplán a **Telepites.cmd** fájlra, normál felhasználóként.
-3. Add meg a saját Games mappádat. Enterrel a `C:\Games` marad.
-4. A telepítő ellenőrzi a Python 3.9+ és a beépített Tkinter/SQLite meglétét,
-   elvégzi a kezdeti játékfelismerést, beállítja a bejelentkezés utáni indulást,
-   és megnyitja a kezelőfelületet.
-5. A **Popup próba** gombbal ellenőrizd az értesítést és a hangot.
+The current installer is unsigned; Windows may show an unknown-publisher/SmartScreen prompt. Use the private release or a build you made yourself. A SHA-256 checksum accompanies the download.
 
-Nincs pip-függőség, letöltés vagy rendszergazdai lépés. Ha nincs megfelelő Python,
-a telepítő ezt jelzi; telepítsd a [Python hivatalos Windows-kiadását](https://www.python.org/downloads/windows/)
-Tkinterrel, és indítsd újra a telepítést. Ezen a gépen Python 3.12.10-zel teszteltük.
+Program files go under `%LOCALAPPDATA%\Programs\GameTimeMonitor`. Data goes in Windows Documents under `GameTimeMonitor\data`, including redirected Documents folders. A fresh install creates `Documents\Gaming Hub`. Upgrades preserve the existing Hub location, thresholds, history, executable rules, exclusions and hidden games, and back up the data before migration.
 
-A telepítés helye a Windows Dokumentumok mappáján belül `GameTimeMonitor`.
-A forráscsomagot ezután áthelyezheted; a telepített Pythont tartsd meg.
-A Games mappát az automatikus Gaming Hub bekapcsolásakor létrehozza, ha szükséges.
-A játékok fájljait nem módosítja.
+Setup adds Start menu and desktop app shortcuts, a desktop Gaming Hub shortcut, Windows startup entries and an Installed apps entry. A fallback Startup shortcut and the Run entry share a per-profile mutex, so only one monitor runs. A restart is not required.
 
-Másik Python vagy telepítési hely megadása PowerShellből:
+## Daily use
+
+Left click the tray icon to open the app. Right click for Open, Gaming Hub, Settings, Refresh games and hub, and Exit monitor. Closing the main window or using **Hide to tray** keeps tracking running. **Exit monitor** stops it until the next launch/sign-in.
+
+Only a tracked game in the foreground counts. Browsers, launcher clients, background games, locked sessions and sleep do not count. Cutscenes still count; keyboard inactivity alone does not pause a game. Samples are taken once a second and saved regularly to SQLite. Midnight starts a new daily total.
+
+The initial daily limit is **120 minutes**, with a warning at **100 minutes**. Alerts are reminders: they do not kill games or enforce a lockout. At a threshold, the app tries one Escape in the currently tracked game, waits 200 ms, then displays an independent topmost alert. It verifies the foreground process identity and avoids sending Escape with modifier keys held. Hidden/minimized main windows do not suppress alerts. **Test alert** checks the popup itself, without simulating a gameplay threshold.
+
+Minecraft Java in fullscreen was successfully tested on one Windows 11 PC at real 20/30-second thresholds. Other fullscreen engines or elevated games may behave differently; see [testing](TESTING.md).
+
+## Discovery and Gaming Hub
+
+Sources: **Steam, Epic Games, Ubisoft Connect, Riot including VALORANT, Minecraft Java**, and standalone games under the configured Games/Hub folder. Installation metadata and file/registry events update the catalog and shortcuts; repair scans cover missed events. Multiple Steam libraries and extra launcher locations can be configured.
+
+Games outside known locations cannot always be recognized safely. Use **Add game** to select the game's actual EXE and name it; this also enables a Hub shortcut. **Assign EXE** maps an extra executable to an existing game. Browsers and launcher clients are blocked. Shared `javaw.exe` is not globally treated as Minecraft; known Minecraft runtime locations or an exact manual rule are required.
+
+Hub entries are links: installations and saves are not moved. Original launcher shortcuts retain arguments, working directory and icons. Without a reliable launch command, a folder link is used. `Folders` contains installation-folder links; `Launchers` contains client shortcuts. Separate real installations of the same title are labeled by source.
+
+Only unchanged shortcuts recorded as owned are removed when a game disappears. Edited/unowned files are preserved. A disconnected/unreadable library is kept until a successful scan. A Hub root has one authoritative profile owner and a lock to prevent duplication; do not delete `.gametime-hub.json` or share one Hub between independent profiles.
+
+## Hide, exclude and uninstall
+
+| Action | Result |
+| --- | --- |
+| **Hide / restore** | Hides the selected row. Tracking, history and Hub links stay. Enable Show hidden games, select it and click again to restore. Survives restart and discovery. |
+| **Exclude / track** | Changes whether future time counts; history stays. |
+| **EXE rules** | Excludes or maps an individual executable. |
+| **Uninstall game…** | Shows a guide, then opens an external removal tool only after Continue. |
+
+Steam opens its uninstall flow. Epic/Ubisoft open the detected client with library removal instructions, or Installed apps if the client is missing. Riot/Minecraft use Windows Installed apps. Standalone games use an exact-match Windows Installer product removal or an identified uninstaller in that installation. Otherwise the game folder opens with manual instructions and an Installed apps fallback.
+
+The app never executes arbitrary registry command text, adds silent-removal flags, or recursively deletes game files. Review the publisher's final confirmation, close running games if requested, and back up local saves. Discovery subsequently retires the removed game and unchanged owned Hub links, retaining history. A portable game's actual mapped EXE/folder must disappear before it is considered removed. Hiding does not uninstall anything.
+
+Fresh installs count chess normally. **Exclude chess games by default** is optional. Pre-1.4 profiles keep their previous exclusion policy during migration; explicit per-game choices take precedence.
+
+## Privacy and removing the monitor
+
+The app has no telemetry, online account, data upload or cloud component. It reads local installation metadata, foreground process paths, game directories and shortcut metadata. It does not read launcher tokens, browser history, messages or save contents. GitHub downloads are separate from the offline monitor.
+
+Data includes `usage.sqlite3` (history, configuration, rules, visibility and alert markers), rotating `monitor.log`, and `hub-state.json`. Logs may contain local paths. Data, installed manifests and logs are excluded from Git. Stop the app before backing up the data folder. Whole-profile transfer is not automatic multi-PC sync: paths, EXE rules and Hub ownership are machine-specific.
+
+Remove the monitor via **Windows Settings → Apps → Installed apps → Game Time Monitor → Uninstall**. Its uninstaller removes owned program files, app shortcuts and startup entries, preserving games, Hub links and data. To erase history afterwards, check your backup and delete the data folder manually. Removing the monitor never uninstalls games.
+
+## Troubleshooting
+
+- **No time counted:** check Active game while the actual game has focus, and confirm Tracked status. Add game / Assign EXE for unknown standalone games. EXE exclusions take precedence; a launcher alone does not count.
+- **Missing after sign-in:** check Task Manager → Startup apps; Windows lets you disable startup. Launch from the Start menu. Setup errors are recorded in `%TEMP%\GameTimeMonitor-setup.log`.
+- **Fullscreen alert hidden:** compare in borderless mode and check privilege levels. The monitor does not request administrator access. Report the game, display mode, time and relevant log lines privately.
+- **Stale link:** use Refresh games and hub. Unreadable libraries and edited/unowned links are intentionally preserved. Removing only a shortcut does not remove the installed game.
+- **Setup failed:** read its log and rerun after resolving the error. Setup refuses an unowned existing target folder and checks payload hashes. File copying is not a transactional MSI operation; a failed upgrade may need rerunning. The data backup stays.
+
+## Develop and build
+
+Source uses Python 3.9+ with Tk and no third-party runtime Python packages. The standalone build targets **Windows 11 x64**, tested with CPython 3.12.10. ARM64 and 32-bit builds are not provided/tested.
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 `
-  -PythonPath "C:\Python312\python.exe" -GamesRoot "D:\Games" `
-  -InstallDir "$env:USERPROFILE\Documents\GameTimeMonitor"
+python -B main.py
+python -B -m unittest discover -s tests -v
 ```
 
-Indítás telepítés után: **Inditas.cmd**, illetve a tálcaikon. Az X gomb a tálcára
-teszi a programot; tényleges kilépés a tálca jobb gombos menüjében érhető el.
-Ha az ikon a Windows rejtett ikonjai között van, a tálca felfelé mutató nyilánál keresd.
-Második indítás a már futó példány ablakát nyitja meg.
-Telepítés után a kibontott csomag `Inditas.cmd` fájlja is a telepített példányt
-nyitja meg, ugyanazzal az adatbázissal. Külön fejlesztői próbaadatokhoz
-explicit `--data-dir` szükséges. Két háttérindításból egy figyelő marad futva.
+Always use temporary `--data-dir` paths for testing. Source launchers reuse an installed profile to prevent split catalogs. Commands include `--diagnose --report report.json`, `--configure`, `--scan-once`, `--sync-hub` and `--stop-wait 20`. Stop the resident app before configuration commands. Never point test Hubs at real game folders.
 
-A játékfigyelő saját kék játékvezérlő–óra ikont használ. **Bal kattintás**
-megnyitja az ablakot akkor is, ha korábban az X gombbal elrejtetted.
-Ha az ablak már nyitva van, előtérbe hozza; újabb kattintás nem rejti el.
-**Jobb kattintás** natív Windows-menüt nyit: Játékidőfigyelő, Gaming Hub,
-Beállítások, Játéklista és hub frissítése, illetve külön Kilépés.
-A menü elvetése és az ikon fölé vitt egér nem állítja le a figyelőt.
+Build on Windows x64 with Python/Tk, PowerShell and built-in IExpress:
 
-Telepítés nélküli kipróbálás: `py -3 -B main.py`. Telepített példány hiányában
-a forrás melletti `data` mappát használja; automatikus indulást a telepítő állít be.
-Meglévő telepítésnél a normál indítás annak közös adatbázisát használja.
+```powershell
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r packaging\requirements-build.txt
+powershell -NoProfile -ExecutionPolicy Bypass -File packaging\build.ps1 -PythonPath .venv\Scripts\python.exe
+```
 
-## Játékfelismerés
+Output is in `dist`. PyInstaller bundles the runtime; IExpress packages it with the per-user bootstrap. Setup verifies hashes, stops the old resident, backs up data, installs/verifies the app, configures startup and launches it without downloading a runtime. See [architecture](ARCHITECTURE.md), [testing](TESTING.md) and [third-party notices](THIRD-PARTY-NOTICES.md). The manual GitHub workflow produces private build artifacts and does not publish a release.
 
-- **Steam:** rendszerleíró adatbázisból felismert Steam-telepítés,
-  `steamapps/libraryfolders.vdf` és `config/libraryfolders.vdf`, majd a könyvtárankénti
-  `appmanifest_*.acf` fájlok. A több meghajtón lévő könyvtárak is működnek.
-  A Steam játékainak teljes fájlfáját nem járja be.
-- **Epic:** a ProgramData alatti Epic-jegyzékmappa `.item` fájljai és a
-  `LauncherInstalled.dat` tartalék telepítési index. A jegyzékekben szereplő
-  tetszőleges meghajtón lévő telepítési helyek támogatottak.
-- **Ubisoft Connect:** a helyi `Software\Ubisoft\Launcher\Installs` bejegyzések
-  `InstallDir` értékei, valamint a `Uplay Install <azonosító>` eltávolítási
-  bejegyzések neve és telepítési helye. Kezeli a felhasználói és a gépszintű,
-  32/64 bites adatokat, valamint az egyéni meghajtókat. A Ubisoft Connect,
-  `upc.exe` és `UplayWebCore.exe` nem számít játéknak.
-- **Riot:** a ProgramData `Riot Games/Metadata` könyvtárának
-  `*.product_settings.yaml` telepítési adatai és a `Riot Game <termék>.<kiadás>`
-  eltávolítási registrybejegyzések. A `RiotClientInstalls.json` társított
-  telepítési útvonalai tartalék felismerést adnak. A VALORANT, a League of Legends
-  és később telepített, más termékazonosítójú Riot-játékok is támogatottak;
-  az egyéni meghajtók és telepítési helyek automatikusan követhetők.
-  A Riot Client, a League kliensfelülete és a Vanguard nem fogyaszt játékidőt.
-  A pusztán letöltést előnéző `preview.manifest` nem jelent telepített játékot.
-- **Games:** a beállított gyökér minden közvetlen almappája egy játékcsoport;
-  az alatta lévő `bin`, `engine` és más alkönyvtárak EXE-fájljai ugyanahhoz a
-  játékhoz tartoznak. A gyökérben közvetlenül lévő EXE-k egy közös csoportot alkotnak.
-- **Minecraft Java:** a helyi `.minecraft/versions` telepítés és a hivatalos
-  launcher saját `runtime` könyvtárai alapján felismeri a játék Java-folyamatát,
-  új runtime-verziónál is. A launcher és a más programokhoz tartozó általános
-  Java nem számít. Egyéni, külső Java-runtime kézzel rendelhető hozzá.
-
-Induláskor összeveti a jegyzékeket a korábbi nyilvántartással. Működés közben
-natív `ReadDirectoryChangesW` fájleseményeket és a Ubisofthoz/Riothoz
-`RegNotifyChangeKeyValue` registryértesítéseket használ; nincs rendszeres teljes gép-
-vagy teljes játékkönyvtár-ellenőrzés. Steam/Epic-esemény után a kis méretű
-telepítési jegyzékeket és a Ubisoft/Riot telepítési indexeit olvassa újra.
-A Riotnál a YAML/JSON telepítési adatok változását figyeli; a nagy játékadatokat,
-adatbázisokat és javítócsomagokat nem olvassa be a felismeréshez.
-A registryfigyelés a kulcsok létrehozását, módosítását és törlését is követi.
-Games-eseménynél csak az érintett játékcsoportot
-ellenőrzi. Teljes Games-bejárás induláskor, Games-gyökér váltásakor és elveszett
-fájlrendszeresemények helyreállításakor szükséges. A mentési fájlok és textúrák
-szokásos változásai nem indítanak játékkeresést.
-
-Az eseményeket 1,2 másodperces nyugalmi idővel vonja össze; folyamatos telepítésnél
-legfeljebb 5 másodpercig vár egy ellenőrzéssel. Félkész jegyzék esetén megtartja
-a korábban olvasott adatot, és ritkuló ütemben újrapróbálja az olvasást.
-Új fájlesemény később is kivált új ellenőrzést.
-
-**Az első indítás is számít:** az előtérben futó EXE teljes útvonalát közvetlenül
-ellenőrzi az ismert Steam-könyvtárak `steamapps/common` alkönyvtáraiban és a Games
-gyökérben. Epicnél az `.item` és a launcher közös indexe adja a telepítési helyet.
-Ubisoftnál a telepítési index mellett az ismert launcher `games` mappája is
-tartalék felismerési gyökér, már az első indításkor.
-Riotnál a kliens társított telepítési indexében szereplő pontos játékmappa
-ad tartalék felismerést, amíg a termék saját telepítési adata megérkezik.
-Ha a jegyzék késik, legfeljebb az utolsó 120 másodperc valóban megfigyelt előtéri
-intervallumát tudja utólag besorolni. Nem talál ki játékidőt a folyamat puszta
-futása alapján. A Steam ideiglenes útvonal alapú rekordja a végleges AppID-hez
-olvad össze, az addig mért idő megőrzésével.
-A Ubisoft és Riot ideiglenes rekordja ugyanígy a végleges játékazonosítóhoz kerül.
-Ha egy korábban kézzel felvett telepítés később automatikusan felismerhetővé
-válik ugyanazon a helyen, a játékideje, kizárása és EXE-szabályai összeolvadnak.
-
-## Automatikus Gaming Hub
-
-A **Beállítások → Gaming Hub** kapcsolóval a konfigurált Games mappa központi
-indítómappává válik. Telepítéskor PowerShellből az `-EnableHub` kapcsoló is
-bekapcsolja. A **Games mappa** gomb megnyitja a hubot. A Windowsban ehhez a
-mappához készített asztali parancsikon közvetlenül is használható.
-
-- A főmappában a felismert videojátékok indítói jelennek meg. A Steam/Epic/Ubisoft/Riot
-  mellett a Games mappában felismert és a kézzel felvett egyéb játékok is bekerülnek.
-- A `Mappak` almappa az eredeti telepítési helyekre mutat. A `Launcherek` mappában
-  a megtalált Steam-, Epic-, Ubisoft- és Riot-kliensindítók vannak.
-- A sakkprogramok a `Sakk` almappába kerülnek, továbbra is a játékidőkereten kívül.
-
-A meglévő eredeti Windows-indítókat lehetőleg változatlanul másolja: az indítási
-paraméterek, munkamappa és ikon megmaradnak. Steamnél és Ubisoftnál termékazonosítós
-URI-t is tud készíteni, Epicnél a helyi jegyzék adja az indítási azonosítókat,
-Riotnál a termék és a kiadás paramétereit használja. Egyéb játékhoz az ismert,
-hozzárendelt EXE-t vagy az egyértelmű Games-EXE-t használja. Bizonytalan több-EXE-s
-telepítéshez mappahivatkozást készít, amely később pontos EXE-hozzárendeléssel javítható.
-
-A frissítés külön háttérszálon, játéklista- és parancsikonváltozásra fut. Az
-asztal és a Start menü indítóinak változásait Windows-fájleseményekkel követi.
-A játékidő másodpercenkénti változása nem indít parancsikongenerálást. Nincs
-periodikus teljes gépkeresés, és a hub nem indít el játékot.
-
-A hub kizárólag a saját `data/hub-state.json` nyilvántartásában szereplő,
-változatlan `.lnk`/`.url` fájlokat cseréli vagy távolítja el; előbb másolatot
-ment a `data/backups/hub-links-*` mappába. Egy névütközés vagy kézzel átírt
-parancsikon megmarad, a saját új indító egyedi nevet kap. Könyvtárkapcsolatra
-nem ír. A hub kikapcsolása vagy a figyelő eltávolítása megtartja a Games mappát.
-Games-gyökér váltásakor a korábbi mappában lévő fájlokat megtartja.
-
-**Játék eltávolításakor** az automatikusan kezelt indító és mappahivatkozás
-is visszavonódik, a korábbi játékidő megmarad. A launcherindexek mellett az ismert
-telepítési mappák közvetlen szülőjének létrehozás/törlés eseményeit is követi.
-A kézi játékoknál a hozzárendelt EXE-k mappáit célzottan figyeli: ha minden
-hozzárendelt EXE eltűnik, a játék kikerül a hubból akkor is, ha a mappája vagy
-mentései megmaradtak. Ugyanoda visszatelepítve újra bekerül, a régi idővel és
-szabályokkal. A felhasználó által átírt parancsikonokat továbbra is megőrzi.
-
-Más helyre telepített, egyik ismert forrásban sem szereplő játékhoz továbbra is
-az **Új kézi játék** gomb használható; ezután a hub is automatikusan átveszi.
-A hub a már felismert játékokból dolgozik, az EXE-k általános játékként besorolására
-nem használ önálló, teljes lemezt átvizsgáló keresőt. Az asztali egyedi ikonokat
-a program folyamatos működés közben nem törli; az első géprendezés külön,
-mentéssel és a hubban lévő megfelelő ellenőrzésével történt.
-
-## Mérés és értesítések
-
-Az előtéri ablak folyamatát másodpercenként kérdezi le, olvasási jogosultsággal.
-Az EXE teljes útvonala alapján mér; a játékmappán belüli gyermekfolyamatok is
-felismerhetők. Alt+Tab után a háttérben maradó játék ideje nem gyűlik tovább.
-Egyszerre mindig egy előtéri folyamat időszaka számít, ezért két futó játék nem
-fogyaszt kétszeres időt. Menüben, kontrollerrel és billentyűzet-/egéraktivitás
-nélkül is mér. Böngészős játékokat és a Steam/Epic/Ubisoft/Riot kezelőfelületét kizárja.
-
-Alváshoz és hibernáláshoz a Windows ébren töltött idejét mérő
-`QueryUnbiasedInterruptTime` számlálót használja. Hosszú mintavételi szünetet,
-óraugrást és zárolt/biztonságos asztalt nem számol el. A mintavétel miatt az
-alkalmazásváltások határán körülbelül egy másodperc eltérés lehetséges.
-Három másodpercnél hosszabb mintavételi szünetet biztonságból kihagy.
-
-A nap a Windows helyi ideje szerint éjfélkor vált. Az éjfélen átnyúló rövid
-intervallumot megosztja a két nap között. Az időadatok és kivételek SQLite-ban
-maradnak meg. Az időadatokat 10 másodpercenként és szabályos kilépéskor menti;
-váratlan leálláskor általában legfeljebb 10 másodperc még nem mentett idő veszhet el.
-Nem számol időt arra az időszakra, amikor a figyelő nem futott.
-
-100 percnél: „Már csak 20 perc játékidőd maradt mára.”
-
-120 percnél: „Lejárt a mai 2 órás játékidőd. Ideje befejezni a játékot.”
-
-A sötét popup a normál ablakok fölé kerül, és értesítési hang is megszólal.
-Az értesítő a főablaktól független, ezért kicsinyített és tálcára rejtett
-főablak mellett is megjelenik. Figyelt játék előterében előbb egyszer Esc-et
-küld, majd 200 ms múlva megjelenik. A folyamat azonosságát és az előteret
-közvetlenül a billentyűküldés előtt ellenőrzi; lenyomott módosítóbillentyű
-mellett kihagyja az Esc-et. Egy értesítés újrapróbálása nem küld újabb Esc-et.
-A küszöb napi értesítését tartósan jelöli. Lejárt keret után egy másik játékfolyamat
-első előtérbe kerülése újra figyelmeztet; ugyanarra a folyamatra az Alt+Tab
-nem generál állandó figyelmeztetést. A PID mellett a folyamat létrehozási idejét
-is figyeli, így az újraindított játék új menetnek számít.
-
-## Beállítások, sakk és javítások
-
-A főablak mutatja a napi összidőt, a hátralévő időt, az aktív játékot, valamint
-a játékok nevét, forrását és mai idejét. A beállításokban módosítható a napi keret,
-az előzetes figyelmeztetés ideje és a Games mappa. A figyelmeztetési küszöbnek
-kisebbnek kell lennie a napi keretnél. A meglévő mai időadatok beállításváltáskor
-is megmaradnak.
-
-Nem alapértelmezett Steam-, Epic- és Ubisoft Connect-helyek a beállításokban
-szintén hozzáadhatók. A korábbi beállítások a frissítéskor megmaradnak.
-A Riot egyéni játékhelyeit a helyi telepítési adatokból veszi át, külön beállítás nélkül.
-
-- **Kizárás / engedélyezés:** a kiválasztott teljes játékot kapcsolja át.
-- **Új kézi játék:** kiválasztasz egy EXE-t, és nevet adsz neki.
-- **EXE hozzárendelése:** egy kiválasztott játékhoz rendel másik EXE-t, például
-  a játékmappán kívül telepített gyermekfolyamatot vagy egy tévesen kihagyott launchert.
-- **Kivételek:** pontos EXE-útvonal alapján kizárás, illetve korábbi szabály törlése.
-
-Az ismert sakknevek (`chess`, `sakk`, `stockfish`, `lc0`, `fritz` stb.) alapból
-kizártak. A megnevezés alapú felismerés nem teljes sakkkatalógus: egy más néven
-telepített sakkprogramot egyszer ki kell zárni. A Chess.com böngészőben eleve
-nem számít. A kizárások és hozzárendelések újraindítás után is megmaradnak.
-A javítások a következő mintáktól hatnak; korábbi időt nem törölnek.
-
-## Korlátok
-
-- A helyi launcherjegyzékek nem hivatalos, verziózott API-k; szokatlan vagy új
-  formátumhoz később módosítás kellhet. Nem alapértelmezett jegyzékhely a beállításokban
-  hozzáadható. Új meghajtó csatlakoztatásakor újra ellenőrzi a launcherforrásokat.
-- Steam nem játék jellegű alkalmazásai offline, pusztán a telepítési jegyzékből
-  nem mindig különíthetők el. Ezeket kézzel ki lehet zárni.
-- Az EXE-nevek alapján kiszűrt konfigurálók, launcherek és segédprogramok között
-  lehet valódi játék is. A pontos EXE-hozzárendelés felülírja ezt a heurisztikát.
-  Ismeretlen segédprogramot egyszer kézzel ki kell zárni. Böngészők és a Steam/Epic/Ubisoft/Riot
-  általános kezelőfelülete kézi hozzárendeléssel sem válik játékká.
-- Egy Games almappa egy játékcsoport. Több, egymásba ágyazott játékot külön
-  főmappákba érdemes telepíteni, vagy pontos EXE-hozzárendeléssel elkülöníteni.
-  Könyvtárkapcsolatok/junctionök bejárását kerüli.
-- A Games mappába tett `.lnk` parancsikonok az eredeti telepítési helyre mutatnak.
-  Önmagukban nem regisztrálnak új játékot. Külső, launcher által nem ismert
-  játékhoz az eredeti EXE-t kell kézzel hozzáadni a figyelőben.
-- Epic tetszőleges új telepítési helye csak valamely helyi telepítési indexből
-  ismerhető meg. Ha egyik index sem írja le időben, az ismeretlen helyen futó
-  játék azonosítása késhet; 120 másodpercnél régebbi ismeretlen időszakot nem pótol.
-- Ubisoftnál a szabványos launcher- és telepítési registrybejegyzéseket kezeli.
-  Ha ezek hiányoznak, az ismert `games` mappák és az utolsó 120 másodperc
-  megfigyelt előtéri időszaka ad tartalék felismerést. Szokatlan, index nélküli
-  telepítéshez kézi EXE-hozzárendelés szükséges lehet.
-- Riotnál a szabványos helyi telepítési indexekből és a legfelső szintű YAML
-  telepítési mezőkből dolgozik, fiókadatokat nem olvas. Ha egyik indexben sem
-  szerepel időben a telepítési hely, a besorolás késhet; az utolsó 120 másodperc
-  valóban megfigyelt ideje utólag elszámolható. Új indexformátumhoz frissítés kellhet.
-- Más helyre telepített gyermekfolyamat vagy nem olvasható, védett folyamat kézi
-  hozzárendelést igényelhet. Ha a Windows nem engedi lekérdezni az EXE útvonalát,
-  a program nem próbál jogosultságot emelni vagy anti-cheat védelmet megkerülni.
-- Kizárólagos teljes képernyő, UAC vagy más biztonságos asztal fölötti popup
-  nem garantálható. A hang tartalék jelzés; némított hangrendszeren nem hallható.
-- A figyelő figyelmeztető eszköz; kézi kilépéssel vagy az automatikus indulás
-  kikapcsolásával szüneteltethető. Nem szülői zárolás és nem megkerülésbiztos.
-
-## Eltávolítás, ellenőrzés és adatok
-
-**Eltavolitas.cmd:** szabályosan leállítja a saját figyelőt, eltávolítja a saját
-automatikus indítási bejegyzését és az ismert programfájljait. A játékokat és
-a `data` mappában tárolt időadatokat/kivételeket megtartja. A Pythont és a
-lefekvési emlékeztetőt nem módosítja. Újratelepítéskor az adatok újra használhatók.
-
-Automatikus indítás: `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`,
-értéknév: `GameTimeMonitor`. Nincs szolgáltatás vagy új ütemezett feladat.
-Az Indítópultban saját `GameTimeMonitor.lnk` tartalék indító is van, ugyanarra
-a háttérparancsra. A két bejelentkezési út ugyanazt az egypéldányos figyelőt
-használja; eltávolításkor mindkét saját indítási bejegyzés megszűnik.
-A `.cmd` indítók csak a saját PowerShell-folyamatuk végrehajtási házirendjét
-állítják `Bypass` módba; a gép tartós beállításait nem változtatják meg.
-
-**Ellenorzes.cmd:** telepített fájlok, Python, SQLite és automatikus indulás ellenőrzése.
-Napló: `data/monitor.log`, méretkorláttal. Adatbázis: `data/usage.sqlite3`.
-Mentéshez állítsd le a figyelőt és másold a teljes `data` mappát. Nincs telemetria,
-hálózati kérés vagy internetigény. A Git-repóba nem kerül adatbázis, napló vagy
-személyes játéklista. Részletes tesztelés: [TESZTELES.md](TESZTELES.md).
-
-Műszaki alapok: [előtéri ablak](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getforegroundwindow),
-[teljes folyamatútvonal](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-queryfullprocessimagenamew),
-[fájlrendszeresemények](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-readdirectorychangesw),
-[registryértesítések](https://learn.microsoft.com/en-us/windows/win32/api/winreg/nf-winreg-regnotifychangekeyvalue),
-[alvást kihagyó időmérés](https://learn.microsoft.com/en-us/windows/win32/sysinfo/interrupt-time),
-[tálcaikon](https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shell_notifyiconw),
-[natív tálcamenü](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-trackpopupmenuex).
+Legacy `Telepites.cmd` / `install.ps1` remain for source development and require Python. Normal users should download Setup. No open-source license has been chosen; public publication is a separate decision.

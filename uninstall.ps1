@@ -4,6 +4,12 @@ if (-not $InstallDir) {
     $InstallDir = if (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'install.json')) { $PSScriptRoot } else { Get-GameTimeDirectory }
 }
 $InstallDir = [IO.Path]::GetFullPath($InstallDir)
+$bundle = Get-GameTimeBundle (Join-Path $InstallDir 'data')
+if ($bundle) {
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $bundle.InstallDir 'uninstall-bundled.ps1')
+    if ($LASTEXITCODE -ne 0) { throw 'Bundled application removal failed.' }
+    return
+}
 $manifest = Read-GameTimeManifest $InstallDir
 if (-not $manifest) { Write-Host 'No owned installation found. Nothing was removed.'; return }
 & $manifest.Python -B (Join-Path $InstallDir 'main.py') --data-dir (Join-Path $InstallDir 'data') --stop-wait 12

@@ -87,12 +87,14 @@ class App:
         self.escape_attempts = set()
         self.closed = False
         self.last_rows = None
-        self.status = tk.StringVar(value="Játékok felismerése…")
+        self.hidden_ids = store.hidden_ids()
+        self.show_hidden = tk.BooleanVar(value=False)
+        self.status = tk.StringVar(value="Discovering games…")
         self.total_text = tk.StringVar(value="00:00:00")
         self.remaining_text = tk.StringVar()
-        self.active_text = tk.StringVar(value="Aktív játék: nincs")
-        root.title("Játékidőfigyelő")
-        root.geometry("1040x700")
+        self.active_text = tk.StringVar(value="Active game: none")
+        root.title("Game Time Monitor")
+        root.geometry(f"{min(1100, root.winfo_screenwidth() - 80)}x{min(760, root.winfo_screenheight() - 100)}")
         root.minsize(850, 600)
         theme(root)
         root.protocol("WM_DELETE_WINDOW", root.withdraw)
@@ -101,7 +103,7 @@ class App:
         try:
             root.iconbitmap(default=str(Path(__file__).with_name("app.ico")))
         except tk.TclError:
-            log.warning("Az alkalmazásikon nem olvasható")
+            log.warning("Application icon is unavailable")
         self.tray = win32.Tray(self.show, self.tray_menu, self.devices_changed)
         if background and self.tray.available:
             root.withdraw()
@@ -117,14 +119,14 @@ class App:
         try:
             self.tray.dispatch_pending()
         except Exception:
-            log.exception("Tálcaesemény feldolgozási hiba")
+            log.exception("Tray event dispatch failed")
         if not self.closed:
             self.tray_timer = self.root.after(75, self.poll_tray)
 
     def _build(self):
         frame = ttk.Frame(self.root, padding=22)
         frame.pack(fill="both", expand=True)
-        ttk.Label(frame, text="Mai játékidő", style="Title.TLabel").pack(anchor="w")
+        ttk.Label(frame, text="Today’s game time", style="Title.TLabel").pack(anchor="w")
         ttk.Label(frame, textvariable=self.total_text, style="Total.TLabel").pack(anchor="w", pady=(8, 0))
         ttk.Label(frame, textvariable=self.remaining_text).pack(anchor="w")
         self.progress = ttk.Progressbar(frame, maximum=self.settings.limit_seconds)
@@ -133,8 +135,8 @@ class App:
         table = ttk.Frame(frame)
         table.pack(fill="both", expand=True)
         self.tree = ttk.Treeview(table, columns=("name", "source", "today", "state", "path"), show="headings", selectmode="browse", height=5)
-        for key, label, width in [("name", "Játék", 200), ("source", "Forrás", 65), ("today", "Ma", 90),
-                                  ("state", "Besorolás", 110), ("path", "Telepítési hely", 310)]:
+        for key, label, width in [("name", "Game", 200), ("source", "Source", 65), ("today", "Today", 90),
+                                  ("state", "Tracking", 110), ("path", "Installation folder", 310)]:
             self.tree.heading(key, text=label)
             self.tree.column(key, width=width, minwidth=60, stretch=key in ("name", "path"))
         self.tree.tag_configure("excluded", foreground=MUTED)
@@ -144,15 +146,19 @@ class App:
         self.tree.configure(yscrollcommand=scrollbar.set)
         actions = ttk.Frame(frame)
         actions.pack(fill="x", pady=(14, 8))
-        for label, command in [("Kizárás / engedélyezés", self.toggle_game), ("Új kézi játék", self.add_manual),
-                               ("EXE hozzárendelése", self.assign_exe), ("Kivételek", self.rules_dialog)]:
+        for label, command in [("Exclude / track", self.toggle_game), ("Add game", self.add_manual),
+                               ("Assign EXE", self.assign_exe), ("EXE rules", self.rules_dialog)]:
             ttk.Button(actions, text=label, command=command).pack(side="left", padx=(0, 6))
+        ttk.Button(actions, text="Hide / restore", command=self.toggle_hidden).pack(side="left", padx=(0, 6))
+        ttk.Button(actions, text="Uninstall game…", command=self.uninstall_game).pack(side="left")
+        ttk.Checkbutton(frame, text="Show hidden games (hiding does not stop tracking)",
+                        variable=self.show_hidden, command=self.refresh_view).pack(anchor="w", pady=(0, 8))
         bottom = ttk.Frame(frame)
         bottom.pack(fill="x")
-        ttk.Button(bottom, text="Beállítások", command=self.settings_dialog).pack(side="left")
-        ttk.Button(bottom, text="Popup próba", command=self.test_popup).pack(side="left", padx=6)
-        ttk.Button(bottom, text="Games mappa", command=self.open_games).pack(side="left", padx=6)
-        ttk.Button(bottom, text="Tálcára", command=self.root.withdraw).pack(side="right")
+        ttk.Button(bottom, text="Settings", command=self.settings_dialog).pack(side="left")
+        ttk.Button(bottom, text="Test alert", command=self.test_popup).pack(side="left", padx=6)
+        ttk.Button(bottom, text="Gaming Hub", command=self.open_games).pack(side="left", padx=6)
+        ttk.Button(bottom, text="Hide to tray", command=self.root.withdraw).pack(side="right")
         ttk.Label(frame, textvariable=self.status, style="Muted.TLabel", wraplength=950).pack(anchor="w", pady=(12, 0))
 
     def show(self):
@@ -165,14 +171,14 @@ class App:
         try:
             os.startfile(self.settings.games_root)
         except OSError:
-            self.message("A Games mappa még nem érhető el. Ellenőrizd az útvonalat a beállításokban.")
+            self.message("The Gaming Hub folder is unavailable. Check its path in Settings.")
 
     def tray_menu(self):
         if self.closed:
             return
-        choice = self.tray.popup_menu([(1, "Játékidőfigyelő megnyitása"), (2, "Gaming Hub megnyitása"),
-                                       (3, "Beállítások"), (4, "Játéklista és hub frissítése"),
-                                       None, (5, "Kilépés a figyelőből")])
+        choice = self.tray.popup_menu([(1, "Open Game Time Monitor"), (2, "Open Gaming Hub"),
+                                       (3, "Settings"), (4, "Refresh games and hub"),
+                                       None, (5, "Exit monitor")])
         action = {1: self.show, 2: self.open_games, 3: self.settings_dialog,
                   4: self.refresh_sources, 5: self.close}.get(choice)
         if action:
@@ -215,9 +221,9 @@ class App:
         return window
 
     def message(self, text):
-        window = self._dialog("Játékidőfigyelő", "560x220")
+        window = self._dialog("Game Time Monitor", "560x220")
         ttk.Label(window, text=text, wraplength=510, padding=20).pack(fill="both", expand=True)
-        ttk.Button(window, text="Rendben", command=window.destroy).pack(pady=(0, 20))
+        ttk.Button(window, text="OK", command=window.destroy).pack(pady=(0, 20))
 
     def prompt(self, title, label, initial=""):
         window = self._dialog(title)
@@ -229,7 +235,7 @@ class App:
             if value.get().strip():
                 result.append(value.get().strip())
                 window.destroy()
-        ttk.Button(window, text="Mentés", command=accept).pack(pady=20)
+        ttk.Button(window, text="Save", command=accept).pack(pady=20)
         window.bind("<Return>", lambda e: accept())
         window.bind("<Escape>", lambda e: window.destroy())
         entry.focus_set()
@@ -239,12 +245,66 @@ class App:
 
     def selected(self):
         selected = self.tree.selection()
-        return self.catalog.games.get(selected[0]) if selected else None
+        if not selected:
+            return None
+        return self.catalog.games.get(selected[0]) or next((g for g in self.store.games() if g.id == selected[0]), None)
+
+    def refresh_view(self):
+        self.last_rows = None
+        self.render()
+
+    def toggle_hidden(self):
+        game = self.selected()
+        if not game:
+            self.message("Select a game in the list first.")
+            return
+        self.store.set_hidden(game.id, game.id not in self.hidden_ids)
+        self.hidden_ids = self.store.hidden_ids()
+        self.refresh_view()
+
+    def uninstall_game(self):
+        game = self.selected()
+        if not game:
+            self.message("Select a game in the list first.")
+            return
+        from .removal import plan_removal, execute
+        plan = plan_removal(game)
+        window = self._dialog("Uninstall game — " + game.name, "640x400")
+        frame = ttk.Frame(window, padding=22)
+        frame.pack(fill="both", expand=True)
+        ttk.Label(frame, text=plan.title, style="Title.TLabel", wraplength=590).pack(anchor="w")
+        ttk.Label(frame, text=plan.instructions, wraplength=590).pack(fill="x", pady=14)
+        ttk.Label(frame, text="Your play history will be kept. Hiding a game does not uninstall it.",
+                  wraplength=590, style="Muted.TLabel").pack(anchor="w")
+        status = tk.StringVar()
+        ttk.Label(frame, textvariable=status, wraplength=590).pack(fill="x", pady=10)
+        buttons = ttk.Frame(frame)
+        buttons.pack(side="bottom", fill="x")
+        def proceed():
+            try:
+                execute(plan)
+                launch.configure(state="disabled")
+                status.set("Opened. Complete the steps above in the publisher's window. You can then close this guide.")
+                self.devices_changed()
+            except (OSError, ValueError) as exc:
+                status.set("Could not open the removal tool. Use Installed apps below. " + str(exc))
+        def installed_apps():
+            try:
+                from .removal import apps_plan
+                execute(apps_plan(game))
+            except OSError as exc:
+                status.set("Open Windows Settings → Apps → Installed apps manually. " + str(exc))
+        launch = ttk.Button(buttons, text="Continue…", command=proceed)
+        launch.pack(side="left")
+        ttk.Button(buttons, text="Installed apps", command=installed_apps).pack(side="left", padx=8)
+        ttk.Button(buttons, text="Close", command=window.destroy).pack(side="right")
+        window.bind("<Escape>", lambda e: window.destroy())
+        window.grab_set()
 
     def toggle_game(self):
         game = self.selected()
         if not game:
-            self.message("Válassz ki egy játékot a listából.")
+            self.message("Select a game in the list first.")
             return
         self.tracker.flush()
         enabled = not self.catalog.enabled(game)
@@ -256,8 +316,8 @@ class App:
         self.render()
 
     def pick_exe(self):
-        return filedialog.askopenfilename(parent=self.root, title="Alkalmazás kiválasztása",
-                                           filetypes=[("Windows alkalmazás", "*.exe")])
+        return filedialog.askopenfilename(parent=self.root, title="Choose application",
+                                           filetypes=[("Windows application", "*.exe")])
 
     def refresh_rules(self):
         self.tracker.flush()
@@ -272,9 +332,9 @@ class App:
             return
         from .model import blocked
         if blocked(path):
-            self.message("A böngészők és a Steam/Epic kezelőfelülete nem sorolható játékhoz.")
+            self.message("Browsers and launcher clients cannot be assigned to a game.")
             return
-        name = self.prompt("Kézi játék", "Játék neve:", Path(path).stem)
+        name = self.prompt("Add game", "Game name:", Path(path).stem)
         if name:
             game = Game("manual:" + uuid.uuid4().hex, name, "Kézi", str(Path(path).parent))
             self.catalog.games[game.id] = game
@@ -286,25 +346,25 @@ class App:
     def assign_exe(self):
         game = self.selected()
         if not game:
-            self.message("Előbb válaszd ki azt a játékot, amelyhez a futtatható fájlt rendeled.")
+            self.message("Select the game to assign this executable to first.")
             return
         path = self.pick_exe()
         if path:
             from .model import blocked
             if blocked(path):
-                self.message("A böngésző és a Steam/Epic kezelőfelülete nem számít játékidőnek.")
+                self.message("Browsers and launcher clients do not count as game time.")
                 return
             self.store.set_rule(path, game.id)
             self.refresh_rules()
 
     def rules_dialog(self):
-        window = self._dialog("Alkalmazáskivételek és hozzárendelések", "850x440")
+        window = self._dialog("Executable exclusions and assignments", "850x440")
         frame = ttk.Frame(window, padding=18)
         frame.pack(fill="both", expand=True)
-        ttk.Label(frame, text="A teljes játék kizárása a főablak listájában is módosítható.").pack(anchor="w", pady=(0, 12))
+        ttk.Label(frame, text="Use Exclude / track in the main list to change tracking for an entire game.").pack(anchor="w", pady=(0, 12))
         tree = ttk.Treeview(frame, columns=("path", "target"), show="headings")
-        tree.heading("path", text="Alkalmazás útvonala")
-        tree.heading("target", text="Besorolás")
+        tree.heading("path", text="Application path")
+        tree.heading("target", text="Tracking")
         tree.column("path", width=540)
         tree.column("target", width=230)
         tree.pack(fill="both", expand=True)
@@ -312,9 +372,9 @@ class App:
             tree.delete(*tree.get_children())
             for index, (path, gid) in enumerate(self.store.rules().items()):
                 name = self.catalog.games[gid].name if gid in self.catalog.games else gid
-                tree.insert("", "end", iid=str(index), values=(path, name or "Kizárva"))
+                tree.insert("", "end", iid=str(index), values=(path, name or "Excluded"))
         def exclude():
-            path = filedialog.askopenfilename(parent=window, title="Kizárandó alkalmazás", filetypes=[("Alkalmazás", "*.exe")])
+            path = filedialog.askopenfilename(parent=window, title="Exclude application", filetypes=[("Application", "*.exe")])
             if path:
                 self.store.set_rule(path, None)
                 self.refresh_rules()
@@ -327,32 +387,35 @@ class App:
                 refresh()
         buttons = ttk.Frame(frame)
         buttons.pack(fill="x", pady=12)
-        ttk.Button(buttons, text="EXE kizárása", command=exclude).pack(side="left")
-        ttk.Button(buttons, text="Kijelölt szabály törlése", command=remove).pack(side="left", padx=8)
+        ttk.Button(buttons, text="Exclude EXE", command=exclude).pack(side="left")
+        ttk.Button(buttons, text="Remove selected rule", command=remove).pack(side="left", padx=8)
         refresh()
 
     def settings_dialog(self):
-        window = self._dialog("Beállítások", "700x620")
+        window = self._dialog("Settings", "740x700")
         frame = ttk.Frame(window, padding=20)
         frame.pack(fill="both", expand=True)
         variables = {}
-        for key, label, initial in [("limit", "Napi keret (perc)", self.settings.limit_seconds / 60),
-                                    ("warning", "Előzetes figyelmeztetés ennyi perc után", self.settings.warning_seconds / 60),
-                                    ("games", "Games mappa teljes útvonala", self.settings.games_root),
-                                    ("steam", "További Steam-telepítések (pontosvesszővel)", ";".join(self.settings.steam_roots)),
-                                    ("epic", "További Epic-jegyzékmappák (pontosvesszővel)", ";".join(self.settings.epic_manifest_dirs)),
-                                    ("ubisoft", "További Ubisoft Connect-telepítések (pontosvesszővel)", ";".join(self.settings.ubisoft_roots))]:
+        for key, label, initial in [("limit", "Daily limit (minutes)", self.settings.limit_seconds / 60),
+                                    ("warning", "Warn after (minutes)", self.settings.warning_seconds / 60),
+                                    ("games", "Gaming Hub folder (full path)", self.settings.games_root),
+                                    ("steam", "Additional Steam installations (separated by semicolons)", ";".join(self.settings.steam_roots)),
+                                    ("epic", "Additional Epic manifest folders (separated by semicolons)", ";".join(self.settings.epic_manifest_dirs)),
+                                    ("ubisoft", "Additional Ubisoft Connect installations (separated by semicolons)", ";".join(self.settings.ubisoft_roots))]:
             ttk.Label(frame, text=label).pack(anchor="w", pady=(7, 3))
             variables[key] = tk.StringVar(value=f"{initial:g}" if isinstance(initial, float) else initial)
             ttk.Entry(frame, textvariable=variables[key]).pack(fill="x")
         def browse():
-            path = filedialog.askdirectory(parent=window, title="Games mappa")
+            path = filedialog.askdirectory(parent=window, title="Gaming Hub")
             if path:
                 variables["games"].set(path)
-        ttk.Button(frame, text="Games mappa tallózása", command=browse).pack(anchor="w", pady=10)
+        ttk.Button(frame, text="Browse Gaming Hub folder", command=browse).pack(anchor="w", pady=10)
         hub_enabled = tk.BooleanVar(value=self.settings.hub_enabled)
-        ttk.Checkbutton(frame, text="Gaming Hub: a játékparancsikonok automatikus frissítése",
+        ttk.Checkbutton(frame, text="Gaming Hub: automatically maintain game shortcuts",
                         variable=hub_enabled).pack(anchor="w", pady=6)
+        exclude_chess = tk.BooleanVar(value=self.settings.exclude_chess)
+        ttk.Checkbutton(frame, text="Exclude chess games by default (optional personal preference)",
+                        variable=exclude_chess).pack(anchor="w", pady=6)
         error = tk.StringVar()
         ttk.Label(frame, textvariable=error, foreground="#ffb3b3", wraplength=650).pack(anchor="w")
         def save():
@@ -364,7 +427,7 @@ class App:
                                     [p.strip() for p in variables["steam"].get().split(";") if p.strip()],
                                     [p.strip() for p in variables["epic"].get().split(";") if p.strip()],
                                     [p.strip() for p in variables["ubisoft"].get().split(";") if p.strip()],
-                                    hub_enabled.get()).validate()
+                                    hub_enabled.get(), exclude_chess.get()).validate()
                 self.tracker.flush()
                 self.store.save_settings(settings)
                 self.settings = self.catalog.settings = settings
@@ -374,17 +437,17 @@ class App:
                 window.destroy()
             except (ValueError, OSError) as exc:
                 error.set(str(exc))
-        ttk.Button(frame, text="Mentés", command=save).pack(anchor="e", pady=8)
+        ttk.Button(frame, text="Save", command=save).pack(anchor="e", pady=8)
 
     def popup(self, alert):
         if self.popup_window:
             return False
         # A transient of an iconic main window is withdrawn by Tk/Windows.
         # Alerts must remain independent even if the main window is hidden later.
-        window = self._dialog("Játékidő – figyelmeztetés", "590x260", transient=False)
+        window = self._dialog("Game time alert", "590x260", transient=False)
         self.popup_window, self.popup_day = window, alert.day
         window.attributes("-topmost", True)
-        title = "Mára elég volt" if alert.kind in ("limit", "session") else "Játékidő emlékeztető"
+        title = "Time to stop playing" if alert.kind in ("limit", "session") else "Game time reminder"
         ttk.Label(window, text=title, style="Title.TLabel", padding=(22, 18, 22, 4)).pack(anchor="w")
         ttk.Label(window, text=alert.text, wraplength=540, padding=(22, 10)).pack(fill="x")
         def dismiss():
@@ -407,22 +470,22 @@ class App:
             window.focus_force()
             window.update_idletasks()
             if not window.winfo_viewable() or not win32.u.IsWindowVisible(hwnd):
-                raise RuntimeError("Az értesítőablak nem vált láthatóvá")
+                raise RuntimeError("Notification window did not become visible")
         except Exception:
-            log.exception("Az értesítés megjelenítése nem sikerült; újrapróbáljuk")
+            log.exception("Notification presentation failed; will retry")
             dismiss()
             return False
-        log.info("Értesítés megjelent: kind=%s day=%s main=%s foreground=%s",
+        log.info("Notification presented: kind=%s day=%s main=%s foreground=%s",
                  alert.kind, alert.day, self.root.state(), foreground)
         try:
             winsound.PlaySound("SystemExclamation", winsound.SND_ALIAS | winsound.SND_ASYNC)
         except RuntimeError:
-            log.warning("Az értesítési hang nem játszható le; az ablak látható marad")
+            log.warning("Notification sound unavailable; window remains visible")
         return True
 
     def test_popup(self):
         self.popup(Alert(datetime.now().date().isoformat(), (), "limit",
-                         "Próba: Lejárt a mai 2 órás játékidőd. Ideje befejezni a játékot.", "Rendben, befejezem"))
+                         "Test: Your daily game time limit has been reached. Time to finish playing.", "OK, I’ll stop"))
 
     def notify(self, alert):
         """Let the current game process Escape before mapping the alert window."""
@@ -435,9 +498,9 @@ class App:
                 if self.catalog.resolve(current.path) and current.interactive and current.identity == self.tracker.identity:
                     escaped = win32.escape_game(current.path, current.identity)
             except Exception:
-                log.exception("Az értesítés előtti Esc nem sikerült")
+                log.exception("Escape before notification failed")
         if escaped:
-            log.info("Esc elküldve a figyelt játéknak; értesítés 200 ms múlva")
+            log.info("Escape sent to tracked game; notification in 200 ms")
             self.notification_timer = self.root.after(200, lambda: self.finish_notification(alert))
         else:
             self.finish_notification(alert)
@@ -453,7 +516,7 @@ class App:
                 self.tracker.delivered(alert)
                 self.tracker.alerts.popleft()
         except Exception:
-            log.exception("Értesítési hiba")
+            log.exception("Notification failed")
 
     def drain_discovery(self):
         while True:
@@ -487,7 +550,7 @@ class App:
                 self.last_rows = None
 
     def render(self):
-        fingerprint = (self.settings.games_root, self.settings.hub_enabled,
+        fingerprint = (self.settings.games_root, self.settings.hub_enabled, self.settings.exclude_chess,
                        tuple(sorted((g.id, g.name, g.root, g.metadata, g.installed) for g in self.catalog.games.values())),
                        tuple(sorted(self.catalog.rules.items())), tuple(sorted(self.catalog.overrides.items())))
         if fingerprint != self.hub_fingerprint:
@@ -501,30 +564,36 @@ class App:
         totals = self.tracker.totals(day)
         total = sum(totals.values())
         self.total_text.set(duration(total))
-        self.remaining_text.set(f"Hátralévő idő: {duration(self.settings.limit_seconds - total)}  ·  Napi keret: {self.settings.limit_seconds / 60:g} perc")
-        self.active_text.set("Aktív játék: " + (self.tracker.active.name if self.tracker.active else "nincs"))
+        self.remaining_text.set(f"Time remaining: {duration(self.settings.limit_seconds - total)}  ·  Daily limit: {self.settings.limit_seconds / 60:g} min")
+        self.active_text.set("Active game: " + (self.tracker.active.name if self.tracker.active else "none"))
         self.progress.configure(maximum=self.settings.limit_seconds, value=min(total, self.settings.limit_seconds))
         games = dict((g.id, g) for g in self.store.games())
         games.update(self.catalog.games)
+        self.hidden_ids = self.store.hidden_ids()  # Also follows discovery's ID merges.
         rows = []
         for game in sorted(games.values(), key=lambda g: g.name.casefold()):
+            if game.id in self.hidden_ids and not self.show_hidden.get():
+                continue
             if not game.installed and game.id not in totals:
                 continue
             enabled = self.catalog.enabled(game)
-            state = ("Figyelve" if enabled else "Kizárva") if game.installed else "Eltávolítva"
-            rows.append((game.id, game.name, game.source, duration(totals.get(game.id, 0)), state, game.root))
+            state = ("Tracked" if enabled else "Excluded") if game.installed else "Removed"
+            if game.id in self.hidden_ids:
+                state += " · hidden"
+            rows.append((game.id, game.name, "Manual" if game.source == "Kézi" else game.source,
+                         duration(totals.get(game.id, 0)), state, game.root))
         if rows != self.last_rows:
             selected = self.tree.selection()
             scroll = self.tree.yview()
             self.tree.delete(*self.tree.get_children())
             for gid, *values in rows:
-                self.tree.insert("", "end", iid=gid, values=values, tags=("excluded",) if values[3] != "Figyelve" else ())
+                self.tree.insert("", "end", iid=gid, values=values, tags=("excluded",) if values[3] != "Tracked" else ())
             if selected and self.tree.exists(selected[0]):
                 self.tree.selection_set(selected[0])
             if scroll:
                 self.tree.yview_moveto(scroll[0])
             self.last_rows = rows
-        self.tray.update(f"Játékidőfigyelő\nMa: {duration(total)} · hátra: {duration(self.settings.limit_seconds - total)}\nBal kattintás: megnyitás · jobb: menü")
+        self.tray.update(f"Game Time Monitor\nToday: {duration(total)} · remaining: {duration(self.settings.limit_seconds - total)}\nLeft click: open · right click: menu")
 
     def tick(self):
         self.tick_timer = None
@@ -553,8 +622,8 @@ class App:
                     self.tracker.queued.difference_update((alert.day, key) for key in alert.keys)
             self.render()
         except Exception as exc:
-            log.exception("Játékidő-mérési hiba")
-            self.status.set("Hiba történt; részletek a monitor.log fájlban: " + str(exc))
+            log.exception("Game time measurement failed")
+            self.status.set("An error occurred; see monitor.log: " + str(exc))
             self.tracker.previous = None
         self.tick_timer = self.root.after(1000, self.tick)
 
