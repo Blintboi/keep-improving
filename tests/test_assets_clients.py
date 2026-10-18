@@ -144,4 +144,24 @@ class AssetClientInterfaceTests(unittest.TestCase):
             self.app.art.artwork(self.game,{}); self.settle()
         self.assertTrue(seen); self.assertTrue(all(t!=threading.get_ident() for t in seen))
 
+    def test_async_shell_icon_crops_transparent_canvas_before_card_sizing(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtGui import QPixmap,QPainter,QColor
+        native=QPixmap(256,256); native.fill(Qt.transparent)
+        painter=QPainter(native); painter.fillRect(2,2,43,43,QColor('#00ff00')); painter.end()
+        native.setDevicePixelRatio(256/96)
+        class ShellIcon:
+            def pixmap(me,*args): return native
+        self.app.art.invalidate(); self.app.art.artwork(self.game,{}); self.settle()
+        key=self.app.art.key(self.game); token=999; self.app.art.pending[key]=token
+        self.app.art.worker.results.put((token,key,None,None,[str(self.exe)],'',''))
+        with patch.object(self.app.art.provider,'icon',return_value=ShellIcon()): self.app.art.poll()
+        _,icon=self.app.art.cache[key]
+        self.assertEqual((icon.width(),icon.height()),(43,43)); self.assertEqual(icon.devicePixelRatio(),1)
+        card=self.app.cards[self.game.id]; card.resize(240,232); card.art=(None,icon)
+        rendered=card.grab().toImage()
+        green=sum(1 for y in range(30,140) for x in range(40,200)
+                  if rendered.pixelColor(x,y).green()>100 and rendered.pixelColor(x,y).red()<30)
+        self.assertGreater(green,3500)  # A readable ~80 px mark, not the former ~13 px dot.
+
 if __name__=='__main__': unittest.main()

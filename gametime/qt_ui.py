@@ -20,7 +20,7 @@ from .tracker import Tracker
 from .hub import HubWorker
 from .i18n import tr,LANGUAGES
 from . import win32,__version__
-from .qt_widgets import STYLE,ACCENT,MUTED,label,button,panel,glyph,duration,BudgetRing,LocalArtwork,CardGrid,GameCard
+from .qt_widgets import STYLE,ACCENT,MUTED,label,button,panel,glyph,duration,BudgetRing,LocalArtwork,CardGrid,GameCard,normalize_icon
 from .qt_statistics import StatisticsPage
 from .overlay import CountdownOverlay,PositionPicker,choose_screen,foreground_screen_name
 
@@ -170,7 +170,7 @@ class App(QMainWindow,MonitorActions):
             card=panel(); body=QVBoxLayout(card); body.setContentsMargins(22,22,22,22); body.setSpacing(15)
             head=QHBoxLayout(); icon=QLabel(); icon.setFixedSize(52,52)
             from PySide6.QtCore import QFileInfo
-            pix=self.art.provider.icon(QFileInfo(client.target)).pixmap(48,48); pix.setDevicePixelRatio(1)
+            pix=normalize_icon(self.art.provider.icon(QFileInfo(client.target)).pixmap(48,48))
             icon.setPixmap(pix.scaled(48,48,Qt.KeepAspectRatio,Qt.SmoothTransformation)); head.addWidget(icon)
             head.addWidget(label(client.name,'section'),1); body.addLayout(head)
             detail=label(self.t('Client library, updates and installation'),'muted'); detail.setWordWrap(True); body.addWidget(detail)

@@ -132,6 +132,14 @@ class BudgetRing(QWidget):
         p.drawArc(QRectF(7,7,52,52),90*16,-int(self.ratio*360*16))
         p.setPen(QPen(QColor('#bdf2db'),1.7,Qt.SolidLine,Qt.RoundCap)); p.drawLine(33,20,33,33); p.drawLine(33,33,42,38)
 
+def normalize_icon(pix):
+    """Shell icons can be tiny artwork inside a larger transparent native canvas."""
+    if pix is not None and not pix.isNull():
+        bounds=QRegion(pix.mask()).boundingRect()
+        if not bounds.isEmpty(): pix=pix.copy(bounds)
+        pix.setDevicePixelRatio(1.0)
+    return pix
+
 class LocalArtwork:
     def __init__(self, data_dir, roots):
         self.data_dir=Path(data_dir); self.roots=list(roots); self.cache={}; self.links={}
@@ -163,8 +171,9 @@ class LocalArtwork:
             if icon is None and executables:
                 try:
                     candidate=self.provider.icon(QFileInfo(executables[0])).pixmap(96,96)
-                    if not candidate.isNull(): pix=candidate; pix.setDevicePixelRatio(1)
+                    if not candidate.isNull(): pix=candidate
                 except (OSError,RuntimeError): pass
+            pix=normalize_icon(pix)
             self.cache[key]=(QPixmap.fromImage(poster) if poster is not None else old_poster,pix)
             self.origins[key]=origin or icon_origin or (executables[0] if executables and pix is not None else '')
             changed.append(key)
@@ -202,12 +211,7 @@ class LocalArtwork:
                 except (OSError,ValueError,configparser.Error): pass
             elif Path(source).suffix.lower()=='.lnk': icon=self.provider.icon(QFileInfo(source))
         pix=icon.pixmap(96,96) if not icon.isNull() else None
-        if pix and not pix.isNull():
-            bounds=QRegion(pix.mask()).boundingRect()
-            if not bounds.isEmpty(): pix=pix.copy(bounds)
-            # Shell pixmaps can carry a size-dependent DPR (e.g. 256/96).
-            # Normalize pixels before sizing them into our logical icon area.
-            pix.setDevicePixelRatio(1.0)
+        pix=normalize_icon(pix)
         result=(poster,pix)
         self.cache[key]=result
         return result

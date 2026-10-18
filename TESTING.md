@@ -58,6 +58,10 @@ The native smoke now passes nine checks, including actual ShowWindowAsync minimi
 
 A copied-profile preview discovered Steam, Epic, Riot, Ubisoft and Minecraft Launcher without opening any client. Its local artwork pass found an image or game icon for each of the 19 installed catalog entries. This includes the hidden redistributable/catalog entries, so it is not a claim of 19 visible game covers. Hungarian library/client and English client captures were inspected. The copy's tracker and overlay timers were stopped before processing events, and it used inert discovery/Hub fixtures; no test action affected real gameplay or shortcuts. Actual client sign-in/update behavior remains controlled by the publishers. Artwork may be unavailable in proprietary/encrypted packs and is not downloaded or fabricated.
 
+## 2.3.1 asynchronous icon sizing correction
+
+The user-reported tiny VALORANT icon came from the asynchronous shell-icon fallback replacing a normalized icon with an uncropped native bitmap. The actual shell bitmap was 256×256 at DPR 256/96, with the visible mark occupying only 43×43 pixels. The shared normalizer now crops transparent bounds and resets DPR for initial icons, asynchronous results and launcher cards. A regression exercises the actual result-queue path with that bitmap geometry, checks the cropped size/DPR and measures a readable card mark instead of the former tiny dot. A fresh copied-profile VALORANT card capture was inspected; no real game was started.
+
 ## 1.4.0 validation on 2026-10-18
 
 150 automated tests passed in 58.746 seconds; 9 GUI checks, 18 legacy source-installer checks, and 14 bundled-runtime install/upgrade/uninstall checks passed. The Hub suite was rerun after its final directory-inventory change: 25 tests passed. All game-removal executions were mocked; no real games were uninstalled.
