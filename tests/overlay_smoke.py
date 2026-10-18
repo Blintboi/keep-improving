@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from unittest.mock import patch
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from gametime import win32
@@ -81,12 +82,25 @@ def run(output):
             app.switch_page(2); pump(.15)
             app.overlay_picker.grab().save(str(output/'position-picker.png'))
             app.grab().save(str(output/'settings.png'))
+            app.settings=app.catalog.settings=replace(app.settings,restriction_enabled=True)
+            app.restriction_enabled.setChecked(True)
+            app.tracker.cache[str(datetime.now().date())]={game.id:7500}; app.render()
+            app.grab().save(str(output/'restriction-settings.png'))
+            # Restrict only our synthetic Form. Foreground observation is
+            # supplied explicitly here because Windows may refuse activation;
+            # production's actual foreground guards have separate unit tests.
+            _,identity=win32.process_image(child.pid)
+            with patch.object(win32.u,'GetForegroundWindow',return_value=fixture):
+                checks['native_fixture_minimize_accepted']=win32.minimize_game(str(exe),identity)
+            pump(.3)
+            iconic=win32.api(win32.u,'IsIconic',[win32.W.HWND],win32.W.BOOL)
+            checks['native_fixture_is_minimized']=bool(iconic(fixture))
             checks['fixture_still_running']=child.poll() is None
         finally:
             stop.touch()
             if child: child.wait(timeout=10)
             app.close(); pump(.05); store.close()
-    report={'checks':checks,'note':'Synthetic windowed Form and direct renderer presentation. Native cross-process hit-test and unchanged foreground verified without forcing activation. Tracker/policy covered by integration tests; no real game/fullscreen test or input injection.'}
+    report={'checks':checks,'note':'Synthetic windowed Form and direct renderer presentation. Native cross-process hit-test and unchanged foreground verified without forcing activation. Native minimization uses an explicitly supplied fixture foreground handle; production guards are tested separately. Tracker/policy covered by integration tests; no real game/fullscreen test or input injection.'}
     (output/'report.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
     print(json.dumps(report)); assert all(checks.values()),report
 

@@ -72,6 +72,8 @@ class Settings:
     overlay_x: float = 1.0
     overlay_y: float = 0.0
     overlay_screen: str = ""
+    restriction_enabled: bool = False
+    restriction_seconds: float = 7500
 
     def validate(self):
         if self.language not in ("en", "hu"):
@@ -86,6 +88,11 @@ class Settings:
                 raise ValueError("Invalid countdown opacity or position.")
         if not isinstance(self.overlay_screen,str) or len(self.overlay_screen)>200:
             raise ValueError("Invalid countdown monitor.")
+        if not isinstance(self.restriction_enabled,bool):
+            raise ValueError("Play restriction must be on or off.")
+        if (isinstance(self.restriction_seconds,bool) or not isinstance(self.restriction_seconds,(int,float))
+                or not math.isfinite(self.restriction_seconds) or not 0<self.restriction_seconds<=86400):
+            raise ValueError("Play restriction must start between 0 and 1440 minutes.")
         root = Path(self.games_root)
         if not root.is_absolute() or root.parent == root:
             raise ValueError("The Gaming Hub needs an absolute folder path, not a drive root.")

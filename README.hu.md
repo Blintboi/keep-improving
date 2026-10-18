@@ -1,4 +1,4 @@
-# Játékidőfigyelő — 2.1.0
+# Játékidőfigyelő — 2.2.0
 
 Windows 11-en futó, sötét felületű Gaming Hub és játékidőfigyelő egy alkalmazásban. A játékgyűjteményből közvetlenül indíthatod a játékokat, követheted az idődet és megnézheted a napi statisztikákat. A repó és a kiadások egyelőre **privátak**. A másik gépen is hozzáférő GitHub-fiókkal jelentkezz be a letöltéshez.
 
@@ -6,7 +6,7 @@ A 2.0-s felület Qt-ra váltott: letisztult sötét oldalsáv, átrendeződő j�
 
 ## Telepítés
 
-Töltsd le a Kiadások / Releases oldalról a `GameTimeMonitor-2.1.0-Setup.exe` fájlt, és indítsd el. A Python, a Qt/PySide6 és az SQLite benne van: semmit nem kell külön telepíteni. A program megnyílik, felismeri a játékokat, és a következő Windows-bejelentkezéskor a tálcán indul. A telepítő jelenleg nincs digitálisan aláírva.
+Töltsd le a Kiadások / Releases oldalról a `GameTimeMonitor-2.2.0-Setup.exe` fájlt, és indítsd el. A Python, a Qt/PySide6 és az SQLite benne van: semmit nem kell külön telepíteni. A program megnyílik, felismeri a játékokat, és a következő Windows-bejelentkezéskor a tálcán indul. A telepítő jelenleg nincs digitálisan aláírva.
 
 A program helye: `%LOCALAPPDATA%\Programs\GameTimeMonitor`. Az előzmények és beállítások a Windows Dokumentumok mappájában, a `GameTimeMonitor\data` alatt maradnak. A frissítés mentést készít, és megtartja az eddigi keretet, kizárásokat, EXE-szabályokat, rejtett játékokat és Hub-mappát.
 
@@ -43,6 +43,14 @@ Bekapcsoláskor alapból a korai popup helyett pirosasra vált a beállított fi
 A helyét a Beállításokban a kicsinyített kijelzőn húzással vagy nyílbillentyűkkel módosíthatod. Választhatsz automatikus vagy konkrét kijelzőt; lecsatlakoztatott kijelzőnél az elsődlegeset használja. A háttér fedettsége 25–95% között állítható, a számjegyek jól olvashatók maradnak. Az **Előnézet 10 másodpercig** mentés nélkül megmutatja az új helyet, időmérés és előzménymódosítás nélkül. Végül nyomd meg a **Beállítások mentése** gombot.
 
 Ez asztali Windows-overlay, nem épül bele a játékba. Exkluzív teljes képernyős, emelt jogosultságú vagy védett játék eltakarhatja. Keret nélküli ablakos módban megbízhatóbb; a Minecraftban is külön ellenőrizni kell. Nem váltja át magától a játék megjelenítési módját. Ha nem látszik a játékod felett, kapcsold vissza a korai popupot. Megjelenítési hiba esetén a program visszaáll a korai popupra, de az exkluzív fullscreen miatti takarást nem mindig lehet felismerni.
+
+## Választható játékkorlát
+
+A **Beállítások → Játék korlátozása** részen kapcsold be a **További figyelt játék megakadályozása a napi határ után** lehetőséget, add meg a napi összesített perceket, majd ments. Új és korábbi telepítésnél alapból kikapcsolva marad, a kezdeti határ **125 perc**. Ez külön állítható a 120 perces emlékeztető kerettől.
+
+A határ elérésekor egy ellenőrzött Esc-et próbál küldeni a felismert, előtérben lévő játéknak, 200 ms múlva pedig ugyanazt az ablakot minimalizálja és megnyitja a Hubot. Ha visszatérsz a játékba, újra minimalizálja; a próbák között legalább két másodperc telik el. Az Esc-et folyamatonként/naponként egyszer próbálja a futó figyelőben, így nem kapcsolgatja folyton a játék menüjét. A Hubból sem indítható figyelt játék, a már előkészített indítást is újraellenőrzi. Külső launcheres indításnál az előtérbe kerülést követően lép közbe. Az összesített idő újraindítás után is megmarad, helyi éjfélkor új nap kezdődik. A rejtett játékokra is vonatkozik; a mérésből kizártakra nem.
+
+A Hub piros sávja jelzi az aktív korlátot, a **Beállítások** bármikor elérhető: ott módosíthatod vagy kikapcsolhatod. Az esedékes popupok helyett ilyenkor ez a sáv jelenik meg. Ez önkéntes korlátozás: a figyelő bezárásával vagy a beállítás átírásával feloldható. Nem zárja be és nem függeszti fel a játék folyamatát, nem tiltja le a bevitelt és nem zárolja a Windowst. Minimalizáláskor különösen az online játék tovább futhat, ezért ments/lépj ki a meccsből időben. Ismeretlen vagy emelt jogosultságú/védett játéknál kézi lépésre lehet szükség. Másik alkalmazásra váltás, zárolás vagy késleltetés közbeni kikapcsolás esetén nem avatkozik közbe. Ha a minimalizálás nem sikerül, állapotüzenetet ad és csak figyelt játék előtérbe kerülésekor próbálkozik újra.
 
 ## Statisztikák
 

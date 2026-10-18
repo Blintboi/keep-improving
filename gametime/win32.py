@@ -43,6 +43,7 @@ api(u, "GetUserObjectInformationW", [W.HANDLE, C.c_int, C.c_void_p, W.DWORD, C.P
 api(u, "SetForegroundWindow", [W.HWND], W.BOOL)
 api(u, "SetWindowPos", [W.HWND, W.HWND, C.c_int, C.c_int, C.c_int, C.c_int, W.UINT], W.BOOL)
 api(u, "IsWindowVisible", [W.HWND], W.BOOL)
+api(u, "ShowWindowAsync", [W.HWND, C.c_int], W.BOOL)
 api(u, "GetAsyncKeyState", [C.c_int], W.SHORT)
 
 
@@ -94,6 +95,25 @@ def escape_game(expected_path, expected_identity):
     if sent != 2:
         log.warning("Escape could not be fully sent to the game: %s/2", sent)
     return sent == 2
+
+
+def minimize_game(expected_path, expected_identity):
+    """Minimize only the exact game that still owns the interactive foreground.
+
+    No process termination/suspension or global key/mouse blocking is used.
+    This is deliberately asynchronous: a hung game must not hang the monitor.
+    """
+    if not expected_identity or not interactive_desktop():
+        return False
+    hwnd = u.GetForegroundWindow()
+    pid = W.DWORD()
+    if not hwnd or not u.GetWindowThreadProcessId(hwnd, C.byref(pid)):
+        return False
+    path, identity = process_image(pid.value)
+    if (identity != expected_identity or os.path.normcase(path) != os.path.normcase(expected_path)
+            or u.GetForegroundWindow() != hwnd):
+        return False
+    return bool(u.ShowWindowAsync(hwnd, 6))  # SW_MINIMIZE
 
 
 def present_notification(hwnd):

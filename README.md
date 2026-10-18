@@ -2,13 +2,13 @@
 
 An offline Windows 11 Gaming Hub and game-time monitor in one app. Launch games from a searchable library, measure foreground gameplay against a shared daily budget, and follow daily statistics in a dark English/Hungarian interface.
 
-**Private preview 2.1.0.** The repository and release downloads remain private. Sign into GitHub with an account that has access on your other PC. Each PC keeps its own history; there is no cloud synchronization. [Magyar útmutató](README.hu.md).
+**Private preview 2.2.0.** The repository and release downloads remain private. Sign into GitHub with an account that has access on your other PC. Each PC keeps its own history; there is no cloud synchronization. [Magyar útmutató](README.hu.md).
 
 The 2.0 interface uses Qt Widgets: a dark sidebar, responsive game cards, a daily-budget ring, contextual game actions and a redesigned statistics page. Artwork is read from existing local Steam caches or installed-game icons; no image service, launcher credentials or artwork downloads are used. Artwork and icons keep their original aspect ratios; complete cover images fit inside the card with dark padding where needed. Missing art has a colored monogram fallback. The shared controller/clock application icon remains unchanged.
 
 ## Install
 
-1. Open this repository's **Releases**, download `GameTimeMonitor-2.1.0-Setup.exe`, and run it as your normal Windows user.
+1. Open this repository's **Releases**, download `GameTimeMonitor-2.2.0-Setup.exe`, and run it as your normal Windows user.
 2. Python, Qt/PySide6 and SQLite are included. No separate Python, pip packages, administrator account or launcher login is needed by the monitor.
 3. The app opens and discovers installed games. It starts in the tray when you sign into Windows. Open **Settings** to change your daily limit or Gaming Hub location.
 
@@ -40,7 +40,7 @@ Left click the tray icon to open the app. Right click for Open, Gaming Hub, Sett
 
 Only a tracked game in the foreground counts. Browsers, launcher clients, background games, locked sessions and sleep do not count. Cutscenes still count; keyboard inactivity alone does not pause a game. Samples are taken once a second and saved regularly to SQLite. Midnight starts a new daily total.
 
-The initial daily limit is **120 minutes**, with a warning at **100 minutes**. Alerts are reminders: they do not kill games or enforce a lockout. For an enabled popup at a threshold, the app tries one Escape in the currently tracked game, waits 200 ms, then displays an independent topmost alert. It verifies the foreground process identity and avoids sending Escape with modifier keys held. Hidden/minimized main windows do not suppress alerts. **Test alert** checks the popup itself, without simulating a gameplay threshold.
+The initial daily limit is **120 minutes**, with a warning at **100 minutes**. Alerts are reminders and do not kill games. The separate optional play restriction is described below. For an enabled popup at a threshold, the app tries one Escape in the currently tracked game, waits 200 ms, then displays an independent topmost alert. It verifies the foreground process identity and avoids sending Escape with modifier keys held. Hidden/minimized main windows do not suppress alerts. **Test alert** checks the popup itself, without simulating a gameplay threshold.
 
 The earlier Tk version was confirmed over Minecraft Java fullscreen at real 20/30-second thresholds. The Qt version retains the guarded Escape/topmost mechanism and has independent hidden/minimized-window integration tests; repeat the real Minecraft trial before treating this preview as fullscreen-validated. Other fullscreen engines or elevated games may behave differently; see [testing](TESTING.md).
 
@@ -53,6 +53,14 @@ By default, enabling it replaces the early warning popup with a reddish timer at
 Drag the miniature timer inside Settings to choose its position, or use the arrow keys. Choose the active game's monitor automatically or a specific display; a disconnected display falls back to the primary monitor. Adjust background opacity from 25–95%; the digits stay readable. **Preview for 10 seconds** shows your unsaved placement without changing time/history. Click **Save settings** to keep changes.
 
 This is a Windows desktop overlay, without game injection. Exclusive fullscreen or elevated/protected games may hide it. Borderless/windowed mode is more reliable; test visibility in your game before relying on the color warning. The app does not force fullscreen changes. Turn off the replacement option to retain the early popup if needed. A renderer error restores early popup delivery, but an exclusive-fullscreen game hiding an otherwise healthy desktop window cannot always be detected.
+
+## Optional play restriction
+
+Enable **Settings → Play restriction → Prevent further tracked gameplay after a daily threshold**, choose the total daily minutes, and save. It is off by default on fresh installs and upgrades; the initial threshold is **125 minutes**. This threshold is independent of the reminder budget (initially 120 minutes).
+
+At or above the threshold, the monitor tries a guarded Escape for the recognized foreground game, waits 200 ms, then requests minimization of that exact process/window and opens the Hub. Returning to a tracked game triggers minimization again, with a two-second retry interval; Escape is attempted once per running process/day in the resident session so retries do not keep toggling its menu. The Hub blocks Play too, including already-prepared launch requests. External launcher starts are detected through foreground tracking. The shared total survives restarts, resets at local midnight, and includes hidden games; excluded games/apps remain outside this policy. A persistent banner explains the restriction and keeps Settings accessible. Disable it or change the threshold there at any time.
+
+This is a voluntary interruption tool, not tamper-resistant parental control. It does not terminate/suspend processes, delete saves, block the keyboard/mouse, lock Windows or require admin rights. Minimizing may not pause a game, especially online play. Save/leave matches before the threshold. Unknown, elevated or protected games may need manual handling. Input/window actions are rechecked against the current interactive foreground process identity; switching apps, locking Windows or disabling the option during the delay cancels the pending action. If minimization is refused, a status message explains it and the monitor retries only on tracked foreground gameplay. After restriction, its banner replaces queued reminder popups.
 
 ## Discovery and Gaming Hub
 

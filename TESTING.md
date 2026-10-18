@@ -46,6 +46,12 @@ The second physical PC, ARM64 and other games' fullscreen modes still require us
 
 The separate `overlay_smoke.py` opt-in test passed seven checks with a real synthetic WinForms process: the visible translucent renderer retained the existing foreground, and native WindowFromPoint hit-testing through its center returned the other process's window. Normal/red timer and Hungarian settings captures were inspected. It does not force user focus or inject input. This verifies native window behavior, not real gameplay or exclusive fullscreen. The new overlay still needs a real Minecraft fullscreen/borderless trial and second-PC testing. The installer upgrade fixture also checks all overlay preferences survive.
 
+## 2.2 voluntary play restriction
+
+223 automated tests passed in 80.974 seconds. Eleven restriction regressions cover opt-in defaults/numeric validation, actual tracker threshold crossing, the 200 ms delay, retry throttling without repeated Escape, cancellation after focus/identity/lock/exclusion/setting changes, midnight reset, hidden games/new process identities, failed Escape/minimization, both launch boundaries, independent saved thresholds, the accessible banner/buttons and reminder conflict suppression. Native guards verify exact executable path, process creation identity and unchanged interactive foreground before requesting minimization. No real game execution or input is used by those tests.
+
+The native smoke now passes nine checks, including actual ShowWindowAsync minimization of its separate synthetic WinForms process while that process remains alive. A fixture foreground handle is explicitly supplied for that minimization test, avoiding forced user focus; actual foreground rejection is covered separately. Hungarian settings/banner captures were inspected. This does not establish fullscreen, elevated-game, online-pause or anti-cheat compatibility. The bundled upgrade fixture checks the restriction remains disabled by default and that enabled/custom overlay and restriction settings survive upgrades. Use synthetic windows and mocked input for short-limit tests; never enable a short restriction in a fixture that discovers the user's real games.
+
 ## 1.4.0 validation on 2026-10-18
 
 150 automated tests passed in 58.746 seconds; 9 GUI checks, 18 legacy source-installer checks, and 14 bundled-runtime install/upgrade/uninstall checks passed. The Hub suite was rerun after its final directory-inventory change: 25 tests passed. All game-removal executions were mocked; no real games were uninstalled.

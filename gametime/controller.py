@@ -58,6 +58,9 @@ class MonitorActions:
         if not game.installed:
             self.message("This game is no longer installed. Refresh the library.")
             return "break"
+        if self.launch_restricted(game):
+            self.restriction_notice()
+            return "break"
         if self.launcher is None:
             from .launch import LaunchWorker
             self.launcher = LaunchWorker(self.data_dir)
@@ -81,6 +84,9 @@ class MonitorActions:
                     current = self.catalog.games.get(game.id)
                     if not current or not current.installed:
                         raise ValueError("This game is no longer installed. Refresh the library.")
+                    if self.launch_restricted(current):
+                        self.restriction_notice()
+                        continue
                     execute(plan)
                     log.info("Game launch requested: game=%s kind=%s", game.id, plan.kind)
                     self.set_status("Launch requested: {name}. Play time starts when the game is in the foreground.", name=game.name)
@@ -177,6 +183,8 @@ class MonitorActions:
         required = popup_required(self.settings, alert.kind)
         if alert.kind == "warning" and getattr(self, "overlay_failed", False):
             required = True
+        if self.restriction_reached(alert.day):
+            required = False  # The persistent restriction notice replaces queued reminders.
         if required:
             return False
         if self.tracker.alerts and self.tracker.alerts[0] == alert:
@@ -253,6 +261,61 @@ class MonitorActions:
                 self.last_rows = None
 
 
+    def restriction_reached(self, day=None):
+        return (self.settings.restriction_enabled and
+                sum(self.tracker.totals(day or datetime.now().date()).values()) >= self.settings.restriction_seconds)
+
+    def launch_restricted(self, game):
+        return self.catalog.enabled(game) and self.restriction_reached()
+
+    def restriction_notice(self):
+        self.open_games()
+        self.set_status("Today's {minutes:g}-minute play restriction is active. Change it in Settings.",
+                        minutes=self.settings.restriction_seconds/60)
+
+    def enforce_gameplay(self, current):
+        if not self.restriction_reached(current.wall.date()) or not current.interactive:
+            return False
+        game = self.catalog.resolve(current.path)
+        if not game or not current.identity or current.identity != self.tracker.identity:
+            return False
+        if getattr(self, "restriction_timer", None) is not None:
+            return True
+        key = (current.wall.date().isoformat(), current.identity)
+        previous = getattr(self, "_restriction_attempt", None)
+        if previous and previous[:2] == key and 0 <= current.awake-previous[2] < 2:
+            return True
+        self._restriction_attempt = (*key, current.awake)
+        escaped = getattr(self, "_restriction_escaped", set())
+        self._restriction_escaped = {item for item in escaped if item[0] == key[0]}
+        if key not in self._restriction_escaped:
+            self._restriction_escaped.add(key)
+            try:
+                win32.escape_game(current.path, current.identity)
+            except Exception:
+                log.exception("Escape before play restriction failed; minimization will still be attempted")
+        # Give the guarded Escape time to reach the game before changing focus.
+        self.restriction_timer = self.call_later(200, lambda: self.finish_restriction(current.path, current.identity, key[0]))
+        return True
+
+    def finish_restriction(self, path, identity, day):
+        self.restriction_timer = None
+        if self.closed or day != datetime.now().date().isoformat() or not self.restriction_reached(day):
+            return
+        try:
+            current = win32.sample()
+            if (not current.interactive or current.identity != identity or norm(current.path) != norm(path)
+                    or not self.catalog.resolve(current.path)):
+                return
+            if win32.minimize_game(path, identity):
+                log.info("Play restriction: requested minimization of tracked game %s", self.catalog.resolve(path).id)
+                self.restriction_notice()
+            else:
+                self.set_status("Could not minimize the game. Close it manually or change Play restriction in Settings.")
+        except Exception:
+            log.exception("Play restriction could not minimize the game")
+            self.set_status("Could not minimize the game. Close it manually or change Play restriction in Settings.")
+
     def tick(self):
         self.tick_timer = None
         if self.closed:
@@ -269,12 +332,14 @@ class MonitorActions:
                 (self.data_dir / "show.request").unlink(missing_ok=True)
                 self.show()
             self.drain_discovery()
-            self.tracker.tick(win32.sample())
+            current = win32.sample()
+            self.tracker.tick(current)
+            restricting = self.enforce_gameplay(current)
             today = datetime.now().date().isoformat()
             if self.popup_window and self.popup_day != today:
                 self.dismiss_popup()
                 self.popup_window = self.popup_day = None
-            if not self.popup_window and self.notification_timer is None and self.tracker.alerts:
+            if not restricting and not self.popup_window and self.notification_timer is None and self.tracker.alerts:
                 alert = self.tracker.alerts[0]
                 if alert.day == today:
                     self.notify(alert)

@@ -1,6 +1,16 @@
 """Small explicit English/Hungarian catalog. Stored IDs and paths never translate."""
 LANGUAGES = {"English": "en", "Magyar": "hu"}
 HU = {
+    'Play restriction': 'Játék korlátozása',
+    'Prevent further tracked gameplay after a daily threshold': 'További figyelt játék megakadályozása a napi határ után',
+    'Restrict after (total daily minutes)': 'Korlátozás ennyi napi játékperc után',
+    'At the threshold, tracked games receive one guarded Escape and are minimized when they return to the foreground. The Hub also blocks launching them until the next day. Games are not closed; online games may continue in the background. You can disable this here.': 'A határnál a figyelt játék egy ellenőrzött Esc-et kap, majd tálcára kerül. Visszanyitáskor újra minimalizáljuk; a Hubból sem indítható a következő napig. A játékot nem zárjuk be, az online játék a háttérben tovább futhat. Itt bármikor kikapcsolhatod.',
+    "Today's {minutes:g}-minute play restriction is active. Change it in Settings.": 'A mai {minutes:g} perces játékkorlát aktív. A Beállításokban módosíthatod.',
+    'Today’s {minutes:g}-minute play restriction is active. Tracked games are minimized; Settings remains available.': 'A mai {minutes:g} perces játékkorlát aktív. A figyelt játékokat minimalizáljuk; a Beállítások elérhető marad.',
+    'Could not minimize the game. Close it manually or change Play restriction in Settings.': 'Nem sikerült minimalizálni a játékot. Lépj ki belőle kézzel, vagy módosítsd a játékkorlátot a Beállításokban.',
+    'Restricted today': 'Ma korlátozva',
+    'Play restriction must be on or off.': 'A játékkorlát csak be- vagy kikapcsolt lehet.',
+    'Play restriction must start between 0 and 1440 minutes.': 'A játékkorlát kezdete 0-nál több, legfeljebb 1440 perc lehet.',
     'In-game countdown': 'Játék közbeni visszaszámláló',
     'Show a click-through countdown while gaming': 'Átkattintható visszaszámláló játék közben',
     'Use a red countdown instead of the early warning popup': 'Korai felugró figyelmeztetés helyett piros visszaszámláló',

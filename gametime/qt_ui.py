@@ -118,6 +118,11 @@ class App(QMainWindow,MonitorActions):
         side.addWidget(self.language); version=label('v'+__version__,'muted'); version.setStyleSheet('font-size:10px; padding-top:8px;'); side.addWidget(version)
         row.addWidget(rail)
         right=QVBoxLayout(); right.setContentsMargins(0,0,0,0); right.setSpacing(0)
+        self.restriction_banner=QFrame(); self.restriction_banner.setStyleSheet('QFrame {background:#45232b; border:0;}')
+        banner_layout=QHBoxLayout(self.restriction_banner); banner_layout.setContentsMargins(30,12,24,12)
+        self.restriction_label=label(); self.restriction_label.setWordWrap(True); self.restriction_label.setStyleSheet('color:#ffc5cc;')
+        banner_layout.addWidget(self.restriction_label,1); banner_layout.addWidget(button(self.t('Settings'),self.settings_dialog))
+        right.addWidget(self.restriction_banner); self.restriction_banner.hide()
         self.pages=QStackedWidget(); right.addWidget(self.pages,1)
         self.hub_page=self._build_library(state); self.pages.addWidget(self.hub_page)
         self.statistics=StatisticsPage(self); self.pages.addWidget(self.statistics)
@@ -183,6 +188,7 @@ class App(QMainWindow,MonitorActions):
         limits_layout.addLayout(fields)
         self.chess=QCheckBox(self.t('Exclude chess games by default (optional personal preference)')); self.chess.setChecked(self.settings.exclude_chess); limits_layout.addWidget(self.chess)
         limits_layout.addWidget(label(self.t('Reminders let you decide when to finish. Games are never closed for you.'),'muted')); body_layout.addWidget(limits)
+        body_layout.addWidget(self.build_restriction_settings())
         body_layout.addWidget(self.build_overlay_settings())
         locations=panel(); places=QVBoxLayout(locations); places.setContentsMargins(22,20,22,22); places.setSpacing(12)
         places.addWidget(label(self.t('Games and discovery'),'section')); places.addWidget(label(self.t('Games and optional shortcuts folder (full path)'),'muted'))
@@ -195,6 +201,20 @@ class App(QMainWindow,MonitorActions):
         footer=QHBoxLayout(); self.settings_error=label('','danger'); self.settings_error.setWordWrap(True); footer.addWidget(self.settings_error,1)
         footer.addWidget(button(self.t('Save settings'),self.save_settings,'primary')); outer.addLayout(footer)
         return page
+
+    def build_restriction_settings(self):
+        card=panel(); layout=QVBoxLayout(card); layout.setContentsMargins(22,20,22,22); layout.setSpacing(12)
+        layout.addWidget(label(self.t('Play restriction'),'section'))
+        self.restriction_enabled=QCheckBox(self.t('Prevent further tracked gameplay after a daily threshold'))
+        self.restriction_enabled.setChecked(self.settings.restriction_enabled); layout.addWidget(self.restriction_enabled)
+        row=QHBoxLayout(); row.addWidget(label(self.t('Restrict after (total daily minutes)'),'muted'),1)
+        self.restriction_minutes=QDoubleSpinBox(); self.restriction_minutes.setRange(.01,1440); self.restriction_minutes.setDecimals(2)
+        self.restriction_minutes.setButtonSymbols(QAbstractSpinBox.NoButtons)
+        self.restriction_minutes.setSingleStep(5); self.restriction_minutes.setValue(self.settings.restriction_seconds/60)
+        self.restriction_minutes.setEnabled(self.restriction_enabled.isChecked()); self.restriction_enabled.toggled.connect(self.restriction_minutes.setEnabled)
+        row.addWidget(self.restriction_minutes); layout.addLayout(row)
+        note=label(self.t('At the threshold, tracked games receive one guarded Escape and are minimized when they return to the foreground. The Hub also blocks launching them until the next day. Games are not closed; online games may continue in the background. You can disable this here.'),'muted')
+        note.setWordWrap(True); layout.addWidget(note); return card
 
     def build_overlay_settings(self):
         card=panel(); layout=QVBoxLayout(card); layout.setContentsMargins(22,20,22,22); layout.setSpacing(12)
@@ -283,7 +303,8 @@ class App(QMainWindow,MonitorActions):
                 steam_roots=[p.strip() for p in self.paths['steam'].text().split(';') if p.strip()],
                 epic_manifest_dirs=[p.strip() for p in self.paths['epic'].text().split(';') if p.strip()],
                 ubisoft_roots=[p.strip() for p in self.paths['ubisoft'].text().split(';') if p.strip()],
-                hub_enabled=self.hub_enabled.isChecked(),exclude_chess=self.chess.isChecked(),**self.overlay_values()).validate()
+                hub_enabled=self.hub_enabled.isChecked(),exclude_chess=self.chess.isChecked(),
+                restriction_enabled=self.restriction_enabled.isChecked(),restriction_seconds=self.restriction_minutes.value()*60,**self.overlay_values()).validate()
             self.tracker.flush(); self.store.save_settings(settings); self.settings=self.catalog.settings=settings
             self.tracker.unclassified.clear(); self.tracker.previous=None; self.service.configure(settings)
             self.art.roots=list(dict.fromkeys(self.art.roots+settings.steam_roots)); self.art.cache.clear(); self.art.refresh_links(settings.games_root)
@@ -327,8 +348,8 @@ class App(QMainWindow,MonitorActions):
 
     def update_launch_button(self):
         if not hasattr(self,'launch_button'): return
-        game=self.selected(); available=bool(game and game.installed and not self.launching)
-        self.launch_button.setEnabled(available); self.more.setEnabled(bool(game)); self.launch_button.setText(self.t('Starting…' if self.launching else '▶ Play'))
+        game=self.selected(); restricted=bool(game and self.launch_restricted(game)); available=bool(game and game.installed and not self.launching and not restricted)
+        self.launch_button.setEnabled(available); self.more.setEnabled(bool(game)); self.launch_button.setText(self.t('Restricted today' if restricted else 'Starting…' if self.launching else '▶ Play'))
         if game:
             self.selection_title.setText(game.name); self.selection_title.setToolTip(game.name)
             self.selection_note.setText(self.source_name(game.source)+'  ·  '+self.t('Tracked' if self.catalog.enabled(game) else 'Excluded'))
@@ -336,7 +357,7 @@ class App(QMainWindow,MonitorActions):
             self.selection_icon.setPixmap(art[1].scaled(40,40,Qt.KeepAspectRatio,Qt.SmoothTransformation) if art and art[1] else self.windowIcon().pixmap(40,40))
         else:
             self.selection_title.setText(self.t('Choose a game')); self.selection_note.setText(self.t('Select a card to play or manage it.'))
-        for gid,card in self.cards.items(): card.set_state(card.seconds,gid==self.selected_id,not self.launching)
+        for gid,card in self.cards.items(): card.set_state(card.seconds,gid==self.selected_id,not self.launching and not self.launch_restricted(card.game))
 
     def game_menu(self):
         game=self.selected()
@@ -467,7 +488,9 @@ class App(QMainWindow,MonitorActions):
             if self.selected_id not in self.cards: self.selected_id=None
             self._art_queue=list(self.cards)
             self.call_later(10,self.load_next_art)
-        for gid,card in self.cards.items(): card.set_state(totals.get(gid,0),gid==self.selected_id,not self.launching)
+        self.restriction_banner.setVisible(self.restriction_reached())
+        self.restriction_label.setText(self.t('Today’s {minutes:g}-minute play restriction is active. Tracked games are minimized; Settings remains available.',minutes=self.settings.restriction_seconds/60))
+        for gid,card in self.cards.items(): card.set_state(totals.get(gid,0),gid==self.selected_id,not self.launching and not self.launch_restricted(card.game))
         self.update_launch_button()
         self.tray.update(self.t('Game Time Monitor\nToday: {total} · remaining: {remaining}\nLeft click: open · right click: menu',total=duration(total),remaining=duration(self.settings.limit_seconds-total)))
         if self.pages.currentIndex()==1 and time.monotonic()-self.statistics.last_refresh>=10: self.statistics.refresh()
