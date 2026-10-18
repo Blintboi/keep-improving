@@ -24,6 +24,7 @@ from . import win32,__version__
 from .qt_widgets import STYLE,ACCENT,MUTED,label,button,panel,glyph,duration,BudgetRing,LocalArtwork,CardGrid,GameCard,normalize_icon
 from .qt_statistics import StatisticsPage
 from .overlay import CountdownOverlay,PositionPicker,choose_screen,foreground_screen_name
+from .rtss import Backend as RTSSBackend, countdown as rtss_countdown, installation as rtss_installation
 
 log=logging.getLogger(__name__)
 
@@ -71,6 +72,7 @@ class App(QMainWindow,MonitorActions):
         screen=QApplication.primaryScreen().availableGeometry()
         self.resize(min(1380,screen.width()-60),min(920,screen.height()-60)); self.setMinimumSize(1000,700)
         self.overlay_failed=False; self.overlay=None; self._overlay_preview_until=0
+        self.rtss=RTSSBackend(self.data_dir); self._overlay_backend='none'; self._overlay_identity=''; self._overlay_updated=0
         self._build(); dark_window(self)
         try: self.overlay=CountdownOverlay(self)
         except Exception:
@@ -309,6 +311,8 @@ class App(QMainWindow,MonitorActions):
         self.overlay_opacity.valueChanged.connect(lambda value:self.update_overlay()); opacity.addWidget(self.overlay_opacity_label); controls.addLayout(opacity)
         actions=QHBoxLayout(); actions.addWidget(button(self.t('Preview (10s)'),self.preview_overlay)); actions.addWidget(button(self.t('Reset position'),lambda:self.overlay_picker.set_position(1,0))); actions.addStretch(); controls.addLayout(actions)
         note=label(self.t('Exclusive fullscreen may hide the countdown.'),'muted'); note.setToolTip(self.t('The countdown never takes focus or mouse input. Exclusive fullscreen may hide desktop overlays; windowed or borderless mode is more reliable.')); note.setWordWrap(True); controls.addWidget(note)
+        controls.addWidget(button(self.t('In-game countdown (RTSS)…'),self.rtss_dialog,'quiet'),0,Qt.AlignLeft)
+        self.rtss_status=label('','muted'); self.rtss_status.setWordWrap(True); self.rtss_status.hide(); controls.addWidget(self.rtss_status)
         layout.addWidget(self.overlay_controls)
         self.overlay_enabled.toggled.connect(self.overlay_controls.setEnabled); self.overlay_enabled.toggled.connect(self.overlay_warning.setEnabled)
         self.overlay_controls.setEnabled(self.overlay_enabled.isChecked()); self.overlay_warning.setEnabled(self.overlay_enabled.isChecked())
@@ -336,16 +340,62 @@ class App(QMainWindow,MonitorActions):
     def preview_overlay(self):
         self._overlay_preview_until=time.monotonic()+10; self.update_overlay()
 
+    def rtss_dialog(self):
+        window=QDialog(self); window.setWindowTitle(self.t('In-game countdown (RTSS)')); window.resize(660,360)
+        layout=QVBoxLayout(window)
+        note=label(self.t('Select game executables for RTSS. Save your game before restarting it.')); note.setWordWrap(True); layout.addWidget(note)
+        table=QTableWidget(0,1); table.setHorizontalHeaderLabels([self.t('Game executable')]); table.horizontalHeader().setSectionResizeMode(0,QHeaderView.Stretch)
+        table.verticalHeader().hide(); table.setCornerButtonEnabled(False)
+        table.setSelectionBehavior(QAbstractItemView.SelectRows); table.setSelectionMode(QAbstractItemView.SingleSelection); table.setEditTriggers(QAbstractItemView.NoEditTriggers); layout.addWidget(table,1)
+        paths=list(self.settings.overlay_rtss_paths)
+        def render():
+            table.setRowCount(len(paths))
+            for row,path in enumerate(paths): table.setItem(row,0,QTableWidgetItem(path))
+        render()
+        status=label('' if rtss_installation() else self.t('Install RTSS 7.3.7 or newer first.'),'muted'); status.setWordWrap(True); layout.addWidget(status)
+        def add():
+            path,_=QFileDialog.getOpenFileName(window,self.t('Game executable'),'',self.t('Applications (*.exe)'))
+            if not path: return
+            game=self.catalog.resolve(path,fallback=False)
+            if not game or game.source=='Riot':
+                status.setText(self.t('Choose a tracked game executable. Riot games are not supported by this integration.')); return
+            if norm(path) not in {norm(p) for p in paths}: paths.append(str(Path(path))); render()
+        def remove():
+            row=table.currentRow()
+            if 0<=row<len(paths): paths.pop(row); render()
+        def save():
+            self.settings=replace(self.settings,overlay_rtss_paths=paths).validate(); self.catalog.settings=self.settings
+            self.store.save_settings(self.settings); self.rtss.hide(); self.rtss.failed_paths.clear(); self.rtss.configured.clear()
+            self.set_status('Settings saved.'); window.accept()
+        actions=QHBoxLayout(); actions.addWidget(button(self.t('Add'),add)); actions.addWidget(button(self.t('Remove'),remove)); actions.addStretch()
+        actions.addWidget(button(self.t('Save'),save,'primary')); actions.addWidget(button(self.t('Cancel'),window.reject)); layout.addLayout(actions)
+        window.exec()
+
+    def hide_countdown(self):
+        if self.overlay: self.overlay.hide()
+        if self._overlay_backend=='rtss' or self.rtss.identity: self.rtss.hide()
+        self._overlay_backend='none'; self._overlay_identity=''; self._overlay_updated=0
+        self.rtss_status.hide()
+
+    def overlay_warning_visible(self):
+        if (self.overlay_failed or self._overlay_backend=='none' or not self._overlay_identity
+                or time.monotonic()-self._overlay_updated>1.5): return False
+        current=win32.sample()
+        if (not current.interactive or current.identity!=self._overlay_identity
+                or current.identity!=self.tracker.identity or not self.catalog.resolve(current.path)): return False
+        if self._overlay_backend=='rtss': return True
+        return bool(self.overlay and self.overlay.isVisible() and win32.desktop_overlay_available())
+
     def update_overlay(self):
-        if self.closed or not self.overlay: return
+        if self.closed: return
         preview=time.monotonic()<self._overlay_preview_until
         settings=replace(self.settings,**self.overlay_values()) if preview else self.settings
         if not settings.overlay_enabled:
-            self.overlay.hide(); return
+            self.hide_countdown(); return
         try:
             current=win32.sample()
             if not current.interactive:
-                self.overlay.hide(); return
+                self.hide_countdown(); return
             if preview:
                 total=settings.warning_seconds; remaining=settings.limit_seconds-total
                 automatic=self.screen().name() if self.screen() else ''
@@ -353,18 +403,33 @@ class App(QMainWindow,MonitorActions):
                 active=self.tracker.active
                 game=self.catalog.resolve(current.path)
                 if not active or not game or game.id!=active.id or current.identity!=self.tracker.identity:
-                    self.overlay.hide(); return
+                    self.hide_countdown(); return
                 total=sum(self.tracker.totals(current.wall.date()).values())
                 previous=self.tracker.previous
                 if previous and previous.identity==current.identity:
                     elapsed=current.awake-previous.awake
                     if 0<elapsed<=1.5 and abs((current.wall-previous.wall).total_seconds()-elapsed)<1.5 and previous.wall.date()==current.wall.date(): total+=elapsed
                 remaining=settings.limit_seconds-total; automatic=foreground_screen_name()
-            self.overlay.present(remaining,total,settings,choose_screen(settings.overlay_screen,automatic),preview)
+            screen=choose_screen(settings.overlay_screen,automatic)
+            if not preview and norm(current.path) in {norm(p) for p in settings.overlay_rtss_paths}:
+                if self.overlay: self.overlay.hide()
+                geometry=screen.geometry(); ratio=screen.devicePixelRatio()
+                text=rtss_countdown(remaining,total>=settings.warning_seconds,settings.overlay_opacity)
+                healthy=self.rtss.present(current.path,current.identity,text,(settings.overlay_x,settings.overlay_y,round(geometry.width()*ratio),round(geometry.height()*ratio)))
+                self._overlay_backend='rtss'; self._overlay_identity=current.identity
+                self._overlay_updated=time.monotonic() if healthy else 0
+                self.overlay_failed=not healthy
+                self.rtss_status.setText(self.t('RTSS connected' if healthy else self.rtss.error or 'RTSS unavailable; early warning popups remain active.')); self.rtss_status.show()
+                return
+            if self.rtss.identity: self.rtss.hide()
+            self.rtss_status.hide()
+            if not self.overlay: raise RuntimeError('Desktop countdown unavailable')
+            self.overlay.present(remaining,total,settings,screen,preview)
+            self._overlay_backend='desktop'; self._overlay_identity='' if preview else current.identity; self._overlay_updated=time.monotonic()
             self.overlay_failed=False
         except Exception:
             if not self.overlay_failed: log.exception('Countdown presentation failed')
-            self.overlay_failed=True; self.overlay.hide(); self.set_status('Countdown unavailable; early warning popups remain active.')
+            self.overlay_failed=True; self.hide_countdown(); self.set_status('Countdown unavailable; early warning popups remain active.')
 
     def browse_root(self):
         value=QFileDialog.getExistingDirectory(self,self.t('Gaming Hub'),self.games_path.text())
@@ -599,6 +664,7 @@ class App(QMainWindow,MonitorActions):
         for timer in list(self._timers): timer.stop(); timer.deleteLater()
         self._timers.clear(); self.dismiss_popup()
         self.overlay_timer.stop()
+        self.rtss.close()
         self.assets_timer.stop(); self.art.close()
         if self.client_worker: self.client_worker.close()
         if self.overlay: self.overlay.close(); self.overlay.deleteLater()

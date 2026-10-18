@@ -180,16 +180,21 @@ class MonitorActions:
 
 
     def consume_silent_alert(self, alert):
-        # A color warning counts as delivered without Escape, sound or a popup.
-        # Keep the original warning if the optional renderer failed to initialize.
+        # A color warning replaces a popup only with a healthy renderer for this
+        # foreground game. A topmost desktop HWND can be hidden by fullscreen.
         required = popup_required(self.settings, alert.kind)
-        if alert.kind == "warning" and getattr(self, "overlay_failed", False):
-            required = True
+        if alert.kind == "warning" and not required:
+            try:
+                required = not self.overlay_warning_visible()
+            except (AttributeError, OSError, RuntimeError):
+                required = True
         if self.restriction_reached(alert.day):
             required = False  # The persistent restriction notice replaces queued reminders.
         if required:
             return False
         if self.tracker.alerts and self.tracker.alerts[0] == alert:
+            log.info("Alert delivered without popup: kind=%s day=%s renderer=%s", alert.kind, alert.day,
+                     getattr(self, '_overlay_backend', 'none'))
             self.tracker.delivered(alert)
             self.tracker.alerts.popleft()
         return True
@@ -350,6 +355,8 @@ class MonitorActions:
             self.drain_discovery()
             current = win32.sample()
             self.tracker.tick(current)
+            update_overlay = getattr(self, 'update_overlay', None)
+            if update_overlay: update_overlay()
             restricting = self.enforce_gameplay(current)
             today = datetime.now().date().isoformat()
             if self.popup_window and self.popup_day != today:

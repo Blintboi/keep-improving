@@ -69,11 +69,12 @@ class OverlayInterfaceTests(unittest.TestCase):
             def request(me,*args): pass
             def close(me): pass
         self.sound=patch('gametime.qt_ui.winsound.PlaySound'); self.sound_mock=self.sound.start()
+        self.desktop=patch('gametime.qt_ui.win32.desktop_overlay_available',return_value=True); self.desktop.start()
         self.app=App(self.store,self.base,background=True,service=Service(),hub=Hub())
         self.app.tick_timer.stop(); self.app.overlay_timer.stop(); self.pump(.02)
 
     def tearDown(self):
-        self.app.close(); self.pump(.02); self.sound.stop(); self.store.close(); self.tmp.cleanup()
+        self.app.close(); self.pump(.02); self.sound.stop(); self.desktop.stop(); self.store.close(); self.tmp.cleanup()
 
     def pump(self,seconds=.06):
         until=time.monotonic()+seconds
@@ -124,7 +125,8 @@ class OverlayInterfaceTests(unittest.TestCase):
         from gametime.tracker import Alert
         alert=Alert(date.today().isoformat(),('warning:6000',),'warning','Warning','OK')
         self.app.tracker._queue(alert); self.app.tracker.active=self.game; self.app.tracker.identity='overlay:1'
-        with patch.object(self.app,'popup') as popup,patch('gametime.controller.win32.escape_game') as escape:
+        self.display(6000)
+        with patch.object(self.app,'popup') as popup,patch('gametime.controller.win32.escape_game') as escape,patch('gametime.qt_ui.win32.sample',return_value=self.sample()):
             self.app.notify(alert); popup.assert_not_called(); escape.assert_not_called()
         self.sound_mock.assert_not_called()
         self.assertFalse(self.app.tracker.alerts); self.assertIn('warning:6000',self.store.alert_keys(alert.day))
@@ -209,10 +211,35 @@ class OverlayInterfaceTests(unittest.TestCase):
         self.app.tracker.tick(current)
         self.assertEqual(len(self.app.tracker.alerts),1)
         with patch.object(self.app,'popup') as popup,patch('gametime.controller.win32.escape_game') as escape,patch('gametime.qt_ui.win32.sample',return_value=current):
-            self.app.notify(self.app.tracker.alerts[0]); self.app.update_overlay()
+            self.app.update_overlay(); self.app.notify(self.app.tracker.alerts[0])
             popup.assert_not_called(); escape.assert_not_called()
         self.assertTrue(self.app.overlay.warning); self.assertEqual(self.app.overlay.seconds,1200)
         self.assertEqual(self.store.totals(initial.wall.date())[self.game.id],6000)
+
+    def test_exclusive_fullscreen_retains_popup_despite_visible_desktop_hwnd(self):
+        from gametime.tracker import Alert
+        self.display(6000); alert=Alert(date.today().isoformat(),('warning:6000',),'warning','Warning','OK'); self.app.tracker._queue(alert)
+        self.assertTrue(self.app.overlay.isVisible())
+        with patch('gametime.qt_ui.win32.desktop_overlay_available',return_value=False),patch('gametime.qt_ui.win32.sample',return_value=self.sample()),patch('gametime.controller.win32.escape_game',return_value=False),patch.object(self.app,'popup',return_value=True) as popup:
+            self.app.notify(alert); popup.assert_called_once_with(alert)
+
+    def test_preview_and_stale_renderer_cannot_suppress_warning(self):
+        current=self.sample(); self.app.tracker.tick(current)
+        with patch('gametime.qt_ui.win32.sample',return_value=current):
+            self.app.preview_overlay(); self.assertFalse(self.app.overlay_warning_visible())
+            self.app._overlay_preview_until=0; self.app.update_overlay(); self.assertTrue(self.app.overlay_warning_visible())
+            self.app._overlay_updated-=3; self.assertFalse(self.app.overlay_warning_visible())
+            self.app.update_overlay()
+        with patch('gametime.qt_ui.win32.sample',return_value=self.sample(identity='other:2')): self.assertFalse(self.app.overlay_warning_visible())
+
+    def test_rtss_selection_requires_ack_and_clears_on_alt_tab(self):
+        self.app.settings=replace(self.app.settings,overlay_rtss_paths=[str(self.exe)]); self.app.catalog.settings=self.app.settings
+        with patch.object(self.app.rtss,'present',return_value=False) as present:
+            self.display(6000); present.assert_called_once(); self.assertFalse(self.app.overlay.isVisible()); self.assertTrue(self.app.overlay_failed)
+        with patch.object(self.app.rtss,'present',return_value=True),patch('gametime.qt_ui.win32.sample',return_value=self.sample()),patch('gametime.qt_ui.win32.desktop_overlay_available',return_value=False):
+            self.app.update_overlay(); self.assertTrue(self.app.overlay_warning_visible())
+        with patch.object(self.app.rtss,'hide') as hide,patch('gametime.qt_ui.win32.sample',return_value=self.sample(path='')):
+            self.app.update_overlay(); hide.assert_called_once(); self.assertEqual(self.app._overlay_backend,'none')
 
     def test_position_picker_drag_moves_and_clamps_the_saved_coordinates(self):
         from PySide6.QtCore import Qt,QPoint

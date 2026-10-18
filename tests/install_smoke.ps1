@@ -11,6 +11,8 @@ $report = [ordered]@{ IsolatedInstallDirectory = $testInstallPath }
 try {
     & (Join-Path $sourcePath 'install.ps1') -PythonPath $PythonPath -InstallDir $testInstallPath -GamesRoot $testGamesPath -StartupName $testStartupName -EnableHub -NoStart
     $report.FirstInstall = Test-Path -LiteralPath (Join-Path $testInstallPath 'install.json')
+    & (Join-Path $testInstallPath 'gametime\rtss_bridge.exe') --self-test
+    $report.RTSSBridgeVerified = $LASTEXITCODE -eq 0
     $manifest = Read-GameTimeManifest $testInstallPath
     $probePath = Join-Path $testBasePath 'seed.py'
     @'
@@ -20,6 +22,8 @@ from gametime.store import Store
 store = Store(pathlib.Path(sys.argv[1]) / 'data' / 'usage.sqlite3')
 store.add_usage({('2000-01-01', 'test:fixture'): 123.0})
 store.set_rule(r'C:\Fixture\chess.exe', None)
+from dataclasses import replace
+store.save_settings(replace(store.settings(), overlay_rtss_paths=[r'C:\Fixture\game.exe']))
 store.close()
 '@ | Set-Content -LiteralPath $probePath -Encoding UTF8
     & $manifest.Python -B $probePath $testInstallPath
@@ -37,12 +41,14 @@ assert store.totals('2000-01-01') == {'test:fixture': 123.0}
 assert norm(r'C:\Fixture\chess.exe') in store.rules()
 assert store.rules()[norm(r'C:\Fixture\chess.exe')] is None
 assert store.settings().hub_enabled is True
+assert store.settings().overlay_rtss_paths == [r'C:\Fixture\game.exe']
 store.close()
 '@ | Set-Content -LiteralPath $probeVerifyPath -Encoding UTF8
     & $manifest.Python -B $probeVerifyPath $testInstallPath
     if ($LASTEXITCODE -ne 0) { throw 'Reinstall did not preserve time and exceptions.' }
     $report.TimeAndExceptionsSurviveReinstall = $true
     $report.HubEnabledSurvivesReinstall = $true
+    $report.RTSSSelectionSurvivesReinstall = $true
     $report.AutostartMatches = (Get-GameTimeStartupValue $testStartupName) -eq $manifest.StartupCommand
     $report.StartupFolderShortcutCreated = Test-Path -LiteralPath $manifest.StartupShortcut
     $argsText = '-B "' + (Join-Path $testInstallPath 'main.py') + '" --background --data-dir "' + (Join-Path $testInstallPath 'data') + '"'

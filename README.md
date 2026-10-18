@@ -2,13 +2,13 @@
 
 An offline Windows 11 Gaming Hub and game-time monitor in one app. Launch games from a searchable library, measure foreground gameplay against a shared daily budget, and follow daily statistics in a dark English/Hungarian interface.
 
-**Private preview 2.4.1.** The repository and release downloads remain private. Sign into GitHub with an account that has access on your other PC. Each PC keeps its own history; there is no cloud synchronization. [Magyar útmutató](README.hu.md).
+**Private preview 2.5.0.** The repository and release downloads remain private. Sign into GitHub with an account that has access on your other PC. Each PC keeps its own history; there is no cloud synchronization. [Magyar útmutató](README.hu.md).
 
 The 2.0 interface uses Qt Widgets: a dark sidebar, responsive game cards, a daily-budget ring, contextual game actions and a redesigned statistics page. Artwork is read from existing local Steam caches, installed-game image files or game icons; no image service, launcher credentials or artwork downloads are used. Artwork and icons keep their original aspect ratios; complete cover images fit inside the card with dark padding where needed. Missing art has a colored monogram fallback. The shared controller/clock application icon remains unchanged.
 
 ## Install
 
-1. Open this repository's **Releases**, download `GameTimeMonitor-2.4.1-Setup.exe`, and run it as your normal Windows user.
+1. Open this repository's **Releases**, download `GameTimeMonitor-2.5.0-Setup.exe`, and run it as your normal Windows user.
 2. Python, Qt/PySide6 and SQLite are included. No separate Python, pip packages, administrator account or launcher login is needed by the monitor.
 3. The app opens and discovers installed games. It starts in the tray when you sign into Windows. Open **Settings** to change your daily limit or Gaming Hub location.
 
@@ -64,7 +64,11 @@ By default, enabling it replaces the early warning popup with red digits at your
 
 Drag the miniature timer inside Settings to choose its position, or use the arrow keys. Choose the active game's monitor automatically or a specific display; a disconnected display falls back to the primary monitor. **Preview (10s)** shows your unsaved placement without changing time/history. Click **Save** to keep changes. **Text opacity** adjusts only the digits from 25–100%; the surrounding area remains fully transparent. Upgrades keep the saved opacity percentage and apply it to the text. **Test alert** in this section checks the expiry-style popup.
 
-This is a Windows desktop overlay, without game injection. Exclusive fullscreen or elevated/protected games may hide it. Borderless/windowed mode is more reliable; test visibility in your game before relying on the color warning. The app does not force fullscreen changes. Turn off the replacement option to retain the early popup if needed. A renderer error restores early popup delivery, but an exclusive-fullscreen game hiding an otherwise healthy desktop window cannot always be detected.
+The default renderer is a Windows desktop overlay. Exclusive fullscreen or elevated/protected games may hide it. The app never changes a game's display mode. A renderer error, stale in-game acknowledgement, or a Windows fullscreen/busy state without a healthy RTSS connection retains the early popup instead of silently consuming the warning. A visible/topmost desktop window alone is not treated as proof that a fullscreen game displays it.
+
+For exclusive fullscreen, install **RTSS 7.3.7 or newer** separately from its [official Guru3D page](https://www.guru3d.com/download/rtss-rivatuner-statistics-server-download/). In RTSS, set the **Global application detection level to None** before selecting games. In the Hub, open **Settings → Countdown → In-game countdown (RTSS)…**, add the exact tracked game's `.exe`, and save. Save and restart the game if it was already running. The Hub prepares only those executable profiles and starts RTSS when needed; ordinary tracking and the desktop timer need no RTSS. Riot games cannot be selected by this integration. No new game is opted in automatically.
+
+The RTSS timer uses the same daily budget, warning color, text opacity and position, with no panel or controls. Native RTSS anchors use the whole framebuffer, including games with a separate HUD viewport. Other RTSS clients in that game share its profile origin and can move with it. It renders on the game's active display; the monitor selector and ten-second desktop preview apply to the desktop renderer. **RTSS connected** means the game is acknowledging OSD updates, not that a person has verified the pixels. Test in actual fullscreen gameplay before relying on it. Removing an executable stops the Hub's text; its RTSS profile remains available in RTSS. RTSS profiles identify executables by filename, while the Hub publishes only for the exact selected path. Existing global detection/performance settings are preserved. RTSS and its compatibility with games/anti-cheat software are separate from this preview. It is not bundled or automatically uninstalled with the Hub.
 
 ## Optional play restriction
 

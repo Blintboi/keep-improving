@@ -1,10 +1,9 @@
-Game Time Monitor 1.6.0 — validation
+Game Time Monitor 2.5.0 private preview validation
 
-179 automated tests passed on Windows 11, Python 3.12.10 (61.245 seconds).
-24 GUI checks passed, including integrated Play, search/source filters, duplicate-click suppression, preserved measurement state, Hungarian language switching, daily/game statistics, installation-based average, hide/show/restore, guided removal, tray and topmost alerts.
-23 bundled-runtime install/upgrade/uninstall checks passed, including one shared desktop app icon, migration of the old separate icons, original installation day/language/hidden/history preservation, startup/Installed apps entries, backups, and data/foreign-file preservation.
-Read-only launch planning resolved all 19 installed catalog entries on the development PC. Game execution in tests was mocked.
-
-See TESTING.md for scope and limits, including the successful Minecraft Java fullscreen trial on 2026-10-18. A second physical PC has not yet been tested.
-
-The standalone installer also preserves unrelated Windows startup values across fresh install, upgrade and uninstall. Final bootstrap was checked with paths containing spaces; the actual icon-branded Setup was installed on the development PC with its existing data.
+249 automated tests passed (92.656 seconds).
+The RTSS helper passed its 10-check native shared-memory fixture.
+Source installer: 20 checks; bundled installer: 35 checks.
+Hungarian/English RTSS settings were inspected using an isolated profile.
+The user confirmed timer visibility and correct top-right placement in Stardew Valley exclusive fullscreen.
+Gameplay beyond the title screen and the second PC still require verification.
+See TESTING.md for evidence, commands and limits.

@@ -45,6 +45,16 @@ api(u, "SetWindowPos", [W.HWND, W.HWND, C.c_int, C.c_int, C.c_int, C.c_int, W.UI
 api(u, "IsWindowVisible", [W.HWND], W.BOOL)
 api(u, "ShowWindowAsync", [W.HWND, C.c_int], W.BOOL)
 api(u, "GetAsyncKeyState", [C.c_int], W.SHORT)
+api(s, "SHQueryUserNotificationState", [C.POINTER(C.c_int)], C.c_long)
+
+
+def desktop_overlay_available():
+    """Conservative fallback: a topmost HWND is not proof of fullscreen visibility."""
+    state = C.c_int()
+    try:
+        return s.SHQueryUserNotificationState(C.byref(state)) >= 0 and state.value in (5, 6, 7)
+    except OSError:
+        return False
 
 
 class MOUSEINPUT(C.Structure):

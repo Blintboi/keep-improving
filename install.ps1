@@ -1,6 +1,7 @@
 param([string]$PythonPath, [string]$GamesRoot, [string]$InstallDir,
       [string]$StartupName = 'GameTimeMonitor', [switch]$NoStart, [switch]$EnableHub)
 . "$PSScriptRoot\common.ps1"
+Build-GameTimeRTSSBridge $PSScriptRoot
 if (-not $InstallDir) { $InstallDir = Get-GameTimeDirectory }
 $InstallDir = [IO.Path]::GetFullPath($InstallDir)
 if ($InstallDir -eq [IO.Path]::GetPathRoot($InstallDir) -or $InstallDir.Contains('"')) {

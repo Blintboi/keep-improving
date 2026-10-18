@@ -1,6 +1,19 @@
 """Small explicit English/Hungarian catalog. Stored IDs and paths never translate."""
 LANGUAGES = {"English": "en", "Magyar": "hu"}
 HU = {
+    'Remove': 'Eltávolítás',
+    'Cancel': 'Mégse',
+    'Applications (*.exe)': 'Alkalmazások (*.exe)',
+    'In-game countdown (RTSS)…': 'Játékon belüli számláló (RTSS)…',
+    'In-game countdown (RTSS)': 'Játékon belüli számláló (RTSS)',
+    'Select game executables for RTSS. Save your game before restarting it.': 'Válaszd ki a játékok exe-fájljait az RTSS-hez. Újraindítás előtt mentsd a játékot.',
+    'Game executable': 'Játék exe-fájlja',
+    'Install RTSS 7.3.7 or newer first.': 'Előbb telepítsd az RTSS 7.3.7-es vagy újabb verzióját.',
+    'Choose a game executable.': 'Válassz egy játék-exe-t.',
+    'Choose a tracked game executable. Riot games are not supported by this integration.': 'Válassz egy figyelt játék-exe-t. A Riot-játékokat ez az integráció nem támogatja.',
+    'RTSS is waiting for the game. Restart the game after saving.': 'Az RTSS a játékra vár. Mentés után indítsd újra a játékot.',
+    'RTSS connected': 'RTSS csatlakoztatva',
+    'RTSS unavailable; early warning popups remain active.': 'Az RTSS nem elérhető; a korai felugró figyelmeztetés aktív marad.',
     'Open': 'Megnyitás',
     'Add': 'Hozzáadás',
     'Remaining': 'Hátra',

@@ -28,7 +28,8 @@ class RestrictionInterfaceTests(unittest.TestCase):
         self.app.settings=self.app.catalog.settings=replace(self.app.settings,restriction_enabled=True)
 
     def reach(self,total=7500):
-        current=self.sample(); self.app.tracker.tick(current)
+        # A one-hour clock-jump fixture must stay on this day even at 23:xx.
+        current=replace(self.sample(),wall=datetime.now().astimezone().replace(hour=12,minute=0,second=0,microsecond=0)); self.app.tracker.tick(current)
         self.app.tracker.cache[str(current.wall.date())]={self.game.id:total}
         return current
 

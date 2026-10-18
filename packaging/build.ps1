@@ -7,6 +7,8 @@
 )
 $ErrorActionPreference = 'Stop'
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+. (Join-Path $repo 'common.ps1')
+Build-GameTimeRTSSBridge $repo
 $OutputDir = [IO.Path]::GetFullPath($OutputDir)
 $BuildDir = [IO.Path]::GetFullPath($BuildDir)
 New-Item -ItemType Directory -Path $OutputDir,$BuildDir -Force | Out-Null
@@ -20,7 +22,7 @@ if (-not $SkipFreeze) {
     try {
         $env:PATH = @((Split-Path -Parent $PythonPath), $pythonInfo.base, (Join-Path $pythonInfo.base 'DLLs'),
                       (Join-Path $env:WINDIR 'System32'), $env:WINDIR, (Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0')) -join ';'
-        & $PythonPath -B -m PyInstaller --noconfirm --clean --onedir --windowed --name GameTimeMonitor --icon (Join-Path $repo 'gametime\app.ico') --add-data ((Join-Path $repo 'gametime\app.ico') + ':gametime') --add-data ((Join-Path $repo 'gametime\hub_links.ps1') + ':gametime') --add-data ((Join-Path $repo 'gametime\icons') + ':gametime/icons') --distpath (Join-Path $BuildDir 'frozen') --workpath (Join-Path $BuildDir 'pyinstaller') --specpath $BuildDir (Join-Path $repo 'main.py')
+        & $PythonPath -B -m PyInstaller --noconfirm --clean --onedir --windowed --name GameTimeMonitor --icon (Join-Path $repo 'gametime\app.ico') --add-data ((Join-Path $repo 'gametime\app.ico') + ':gametime') --add-data ((Join-Path $repo 'gametime\rtss_bridge.exe') + ':gametime') --add-data ((Join-Path $repo 'gametime\hub_links.ps1') + ':gametime') --add-data ((Join-Path $repo 'gametime\icons') + ':gametime/icons') --distpath (Join-Path $BuildDir 'frozen') --workpath (Join-Path $BuildDir 'pyinstaller') --specpath $BuildDir (Join-Path $repo 'main.py')
         if ($LASTEXITCODE -ne 0) { throw 'PyInstaller build failed.' }
     } finally { $env:PATH = $savedBuildPath }
 

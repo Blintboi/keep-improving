@@ -9,3 +9,5 @@ test-reports/
 build/
 dist/
 *.spec
+gametime/rtss_bridge.exe
+gametime/rtss_bridge.exe.sha256

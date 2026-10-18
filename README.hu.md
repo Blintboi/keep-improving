@@ -1,4 +1,4 @@
-# Játékidőfigyelő — 2.4.1
+# Játékidőfigyelő — 2.5.0
 
 Windows 11-en futó, sötét felületű Gaming Hub és játékidőfigyelő egy alkalmazásban. A játékgyűjteményből közvetlenül indíthatod a játékokat, követheted az idődet és megnézheted a napi statisztikákat. A repó és a kiadások egyelőre **privátak**. A másik gépen is hozzáférő GitHub-fiókkal jelentkezz be a letöltéshez.
 
@@ -8,7 +8,7 @@ A rövidített felületen a mai és hátralévő idő, a játéknevek és a keze
 
 ## Telepítés
 
-Töltsd le a Kiadások / Releases oldalról a `GameTimeMonitor-2.4.1-Setup.exe` fájlt, és indítsd el. A Python, a Qt/PySide6 és az SQLite benne van: semmit nem kell külön telepíteni. A program megnyílik, felismeri a játékokat, és a következő Windows-bejelentkezéskor a tálcán indul. A telepítő jelenleg nincs digitálisan aláírva.
+Töltsd le a Kiadások / Releases oldalról a `GameTimeMonitor-2.5.0-Setup.exe` fájlt, és indítsd el. A Python, a Qt/PySide6 és az SQLite benne van: semmit nem kell külön telepíteni. A program megnyílik, felismeri a játékokat, és a következő Windows-bejelentkezéskor a tálcán indul. A telepítő jelenleg nincs digitálisan aláírva.
 
 A program helye: `%LOCALAPPDATA%\Programs\GameTimeMonitor`. Az előzmények és beállítások a Windows Dokumentumok mappájában, a `GameTimeMonitor\data` alatt maradnak. A frissítés mentést készít, és megtartja az eddigi keretet, kizárásokat, EXE-szabályokat, rejtett játékokat és Hub-mappát.
 
@@ -56,7 +56,11 @@ Bekapcsoláskor alapból a korai popup helyett pirosra vált a beállított figy
 
 A helyét a Beállításokban a kicsinyített kijelzőn húzással vagy nyílbillentyűkkel módosíthatod. Választhatsz automatikus vagy konkrét kijelzőt; lecsatlakoztatott kijelzőnél az elsődlegeset használja. Az **Előnézet (10 mp)** mentés nélkül megmutatja az új helyet, időmérés és előzménymódosítás nélkül. Végül nyomd meg a **Mentés** gombot. A **Szöveg fedettsége** csúszka 25–100% között csak a számjegyek áttetszőségét állítja; a környezetük teljesen átlátszó marad. A korábban mentett százalék frissítéskor megmarad, és a szövegre érvényes. Az **Értesítés próbája** gomb itt teszteli a felugró figyelmeztetést.
 
-Ez asztali Windows-overlay, nem épül bele a játékba. Exkluzív teljes képernyős, emelt jogosultságú vagy védett játék eltakarhatja. Keret nélküli ablakos módban megbízhatóbb; a Minecraftban is külön ellenőrizni kell. Nem váltja át magától a játék megjelenítési módját. Ha nem látszik a játékod felett, kapcsold vissza a korai popupot. Megjelenítési hiba esetén a program visszaáll a korai popupra, de az exkluzív fullscreen miatti takarást nem mindig lehet felismerni.
+Az alapértelmezett megjelenítő asztali Windows-overlay; az exkluzív teljes képernyős, emelt jogosultságú vagy védett játék eltakarhatja. A program nem változtatja meg a játék megjelenítési módját. Megjelenítési hibánál, elavult RTSS-visszajelzésnél vagy működő RTSS-kapcsolat nélküli fullscreen/foglalt Windows-állapotnál megtartja a korai popupot. Önmagában a látható, legfelül lévő asztali ablak nem bizonyítja, hogy a játék felett is látszik a számláló.
+
+Exkluzív fullscreenhez külön telepíthető az **RTSS 7.3.7 vagy újabb** a [hivatalos Guru3D-oldalról](https://www.guru3d.com/download/rtss-rivatuner-statistics-server-download/). Az RTSS-ben először állítsd a **Global profil felismerését None-ra**. A Hub **Beállítások → Visszaszámláló → Játékon belüli számláló (RTSS)…** gombjánál add hozzá a figyelt játék pontos `.exe`-fájlját, és mentsd. Ha már futott a játék, mentés után indítsd újra. A Hub csak a kiválasztott exe-k profilját készíti elő, és szükség esetén elindítja az RTSS-t. A sima időmérés és az asztali számláló RTSS nélkül is működik. Ez az integráció Riot-játékhoz nem kapcsolható be, és új játékokat nem vesz fel automatikusan.
+
+Az RTSS-számláló ugyanazt a napi keretet, fehér/piros számjegyeket, fedettséget és pozíciót használja, háttér és gombok nélkül. Az RTSS saját pozícióvezérlését és a teljes képkockát használja, így a játék belső HUD-területe nem tolja el. Az ugyanabban a játékban használt más RTSS-kliensek kijelzése is együtt mozoghat vele. A játék aktív kijelzőjén jelenik meg; a kijelzőválasztó és a tíz másodperces asztali előnézet az asztali megjelenítőre vonatkozik. Az **RTSS csatlakoztatva** állapot a játék OSD-frissítési visszajelzését jelenti; a tényleges láthatóságot játék közben kell ellenőrizni. Az exe eltávolítása leállítja a Hub szövegét, az RTSS-profilja az RTSS-ben marad szerkeszthető. Az RTSS fájlnév alapján választ profilt, a Hub csak a kiválasztott pontos útvonalnál küld szöveget. A meglévő általános felismerési és teljesítménybeállításokat nem írja át. Az RTSS külön program; a Hub telepítője nem tartalmazza, az eltávolítója nem törli.
 
 ## Választható játékkorlát
 

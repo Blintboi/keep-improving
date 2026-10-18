@@ -72,6 +72,7 @@ class Settings:
     overlay_x: float = 1.0
     overlay_y: float = 0.0
     overlay_screen: str = ""
+    overlay_rtss_paths: list = field(default_factory=list)
     restriction_enabled: bool = False
     restriction_seconds: float = 7500
 
@@ -88,6 +89,11 @@ class Settings:
                 raise ValueError("Invalid countdown opacity or position.")
         if not isinstance(self.overlay_screen,str) or len(self.overlay_screen)>200:
             raise ValueError("Invalid countdown monitor.")
+        if (not isinstance(self.overlay_rtss_paths, list) or len(self.overlay_rtss_paths) > 100
+                or any(not isinstance(path, str) or len(path) > 32767 or "\0" in path
+                       or not ntpath.isabs(path) or not path.lower().endswith('.exe')
+                       or helper(path) for path in self.overlay_rtss_paths)):
+            raise ValueError("Choose a game executable.")
         if not isinstance(self.restriction_enabled,bool):
             raise ValueError("Play restriction must be on or off.")
         if (isinstance(self.restriction_seconds,bool) or not isinstance(self.restriction_seconds,(int,float))

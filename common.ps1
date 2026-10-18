@@ -69,8 +69,24 @@ function Get-GameTimePython([string]$PythonPath) {
     throw 'Python 3.10+ with PySide6 is required. Run python -m pip install -r requirements-runtime.txt, or use the standalone Setup. Pass -PythonPath to select a prepared environment.'
 }
 
+function Build-GameTimeRTSSBridge([string]$SourceRoot) {
+    $source = Join-Path $SourceRoot 'gametime\rtss_bridge.cs'
+    $output = Join-Path $SourceRoot 'gametime\rtss_bridge.exe'
+    $hashPath = $output + '.sha256'
+    $hasher = [Security.Cryptography.SHA256]::Create()
+    try { $sourceHash = [BitConverter]::ToString($hasher.ComputeHash([IO.File]::ReadAllBytes($source))).Replace('-','') }
+    finally { $hasher.Dispose() }
+    if ((Test-Path -LiteralPath $output) -and (Test-Path -LiteralPath $hashPath) -and
+        (Get-Content -LiteralPath $hashPath -Raw).Trim() -eq $sourceHash) { return }
+    $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+    if (-not (Test-Path -LiteralPath $compiler)) { throw 'The Windows .NET Framework 4 compiler is required to build the optional RTSS bridge.' }
+    & $compiler /nologo /unsafe /optimize+ /platform:anycpu /target:exe /r:System.Web.Extensions.dll (('/out:' + $output)) $source
+    if ($LASTEXITCODE -ne 0) { throw 'RTSS bridge compilation failed.' }
+    $sourceHash | Set-Content -LiteralPath $hashPath -Encoding ascii
+}
+
 function Get-GameTimeFiles {
-    @('gametime\artwork.py','gametime\clients.py','gametime\overlay.py','requirements-runtime.txt','gametime\controller.py','gametime\qt_ui.py','gametime\qt_widgets.py','gametime\qt_statistics.py','gametime\icons\chevron.svg','gametime\icons\check.svg','main.py','gametime\__init__.py','gametime\model.py','gametime\discovery.py',
+    @('gametime\artwork.py','gametime\clients.py','gametime\overlay.py','gametime\rtss.py','gametime\rtss_bridge.cs','gametime\rtss_bridge.exe','gametime\rtss_bridge.exe.sha256','requirements-runtime.txt','gametime\controller.py','gametime\qt_ui.py','gametime\qt_widgets.py','gametime\qt_statistics.py','gametime\icons\chevron.svg','gametime\icons\check.svg','main.py','gametime\__init__.py','gametime\model.py','gametime\discovery.py',
       'gametime\store.py','gametime\tracker.py','gametime\service.py','gametime\win32.py','gametime\i18n.py','gametime\statistics.py','gametime\statistics_ui.py',
       'gametime\ui.py','gametime\launch.py','gametime\removal.py','gametime\ubisoft.py','gametime\riot.py','gametime\minecraft.py','gametime\hub.py','gametime\hub_links.ps1','gametime\app.ico','gametime\app.png','common.ps1','install.ps1','uninstall.ps1','launch.ps1','verify.ps1',
       'Telepites.cmd','Eltavolitas.cmd','Inditas.cmd','Ellenorzes.cmd','README.md','README.hu.md','TESTING.md','ARCHITECTURE.md','THIRD-PARTY-NOTICES.md','TESZTELES.md','TESZTEREDMENYEK.txt')
