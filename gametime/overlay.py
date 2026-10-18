@@ -4,7 +4,7 @@ import logging
 import math
 import time
 from PySide6.QtCore import Qt, QRectF, QPointF, Signal
-from PySide6.QtGui import QColor, QFont, QPainter, QPen
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen
 from PySide6.QtWidgets import QApplication, QWidget
 from . import win32
 
@@ -62,12 +62,13 @@ class CountdownOverlay(QWidget):
         self.setAttribute(Qt.WA_ShowWithoutActivating)
         self.setAttribute(Qt.WA_TransparentForMouseEvents)
         self.setFocusPolicy(Qt.NoFocus)
-        self.setFixedSize(244, 86)
+        self.timer_font = QFont("Consolas", 25, QFont.Bold)
+        metrics = QFontMetrics(self.timer_font, self)
+        self.setFixedSize(metrics.horizontalAdvance("00:00:00")+4, metrics.height()+4)
         self.seconds = 0
         self.warning = False
         self.preview = False
         self.opacity = .72
-        self.ratio = 1
         self._raised_at = 0
         self._native_styles()
 
@@ -82,12 +83,10 @@ class CountdownOverlay(QWidget):
         return hwnd
 
     def present(self, remaining, total, settings, screen, preview=False):
-        state = (max(0, math.ceil(remaining)), total >= settings.warning_seconds,
-                 preview, settings.overlay_opacity,
-                 max(0, min(1, remaining/settings.limit_seconds)), settings.language)
+        state = (max(0, math.ceil(remaining)), total >= settings.warning_seconds, preview, settings.overlay_opacity)
         if getattr(self, "_state", None) != state:
             self._state = state
-            self.seconds, self.warning, self.preview, self.opacity, self.ratio, _ = state
+            self.seconds, self.warning, self.preview, self.opacity = state
             self.update()
         self.move(*placement(screen.availableGeometry(), self.size(),
                              settings.overlay_x, settings.overlay_y))
@@ -107,26 +106,13 @@ class CountdownOverlay(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        accent = QColor("#ff929d" if self.warning else "#9bedcd")
-        background = QColor("#451d28" if self.warning else "#14252c")
-        background.setAlpha(round(self.opacity*255))
-        painter.setPen(QPen(QColor(205, 96, 112, 160) if self.warning
-                            else QColor(130, 198, 178, 100), 1))
-        painter.setBrush(background)
-        painter.drawRoundedRect(QRectF(1, 1, self.width()-2, self.height()-2), 15, 15)
-        painter.setPen(accent)
-        painter.setFont(QFont("Segoe UI", 8, QFont.DemiBold))
-        caption = self.owner.t("PREVIEW") if self.preview else self.owner.t("GAME TIME LEFT")
-        painter.drawText(QRectF(17, 10, 211, 18), Qt.AlignVCenter, caption)
+        color = QColor("#ff5c65" if self.warning else "#ffffff")
+        color.setAlphaF(self.opacity)
+        painter.setPen(color)
         seconds = self.seconds
         text = f"{seconds//3600:02d}:{seconds%3600//60:02d}:{seconds%60:02d}"
-        painter.setFont(QFont("Consolas", 25, QFont.Bold))
-        painter.drawText(QRectF(16, 28, 212, 39), Qt.AlignVCenter, text)
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor(255, 255, 255, 35))
-        painter.drawRoundedRect(QRectF(17, 74, 210, 3), 1.5, 1.5)
-        painter.setBrush(accent)
-        painter.drawRoundedRect(QRectF(17, 74, 210*self.ratio, 3), 1.5, 1.5)
+        painter.setFont(self.timer_font)
+        painter.drawText(self.rect(), Qt.AlignCenter, text)
 
 
 class PositionPicker(QWidget):
@@ -173,10 +159,7 @@ class PositionPicker(QWidget):
                          QPointF(monitor.center().x(), monitor.bottom()-6))
         painter.drawLine(QPointF(monitor.left()+6, monitor.center().y()),
                          QPointF(monitor.right()-6, monitor.center().y()))
-        painter.setPen(QPen(QColor("#90dbbb"), 1))
-        painter.setBrush(QColor("#26483d"))
-        painter.drawRoundedRect(hud, 6, 6)
-        painter.setPen(QColor("#b6f3da"))
+        painter.setPen(QColor("#ffffff"))
         painter.setFont(QFont("Consolas", 10, QFont.Bold))
         painter.drawText(hud, Qt.AlignCenter, "00:20:00" if hud.width()>=80 else "20:00")
 

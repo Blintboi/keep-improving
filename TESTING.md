@@ -62,6 +62,12 @@ A copied-profile preview discovered Steam, Epic, Riot, Ubisoft and Minecraft Lau
 
 The user-reported tiny VALORANT icon came from the asynchronous shell-icon fallback replacing a normalized icon with an uncropped native bitmap. The actual shell bitmap was 256×256 at DPR 256/96, with the visible mark occupying only 43×43 pixels. The shared normalizer now crops transparent bounds and resets DPR for initial icons, asynchronous results and launcher cards. A regression exercises the actual result-queue path with that bitmap geometry, checks the cropped size/DPR and measures a readable card mark instead of the former tiny dot. A fresh copied-profile VALORANT card capture was inspected; no real game was started.
 
+## 2.4 minimal interface and text-only countdown
+
+All 58 focused Qt, local-artwork/client, overlay and restriction tests passed in 27.900 seconds after the final card alignment and text-opacity changes. Existing persistence checks now include 100% text opacity; invalid values above 100% remain rejected. The overlay still changes color at the configured shared-budget warning threshold, preserves independent expiry popups, and uses the same input/focus guards.
+
+The native overlay smoke passed all nine checks with its separate synthetic WinForms process. An isolated renderer check measured maximum text alpha 255 at 100% and 64 at 25%, with transparent corners and no panel pixels; white and red states were captured and inspected. Hungarian library/statistics/settings and English client/library captures were inspected, including the settled 1000×700 layout and Play aligned beside each game name. The profile preview used a database copy with inert discovery/Hub fixtures and stopped tracker/overlay timers. No real game or launcher was started, and these checks do not add real-game fullscreen evidence.
+
 ## 1.4.0 validation on 2026-10-18
 
 150 automated tests passed in 58.746 seconds; 9 GUI checks, 18 legacy source-installer checks, and 14 bundled-runtime install/upgrade/uninstall checks passed. The Hub suite was rerun after its final directory-inventory change: 25 tests passed. All game-removal executions were mocked; no real games were uninstalled.

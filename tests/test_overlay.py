@@ -34,7 +34,7 @@ class OverlaySettingsTests(unittest.TestCase):
 
     @unittest.skipUnless(os.name=='nt','Windows paths required')
     def test_invalid_opacity_position_and_switches_are_rejected(self):
-        for fields in ({'overlay_opacity':float('nan')},{'overlay_opacity':.1},{'overlay_opacity':1},
+        for fields in ({'overlay_opacity':float('nan')},{'overlay_opacity':.1},{'overlay_opacity':1.01},
                        {'overlay_x':-1},{'overlay_y':2},{'overlay_x':True},{'overlay_enabled':'yes'},
                        {'overlay_screen':None}):
             with self.subTest(fields=fields),self.assertRaises(ValueError): replace(Settings(),**fields).validate()
@@ -93,7 +93,7 @@ class OverlayInterfaceTests(unittest.TestCase):
     def test_countdown_normal_warning_and_expired_states(self):
         overlay=self.display(5999); self.assertTrue(overlay.isVisible()); self.assertEqual(overlay.seconds,1201); self.assertFalse(overlay.warning)
         overlay=self.display(6000); self.assertEqual(overlay.seconds,1200); self.assertTrue(overlay.warning)
-        overlay=self.display(7205); self.assertEqual(overlay.seconds,0); self.assertTrue(overlay.warning); self.assertEqual(overlay.ratio,0)
+        overlay=self.display(7205); self.assertEqual(overlay.seconds,0); self.assertTrue(overlay.warning)
 
     def test_overlay_hides_for_other_apps_exclusions_lock_and_process_change(self):
         overlay=self.display(100)
@@ -157,11 +157,11 @@ class OverlayInterfaceTests(unittest.TestCase):
         with patch.object(self.app,'popup',return_value=True) as popup: self.app.notify(alert); popup.assert_called_once_with(alert)
 
     def test_position_opacity_monitor_and_options_persist_without_changing_budget(self):
-        self.app.overlay_picker.set_position(.2,.8); self.app.overlay_opacity.setValue(55)
+        self.app.overlay_picker.set_position(.2,.8); self.app.overlay_opacity.setValue(100)
         self.app.limit_popup.setChecked(False); self.app.overlay_warning.setChecked(False)
         self.app.overlay_screen.setCurrentIndex(1); self.app.save_settings()
         saved=self.store.settings(); self.assertTrue(saved.overlay_enabled); self.assertFalse(saved.overlay_replace_warning); self.assertFalse(saved.limit_popup_enabled)
-        self.assertEqual((saved.overlay_x,saved.overlay_y,saved.overlay_opacity),(.2,.8,.55))
+        self.assertEqual((saved.overlay_x,saved.overlay_y,saved.overlay_opacity),(.2,.8,1))
         self.assertEqual(saved.overlay_screen,self.qt.primaryScreen().name()); self.assertEqual(saved.limit_seconds,7200); self.assertEqual(saved.language,'hu')
         reader=Store(self.base/'usage.sqlite3'); self.assertEqual(reader.settings(),saved); reader.close()
 

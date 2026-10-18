@@ -220,16 +220,18 @@ class GameCard(QFrame):
     selected=Signal(str)
     launched=Signal(str)
     def __init__(self,game,t):
-        super().__init__(); self.game=game; self.t=t; self.chosen=False; self.hovered=False; self.seconds=0; self.art=(None,None)
+        super().__init__(); self.game=game; self.t=t; self.chosen=False; self.hovered=False; self.seconds=0; self.art=(None,None); self.show_source=False
         self.setFixedHeight(232); self.setMinimumWidth(190); self.setCursor(Qt.PointingHandCursor)
         self.setFocusPolicy(Qt.StrongFocus); self.setAccessibleName(game.name)
         self.play=button('',lambda:self.launched.emit(self.game.id)); self.play.setIcon(glyph('play','#b8f4db',17)); self.play.setFixedSize(34,34)
         self.play.setParent(self); self.play.setToolTip(t('▶ Play')); self.play.setAccessibleName(t('▶ Play')+' '+game.name)
         self.play.setStyleSheet('QPushButton {background:#28463c; border:1px solid #3b6352; border-radius:17px; padding:0;} QPushButton:hover {background:#3b6854;}')
-        self.setToolTip(game.name)
-    def resizeEvent(self,event): self.play.move(self.width()-49,183)
+        self.setToolTip(game.name+' · '+game.source)
+    def resizeEvent(self,event): self.play.move(self.width()-49,168)
     def set_state(self,seconds,chosen,enabled=True):
         if self.seconds!=seconds or self.chosen!=chosen: self.seconds=seconds; self.chosen=chosen; self.update()
+        source=self.t('Manual') if self.game.source=='Kézi' else self.t('Games folder') if self.game.source=='Games' else self.game.source
+        self.setToolTip(self.game.name+' · '+source+'\n'+self.t('Today')+': '+duration(seconds))
         self.play.setEnabled(enabled and self.game.installed)
     def enterEvent(self,event): self.hovered=True; self.update()
     def leaveEvent(self,event): self.hovered=False; self.update()
@@ -268,14 +270,15 @@ class GameCard(QFrame):
                 p.drawText(QRectF(0,38,self.width(),88),Qt.AlignCenter,initials)
         fade=QLinearGradient(0,68,0,166); fade.setColorAt(0,QColor(25,33,38,0)); fade.setColorAt(1,QColor(PANEL)); p.fillRect(QRectF(0,60,self.width(),108),fade)
         source=self.t('Manual') if self.game.source=='Kézi' else self.t('Games folder') if self.game.source=='Games' else self.game.source
-        p.setFont(QFont('Segoe UI',8,QFont.DemiBold)); badge_width=p.fontMetrics().horizontalAdvance(source)+18
-        p.setPen(Qt.NoPen); p.setBrush(QColor(12,22,25,205)); p.drawRoundedRect(QRectF(12,12,badge_width,23),7,7)
-        p.setPen(QColor('#c5d9d5')); p.drawText(QRectF(21,12,badge_width-12,23),Qt.AlignVCenter,source)
+        if self.show_source:
+            p.setFont(QFont('Segoe UI',8,QFont.DemiBold)); badge_width=p.fontMetrics().horizontalAdvance(source)+18
+            p.setPen(Qt.NoPen); p.setBrush(QColor(12,22,25,205)); p.drawRoundedRect(QRectF(12,12,badge_width,23),7,7)
+            p.setPen(QColor('#c5d9d5')); p.drawText(QRectF(21,12,badge_width-12,23),Qt.AlignVCenter,source)
         p.setFont(QFont('Segoe UI',11,QFont.DemiBold)); p.setPen(QColor(TEXT))
-        p.drawText(QRectF(15,148,self.width()-30,39),Qt.TextWordWrap|Qt.AlignTop,self.game.name)
+        p.drawText(QRectF(15,164,self.width()-78,42),Qt.TextWordWrap|Qt.AlignVCenter,self.game.name)
         p.setFont(QFont('Segoe UI',9)); p.setPen(QColor(MUTED))
-        caption=self.t('Today')+'  '+duration(self.seconds) if self.game.installed else self.t('Removed')
-        p.drawText(QRectF(15,194,self.width()-72,20),Qt.AlignVCenter,caption)
+        caption=(duration(self.seconds) if self.seconds else '') if self.game.installed else self.t('Removed')
+        p.drawText(QRectF(15,209,self.width()-30,17),Qt.AlignVCenter,caption)
         p.setClipping(False); p.setBrush(Qt.NoBrush); p.setPen(QPen(QColor(ACCENT if self.chosen else '#3b514e' if self.hovered else '#2b393f'),1.6 if self.chosen else 1))
         p.drawRoundedRect(rect,15,15)
 

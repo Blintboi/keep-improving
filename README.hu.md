@@ -1,12 +1,14 @@
-# Játékidőfigyelő — 2.3.1
+# Játékidőfigyelő — 2.4.0
 
 Windows 11-en futó, sötét felületű Gaming Hub és játékidőfigyelő egy alkalmazásban. A játékgyűjteményből közvetlenül indíthatod a játékokat, követheted az idődet és megnézheted a napi statisztikákat. A repó és a kiadások egyelőre **privátak**. A másik gépen is hozzáférő GitHub-fiókkal jelentkezz be a letöltéshez.
 
 A 2.0-s felület Qt-ra váltott: letisztult sötét oldalsáv, átrendeződő játékkártyák, kör alakú napi keretjelző és új statisztikaoldal került bele. A kártyák meglévő helyi Steam-borítóképeket, telepített játékképeket és játékikonokat használnak, képletöltés nélkül. A borítóképek teljes egészükben, az eredeti oldalarányukat megtartva férnek a képmezőbe; a szabad hely sötét marad. A közös kontrolleres-órás alkalmazásikon megmaradt. A kijelölt játék kezelését az alsó **…** menüben találod; a nyelvválasztó az oldalsáv alján van.
 
+A rövidített felületen a mai és hátralévő idő, a játéknevek és a kezelőgombok maradnak előtérben. Az indítógomb a játék neve mellett jelenik meg. Nullás játékidő nem foglal helyet a kártyán; a forrásjelzés az azonos nevű játékokat különbözteti meg. A részletes súgó tooltipben érhető el, a további launcherútvonalakat a **Beállítások → Játékmappa → Haladó** részben találod.
+
 ## Telepítés
 
-Töltsd le a Kiadások / Releases oldalról a `GameTimeMonitor-2.3.1-Setup.exe` fájlt, és indítsd el. A Python, a Qt/PySide6 és az SQLite benne van: semmit nem kell külön telepíteni. A program megnyílik, felismeri a játékokat, és a következő Windows-bejelentkezéskor a tálcán indul. A telepítő jelenleg nincs digitálisan aláírva.
+Töltsd le a Kiadások / Releases oldalról a `GameTimeMonitor-2.4.0-Setup.exe` fájlt, és indítsd el. A Python, a Qt/PySide6 és az SQLite benne van: semmit nem kell külön telepíteni. A program megnyílik, felismeri a játékokat, és a következő Windows-bejelentkezéskor a tálcán indul. A telepítő jelenleg nincs digitálisan aláírva.
 
 A program helye: `%LOCALAPPDATA%\Programs\GameTimeMonitor`. Az előzmények és beállítások a Windows Dokumentumok mappájában, a `GameTimeMonitor\data` alatt maradnak. A frissítés mentést készít, és megtartja az eddigi keretet, kizárásokat, EXE-szabályokat, rejtett játékokat és Hub-mappát.
 
@@ -16,13 +18,13 @@ Az asztalon egy közös **Gaming Hub** parancsikon marad a megszokott kontroller
 
 A **Játéktár** a kezdőlap: színes játékcsempék, helyi borítóképek és ikonok, gyorsindítás és rendezés a mai játékidő szerint. Keress játéknevet, vagy szűrj forrásra, válassz ki egy játékot, majd kattints a **Játék indítása** gombra. A kártyán dupla kattintás vagy Enter is indít. A Steam-, Epic-, Ubisoft- és Riot-játékot a megfelelő kliensen át, Minecraftot a launcherével vagy a meglévő hivatkozásával indítja; az eredeti parancsikon argumentumai megmaradnak. Egyértelmű, önálló EXE közvetlenül is indulhat.
 
-Ha több EXE közül kell választani, az **EXE hozzárendelése** gombbal egyszer jelöld ki a játék tényleges futtatható fájlját. Ezt az indításhoz és a méréshez is megjegyzi. A **Játék hozzáadása** is elmenti a választást. Az indítás előkészítése közben folytatódik az időmérés; a launcher megnyitása önmagában nem fogyasztja a keretet. A mérésből kizárt játékot is indíthatod, az eltávolítottat nem.
+Ha több EXE közül kell választani, az **EXE hozzárendelése** gombbal egyszer jelöld ki a játék tényleges futtatható fájlját. Ezt az indításhoz és a méréshez is megjegyzi. A **Hozzáadás** is elmenti a választást. Az indítás előkészítése közben folytatódik az időmérés; a launcher megnyitása önmagában nem fogyasztja a keretet. A mérésből kizárt játékot is indíthatod, az eltávolítottat nem.
 
 Az elrejtés, eltávolítás és időmérési beállítás ugyanebben a gyűjteményben érhető el; a **Statisztikák** külön oldal az oldalsávban. A **Játékmappa megnyitása** a kiválasztott játék fájljaihoz vezet. Az asztali ikon és a tálcamenü Gaming Hub pontja mindig a beépített játéklistához tér vissza.
 
 ## Játékkliensek és helyi képek
 
-Az oldalsáv **Játékkliensek** oldalán külön nyitható a telepített **Steam, Epic Games Launcher, Riot Client, Ubisoft Connect és Minecraft Launcher**. Mindegyik saját ikont és **Kliens megnyitása** gombot kap. A keresés a helyi parancsikonokból és telepítési adatokból dolgozik; egy játék indítására szolgáló argumentumokat nem használ fel általános kliensnyitásra. Indítás előtt újra ellenőrzi a program helyét. Egyetlen klienst sem indít el magától. A **Frissítés** újrakeresi a klienseket; a látható oldal körülbelül percenként is frissül.
+Az oldalsáv **Játékkliensek** oldalán külön nyitható a telepített **Steam, Epic Games Launcher, Riot Client, Ubisoft Connect és Minecraft Launcher**. Mindegyik saját ikont és **Megnyitás** gombot kap. A keresés a helyi parancsikonokból és telepítési adatokból dolgozik; egy játék indítására szolgáló argumentumokat nem használ fel általános kliensnyitásra. Indítás előtt újra ellenőrzi a program helyét. Egyetlen klienst sem indít el magától. A **Frissítés** újrakeresi a klienseket; a látható oldal körülbelül percenként is frissül.
 
 A kliensek az aktív játékkorlát mellett is megnyithatók, így a könyvtár, telepítés és frissítés elérhető. A kliensben töltött idő nem fogyasztja a játékkeretet. A belőle indított tényleges, figyelt játékra továbbra is érvényes az időmérés és a beállított korlátozás.
 
@@ -48,17 +50,17 @@ Az ablak bezárása és a **Tálcára** gomb mellett tovább fut a mérés. A t�
 
 ## Játék közbeni visszaszámláló
 
-A **Beállítások → Játék közbeni visszaszámláló** részen kapcsolhatod be az áttetsző számlálót, majd mentsd a beállításokat. Új és korábbi telepítéseken alapból kikapcsolva marad. Csak az előtérben lévő, figyelt játék közben jelenik meg, és a közös napi keret hátralévő idejét mutatja. Másik alkalmazásra váltáskor vagy zároláskor eltűnik; a Hub tálcára tétele mellett tovább látható. Az egérkattintásokat átengedi, nem kér fókuszt és nem fogja el a billentyűket.
+A **Beállítások → Visszaszámláló** részen kapcsolhatod be a **Megjelenítés játék közben** lehetőséget, majd mentsd a beállításokat. Új és korábbi telepítéseken alapból kikapcsolva marad. Csak a hátralévő idő fehér számjegyei látszanak, teljesen átlátszó háttéren, keret, felirat és folyamatjelző nélkül. Az előtérben lévő, figyelt játék közben jelenik meg, és a közös napi keret hátralévő idejét mutatja. Másik alkalmazásra váltáskor vagy zároláskor eltűnik; a Hub tálcára tétele mellett tovább látható. Az egérkattintásokat átengedi, nem kér fókuszt és nem fogja el a billentyűket.
 
-Bekapcsoláskor alapból a korai popup helyett pirosasra vált a beállított figyelmeztetési küszöbnél. A szokásos 100/120 perces keretnél ez 20 perc hátralévő időt jelent. Ehhez nem küld Esc-et és nem szól hang. A korai popup külön visszakapcsolható. A **Felugró figyelmeztetés a napi keret lejáratakor** ettől független kapcsoló, alapból bekapcsolva; a később indított, kereten túli játékmenetek jelzését is vezérli. Lejárat után a számláló nullán marad. A popup nem állítja le a játékot.
+Bekapcsoláskor alapból a korai popup helyett pirosra vált a beállított figyelmeztetési küszöbnél. A szokásos 100/120 perces keretnél ez 20 perc hátralévő időt jelent. Ehhez nem küld Esc-et és nem szól hang. A korai popup külön visszakapcsolható. A **Felugró jelzés lejáratkor** ettől független kapcsoló, alapból bekapcsolva; a később indított, kereten túli játékmenetek jelzését is vezérli. Lejárat után a számláló nullán marad. A popup nem állítja le a játékot.
 
-A helyét a Beállításokban a kicsinyített kijelzőn húzással vagy nyílbillentyűkkel módosíthatod. Választhatsz automatikus vagy konkrét kijelzőt; lecsatlakoztatott kijelzőnél az elsődlegeset használja. A háttér fedettsége 25–95% között állítható, a számjegyek jól olvashatók maradnak. Az **Előnézet 10 másodpercig** mentés nélkül megmutatja az új helyet, időmérés és előzménymódosítás nélkül. Végül nyomd meg a **Beállítások mentése** gombot.
+A helyét a Beállításokban a kicsinyített kijelzőn húzással vagy nyílbillentyűkkel módosíthatod. Választhatsz automatikus vagy konkrét kijelzőt; lecsatlakoztatott kijelzőnél az elsődlegeset használja. Az **Előnézet (10 mp)** mentés nélkül megmutatja az új helyet, időmérés és előzménymódosítás nélkül. Végül nyomd meg a **Mentés** gombot. A **Szöveg fedettsége** csúszka 25–100% között csak a számjegyek áttetszőségét állítja; a környezetük teljesen átlátszó marad. A korábban mentett százalék frissítéskor megmarad, és a szövegre érvényes. Az **Értesítés próbája** gomb itt teszteli a felugró figyelmeztetést.
 
 Ez asztali Windows-overlay, nem épül bele a játékba. Exkluzív teljes képernyős, emelt jogosultságú vagy védett játék eltakarhatja. Keret nélküli ablakos módban megbízhatóbb; a Minecraftban is külön ellenőrizni kell. Nem váltja át magától a játék megjelenítési módját. Ha nem látszik a játékod felett, kapcsold vissza a korai popupot. Megjelenítési hiba esetén a program visszaáll a korai popupra, de az exkluzív fullscreen miatti takarást nem mindig lehet felismerni.
 
 ## Választható játékkorlát
 
-A **Beállítások → Játék korlátozása** részen kapcsold be a **További figyelt játék megakadályozása a napi határ után** lehetőséget, add meg a napi összesített perceket, majd ments. Új és korábbi telepítésnél alapból kikapcsolva marad, a kezdeti határ **125 perc**. Ez külön állítható a 120 perces emlékeztető kerettől.
+A **Beállítások → Játék korlátozása** részen kapcsold be a **Korlátozás bekapcsolása** lehetőséget, add meg a napi összesített perceket, majd ments. Új és korábbi telepítésnél alapból kikapcsolva marad, a kezdeti határ **125 perc**. Ez külön állítható a 120 perces emlékeztető kerettől.
 
 A határ elérésekor egy ellenőrzött Esc-et próbál küldeni a felismert, előtérben lévő játéknak, 200 ms múlva pedig ugyanazt az ablakot minimalizálja és megnyitja a Hubot. Ha visszatérsz a játékba, újra minimalizálja; a próbák között legalább két másodperc telik el. Az Esc-et folyamatonként/naponként egyszer próbálja a futó figyelőben, így nem kapcsolgatja folyton a játék menüjét. A Hubból sem indítható figyelt játék, a már előkészített indítást is újraellenőrzi. Külső launcheres indításnál az előtérbe kerülést követően lép közbe. Az összesített idő újraindítás után is megmarad, helyi éjfélkor új nap kezdődik. A rejtett játékokra is vonatkozik; a mérésből kizártakra nem.
 
@@ -77,7 +79,7 @@ A már meglévő előzményeket használja, az elrejtett, kizárt és eltávolí
 
 ## Gaming Hub és játékkezelés
 
-Steam, Epic, Ubisoft Connect, Riot, Minecraft Java és a beállított játékmappában lévő önálló játékok támogatottak. A játékfájlok és mentések nem költöznek. Az új és eltávolított játékok követése automatikus; más, ismeretlen helyen lévő játékot a **Játék hozzáadása** gombbal vehetsz fel. A régi parancsikonmappa megmarad választható kiegészítőként; a Beállításokban a **Parancsikonmappa karbantartása is** jelöléssel vezérelhető. A beépített játéklista és indítás ettől függetlenül működik.
+Steam, Epic, Ubisoft Connect, Riot, Minecraft Java és a beállított játékmappában lévő önálló játékok támogatottak. A játékfájlok és mentések nem költöznek. Az új és eltávolított játékok követése automatikus; más, ismeretlen helyen lévő játékot a **Hozzáadás** gombbal vehetsz fel. A régi parancsikonmappa megmarad választható kiegészítőként; a Beállításokban a **Parancsikonok frissítése** jelöléssel vezérelhető. A beépített játéklista és indítás ettől függetlenül működik.
 
 Az **Elrejtés / visszaállítás** csak a főlistát módosítja: a mérés, az előzmény és a Hub-parancsikon megmarad. A **Rejtett játékok mutatása** jelöléssel visszahozhatod a sort. A **Kizárás / mérés** külön szabályozza, számítson-e a játék jövőbeli ideje.
 

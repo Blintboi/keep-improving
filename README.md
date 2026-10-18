@@ -2,13 +2,13 @@
 
 An offline Windows 11 Gaming Hub and game-time monitor in one app. Launch games from a searchable library, measure foreground gameplay against a shared daily budget, and follow daily statistics in a dark English/Hungarian interface.
 
-**Private preview 2.3.1.** The repository and release downloads remain private. Sign into GitHub with an account that has access on your other PC. Each PC keeps its own history; there is no cloud synchronization. [Magyar útmutató](README.hu.md).
+**Private preview 2.4.0.** The repository and release downloads remain private. Sign into GitHub with an account that has access on your other PC. Each PC keeps its own history; there is no cloud synchronization. [Magyar útmutató](README.hu.md).
 
 The 2.0 interface uses Qt Widgets: a dark sidebar, responsive game cards, a daily-budget ring, contextual game actions and a redesigned statistics page. Artwork is read from existing local Steam caches, installed-game image files or game icons; no image service, launcher credentials or artwork downloads are used. Artwork and icons keep their original aspect ratios; complete cover images fit inside the card with dark padding where needed. Missing art has a colored monogram fallback. The shared controller/clock application icon remains unchanged.
 
 ## Install
 
-1. Open this repository's **Releases**, download `GameTimeMonitor-2.3.1-Setup.exe`, and run it as your normal Windows user.
+1. Open this repository's **Releases**, download `GameTimeMonitor-2.4.0-Setup.exe`, and run it as your normal Windows user.
 2. Python, Qt/PySide6 and SQLite are included. No separate Python, pip packages, administrator account or launcher login is needed by the monitor.
 3. The app opens and discovers installed games. It starts in the tray when you sign into Windows. Open **Settings** to change your daily limit or Gaming Hub location.
 
@@ -22,13 +22,15 @@ Setup adds one shared desktop **Gaming Hub** icon, a Start menu shortcut, Window
 
 The **Library** page is the home screen, with artwork cards, quick Play buttons, search, source filters and sorting by name or today’s time. Search by name or filter by source, select a game and click **Play**, double-click its card or press Enter. Play uses Steam, Epic, Ubisoft and Riot launch routes, the Minecraft launcher or an existing shortcut with its original arguments. Standalone games with one executable can start directly. Discovery keeps the library up to date.
 
-If the executable is ambiguous, use **Assign EXE** to choose it once. The app saves the choice and its tracking rule. **Add game** also remembers the executable. Choices survive upgrades and discovery ID merges. Excluding a game's time does not prevent launching it. Removed games cannot launch. Preparation runs on a worker, keeping measurement and reminders responsive; opening a launcher alone does not count as gameplay.
+If the executable is ambiguous, use **Assign EXE** to choose it once. The app saves the choice and its tracking rule. **Add** also remembers the executable. Choices survive upgrades and discovery ID merges. Excluding a game's time does not prevent launching it. Removed games cannot launch. Preparation runs on a worker, keeping measurement and reminders responsive; opening a launcher alone does not count as gameplay.
 
 Select a card and use its **…** menu for Hide / restore, Exclude / track, Assign EXE, EXE rules, Open game folder and Uninstall game. Statistics and Settings have their own pages in the left sidebar. **Open game folder** opens the selected installation when you need its files. The desktop Gaming Hub icon and tray's Open Gaming Hub return to this page without opening a separate folder or another monitor.
 
+The library keeps labels brief: Today and Remaining above the cards, Play beside the game name, recorded time only when nonzero, and a source badge only when matching game names need distinguishing. The selected-game controls appear after selection. Extra help is available in tooltips; additional launcher locations are under **Settings → Games folder → Advanced**. The Settings title's tooltip shows the app version.
+
 ## Launcher clients and local artwork
 
-Open **Launchers** in the sidebar for a separate client library: installed **Steam, Epic Games Launcher, Riot Client, Ubisoft Connect and Minecraft Launcher** appear with their own icons and Open launcher buttons. Detection uses local Start menu/Desktop shortcut targets, known installation roots and installation-only registry/index records. Shortcuts with game-specific arguments are ignored for generic client opening; the executable path is rechecked before opening without shell command text or extra arguments. No client opens automatically. Refresh repeats detection, and the visible page refreshes about once a minute. A missing client shows a clear message.
+Open **Launchers** in the sidebar for a separate client library: installed **Steam, Epic Games Launcher, Riot Client, Ubisoft Connect and Minecraft Launcher** appear with their own icons and **Open** buttons. Detection uses local Start menu/Desktop shortcut targets, known installation roots and installation-only registry/index records. Shortcuts with game-specific arguments are ignored for generic client opening; the executable path is rechecked before opening without shell command text or extra arguments. No client opens automatically. Refresh repeats detection, and the visible page refreshes about once a minute. A missing client shows a clear message.
 
 Launcher clients remain accessible when the voluntary game restriction is active, so libraries, downloads and updates still work. Their foreground time does not consume the game budget. Starting an actual tracked game, including through a client, still follows the normal time/restriction policy.
 
@@ -56,17 +58,17 @@ The earlier Tk version was confirmed over Minecraft Java fullscreen at real 20/3
 
 ## In-game countdown (optional)
 
-In **Settings → In-game countdown**, enable **Show a click-through countdown while gaming**, then save. Fresh installs and older profiles keep it off until you enable it. The small translucent timer appears only during tracked foreground gameplay, counts the remaining shared daily budget, and disappears when you switch to another app or lock Windows. Hiding the Hub does not hide the timer. The timer never accepts mouse/keyboard input or takes focus.
+In **Settings → Countdown**, enable **Show while gaming**, then save. Fresh installs and older profiles keep it off until you enable it. Only the remaining-time digits appear, white on a fully transparent background, without a panel, border, caption or progress bar. The timer appears during tracked foreground gameplay and disappears when you switch to another app or lock Windows. Hiding the Hub does not hide the timer. The timer never accepts mouse/keyboard input or takes focus.
 
-By default, enabling it replaces the early warning popup with a reddish timer at your configured warning threshold (20 minutes remaining with the initial 100/120-minute settings). No Escape, sound or focus change occurs for that color warning. You can retain the early popup instead. **Show a popup when the daily budget expires** is a separate switch, on by default, and controls later over-budget session reminders too. The timer stays at zero after expiry. Popups keep the existing guarded Escape behavior; they do not stop games.
+By default, enabling it replaces the early warning popup with red digits at your configured warning threshold (20 minutes remaining with the initial 100/120-minute settings). No Escape, sound or focus change occurs for that color warning. You can retain the early popup instead. **Popup when time expires** is a separate switch, on by default, and controls later over-budget session reminders too. The timer stays at zero after expiry. Popups keep the existing guarded Escape behavior; they do not stop games.
 
-Drag the miniature timer inside Settings to choose its position, or use the arrow keys. Choose the active game's monitor automatically or a specific display; a disconnected display falls back to the primary monitor. Adjust background opacity from 25–95%; the digits stay readable. **Preview for 10 seconds** shows your unsaved placement without changing time/history. Click **Save settings** to keep changes.
+Drag the miniature timer inside Settings to choose its position, or use the arrow keys. Choose the active game's monitor automatically or a specific display; a disconnected display falls back to the primary monitor. **Preview (10s)** shows your unsaved placement without changing time/history. Click **Save** to keep changes. **Text opacity** adjusts only the digits from 25–100%; the surrounding area remains fully transparent. Upgrades keep the saved opacity percentage and apply it to the text. **Test alert** in this section checks the expiry-style popup.
 
 This is a Windows desktop overlay, without game injection. Exclusive fullscreen or elevated/protected games may hide it. Borderless/windowed mode is more reliable; test visibility in your game before relying on the color warning. The app does not force fullscreen changes. Turn off the replacement option to retain the early popup if needed. A renderer error restores early popup delivery, but an exclusive-fullscreen game hiding an otherwise healthy desktop window cannot always be detected.
 
 ## Optional play restriction
 
-Enable **Settings → Play restriction → Prevent further tracked gameplay after a daily threshold**, choose the total daily minutes, and save. It is off by default on fresh installs and upgrades; the initial threshold is **125 minutes**. This threshold is independent of the reminder budget (initially 120 minutes).
+Enable **Settings → Play restriction → Enable play restriction**, choose the total daily minutes, and save. It is off by default on fresh installs and upgrades; the initial threshold is **125 minutes**. This threshold is independent of the reminder budget (initially 120 minutes).
 
 At or above the threshold, the monitor tries a guarded Escape for the recognized foreground game, waits 200 ms, then requests minimization of that exact process/window and opens the Hub. Returning to a tracked game triggers minimization again, with a two-second retry interval; Escape is attempted once per running process/day in the resident session so retries do not keep toggling its menu. The Hub blocks Play too, including already-prepared launch requests. External launcher starts are detected through foreground tracking. The shared total survives restarts, resets at local midnight, and includes hidden games; excluded games/apps remain outside this policy. A persistent banner explains the restriction and keeps Settings accessible. Disable it or change the threshold there at any time.
 
@@ -76,9 +78,9 @@ This is a voluntary interruption tool, not tamper-resistant parental control. It
 
 Sources: **Steam, Epic Games, Ubisoft Connect, Riot including VALORANT, Minecraft Java**, and standalone games under the configured Games/Hub folder. Installation metadata and file/registry events update the catalog and shortcuts; repair scans cover missed events. Multiple Steam libraries and extra launcher locations can be configured.
 
-Games outside known locations cannot always be recognized safely. Use **Add game** to select the actual game EXE and name it. **Assign EXE** maps an executable to an existing game and remembers it for Play. Browsers and launcher clients are blocked. Shared `javaw.exe` is not globally treated as Minecraft; known Minecraft runtime locations or an exact manual rule are required.
+Games outside known locations cannot always be recognized safely. Use **Add** to select the actual game EXE and name it. **Assign EXE** maps an executable to an existing game and remembers it for Play. Browsers and launcher clients are blocked. Shared `javaw.exe` is not globally treated as Minecraft; known Minecraft runtime locations or an exact manual rule are required.
 
-The existing shortcuts folder is an optional companion, controlled by **Also maintain a shortcuts folder (optional)** in Settings. The integrated library and Play work with this option off too. Installations and saves are not moved. In the companion folder, original shortcuts retain arguments, working directory and icons; an unknown launch command produces a folder link. `Folders` contains installation links and `Launchers` contains client shortcuts. Separate real installations of the same title are labeled by source.
+The existing shortcuts folder is an optional companion, controlled by **Maintain game shortcuts** in Settings. The integrated library and Play work with this option off too. Installations and saves are not moved. In the companion folder, original shortcuts retain arguments, working directory and icons; an unknown launch command produces a folder link. `Folders` contains installation links and `Launchers` contains client shortcuts. Separate real installations of the same title are labeled by source.
 
 Only unchanged shortcuts recorded as owned are removed when a game disappears. Edited/unowned files are preserved. A disconnected/unreadable library is kept until a successful scan. A Hub root has one authoritative profile owner and a lock to prevent duplication; do not delete `.gametime-hub.json` or share one Hub between independent profiles.
 
@@ -95,7 +97,7 @@ Steam opens its uninstall flow. Epic/Ubisoft open the detected client with libra
 
 The app never executes arbitrary registry command text, adds silent-removal flags, or recursively deletes game files. Review the publisher's final confirmation, close running games if requested, and back up local saves. Discovery subsequently retires the removed game and unchanged owned Hub links, retaining history. A portable game's actual mapped EXE/folder must disappear before it is considered removed. Hiding does not uninstall anything.
 
-Fresh installs count chess normally. **Exclude chess games by default** is optional. Pre-1.4 profiles keep their previous exclusion policy during migration; explicit per-game choices take precedence.
+Fresh installs count chess normally. **Exclude chess games** is optional. Pre-1.4 profiles keep their previous exclusion policy during migration; explicit per-game choices take precedence.
 
 ## Privacy and removing the monitor
 
@@ -107,7 +109,7 @@ Remove the monitor via **Windows Settings → Apps → Installed apps → Game T
 
 ## Troubleshooting
 
-- **No time counted:** check Active game while the actual game has focus, and confirm Tracked status. Add game / Assign EXE for unknown standalone games. EXE exclusions take precedence; a launcher alone does not count.
+- **No time counted:** check the active-game name while the actual game has focus, and inspect its tracking option in the **…** menu. Use Add / Assign EXE for unknown standalone games. EXE exclusions take precedence; a launcher alone does not count.
 - **Missing after sign-in:** check Task Manager → Startup apps; Windows lets you disable startup. Launch from the Start menu. Setup errors are recorded in `%TEMP%\GameTimeMonitor-setup.log`.
 - **Fullscreen alert hidden:** compare in borderless mode and check privilege levels. The monitor does not request administrator access. Report the game, display mode, time and relevant log lines privately.
 - **Stale link:** use Refresh games and hub. Unreadable libraries and edited/unowned links are intentionally preserved. Removing only a shortcut does not remove the installed game.

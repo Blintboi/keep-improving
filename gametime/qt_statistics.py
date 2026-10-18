@@ -14,9 +14,8 @@ class StatisticsPage(QWidget):
         scroll=QScrollArea(); scroll.setWidgetResizable(True); shell.addWidget(scroll)
         content=QWidget(); scroll.setWidget(content)
         layout=QVBoxLayout(content); layout.setContentsMargins(32,25,32,22); layout.setSpacing(16)
-        header=QHBoxLayout(); titles=QVBoxLayout(); titles.setSpacing(6)
-        titles.addWidget(label(t('Statistics'),'title')); titles.addWidget(label(t('See how your play time adds up.'),'muted'))
-        header.addLayout(titles); header.addStretch(); header.addWidget(button(t('Refresh'),self.refresh)); layout.addLayout(header)
+        header=QHBoxLayout(); header.addWidget(label(t('Statistics'),'title'),1)
+        header.addWidget(button(t('Refresh'),self.refresh)); layout.addLayout(header)
         controls=QHBoxLayout(); controls.setSpacing(8)
         self.presets=[]
         for text,days in [('Last 7 days',7),('Last 30 days',30),('This month',0)]:
@@ -37,7 +36,7 @@ class StatisticsPage(QWidget):
             box.addWidget(label(t(title),'muted')); value.setWordWrap(True); box.addWidget(value); metrics.addWidget(card,1)
         layout.addLayout(metrics)
         chart_box=panel(); chart_layout=QVBoxLayout(chart_box); chart_layout.setContentsMargins(20,17,20,13)
-        chart_layout.addWidget(label(t('Daily play time — click a bar to see its games'),'section'))
+        chart_title=label(t('Daily play time'),'section'); chart_title.setToolTip(t('Daily play time — click a bar to see its games')); chart_layout.addWidget(chart_title)
         self.chart=DailyChart(); self.chart.day_clicked.connect(self.choose_day); chart_layout.addWidget(self.chart)
         layout.addWidget(chart_box,2)
         lower=QHBoxLayout(); lower.setSpacing(16)
@@ -48,7 +47,7 @@ class StatisticsPage(QWidget):
         lower.addWidget(days_card,1)
         games_card=panel(); games_layout=QVBoxLayout(games_card); games_layout.setContentsMargins(16,12,16,6)
         heading=QHBoxLayout(); self.breakdown_title=label(t('Whole period'),'section'); heading.addWidget(self.breakdown_title); heading.addStretch()
-        heading.addWidget(button(t('Whole period'),self.show_period,'quiet')); games_layout.addLayout(heading)
+        self.whole_period_button=button(t('Whole period'),self.show_period,'quiet'); heading.addWidget(self.whole_period_button); games_layout.addLayout(heading)
         self.games_table=QTableWidget(0,4); self.games_table.setHorizontalHeaderLabels([t('Game'),t('Source'),t('Time'),t('Share')])
         self.games_table.verticalHeader().hide(); self.games_table.setShowGrid(False)
         self.games_table.setSelectionBehavior(QAbstractItemView.SelectRows); self.games_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -57,7 +56,7 @@ class StatisticsPage(QWidget):
         self.games_table.setMinimumHeight(145); games_layout.addWidget(self.games_table); lower.addWidget(games_card,3)
         layout.addLayout(lower,2)
         self.average_note=label('','muted'); self.average_note.setWordWrap(True); layout.addWidget(self.average_note)
-        note=label(t('Only recorded play time is available. Hidden and removed games are included.'),'muted'); note.setWordWrap(True); layout.addWidget(note)
+        self.total_label.setToolTip(t('Only recorded play time is available. Hidden and removed games are included.'))
 
     def preset(self,count):
         today=date.today()
@@ -76,7 +75,9 @@ class StatisticsPage(QWidget):
         self.report=summarize(self.app.store.history(self.start.text(),self.end.text()),self.start.text(),self.end.text(),started_on=started,as_of=date.today().isoformat())
         self.total_label.setText(duration(self.report.total)); self.average_label.setText(duration(self.report.average))
         self.top_label.setText(self.report.games[0][1] if self.report.games else self.app.t('No recorded play time'))
-        self.average_note.setText(self.app.t('Average uses {days} elapsed days in the selected period, no earlier than installation ({date}).',days=self.report.average_days,date=started))
+        explanation=self.app.t('Average uses {days} elapsed days in the selected period, no earlier than installation ({date}).',days=self.report.average_days,date=started)
+        self.average_note.setText(self.app.t('Average: {days} days · installed {date}',date=started,days=self.report.average_days))
+        self.average_label.setToolTip(explanation); self.average_note.setToolTip(explanation)
         if self.selected_day not in self.report.days: self.selected_day=None
         self.updating=True; self.days_list.clear()
         for day,seconds in reversed(list(self.report.days.items())): self.days_list.addItem(day+'   '+duration(seconds))
@@ -99,7 +100,7 @@ class StatisticsPage(QWidget):
         if not self.report: return
         rows=self.report.by_day.get(self.selected_day,[]) if self.selected_day else self.report.games
         total=sum(row[3] for row in rows)
-        self.breakdown_title.setText(self.app.t('Breakdown — {period}',period=self.selected_day or self.app.t('Whole period')))
+        self.breakdown_title.setText(self.selected_day or self.app.t('By game')); self.whole_period_button.setVisible(self.selected_day is not None)
         self.games_table.setRowCount(len(rows))
         for i,(gid,name,source,seconds) in enumerate(rows):
             share=f'{seconds/total:.1%}' if total else '0%'

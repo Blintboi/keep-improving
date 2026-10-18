@@ -83,7 +83,7 @@ class Settings:
         for value in (self.overlay_enabled, self.overlay_replace_warning, self.limit_popup_enabled):
             if not isinstance(value, bool):
                 raise ValueError("Overlay switches must be on or off.")
-        for value, minimum, maximum in ((self.overlay_opacity,.25,.95), (self.overlay_x,0,1), (self.overlay_y,0,1)):
+        for value, minimum, maximum in ((self.overlay_opacity,.25,1), (self.overlay_x,0,1), (self.overlay_y,0,1)):
             if isinstance(value,bool) or not isinstance(value,(int,float)) or not math.isfinite(value) or not minimum <= value <= maximum:
                 raise ValueError("Invalid countdown opacity or position.")
         if not isinstance(self.overlay_screen,str) or len(self.overlay_screen)>200:
