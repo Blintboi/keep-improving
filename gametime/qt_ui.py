@@ -222,7 +222,11 @@ class App(QMainWindow,MonitorActions):
     def settings_dialog(self): self.switch_page(2); self.show()
     def show(self):
         if self.closed: return
-        self.showNormal(); self.raise_(); self.activateWindow(); win32.u.SetForegroundWindow(dark_window(self))
+        self.showNormal(); hwnd=dark_window(self)
+        # Windows STARTUPINFO may hide the first Qt show. Explicitly restore the
+        # native window as well, including launches through hidden startup links.
+        win32.u.ShowWindow(hwnd,9)
+        self.raise_(); self.activateWindow(); win32.u.SetForegroundWindow(hwnd)
     def open_games(self): self.switch_page(0); self.show()
     def closeEvent(self,event):
         if self.closed: event.accept()

@@ -270,4 +270,3 @@ class MonitorActions:
             self.set_status("An error occurred; see monitor.log: " + str(exc))
             self.tracker.previous = None
         self.tick_timer = self.call_later(1000, self.tick)
-

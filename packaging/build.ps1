@@ -2,7 +2,8 @@
     [string]$PythonPath = 'python.exe',
     [string]$OutputDir = (Join-Path $PSScriptRoot '..\dist'),
     [string]$BuildDir = (Join-Path $PSScriptRoot '..\build'),
-    [switch]$SkipFreeze
+    [switch]$SkipFreeze,
+    [switch]$FreezeOnly
 )
 $ErrorActionPreference = 'Stop'
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
@@ -11,10 +12,22 @@ $BuildDir = [IO.Path]::GetFullPath($BuildDir)
 New-Item -ItemType Directory -Path $OutputDir,$BuildDir -Force | Out-Null
 $version = (& $PythonPath -B -c "import sys; sys.path.insert(0,sys.argv[1]); from gametime import __version__; print(__version__)" $repo).Trim()
 if (-not $SkipFreeze) {
-    & $PythonPath -B -m PyInstaller --noconfirm --clean --onedir --windowed --name GameTimeMonitor --icon (Join-Path $repo 'gametime\app.ico') --add-data ((Join-Path $repo 'gametime\app.ico') + ':gametime') --add-data ((Join-Path $repo 'gametime\hub_links.ps1') + ':gametime') --add-data ((Join-Path $repo 'gametime\icons') + ':gametime/icons') --distpath (Join-Path $BuildDir 'frozen') --workpath (Join-Path $BuildDir 'pyinstaller') --specpath $BuildDir (Join-Path $repo 'main.py')
-    if ($LASTEXITCODE -ne 0) { throw 'PyInstaller build failed.' }
+    # Build tools must not resolve Qt dependencies from unrelated programs on PATH.
+    $pythonQuery = 'import sys,json; print(json.dumps({"executable":sys.executable,"base":sys.base_prefix}))'
+    $pythonInfo = ($pythonQuery | & $PythonPath -) | ConvertFrom-Json
+    $PythonPath = $pythonInfo.executable
+    $savedBuildPath = $env:PATH
+    try {
+        $env:PATH = @((Split-Path -Parent $PythonPath), $pythonInfo.base, (Join-Path $pythonInfo.base 'DLLs'),
+                      (Join-Path $env:WINDIR 'System32'), $env:WINDIR, (Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0')) -join ';'
+        & $PythonPath -B -m PyInstaller --noconfirm --clean --onedir --windowed --name GameTimeMonitor --icon (Join-Path $repo 'gametime\app.ico') --add-data ((Join-Path $repo 'gametime\app.ico') + ':gametime') --add-data ((Join-Path $repo 'gametime\hub_links.ps1') + ':gametime') --add-data ((Join-Path $repo 'gametime\icons') + ':gametime/icons') --distpath (Join-Path $BuildDir 'frozen') --workpath (Join-Path $BuildDir 'pyinstaller') --specpath $BuildDir (Join-Path $repo 'main.py')
+        if ($LASTEXITCODE -ne 0) { throw 'PyInstaller build failed.' }
+    } finally { $env:PATH = $savedBuildPath }
+
 }
 $bundle = Join-Path $BuildDir 'frozen\GameTimeMonitor'
+if (Test-Path -LiteralPath (Join-Path $bundle '_internal\icuuc.dll')) { throw 'Unexpected app-local ICU: Qt on Windows 11 must use the Windows ICU runtime.' }
+if ($FreezeOnly) { Write-Output $bundle; return }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'uninstall-bundled.ps1') -Destination $bundle
 foreach ($name in @('README.md','README.hu.md','TESTING.md','ARCHITECTURE.md','THIRD-PARTY-NOTICES.md')) {
     Copy-Item -LiteralPath (Join-Path $repo $name) -Destination $bundle

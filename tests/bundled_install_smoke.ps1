@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$PackageDir,
+﻿param([Parameter(Mandatory=$true)][string]$PackageDir,
       [Parameter(Mandatory=$true)][string]$ReportPath,
       [string]$PythonPath='python.exe')
 $ErrorActionPreference = 'Stop'
@@ -37,6 +37,28 @@ try {
     $hubLink = $shell.CreateShortcut($hubPath)
     $report.desktop_hub_opens_integrated_app = $hubLink.TargetPath -eq $exe -and $hubLink.Arguments -eq ('--hub --data-dir "' + $data + '"') -and $hubLink.IconLocation -eq ($hubIcon + ',0')
     $report.single_shared_desktop_icon = @(Get-ChildItem -LiteralPath $desktop -Filter '*.lnk').Count -eq 1
+    # Diagnostics alone never imports Qt. Exercise the actual frozen GUI too.
+    $gui = Start-Process -FilePath $exe -ArgumentList @('--background','--data-dir',('"' + $data + '"')) -WindowStyle Hidden -PassThru
+    try {
+        Start-Sleep -Seconds 2
+        if ($gui.HasExited) { throw 'Frozen Qt resident did not start.' }
+        $hubRequest = Start-Process -FilePath $exe -ArgumentList @('--hub','--data-dir',('"' + $data + '"')) -WindowStyle Hidden -PassThru
+        if (-not $hubRequest.WaitForExit(10000)) { throw 'Hub request did not return.' }
+        $guiDeadline = [DateTime]::UtcNow.AddSeconds(20)
+        do {
+            Start-Sleep -Milliseconds 200
+            $gui.Refresh()
+            if ($gui.HasExited) { throw 'Frozen Qt interface exited before opening.' }
+            $guiVisible = $gui.MainWindowTitle -eq 'Gaming Hub'
+        } until ($guiVisible -or [DateTime]::UtcNow -ge $guiDeadline)
+        if (-not $guiVisible) { throw 'Frozen Qt interface did not become visible; inspect its monitor.log.' }
+        $report.qt_window_opens_from_background = $true
+        $report.qt_hub_request_reuses_resident = $hubRequest.HasExited -and -not $gui.HasExited
+        $stop = Start-Process -FilePath $exe -ArgumentList @('--stop-wait','20','--data-dir',('"' + $data + '"')) -WindowStyle Hidden -Wait -PassThru
+        $report.qt_resident_stops_gracefully = $stop.ExitCode -eq 0 -and $gui.WaitForExit(10000)
+    } finally {
+        if (-not $gui.HasExited) { Stop-Process -Id $gui.Id -Force }
+    }
     $process = Start-Process -FilePath $exe -ArgumentList @('--configure','--language','hu','--data-dir',('"' + $data + '"')) -WindowStyle Hidden -Wait -PassThru
     if ($process.ExitCode -ne 0) { throw 'Language selection failed.' }
     $trackingStart = 'import sqlite3,sys; d=sqlite3.connect(sys.argv[1]); print(d.execute("SELECT value FROM settings WHERE key=?",("tracking_started_on",)).fetchone()[0])' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
@@ -50,6 +72,16 @@ try {
     'save data' | Set-Content -LiteralPath (Join-Path $data 'keep.txt')
     'import sqlite3,sys; from datetime import date; d=sqlite3.connect(sys.argv[1]); d.execute("INSERT INTO game_preferences VALUES (?,?)",("test:hidden",1)); d.execute("INSERT INTO usage VALUES (?,?,?)",(date.today().isoformat(),"test:hidden",123)); d.commit()' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     if ($LASTEXITCODE -ne 0) { throw 'Fixture write failed.' }
+    $obsoleteOwned = Join-Path $app 'obsolete-owned.bin'
+    $obsoleteEdited = Join-Path $app 'obsolete-edited.txt'
+    'old runtime' | Set-Content -LiteralPath $obsoleteOwned
+    'original document' | Set-Content -LiteralPath $obsoleteEdited
+    $oldPayload = Get-Content -LiteralPath (Join-Path $app 'bundle-install.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+    foreach ($oldFile in @($obsoleteOwned,$obsoleteEdited)) {
+        $oldPayload.Files += [PSCustomObject]@{Path=[IO.Path]::GetFileName($oldFile);SHA256=(Get-FileHash -LiteralPath $oldFile).Hash}
+    }
+    $oldPayload | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $app 'bundle-install.json') -Encoding UTF8
+    'user modified document' | Set-Content -LiteralPath $obsoleteEdited
     # Reproduce the old separate monitor icon and old Hub-folder shortcut.
     $legacyDesktop = Join-Path $desktop ($name + '.lnk')
     $oldMonitor = $shell.CreateShortcut($legacyDesktop)
@@ -61,6 +93,8 @@ try {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $setup -InstallDir $app -DataDir $data -GamesRoot $games -DesktopDir $desktop -StartupName $name -Quiet -NoStart
     if ($LASTEXITCODE -ne 0) { throw 'Upgrade failed.' }
     $process = Start-Process -FilePath $exe -ArgumentList @('--diagnose','--data-dir',('"' + $data + '"'),'--report',('"' + $diag + '"')) -WindowStyle Hidden -Wait -PassThru
+    $report.obsolete_owned_file_removed = -not (Test-Path -LiteralPath $obsoleteOwned)
+    $report.modified_obsolete_file_preserved = (Get-Content -LiteralPath $obsoleteEdited) -eq 'user modified document'
     $report.language_preserved_on_upgrade = (Get-Content -LiteralPath $diag -Raw -Encoding UTF8 | ConvertFrom-Json).language -eq 'hu'
     $trackingStartAfter = 'import sqlite3,sys; d=sqlite3.connect(sys.argv[1]); print(d.execute("SELECT value FROM settings WHERE key=?",("tracking_started_on",)).fetchone()[0])' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     $report.tracking_start_preserved_on_upgrade = $trackingStartAfter -eq $trackingStart
@@ -71,6 +105,17 @@ try {
     $report.upgrade_preserves_hidden_and_history = $value[0] -eq '1' -and [double]$value[1] -eq 123
     $report.backup_created = @(Get-ChildItem -LiteralPath (Join-Path $data 'backups') -Filter 'before-*' -Directory).Count -gt 0
     $report.foreign_startup_preserved_on_upgrade = (Get-ItemProperty -LiteralPath $runKey).PSObject.Properties[$sentinelName].Value -eq $sentinelValue
+    $validManifestText = Get-Content -LiteralPath (Join-Path $app 'bundle-install.json') -Raw -Encoding UTF8
+    $outsideFile = Join-Path $taskRoot 'escape-sentinel.txt'
+    'outside sentinel' | Set-Content -LiteralPath $outsideFile
+    $unsafeManifest = $validManifestText | ConvertFrom-Json
+    $unsafeManifest.Files += [PSCustomObject]@{Path='..\escape-sentinel.txt';SHA256=(Get-FileHash -LiteralPath $outsideFile).Hash}
+    $unsafeManifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $app 'bundle-install.json') -Encoding UTF8
+    try {
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $setup -InstallDir $app -DataDir $data -GamesRoot $games -DesktopDir $desktop -StartupName $name -Quiet -NoStart
+        $report.unsafe_obsolete_path_rejected = $LASTEXITCODE -ne 0
+        $report.outside_file_preserved = (Get-Content -LiteralPath $outsideFile) -eq 'outside sentinel'
+    } finally { $validManifestText | Set-Content -LiteralPath (Join-Path $app 'bundle-install.json') -Encoding UTF8 }
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $app 'uninstall-bundled.ps1') -Quiet
     if ($LASTEXITCODE -ne 0) { throw 'Uninstall failed.' }
     $report.program_removed = -not (Test-Path -LiteralPath $exe)

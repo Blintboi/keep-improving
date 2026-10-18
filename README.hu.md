@@ -30,7 +30,7 @@ A **Gaming Hub** oldalon látszik a mai összes játékidő, a hátralévő kere
 
 Csak az előtérben lévő, figyelt játék ideje számít. A böngésző, a játékkezelő kliens, a háttérben futó játék, az alvás és a zárolt munkamenet nem számít. Játékon belüli átvezetők közben is mér; a billentyűzet tétlensége önmagában nem szüneteltet. Éjfélkor új napi összesítés kezdődik.
 
-A jelzés emlékeztető: nem állítja le és nem zárja ki a játékot. A megfelelő előtérben lévő játéknál előbb egy Esc-et próbál küldeni, majd előre hozza a figyelmeztetést. Minecraft Java teljes képernyőn már sikeresen teszteltük; más játékok kizárólagos fullscreen módja még igényelhet próbát.
+A jelzés emlékeztető: nem állítja le és nem zárja ki a játékot. A megfelelő előtérben lévő játéknál előbb egy Esc-et próbál küldeni, majd előre hozza a figyelmeztetést. A korábbi Tk-felülettel a Minecraft Java teljes képernyős próbája sikeres volt; az új Qt-felülettel ezt még meg kell ismételni.
 
 Az ablak bezárása és a **Tálcára** gomb mellett tovább fut a mérés. A tálcaikon bal kattintásra megnyitja az ablakot, jobb kattintásra menüt ad. A **Kilépés a figyelőből** állítja le a programot.
 

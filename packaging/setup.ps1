@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'Programs\GameTimeMonitor'),
     [string]$DataDir = (Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'GameTimeMonitor\data'),
     [string]$StartupName = 'GameTimeMonitor',
@@ -60,6 +60,34 @@ try {
         if (Test-Path -LiteralPath $item) { Copy-Item -LiteralPath $item -Destination $backup }
     }
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+    # Retire only unchanged obsolete files recorded by the previous installer.
+    # This also removes old runtime DLLs that would shadow a new runtime.
+    $newPaths = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+    foreach ($file in $payload.Files) { [void]$newPaths.Add($file.Path) }
+    if ($old) {
+        foreach ($prior in $old.Files) {
+            if ($newPaths.Contains($prior.Path)) { continue }
+            $obsolete = [IO.Path]::GetFullPath((Join-Path $InstallDir $prior.Path))
+            if (-not $obsolete.StartsWith($InstallDir + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe previous application path.' }
+            $check = $obsolete
+            while ($check.Length -ge $InstallDir.Length) {
+                if ((Test-Path -LiteralPath $check) -and ((Get-Item -LiteralPath $check).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Obsolete application path contains a reparse point.' }
+                $check = [IO.Path]::GetDirectoryName($check)
+                if (-not $check) { break }
+            }
+            if (Test-Path -LiteralPath $obsolete -PathType Leaf) {
+                if ((Get-PayloadHash $obsolete) -eq $prior.SHA256) {
+                    $retained = [IO.Path]::GetFullPath((Join-Path (Join-Path $backup 'obsolete-program-files') $prior.Path))
+                    if (-not $retained.StartsWith($backup + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe obsolete-file backup path.' }
+                    [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($retained)) | Out-Null
+                    Copy-Item -LiteralPath $obsolete -Destination $retained
+                    Remove-Item -LiteralPath $obsolete
+                } elseif ([IO.Path]::GetExtension($obsolete) -in @('.dll','.pyd','.exe')) {
+                    throw 'An obsolete runtime file was modified and was preserved. Use a separate install folder or restore the original file before upgrading.'
+                }
+            }
+        }
+    }
     foreach ($file in $payload.Files) {
         $target = [IO.Path]::GetFullPath((Join-Path $InstallDir $file.Path))
         if (-not $target.StartsWith($InstallDir + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe application path.' }

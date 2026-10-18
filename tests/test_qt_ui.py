@@ -105,7 +105,7 @@ class QtInterfaceTests(unittest.TestCase):
         tray=self.app.tray
         for _ in range(2):
             self.assertTrue(win32.u.PostMessageW(tray.window,0x8001,0,(1<<16)|0x400)); self.pump(.15)
-            self.assertTrue(self.app.isVisible()); self.assertFalse(self.app.closed)
+            self.assertTrue(self.app.isVisible()); self.assertTrue(win32.u.IsWindowVisible(int(self.app.winId()))); self.assertFalse(self.app.closed)
         with patch.object(tray,'popup_menu',return_value=5): self.app.tray_menu()
         self.assertTrue(self.app.closed)
 
