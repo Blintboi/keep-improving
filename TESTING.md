@@ -23,6 +23,10 @@ The retained legacy GUI smoke creates real Tk windows with synthetic fixtures. I
 
 The 1.6 bundled test redirects desktop shortcut creation into its own temporary Desktop fixture, exercises the old separate monitor/Hub-folder shortcut migration and checks one shared app icon and owned-shortcut removal during uninstall. It does not create test shortcuts on the user's actual desktop.
 
+## 2.7.5 sidebar cleanup
+
+All 35 existing Qt interface and resource regressions passed in 18.088 seconds. The redundant sidebar Hide to tray button was removed. Native integration checks still exercise the main-window close action hiding the Hub, reopening from the tray, continued hidden time accounting and explicit shutdown signaling. Both user guides describe the top-right X as the way to hide the window; the production close handler is unchanged.
+
 ## 2.7.4 lower idle resource usage
 
 The full 291-test suite passed in 123.388 seconds. After the final transient tray-update retry guard, all 13 resource/tray regressions passed in 5.423 seconds. Coverage includes foreground accounting while hidden, deferred library queries, fresh totals/statistics on show and restore, adaptive result polling with hidden synchronization, launcher refresh visibility, countdown timer activation/idle shutdown, explicit shutdown signaling and retrying failed native tooltip updates. The RTSS worker regression verifies one clear on hide, no repeated idle IPC, fresh receipts after resume and prompt shutdown. Existing alert, restriction, artwork, cloud and legacy-controller regressions also passed. Game execution/input uses isolated fixtures and mocks.

@@ -130,7 +130,6 @@ class App(QMainWindow,MonitorActions):
             self.nav[index]=item; side.addWidget(item)
         side.addStretch()
         active=label('●  '+self.t('Monitoring active')); active.setStyleSheet('color:#9ce7c5; font-size:11px; padding:6px 10px;'); side.addWidget(active)
-        hide=button(self.t('Hide to tray'),self.hide,'quiet'); hide.setIcon(glyph('hide',MUTED,18)); side.addWidget(hide)
         side.addSpacing(12)
         self.language=QComboBox()
         self.language.setAccessibleName(self.t('Language / Nyelv')); self.language.setToolTip(self.t('Language / Nyelv'))
