@@ -9,7 +9,7 @@ import os
 import time
 import uuid
 import winsound
-from PySide6.QtCore import Qt,QTimer,QPoint,QEventLoop
+from PySide6.QtCore import Qt,QTimer,QPoint,QEventLoop,QObject,QEvent
 from PySide6.QtGui import QIcon,QFont,QAction
 from PySide6.QtWidgets import (QApplication,QMainWindow,QWidget,QFrame,QLabel,QVBoxLayout,QHBoxLayout,
     QGridLayout,QStackedWidget,QScrollArea,QLineEdit,QComboBox,QCheckBox,QDoubleSpinBox,QDialog,QToolButton,
@@ -46,6 +46,18 @@ def setup_application():
     app.setQuitOnLastWindowClosed(False); app.setStyle('Fusion'); app.setStyleSheet(STYLE)
     app.setFont(QFont('Segoe UI',10)); app.setWindowIcon(QIcon(str(Path(__file__).with_name('app.ico'))))
     return app
+
+class CodeVisibilityGuard(QObject):
+    """A revealed connection secret must not remain visible in a retired window."""
+    def __init__(self,window,hide_code):
+        super().__init__(window)
+        self.hide_code=hide_code
+        window.installEventFilter(self)
+
+    def eventFilter(self,watched,event):
+        if event.type() in (QEvent.WindowDeactivate,QEvent.Hide): self.hide_code()
+        return False
+
 
 class AlertDialog(QDialog):
     def __init__(self,owner):
@@ -264,8 +276,18 @@ class App(QMainWindow,MonitorActions):
         layout.addWidget(label(self.t('Connection code'),'muted'))
         saved_code=self.settings.statistics_sync_group if CLOUD_CODE.fullmatch(self.settings.statistics_sync_group) else new_code()
         code_row=QHBoxLayout(); code=QLineEdit(display_code(saved_code)); code.setMaxLength(40); code.setMinimumHeight(40); code.setAccessibleName(self.t('Connection code')); code_row.addWidget(code,1)
+        code.setEchoMode(QLineEdit.Password)
         code.setStyleSheet('font-family:Consolas; font-size:14px;')
-        code_row.addWidget(button(self.t('New code'),lambda:code.setText(display_code(new_code()))))
+        reveal=button(self.t('Show code'),lambda:None); reveal.setCheckable(True)
+        reveal.setToolTip(self.t('The code is hidden again when you leave this window.'))
+        def visibility(visible):
+            code.setEchoMode(QLineEdit.Normal if visible else QLineEdit.Password)
+            reveal.setText(self.t('Hide code' if visible else 'Show code'))
+        reveal.toggled.connect(visibility); code_row.addWidget(reveal)
+        window._code_visibility_guard=CodeVisibilityGuard(window,lambda:reveal.setChecked(False))
+        def regenerate():
+            reveal.setChecked(False); code.setText(display_code(new_code()))
+        code_row.addWidget(button(self.t('New code'),regenerate))
         code_row.addWidget(button(self.t('Copy'),lambda:QApplication.clipboard().setText(code.text()))); layout.addLayout(code_row)
         secret_note=label(self.t('Keep your code private: anyone with it can link a computer. A new code starts a separate group.'),'muted'); secret_note.setWordWrap(True); layout.addWidget(secret_note)
         help_text=label(self.t('Only statistics are shared. Daily limits, exclusions, executable paths and settings stay on each computer.'),'muted'); help_text.setWordWrap(True); layout.addWidget(help_text)

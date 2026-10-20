@@ -162,6 +162,46 @@ class QtInterfaceTests(unittest.TestCase):
         self.assertFalse(self.app._dialogs); self.app.render()
         self.assertFalse(self.store.settings().statistics_sync_enabled)
 
+    def test_saved_connection_code_is_hidden_until_explicitly_revealed_and_copies_while_hidden(self):
+        from PySide6.QtWidgets import QLineEdit,QPushButton
+        from gametime.statistics_sync import display_code
+        saved='0123456789abcdef0123456789abcdef'
+        settings=replace(self.app.settings,statistics_sync_group=saved)
+        self.store.save_settings(settings); self.app.settings=self.app.catalog.settings=settings
+        self.app.statistics_sync_dialog(); window=self.app._dialogs[-1]
+        code=next(w for w in window.findChildren(QLineEdit) if w.accessibleName()==self.app.t('Connection code'))
+        buttons={b.text():b for b in window.findChildren(QPushButton)}
+        expected=display_code(saved)
+        self.assertEqual(code.text(),expected); self.assertNotEqual(code.displayText(),expected)
+        self.assertEqual(code.echoMode(),QLineEdit.Password)
+        with patch('gametime.qt_ui.QApplication.clipboard') as clipboard:
+            buttons[self.app.t('Copy')].click()
+            clipboard.return_value.setText.assert_called_once_with(expected)
+        self.assertEqual(code.echoMode(),QLineEdit.Password)
+        reveal=buttons[self.app.t('Show code')]; reveal.click()
+        self.assertEqual(code.displayText(),expected); self.assertEqual(reveal.text(),self.app.t('Hide code'))
+        reveal.click(); self.assertNotEqual(code.displayText(),expected)
+        reveal.click(); window.close(); self.pump(.02)
+        self.app.statistics_sync_dialog(); window=self.app._dialogs[-1]
+        reopened=next(w for w in window.findChildren(QLineEdit) if w.accessibleName()==self.app.t('Connection code'))
+        self.assertEqual(reopened.echoMode(),QLineEdit.Password)
+        self.assertEqual(self.store.settings().statistics_sync_group,saved)
+
+    def test_revealed_code_is_hidden_when_window_is_left_hidden_or_code_is_regenerated(self):
+        from PySide6.QtCore import QEvent
+        from PySide6.QtWidgets import QLineEdit,QPushButton
+        self.app.statistics_sync_dialog(); window=self.app._dialogs[-1]
+        code=next(w for w in window.findChildren(QLineEdit) if w.accessibleName()==self.app.t('Connection code'))
+        buttons={b.text():b for b in window.findChildren(QPushButton)}; reveal=buttons[self.app.t('Show code')]
+        reveal.click(); self.qt.sendEvent(window,QEvent(QEvent.WindowDeactivate))
+        self.assertEqual(code.echoMode(),QLineEdit.Password); self.assertFalse(reveal.isChecked())
+        reveal.click(); window.hide()
+        self.assertEqual(code.echoMode(),QLineEdit.Password); self.assertFalse(reveal.isChecked())
+        window.show(); self.assertEqual(code.echoMode(),QLineEdit.Password)
+        original=code.text(); reveal.click(); buttons[self.app.t('New code')].click()
+        self.assertNotEqual(code.text(),original); self.assertEqual(code.echoMode(),QLineEdit.Password)
+        window.reject(); self.assertEqual(self.store.settings().statistics_sync_group,'')
+
     def test_statistics_average_since_installation_and_day_drilldown(self):
         today=date.today(); start=today-timedelta(days=3)
         with self.store.db: self.store.db.execute("UPDATE settings SET value=? WHERE key='tracking_started_on'",(start.isoformat(),))

@@ -1,12 +1,12 @@
 # Game Time Monitor
 
-**[Download the latest installer — 2.7.0 · Windows x64](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256)
+**[Download the latest installer — 2.7.1 · Windows x64](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256)
 
 Run the downloaded installer to install or update the app. Existing history, settings and exclusions are kept, with a backup before upgrading. [Magyar útmutató](README.hu.md).
 
 An offline Windows 11 Gaming Hub and game-time monitor in one app. Launch games from a searchable library, measure foreground gameplay against a shared daily budget, and follow daily statistics in a dark English/Hungarian interface.
 
-**Private preview 2.7.0.** The repository and installer remain private. Sign into GitHub with an account that has access on your other PC. Optional encrypted synchronization combines statistics from your computers using the same connection code, without a shared folder.
+**Private preview 2.7.1.** The repository and installer remain private. Sign into GitHub with an account that has access on your other PC. Optional encrypted synchronization combines statistics from your computers using the same connection code, without a shared folder.
 
 The 2.0 interface uses Qt Widgets: a dark sidebar, responsive game cards, a daily-budget ring, contextual game actions and a redesigned statistics page. Artwork is read from existing local Steam caches, installed-game image files or game icons; no image service, launcher credentials or artwork downloads are used. Artwork and icons keep their original aspect ratios; complete cover images fit inside the card with dark padding where needed. Missing art has a colored monogram fallback. The shared controller/clock application icon remains unchanged.
 
@@ -51,6 +51,8 @@ Open the **Statistics / Statisztikák** page to see recorded play time by day an
 Statistics include existing history, hidden/excluded games and removed installations. Hiding or uninstalling does not erase past time. Days without recorded time appear as zero. The daily average uses elapsed calendar days within the selected range, starting no earlier than installation; idle days after installation count, but days before installation and future dates do not. The footer shows the installation date and number of days used. That date survives upgrades; older profiles use the earlier available database creation date or first recorded activity. No activity before tracking began can be reconstructed, and the monitor does not infer unrecorded gameplay. Language changes preserve the selected date range.
 
 ## Link statistics across computers
+
+From 2.7.1, the connection code is hidden each time you open **Link computers**. **Show code / Hide code** reveals it only when requested; leaving or hiding the window hides it again. **Copy** works while the code is hidden. Generating a new code also keeps it hidden. Upgrades preserve your existing code and linked computers.
 
 Install version 2.7.0 or later on each computer. Open **Statistics → Link computers** (also available in Settings), name the first computer, copy its generated code, and save with automatic synchronization enabled. On your other computer, enter that same code and save. No shared folder or separate player account is needed. **Sync now** refreshes immediately. Automatic exchange runs while the app is running, normally once a minute and gradually slowing to once every five minutes when nothing changes.
 

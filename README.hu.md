@@ -1,6 +1,6 @@
-# Játékidőfigyelő — 2.7.0
+# Játékidőfigyelő — 2.7.1
 
-**[Legfrissebb telepítő letöltése — 2.7.0 · Windows x64](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256)
+**[Legfrissebb telepítő letöltése — 2.7.1 · Windows x64](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256)
 
 A letöltött telepítőt indítsd el a telepítéshez vagy frissítéshez. A korábbi előzmények, beállítások és kizárások megmaradnak, és frissítés előtt biztonsági mentés készül.
 
@@ -86,6 +86,8 @@ A **Statisztikák** oldalon napi diagram, napi lista és játékonkénti időbon
 A már meglévő előzményeket használja, az elrejtett, kizárt és eltávolított játékok korábban rögzített idejével együtt. Rögzített idő nélküli napok nullával jelennek meg. **A napi átlagot legkorábban a telepítés napjától számítja**, a kijelölt időszak máig eltelt napjaiból. A telepítés utáni játékmentes napok számítanak, a telepítés előtti és a jövőbeli napok nem. Alul látszik a kezdőnap és az átlag alapjául szolgáló napok száma. A telepítés dátuma frissítéskor megmarad; régi profilnál az adatbázis létrehozási idejéből és a legelső rögzített játékidőből elérhető korábbi napot használja. A figyelő telepítése előtti vagy korábban fel nem ismert játékidőt nem lehet utólag visszaállítani.
 
 ## Statisztikák összekapcsolása több gépen
+
+A 2.7.1-től az összekapcsolási kód minden ablaknyitáskor rejtett. A **Kód mutatása / Kód elrejtése** gombbal kapcsolhatod a láthatóságát; másik ablakra váltáskor vagy az ablak elrejtésekor automatikusan visszarejti. A **Másolás** gomb rejtett kódnál is működik, és az újonnan generált kód is rejtve marad. A frissítés megtartja a korábbi kódot és az összekapcsolt gépeket.
 
 A **Statisztikák → Gépek összekapcsolása** vagy a Beállítások azonos nevű gombjával kapcsolhatod össze a saját gépeidet. Mindegyik gépre a 2.7.0-s vagy újabb alkalmazást telepítsd. Közös mappa és külön felhasználói regisztráció nem szükséges.
 

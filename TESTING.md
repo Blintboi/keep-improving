@@ -23,6 +23,12 @@ The retained legacy GUI smoke creates real Tk windows with synthetic fixtures. I
 
 The 1.6 bundled test redirects desktop shortcut creation into its own temporary Desktop fixture, exercises the old separate monitor/Hub-folder shortcut migration and checks one shared app icon and owned-shortcut removal during uninstall. It does not create test shortcuts on the user's actual desktop.
 
+## 2.7.1 connection-code privacy
+
+All 54 focused tests passed: 22 Qt integration tests in 9.260 seconds and 32 statistics/cloud/translation tests in 7.230 seconds. New regressions check that existing codes open masked, copying does not reveal the code, showing and hiding are explicit, reopening starts masked, leaving or hiding the window remasks a revealed code, and generating a replacement keeps it hidden. Cancel/reopen does not change the saved connection code.
+
+Hungarian and English native Qt captures were inspected with a synthetic code in hidden and revealed states. The code field and all three buttons fit in the linking dialog. No real connection secret or clipboard contents were used in these tests. On 2026-10-20, the user separately confirmed that linking their two computers succeeded; the privacy update preserves that existing connection.
+
 ## 2.7 code-only internet statistics
 
 The 2.7.0 self-extracting Setup was extracted without installing, and its three contained package files matched the built payload hashes. All 35 bundled fresh-install/upgrade/uninstall smoke checks passed, including the real frozen Qt window, single-instance reopening, history/hidden-state preservation, user preferences, backups, owned-file cleanup and foreign-file retention. The separate RTSS native self-test passed ten checks. The installer includes cryptography and its pinned dependencies and upstream license texts.
