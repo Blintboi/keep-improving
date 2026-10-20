@@ -1,6 +1,6 @@
 # Game Time Monitor
 
-**[Download the latest installer — 2.7.0 · Windows x64](downloads/GameTimeMonitor-Setup.exe?raw=true)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256)
+**[Download the latest installer — 2.7.0 · Windows x64](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256)
 
 Run the downloaded installer to install or update the app. Existing history, settings and exclusions are kept, with a backup before upgrading. [Magyar útmutató](README.hu.md).
 

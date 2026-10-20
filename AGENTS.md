@@ -13,7 +13,10 @@ For each new application version:
    download filename.
 3. Update the version shown at the very beginning of both `README.md` and
    `README.hu.md`. Keep their direct installer links visible at the top and
-   pointing to the current file in `downloads/`.
+   pointing to the current file in `downloads/`. Use the full GitHub
+   `/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe` URL. Do not use a
+   relative installer link with `?raw=true`: it navigates through the blob page
+   and the user has reported a GitHub error page during that download flow.
 4. Commit the matching source, installer, checksum and README updates together,
    then push them to the GitHub default branch through the repository's allowed
    workflow. Verify that the remote README version and installer match.
