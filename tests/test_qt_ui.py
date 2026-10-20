@@ -233,6 +233,57 @@ class QtInterfaceTests(unittest.TestCase):
         self.assertFalse(self.app._dialogs); self.app.render()
         self.assertFalse(self.store.settings().statistics_sync_enabled)
 
+    def test_new_cloud_code_needs_account_and_retains_existing_local_profile(self):
+        from PySide6.QtWidgets import QPushButton,QLabel
+        from gametime.statistics_auth import MESSAGES
+        self.app.statistics_sync_dialog(); window=self.app._dialogs[-1]
+        next(b for b in window.findChildren(QPushButton) if b.text()==self.app.t('Save')).click()
+        self.assertFalse(self.store.settings().statistics_sync_enabled)
+        self.assertEqual(self.store.settings().limit_seconds,7200)
+        self.assertIn(self.app.t(MESSAGES['session']),[w.text() for w in window.findChildren(QLabel)])
+        self.assertFalse(self.app._auth_busy)
+
+    def test_account_result_after_closed_dialog_saves_refresh_and_recovers_pending_code(self):
+        from PySide6.QtWidgets import QPushButton,QLineEdit
+        from gametime.statistics_sync import group_code
+        from test_statistics_auth import session
+        original=session(); self.app.account_session=original; self.store.save_account_session(original)
+        self.app.statistics_sync_dialog(); window=self.app._dialogs[-1]
+        code=group_code(next(w for w in window.findChildren(QLineEdit) if w.accessibleName()==self.app.t('Connection code')).text())
+        with patch.object(self.app.account_auth,'request',return_value=True) as request:
+            next(b for b in window.findChildren(QPushButton) if b.text()==self.app.t('Save')).click()
+            request.assert_called_once_with('activate',original,code)
+        self.assertEqual(self.store.pending_connection(),code); self.assertFalse(self.store.settings().statistics_sync_enabled)
+        window.reject(); self.pump(.02)
+        rotated={**original,'refresh_token':'new-private-refresh-token'}
+        self.app.account_auth.results.put((('activate',original,0),[{'ok':True,'session':rotated}],''))
+        self.app.poll_account(); self.assertEqual(self.store.account_session(),rotated)
+        self.assertFalse(self.store.settings().statistics_sync_enabled)
+        self.app.statistics_sync_dialog(); reopened=self.app._dialogs[-1]
+        field=next(w for w in reopened.findChildren(QLineEdit) if w.accessibleName()==self.app.t('Connection code'))
+        self.assertEqual(group_code(field.text()),code); self.assertEqual(field.echoMode(),QLineEdit.Password)
+        with patch.object(self.app.account_auth,'request',return_value=True),patch.object(self.app,'request_statistics_sync'):
+            next(b for b in reopened.findChildren(QPushButton) if b.text()==self.app.t('Save')).click()
+            changed=replace(self.app.settings,limit_seconds=9000)
+            self.store.save_settings(changed); self.app.settings=self.app.catalog.settings=changed
+            self.app.account_auth.results.put((('activate',rotated,0),[{'ok':True,'session':rotated}],''))
+            self.app.poll_account()
+        self.assertEqual(self.store.settings().statistics_sync_group,code)
+        self.assertEqual(self.store.pending_connection(),'')
+        self.assertEqual(self.store.settings().limit_seconds,9000)
+
+    def test_replacing_managed_code_requires_confirmation_and_does_not_commit_on_decline(self):
+        from PySide6.QtWidgets import QPushButton,QMessageBox
+        from test_statistics_auth import session
+        self.app.account_session=session(); self.app.statistics_sync_dialog(); window=self.app._dialogs[-1]
+        with patch.object(self.app.account_auth,'request',return_value=True) as request:
+            next(b for b in window.findChildren(QPushButton) if b.text()==self.app.t('Save')).click()
+            with patch('gametime.qt_account.QMessageBox.question',return_value=QMessageBox.No) as confirm:
+                self.app.account_auth.results.put((('activate',session(),0),[{'error':'other_group','session':session()}],'other group'))
+                self.app.poll_account(); confirm.assert_called_once()
+            self.assertEqual(request.call_count,1)
+        self.assertFalse(self.store.settings().statistics_sync_enabled)
+
     def test_saved_connection_code_is_hidden_until_explicitly_revealed_and_copies_while_hidden(self):
         from PySide6.QtWidgets import QLineEdit,QPushButton
         from gametime.statistics_sync import display_code

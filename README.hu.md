@@ -1,10 +1,10 @@
-# Játékidőfigyelő — 2.9.0
+# Játékidőfigyelő — 2.10.0
 
-**[Legfrissebb telepítő letöltése — 2.9.0 · Windows x64](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256)
+**[Legfrissebb telepítő letöltése — 2.10.0 · Windows x64](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256)
 
 A letöltött telepítőt indítsd el a telepítéshez vagy frissítéshez. A korábbi előzmények, beállítások és kizárások megmaradnak, és frissítés előtt biztonsági mentés készül.
 
-A 2.9.0 Windows-fiókhoz kötött védelemmel tárolja az összekapcsolási kódot, szigorú szerveroldali kvótákat és adatellenőrzést használ, törli a 90 napja inaktív szervermásolatokat, és hiba esetén ritkítja az újrapróbálkozást. A meglévő gépkapcsolatok működnek. **Új felhőcsoporthoz jelenleg üzemeltetői engedély kell; a szabad nyilvános regisztráció még zárva van.** A védelmek és a nyitás előfeltételei a [biztonsági leírásban](SECURITY.md) találhatók.
+A 2.10.0 GitHub-belépést ad az összekapcsolási kód létrehozásához, cseréjéhez és visszavonásához. További gép továbbra is ugyanazzal a kóddal csatlakozik. A tokeneket és a függő kódcserét Windows-fiókhoz kötött védelem tárolja; a meglévő kapcsolatok és előzmények megmaradnak. Az ingyenes háttér kezdetben **10 aktív csoportot** fogad, regisztrációs, kérés-, tárhely- és forgalmi korlátokkal. Részletek a [biztonsági leírásban](SECURITY.md).
 
 A 2.7.4 kevesebb felesleges háttérmunkát végez: a rejtett vagy minimalizált ablak a játéktárat és a statisztikanézetet visszanyitáskor frissíti, az üres feldolgozási várólistákat ritkábban ellenőrzi, az overlay gyors időzítője pedig csak játék vagy előnézet közben fut. A tálcán tovább működik az időmérés, a figyelmeztetés és a szinkronizálás.
 
@@ -97,14 +97,14 @@ A 2.7.2-től a statisztikatáblázat **Gép** oszlopa megmutatja az adatot küld
 
 A 2.7.1-től az összekapcsolási kód minden ablaknyitáskor rejtett. A **Kód mutatása / Kód elrejtése** gombbal kapcsolhatod a láthatóságát; másik ablakra váltáskor vagy az ablak elrejtésekor automatikusan visszarejti. A **Másolás** gomb rejtett kódnál is működik, és az újonnan generált kód is rejtve marad. A frissítés megtartja a korábbi kódot és az összekapcsolt gépeket.
 
-A **Statisztikák → Gépek összekapcsolása** vagy a Beállítások azonos nevű gombjával kapcsolhatod össze a saját gépeidet. Mindegyik gépre a 2.7.0-s vagy újabb alkalmazást telepítsd. Közös mappa és külön felhasználói regisztráció nem szükséges.
+A **Statisztikák → Gépek összekapcsolása** vagy a Beállítások azonos nevű gombjával kapcsolhatod össze a saját gépeidet. Az első gépen 2.10.0 vagy újabb verzióval hozz létre kódot; meglévő kódhoz a 2.7.0-s vagy újabb kliens is csatlakozhat. Közös mappa nem szükséges.
 
-1. Az első gépen adj nevet a gépnek, és másold ki a program által generált kódot.
+1. Az első gépen kattints a **Bejelentkezés GitHubbal** gombra, majd térj vissza az alkalmazásba és adj nevet a gépnek.
 2. Hagyd bekapcsolva az automatikus szinkronizálást, majd kattints a **Mentés** gombra.
-3. A másik gépen ugyanebbe az ablakba illeszd be ugyanazt a kódot, és mentsd el.
+3. Másold ki a kódot, a másik gépen ugyanebbe az ablakba illeszd be, és mentsd el. Meglévő kódhoz nem szükséges újabb bejelentkezés.
 4. A **Szinkronizálás** gombbal azonnal frissíthetsz. Egyébként a program futás közben általában percenként, változatlan adatoknál fokozatosan ritkítva, legfeljebb ötpercenként szinkronizál.
 
-Minden felhasználó saját, véletlenszerű kódot használ. A kód hozzáférést ad a csoporthoz, és ebből származik a titkosítási kulcs is, ezért tartsd titokban: aki ismeri, hozzákapcsolhat egy gépet. Az **Új kód** külön csoportot választ, amelyhez előbb szerveroldali engedély szükséges. Az engedélyezett kódot minden összekapcsolni kívánt gépen meg kell adni.
+Minden felhasználó saját, véletlenszerű kódot használ. A kód hozzáférést ad a csoporthoz és a titkosítási kulcshoz, ezért tartsd titokban: aki ismeri, olvashatja és meghamisíthatja a csoport statisztikáit. Egy ellenőrzött GitHub-fiók egy aktuális kódot kezel. Az **Új kód** mentése megerősítést kér a korábbi kezelt kód lecseréléséhez: annak szerveroldali másolatai törlődnek, gépei leválnak, a helyi előzmények megmaradnak. A többi gépen is add meg az új kódot. A **Felhős kapcsolat visszavonása** megerősítés után törli a kezelt szervercsoportot. A **Kijelentkezés** a fiókkezelést zárja le ezen a gépen; a kódos szinkronizálás tovább működik.
 
 A **Gépek** listában az összesített előzmény, az aktuális gép vagy egy másik gép külön is megtekinthető. Az átlag a kiválasztott gépek közül a legkorábbi követéskezdethez igazodik. Az ismételt frissítés nem adja hozzá újra ugyanazt az időt. A launcherazonosítók alapján ugyanaz a játék közös sorba kerül; a kézzel felvett és önálló játékok azonos forrás és normalizált név alapján kapcsolódnak össze.
 
@@ -126,7 +126,7 @@ Minden játék azonos szabályok szerint számít. Amit nem szeretnél mérni, a
 
 ## Adatok és eltávolítás
 
-Nincs általános telemetria. A program helyi telepítési jegyzékeket, folyamatútvonalakat és parancsikonokat olvas. A külön bekapcsolt statisztikaszinkron titkosított csomagokat továbbít a Supabase-háttérhez; a szolgáltató a hálózati kérésekről is vezethet naplót. Előzménymentés előtt lépj ki a tálcamenüből, majd másold ki az adatkönyvtárat.
+Nincs általános telemetria. A program helyi telepítési jegyzékeket, folyamatútvonalakat és parancsikonokat olvas. A bekapcsolt statisztikaszinkron titkosított csomagokat továbbít a Supabase-háttérhez. A GitHub-belépés a profilodat és az ellenőrzött e-mail-címedet a Supabase Auth számára is átadja; a szolgáltató hozzáférési és biztonsági naplókat kezelhet. A Supabase-tokeneket a Windows DPAPI védi; a GitHub szolgáltatói tokenjeit a kliens nem őrzi meg. [Adatkezelési tájékoztató](https://jtvdbqwmejrckjejjrdl.supabase.co/functions/v1/statistics-sync/about). A helyi mérés fiók nélkül is működik. Előzménymentés előtt lépj ki a tálcamenüből, majd másold ki az adatkönyvtárat.
 
 A figyelőt a Windows **Gépház → Alkalmazások → Telepített alkalmazások → Game Time Monitor → Eltávolítás** útvonalon távolíthatod el. Az alkalmazás saját asztali ikonja eltűnik, a játékok, a kiegészítő mappa parancsikonjai és az előzmények megmaradnak. A részletes fejlesztői, hibakeresési és tesztleírás az [angol dokumentációban](README.md) található.
 

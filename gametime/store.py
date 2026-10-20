@@ -102,6 +102,33 @@ class Store:
             self.db.execute('PRAGMA wal_checkpoint(TRUNCATE)')
             self._secret_migrated=False
 
+    def account_session(self):
+        from .statistics_auth import validate_session
+        row=self.db.execute("SELECT value FROM settings WHERE key='statistics_auth_session'").fetchone()
+        if not row: return None
+        try: return validate_session(json.loads(unprotect(row[0])))
+        except (OSError,ValueError,TypeError): return None
+
+    def save_account_session(self,session):
+        from .statistics_auth import validate_session
+        with self.db:
+            if session is None: self.db.execute("DELETE FROM settings WHERE key='statistics_auth_session'")
+            else:
+                value=protect(json.dumps(validate_session(session),separators=(',',':')))
+                self.db.execute("INSERT OR REPLACE INTO settings VALUES ('statistics_auth_session',?)",(value,))
+
+    def pending_connection(self,value=None,*,clear=False):
+        if value is not None or clear:
+            with self.db:
+                if clear: self.db.execute("DELETE FROM settings WHERE key='statistics_pending_connection'")
+                else:
+                    if not isinstance(value,str) or len(value)!=32 or any(ch not in '0123456789abcdef' for ch in value): raise ValueError('Invalid connection code.')
+                    self.db.execute("INSERT OR REPLACE INTO settings VALUES ('statistics_pending_connection',?)",(protect(value),))
+        row=self.db.execute("SELECT value FROM settings WHERE key='statistics_pending_connection'").fetchone()
+        if not row: return ''
+        try: return unprotect(row[0])
+        except (OSError,ValueError): return ''
+
     def games(self, installed_only=False):
         sql = "SELECT id,name,source,root,metadata,installed FROM games"
         if installed_only:

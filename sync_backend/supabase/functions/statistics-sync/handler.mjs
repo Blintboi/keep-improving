@@ -1,4 +1,26 @@
 // Ciphertext relay only: connection/encryption keys and plaintext stay local.
+const ABOUT = `Game Time Monitor / Játékfigyelő
+
+Windows játékidő-figyelő, titkosított statisztikai szinkronizálással.
+
+Bejelentkezés és adatkezelés
+
+A GitHub-belépés a kapcsolati kód létrehozására és kezelésére szolgál. A Supabase Auth tárolja a fiókazonosítót, a GitHub-profilt és az ellenőrzött e-mail-címet. Az alkalmazás nem kéri a GitHub-jelszavadat.
+
+A játékidő, a játéknevek és a gép neve titkosítva kerülnek a szerverre. A visszafejtés kulcsa a gépeiden marad. A kapcsolati kód birtokosa hozzáférhet a csoport statisztikáihoz, ezért tartsd titokban.
+
+A szerver a titkosított másolatokat, a csoport és a gépek technikai azonosítóit, valamint a forgalmi keretek számlálóit tárolja. A beállítások, a napi keretek és a programútvonalak helyben maradnak. A szolgáltató saját biztonsági és hozzáférési naplókat is kezelhet.
+
+A 90 napja inaktív gépmásolatokat automatikusan töröljük. A kezelt kód visszavonása vagy cseréje eltávolítja a régi csoport szerveroldali másolatait; a helyi előzmények megmaradnak. A fiók és a visszaélés elleni számlálók törlését az üzemeltetőtől kérheted.
+
+Az ingyenes szolgáltatás korlátozott kapacitású, elérhetősége nem garantált. A helyi követés szinkronizálás nélkül is működik.
+
+English
+
+A Windows game-time monitor with encrypted statistics synchronization. GitHub sign-in manages connection codes. Supabase Auth stores your account ID, GitHub profile and verified email. Statistics are encrypted on your computers; keep your connection code private. Server ciphertext is deleted after 90 inactive days or when the owner revokes/replaces the code. Account and abuse counters require operator-assisted deletion. Local history and settings remain on your computers. The free service has limited capacity and no availability guarantee.
+
+Kapcsolat / Contact: https://github.com/Blintboi
+`;
 const FORMAT = 'GameTimeMonitor.sync.v1';
 const ID = /^[0-9a-f]{32}$/;
 const KEY = /^[0-9a-f]{64}$/;
@@ -70,6 +92,8 @@ export function createHandler({ url, serviceKey, fetcher = fetch, clock = Date.n
     return allowed;
   };
   const handle = async function(request) {
+    if (request.method === 'GET' && new URL(request.url).pathname.endsWith('/about')) return new Response(ABOUT,
+      {status:200,headers:{...HEADERS,'content-type':'text/plain; charset=utf-8'}});
     if (request.method === 'GET' && new URL(request.url).pathname.endsWith('/health')) return reply(200, { format: FORMAT, status: 'ok' });
     if (request.method !== 'POST') return reply(405, { error: 'method' });
     const authorization = request.headers.get('authorization') || '';

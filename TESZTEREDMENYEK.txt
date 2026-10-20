@@ -1,9 +1,10 @@
-Game Time Monitor 2.5.0 private preview validation
+Game Time Monitor 2.10.0 private preview validation
 
-249 automated tests passed (92.656 seconds).
-The RTSS helper passed its 10-check native shared-memory fixture.
-Source installer: 20 checks; bundled installer: 35 checks.
-Hungarian/English RTSS settings were inspected using an isolated profile.
-The user confirmed timer visibility and correct top-right placement in Stardew Valley exclusive fullscreen.
-Gameplay beyond the title screen and the second PC still require verification.
-See TESTING.md for evidence, commands and limits.
+320 application tests passed (153.871 seconds) on Python 3.13.16 / OpenSSL 3.5.9.
+18 Node endpoint tests passed. PostgreSQL account, signup and relay fixtures passed with rollback.
+Live GitHub PKCE, existing group ownership, refresh and DPAPI persistence verified.
+A second logged-out session was denied; the saved app session remained valid.
+Both original linked computers and the connection code were preserved.
+Source installer: 20 checks. Bundled installer: 37 checks; RTSS native helper: 10 checks.
+The RTSS helper retains its native shared-memory checks; no real games were launched.
+Free hosting is subject to request floods and capacity limits; see SECURITY.md.

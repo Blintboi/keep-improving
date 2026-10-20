@@ -2,3 +2,11 @@
 # The function authenticates a per-user capability, not a Supabase user JWT.
 # No provider credential is shipped in the Windows installer.
 verify_jwt = false
+
+[functions.statistics-account]
+# Also calls Auth /user and checks a live session + verified provider in SQL.
+verify_jwt = true
+
+[auth.hook.before_user_created]
+enabled = true
+uri = "pg-functions://postgres/public/gametime_before_user_created"

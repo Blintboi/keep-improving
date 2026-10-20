@@ -2,6 +2,48 @@
 
 Use isolated temporary profiles and synthetic game installations. Never uninstall a real user game to test removal; mock the execution boundary.
 
+## 2.10.0 verified account admission
+
+All **320 application tests passed in 153.871 seconds** on CPython 3.13.16 /
+OpenSSL 3.5.9. Native PKCE tests
+use isolated loopback Auth fixtures and verify S256 exchange, random callback
+paths, Host/Origin rejection, cancellation, sanitized provider/network failures,
+redirect refusal, token whitelisting and DPAPI session/pending-code recovery.
+Qt tests cover login-required creation, code-only linking, masked codes, declined
+rotation, refreshed-token persistence after a deleted dialog and retention of
+settings changed during a background request.
+
+All 18 Node endpoint tests passed. The real PostgreSQL `service_role` passed
+`account.sql` and `hardening.sql` transaction/rollback probes: verified provider
+and live session ownership, closed/capacity/day gates, rotation/revocation,
+owner quotas, bans, grants and exact storage counters. `signup.sql` checks hook
+logic/column grants transactionally. Managed postgres cannot SET ROLE
+supabase_auth_admin; a separate real Auth signup returned the configured hook's
+403, created no Auth user and consumed no slot.
+
+Live GitHub PKCE login succeeded with only profile/email scope, the unchanged
+existing group was claimed by its verified owner, refresh and DPAPI persistence
+passed, and a second temporary session was logged out then denied management.
+The saved app session remained valid. The old 2.9.0 client continued encrypted
+exchange with both original devices. No synthetic Auth user remains. Registration
+is enabled within the ten-group/five-signup-daily/fifty-signup-total ceiling.
+Email/password and anonymous providers are disabled; GitHub requires email.
+
+Security advisors report four informational RLS-without-policy findings for
+intentionally service-only tables and a password-leak-protection warning. The
+latter is a paid feature on an unused/disabled email-password login path, not
+GitHub password handling. See [provider guidance](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
+The service is still Free and private distribution is unchanged. Tests do not
+establish DDoS resistance, code signing, operator MFA or absence of unknown bugs.
+
+The 20 source-install/upgrade/uninstall checks passed with the account modules.
+The signed-in Hungarian dialog was inspected with an isolated profile. The
+actual self-extracting 2.10.0 installer passed all 37 bundled install/upgrade/
+uninstall checks and the RTSS helper's 10 native shared-memory checks. The
+frozen archive includes Auth/account/DPAPI modules. A final documentation-only
+repack is checked against the tested runtime hashes and extracted payload.
+
+
 ## 2.9.0 security hardening
 
 The full **311-test** application suite passed in **143.766 seconds** on the

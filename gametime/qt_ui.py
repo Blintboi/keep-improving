@@ -9,6 +9,7 @@ import os
 import time
 import uuid
 import winsound
+from sqlite3 import Error as SQLiteError
 from PySide6.QtCore import Qt,QTimer,QPoint,QEventLoop,QObject,QEvent,Signal
 from PySide6.QtGui import QIcon,QFont,QAction
 from PySide6.QtWidgets import (QApplication,QMainWindow,QWidget,QFrame,QLabel,QVBoxLayout,QHBoxLayout,
@@ -25,8 +26,9 @@ from .qt_widgets import STYLE,ACCENT,MUTED,label,button,panel,glyph,duration,Bud
 from .qt_statistics import StatisticsPage
 from .overlay import CountdownOverlay,PositionPicker,choose_screen,foreground_screen_name
 from .rtss import Backend as RTSSBackend, countdown as rtss_countdown, installation as rtss_installation
-from .statistics_sync import StatisticsData,computer_name,group_code,display_code
-from .statistics_cloud import CloudSyncWorker,CLOUD_CODE,SERVICE_URL,new_code
+from .statistics_sync import StatisticsData
+from .statistics_cloud import CloudSyncWorker,SERVICE_URL
+from .statistics_auth import AuthWorker
 
 log=logging.getLogger(__name__)
 
@@ -75,6 +77,8 @@ class App(QMainWindow,MonitorActions):
         self.store,self.data_dir=store,Path(data_dir)
         self.settings=store.settings(); self.catalog=Catalog(self.settings,store.games(True),store.overrides(),store.rules())
         self.statistics_data=StatisticsData(store); self.statistics_sync=CloudSyncWorker()
+        self.account_auth=AuthWorker(); self.account_session=store.account_session()
+        self._auth_busy=False; self._auth_callback=None
         self._sync_busy=False; self._sync_attempted=0; self._sync_status='Statistics sync is off.'
         self._sync_interval=60; self._sync_revision=None
         self.tracker=Tracker(store,self.catalog); self.hub=hub or HubWorker(data_dir); self.hub_fingerprint=None
@@ -225,6 +229,7 @@ class App(QMainWindow,MonitorActions):
                     if warning: self.clients_status.setText(self.t(warning)); self.clients_status.show()
                 if self.isVisible() and not self.isMinimized() and self.pages.currentIndex()==3 and not self._clients_busy and time.monotonic()-self._clients_refreshed>=60: self.refresh_clients()
         except (OSError,ValueError,RuntimeError): log.warning('Optional assets/launchers unavailable',exc_info=True)
+        self.poll_account()
         self.poll_statistics_sync()
         self.update_assets_interval()
 
@@ -232,6 +237,33 @@ class App(QMainWindow,MonitorActions):
         # Workers still return promptly; an empty queue needs no 100 ms wakeups.
         interval=100 if self.art.pending or self._clients_busy or self._sync_busy else 1000
         if self.assets_timer.interval()!=interval: self.assets_timer.setInterval(interval)
+
+    def request_account(self,action,code,callback):
+        if self.closed or self._auth_busy: return False
+        self._auth_busy=self.account_auth.request(action,self.account_session,code)
+        if self._auth_busy:
+            self._auth_callback=callback
+            for window in self._dialogs:
+                update=getattr(window,'_account_update',None)
+                if update: update()
+        return self._auth_busy
+
+    def poll_account(self):
+        while not self.account_auth.results.empty():
+            token,values,warning=self.account_auth.results.get_nowait()
+            if token[2]!=self.account_auth.generation: continue
+            self._auth_busy=False; value=values[0] if values else {}
+            if 'session' in value:
+                self.account_session=value['session']
+                try: self.store.save_account_session(value['session'])
+                except (OSError,SQLiteError):
+                    warning='Could not save account sign-in. Try again.'
+                    value={**value,'ok':False,'error':'storage'}
+            callback,self._auth_callback=self._auth_callback,None
+            for window in self._dialogs:
+                update=getattr(window,'_account_update',None)
+                if update: update()
+            if callback: callback(value,warning)
 
     def statistics_sync_status(self):
         if self.store.credentials_unavailable: return self.t('Enter your connection code again on this Windows account to reconnect.')
@@ -279,46 +311,8 @@ class App(QMainWindow,MonitorActions):
             self.request_statistics_sync()
 
     def statistics_sync_dialog(self):
-        window=self._dialog(self.t('Link computers'),760)
-        layout=QVBoxLayout(window); layout.setContentsMargins(26,24,26,24); layout.setSpacing(14)
-        layout.addWidget(label(self.t('Link computers'),'section'))
-        note=label(self.t('Use the generated code on your first computer, then enter that same code on your other computers. No shared folder or separate account is needed.'))
-        note.setWordWrap(True); layout.addWidget(note)
-        enabled=QCheckBox(self.t('Automatically synchronize statistics')); enabled.setChecked(self.settings.statistics_sync_enabled or not CLOUD_CODE.fullmatch(self.settings.statistics_sync_group)); layout.addWidget(enabled)
-        layout.addWidget(label(self.t('Computer name'),'muted'))
-        name=QLineEdit(self.settings.statistics_device_name or computer_name()); name.setMaxLength(80); name.setMinimumHeight(40); name.setAccessibleName(self.t('Computer name')); layout.addWidget(name)
-        layout.addWidget(label(self.t('Connection code'),'muted'))
-        saved_code=self.settings.statistics_sync_group if CLOUD_CODE.fullmatch(self.settings.statistics_sync_group) else new_code()
-        code_row=QHBoxLayout(); code=QLineEdit(display_code(saved_code)); code.setMaxLength(40); code.setMinimumHeight(40); code.setAccessibleName(self.t('Connection code')); code_row.addWidget(code,1)
-        code.setEchoMode(QLineEdit.Password)
-        code.setStyleSheet('font-family:Consolas; font-size:14px;')
-        reveal=button(self.t('Show code'),lambda:None); reveal.setCheckable(True)
-        reveal.setToolTip(self.t('The code is hidden again when you leave this window.'))
-        def visibility(visible):
-            code.setEchoMode(QLineEdit.Normal if visible else QLineEdit.Password)
-            reveal.setText(self.t('Hide code' if visible else 'Show code'))
-        reveal.toggled.connect(visibility); code_row.addWidget(reveal)
-        window._code_visibility_guard=CodeVisibilityGuard(window,lambda:reveal.setChecked(False))
-        def regenerate():
-            reveal.setChecked(False); code.setText(display_code(new_code()))
-        code_row.addWidget(button(self.t('New code'),regenerate))
-        code_row.addWidget(button(self.t('Copy'),lambda:QApplication.clipboard().setText(code.text()))); layout.addLayout(code_row)
-        secret_note=label(self.t('Keep your code private: anyone with it can link a computer. A new code starts a separate group.'),'muted'); secret_note.setWordWrap(True); layout.addWidget(secret_note)
-        help_text=label(self.t('Only statistics are shared. Daily limits, exclusions, executable paths and settings stay on each computer.'),'muted'); help_text.setWordWrap(True); layout.addWidget(help_text)
-        error=label('','danger'); error.setWordWrap(True); layout.addWidget(error)
-        def save():
-            try:
-                if enabled.isChecked() and not SERVICE_URL: raise ValueError('The synchronization service is not configured yet.')
-                settings=replace(self.settings,statistics_sync_enabled=enabled.isChecked(),
-                                 statistics_sync_group=group_code(code.text()),statistics_device_name=name.text().strip()).validate()
-                self.store.save_settings(settings); self.settings=self.catalog.settings=settings
-                self.statistics_sync.cancel(); self._sync_busy=False; self._sync_attempted=0
-                self._sync_interval=60; self._sync_revision=None
-                self._sync_status='Statistics sync is off.'; self.statistics.scope='all'; self.statistics.refresh()
-                self.request_statistics_sync(); self.update_statistics_sync_status(); window.accept()
-            except (OSError,ValueError) as exc: error.setText(self.t(str(exc)))
-        actions=QHBoxLayout(); actions.addStretch(); actions.addWidget(button(self.t('Cancel'),window.reject)); actions.addWidget(button(self.t('Save'),save,'primary')); layout.addLayout(actions)
-        window.show(); dark_window(window)
+        from .qt_account import statistics_dialog
+        statistics_dialog(self)
 
     def refresh_sources(self):
         self.art.invalidate(); self._art_queue=list(self.cards); self.call_later(10,self.load_next_art)
@@ -817,7 +811,7 @@ class App(QMainWindow,MonitorActions):
     def close(self):
         if self.closed: return
         self.closed=True
-        self.statistics_sync.close()
+        self.statistics_sync.close(); self.account_auth.close()
         for timer in list(self._timers): timer.stop(); timer.deleteLater()
         self._timers.clear(); self.dismiss_popup()
         self.overlay_timer.stop()

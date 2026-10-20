@@ -245,6 +245,37 @@ HU = {
 }
 
 
+HU.update({
+    'Sign in with GitHub to create or manage a connection code. To link another computer, enter the same existing code.': 'Kapcsolati kód létrehozásához és kezeléséhez jelentkezz be GitHubbal. Másik gép összekapcsolásához írd be a meglévő kódot.',
+    'Sign in with GitHub': 'Bejelentkezés GitHubbal', 'Sign out': 'Kijelentkezés',
+    'Signed in: {name}': 'Bejelentkezve: {name}', 'Not signed in': 'Nincs bejelentkezve',
+    'Opening GitHub sign-in…': 'GitHub-bejelentkezés megnyitása…',
+    'Keep your code private: anyone with it can link a computer. Replacing your managed code disconnects its other computers.': 'Tartsd titokban a kódot: aki ismeri, csatlakoztathat egy gépet. A kezelt kód lecserélése leválasztja a hozzá tartozó többi gépet.',
+    'Replace connection code': 'Kapcsolati kód cseréje',
+    'Replace your cloud connection code? Copies on the server for the previous code will be removed. Your local history stays available. Enter the new code again on your other computers.': 'Lecseréled a felhős kapcsolati kódodat? A régi kód szerveroldali másolatai törlődnek. A helyi előzmények megmaradnak. A többi gépeden is add meg az új kódot.',
+    'Revoke cloud connection': 'Felhős kapcsolat visszavonása',
+    'Revoke your managed connection code and remove its server copies? Local history is kept. All computers using that code will stop synchronizing.': 'Visszavonod a kezelt kódodat és törlöd a szerveroldali másolatait? A helyi előzmények megmaradnak. Az ezzel a kóddal csatlakozó gépek szinkronizálása leáll.',
+    'Cloud connection revoked. Local history is kept.': 'A felhős kapcsolat visszavonva. A helyi előzmények megmaradtak.',
+    'Could not save connection settings. Try again.': 'A kapcsolati beállításokat nem sikerült menteni. Próbáld újra.',
+    'Could not save account sign-in. Try again.': 'A bejelentkezést nem sikerült menteni. Próbáld újra.',
+    'Account sign-in is unavailable. Try again later.': 'A bejelentkezés most nem érhető el. Próbáld újra később.',
+    'GitHub sign-in has not been configured on the service yet.': 'A szolgáltatáson még nincs beállítva a GitHub-belépés.',
+    'Sign in with GitHub again to manage this group.': 'A csoport kezeléséhez jelentkezz be GitHubbal.',
+    'A verified GitHub account is required.': 'Ellenőrzött GitHub-fiók szükséges.',
+    'New cloud registrations are temporarily closed.': 'Az új felhős regisztrációk átmenetileg szünetelnek.',
+    'Cloud capacity is currently full. Local statistics are kept.': 'A felhő kapacitása jelenleg betelt. A helyi statisztikák megmaradnak.',
+    'The monthly code replacement limit was reached. Local statistics are kept.': 'Elérted a havi kódcsere-keretet. A helyi statisztikák megmaradnak.',
+    'This account already manages another code. Replace it to use this new code.': 'Ez a fiók már kezel egy másik kódot. Az új kód használatához cseréld le a régit.',
+    'This connection code has been revoked. Use your current code.': 'Ezt a kapcsolati kódot visszavonták. Használd az aktuális kódodat.',
+    'Cloud access for this account is disabled. Local statistics are kept.': 'A fiók felhős hozzáférése le van tiltva. A helyi statisztikák megmaradnak.',
+    'This code cannot replace the current group. Generate a new code.': 'Ez a kód nem helyettesítheti az aktuális csoportot. Készíts új kódot.',
+    'Too many account requests. Try again later.': 'Túl sok fiókkérés érkezett. Próbáld újra később.',
+    'Sign-in was cancelled.': 'A bejelentkezés megszakadt.',
+    'Sign-in timed out. Try again.': 'A bejelentkezési idő lejárt. Próbáld újra.',
+    'Signed out locally. The server session could not be revoked while offline.': 'Ezen a gépen kijelentkeztél. Kapcsolat nélkül a szerveroldali munkamenetet nem lehetett visszavonni.',
+})
+
+
 def tr(text, language="en", **values):
     translated = text
     if language == "hu":
