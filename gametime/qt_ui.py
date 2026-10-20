@@ -716,8 +716,11 @@ class App(QMainWindow,MonitorActions):
         games={g.id:g for g in self.store.games()}; games.update(self.catalog.games); self.hidden_ids=self.store.hidden_ids()
         source=self.source_filter.currentData()
         if self._restore_source is not None: source=self._restore_source; self._restore_source=None
-        sources=sorted({g.source for g in games.values()}); self.source_filter.blockSignals(True); self.source_filter.clear(); self.source_filter.addItem(self.t('All sources'),None)
-        for value in sources: self.source_filter.addItem(self.source_name(value),value)
+        sources=[(self.t('All sources'),None)]+[(self.source_name(value),value) for value in sorted({g.source for g in games.values()})]
+        self.source_filter.blockSignals(True)
+        if [(self.source_filter.itemText(i),self.source_filter.itemData(i)) for i in range(self.source_filter.count())]!=sources:
+            self.source_filter.clear()
+            for text,value in sources: self.source_filter.addItem(text,value)
         self.source_filter.setCurrentIndex(max(0,self.source_filter.findData(source))); self.source_filter.blockSignals(False); source=self.source_filter.currentData()
         query=self.search.text().strip().casefold()
         filtered=[g for g in games.values() if (self.hidden_toggle.isChecked() or g.id not in self.hidden_ids) and (g.installed or g.id in totals)
@@ -725,17 +728,26 @@ class App(QMainWindow,MonitorActions):
         filtered.sort(key=lambda g:(-totals.get(g.id,0) if self.sort.currentData()=='today' else 0,g.name.casefold(),g.id))
         fingerprint=tuple((g.id,g.name,g.source,g.root,g.metadata,g.installed) for g in filtered)
         if self.last_rows!=fingerprint:
-            self.art.refresh_links(self.settings.games_root); self.cards={g.id:GameCard(g,self.t) for g in filtered}
+            self.art.refresh_links(self.settings.games_root)
+            previous=self.cards; self.cards={}; artwork=[]
             duplicates=Counter(g.name.casefold() for g in filtered)
-            for card in self.cards.values():
-                card.show_source=duplicates[card.game.name.casefold()]>1
-                card.selected.connect(self.select_game); card.launched.connect(self.play_game)
-                card.options_requested.connect(self.game_menu)
+            for game in filtered:
+                card=previous.get(game.id)
+                if card is None:
+                    card=GameCard(game,self.t); artwork.append(game.id)
+                    card.selected.connect(self.select_game); card.launched.connect(self.play_game)
+                    card.options_requested.connect(self.game_menu)
+                else:
+                    if self.art.key(card.game)!=self.art.key(game) or self.art.key(game) not in self.art.cache: artwork.append(game.id)
+                    card.set_game(game)
+                show_source=duplicates[game.name.casefold()]>1
+                if card.show_source!=show_source: card.show_source=show_source; card.update()
+                self.cards[game.id]=card
             self.grid.set_cards(list(self.cards.values())); self.last_rows=fingerprint
             self.empty.setVisible(not filtered)
             if self.selected_id not in self.cards: self.selected_id=None
-            self._art_queue=list(self.cards)
-            self.call_later(10,self.load_next_art)
+            self._art_queue=list(dict.fromkeys([gid for gid in getattr(self,'_art_queue',[]) if gid in self.cards]+artwork))
+            if self._art_queue: self.call_later(10,self.load_next_art)
         self.restriction_banner.setVisible(self.restriction_reached())
         self.restriction_label.setText(self.t('Play restriction active · {minutes:g} min',minutes=self.settings.restriction_seconds/60))
         for gid,card in self.cards.items(): card.set_state(totals.get(gid,0),gid==self.selected_id,not self.launching and not self.launch_restricted(card.game))
@@ -747,7 +759,9 @@ class App(QMainWindow,MonitorActions):
         if self.closed or not self._art_queue: return
         gid=self._art_queue.pop(0); card=self.cards.get(gid)
         if card:
-            try: card.art=self.art.artwork(card.game,self.catalog.rules)
+            try:
+                art=self.art.artwork(card.game,self.catalog.rules)
+                if self.art.key(card.game) not in self.art.pending or not any(card.art): card.art=art
             except (OSError,ValueError,TypeError,AttributeError):
                 log.warning('Local game artwork unavailable: %s',gid,exc_info=True)
             card.update()

@@ -1,10 +1,12 @@
 """Historical statistics, using the same recorded-time model as the monitor."""
 from datetime import date,timedelta
+from collections import Counter
 import time
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QWidget,QScrollArea,QVBoxLayout,QHBoxLayout,QLineEdit,QListWidget,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,QComboBox
 from .statistics import date_range,summarize
 from .qt_widgets import label,button,panel,duration,DailyChart
+from .statistics_sync import computer_name
 
 class StatisticsPage(QWidget):
     def __init__(self,app):
@@ -54,11 +56,13 @@ class StatisticsPage(QWidget):
         games_card=panel(); games_layout=QVBoxLayout(games_card); games_layout.setContentsMargins(16,12,16,6)
         heading=QHBoxLayout(); self.breakdown_title=label(t('Whole period'),'section'); heading.addWidget(self.breakdown_title); heading.addStretch()
         self.whole_period_button=button(t('Whole period'),self.show_period,'quiet'); heading.addWidget(self.whole_period_button); games_layout.addLayout(heading)
-        self.games_table=QTableWidget(0,4); self.games_table.setHorizontalHeaderLabels([t('Game'),t('Source'),t('Time'),t('Share')])
+        self.games_table=QTableWidget(0,5); self.games_table.setHorizontalHeaderLabels([t('Game'),t('Computer'),t('Source'),t('Time'),t('Share')])
         self.games_table.verticalHeader().hide(); self.games_table.setShowGrid(False)
         self.games_table.setSelectionBehavior(QAbstractItemView.SelectRows); self.games_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.games_table.horizontalHeader().setSectionResizeMode(0,QHeaderView.Stretch)
-        for col,width in ((1,105),(2,105),(3,80)): self.games_table.setColumnWidth(col,width)
+        for col,width in ((1,140),(2,90),(3,88),(4,64)): self.games_table.setColumnWidth(col,width)
+        self.games_table.setStyleSheet('QTableWidget::item {padding:10px 6px;}')
+        self.games_table.setWordWrap(False)
         self.games_table.setMinimumHeight(145); games_layout.addWidget(self.games_table); lower.addWidget(games_card,3)
         layout.addLayout(lower,2)
         self.average_note=label('','muted'); self.average_note.setWordWrap(True); layout.addWidget(self.average_note)
@@ -80,7 +84,8 @@ class StatisticsPage(QWidget):
         self.refresh_devices()
         group=self.app.settings.statistics_sync_group
         started=self.app.statistics_data.started_on(group,self.scope)
-        self.report=summarize(self.app.statistics_data.history(self.start.text(),self.end.text(),group,self.scope),self.start.text(),self.end.text(),started_on=started,as_of=date.today().isoformat())
+        self.computer_history=self.app.statistics_data.history_by_computer(self.start.text(),self.end.text(),group,self.scope,self.app.settings.statistics_device_name)
+        self.report=summarize((row[:5] for row in self.computer_history),self.start.text(),self.end.text(),started_on=started,as_of=date.today().isoformat())
         self.total_label.setText(duration(self.report.total)); self.average_label.setText(duration(self.report.average))
         self.top_label.setText(self.report.games[0][1] if self.report.games else self.app.t('No recorded play time'))
         explanation=self.app.t('Average uses {days} elapsed days in the selected period, starting at {date}.',days=self.report.average_days,date=started)
@@ -93,9 +98,13 @@ class StatisticsPage(QWidget):
         self.updating=False; self.show_breakdown()
 
     def refresh_devices(self):
+        remote=self.app.statistics_data.devices(self.app.settings.statistics_sync_group)
+        names=Counter(name for identity,name,started in remote)
+        self.computer_names={'local':self.app.t('{name} (this computer)',name=self.app.settings.statistics_device_name or computer_name())}
+        self.computer_names.update({identity:name+(' · '+identity[:8] if names[name]>1 else '') for identity,name,started in remote})
         self.devices.blockSignals(True); self.devices.clear()
-        self.devices.addItem(self.app.t('All linked computers'),'all'); self.devices.addItem(self.app.t('This computer'),'local')
-        for identity,name,started in self.app.statistics_data.devices(self.app.settings.statistics_sync_group): self.devices.addItem(name,identity)
+        self.devices.addItem(self.app.t('All linked computers'),'all'); self.devices.addItem(self.computer_names['local'],'local')
+        for identity,name,started in remote: self.devices.addItem(self.computer_names[identity],identity)
         index=self.devices.findData(self.scope)
         if index<0: self.scope='all'; index=0
         self.devices.setCurrentIndex(index); self.devices.blockSignals(False)
@@ -121,15 +130,24 @@ class StatisticsPage(QWidget):
         if not self.report: return
         rows=self.report.by_day.get(self.selected_day,[]) if self.selected_day else self.report.games
         total=sum(row[3] for row in rows)
-        self.breakdown_title.setText(self.selected_day or self.app.t('By game')); self.whole_period_button.setVisible(self.selected_day is not None)
+        order={row[0]:index for index,row in enumerate(rows)}
+        grouped={}
+        for day,gid,name,source,seconds,identity,device_name in self.computer_history:
+            if self.selected_day and day!=self.selected_day: continue
+            grouped.setdefault((gid,identity),[gid,name,source,0,identity,device_name])[3]+=seconds
+        rows=sorted(grouped.values(),key=lambda row:(order[row[0]],-row[3],row[5].casefold(),row[4]))
+        self.breakdown_title.setText(self.selected_day or self.app.t('By game and computer')); self.whole_period_button.setVisible(self.selected_day is not None)
         self.games_table.setRowCount(len(rows))
-        for i,(gid,name,source,seconds) in enumerate(rows):
+        for i,(gid,name,source,seconds,identity,device_name) in enumerate(rows):
             share=f'{seconds/total:.1%}' if total else '0%'
             if self.app.settings.language=='hu': share=share.replace('.',',')
             source=self.app.source_name(source)
-            for col,value in enumerate((name,source,duration(seconds),share)):
+            computer=self.computer_names.get(identity,device_name)
+            for col,value in enumerate((name,computer,source,duration(seconds),share)):
                 item=QTableWidgetItem(value)
-                if col>=2: item.setTextAlignment(Qt.AlignRight|Qt.AlignVCenter)
+                item.setToolTip(value)
+                if col==1: item.setData(Qt.UserRole,identity)
+                if col>=3: item.setTextAlignment(Qt.AlignRight|Qt.AlignVCenter)
                 self.games_table.setItem(i,col,item)
             self.games_table.setRowHeight(i,44)
         self.chart.set_days(self.report.days,self.selected_day)

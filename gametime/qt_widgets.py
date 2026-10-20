@@ -232,6 +232,11 @@ class GameCard(QFrame):
         self.setToolTip(game.name+' · '+game.source)
     def resizeEvent(self,event):
         self.play.move(self.width()-49,168); self.more.move(self.width()-46,10)
+    def set_game(self,game):
+        if self.game==game: return
+        self.game=game; self.setAccessibleName(game.name)
+        self.play.setAccessibleName(self.t('▶ Play')+' '+game.name)
+        self.more.setAccessibleName(self.t('Game options')+' '+game.name); self.update()
     def set_state(self,seconds,chosen,enabled=True):
         if self.seconds!=seconds or self.chosen!=chosen: self.seconds=seconds; self.chosen=chosen; self.update()
         source=self.t('Manual') if self.game.source=='Kézi' else self.t('Games folder') if self.game.source=='Games' else self.game.source
@@ -291,13 +296,18 @@ class CardGrid(QWidget):
         super().__init__(); self.cards=[]; self.columns=0
         self.grid=QGridLayout(self); self.grid.setContentsMargins(0,0,8,0); self.grid.setSpacing(16); self.grid.setAlignment(Qt.AlignTop)
     def set_cards(self,cards):
-        for old in self.cards: self.grid.removeWidget(old); old.deleteLater()
-        self.cards=cards; self.columns=0; self.reflow()
+        if self.cards==cards: return
+        self.setUpdatesEnabled(False)
+        for old in self.cards:
+            self.grid.removeWidget(old)
+            if old not in cards: old.hide(); old.deleteLater()
+        self.cards=cards; self.reflow(force=True)
+        self.setUpdatesEnabled(True)
     def resizeEvent(self,event): self.reflow()
-    def reflow(self):
+    def reflow(self,force=False):
         if not hasattr(self,'grid'): return
         columns=max(1,(self.width()+16)//238)
-        if columns==self.columns: return
+        if columns==self.columns and not force: return
         for card in self.cards: self.grid.removeWidget(card)
         for i,card in enumerate(self.cards): self.grid.addWidget(card,i//columns,i%columns)
         for col in range(max(columns,self.columns)): self.grid.setColumnStretch(col,1 if col<columns else 0)

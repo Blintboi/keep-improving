@@ -1,6 +1,6 @@
-# Játékidőfigyelő — 2.7.1
+# Játékidőfigyelő — 2.7.2
 
-**[Legfrissebb telepítő letöltése — 2.7.1 · Windows x64](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256)
+**[Legfrissebb telepítő letöltése — 2.7.2 · Windows x64](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256)
 
 A letöltött telepítőt indítsd el a telepítéshez vagy frissítéshez. A korábbi előzmények, beállítások és kizárások megmaradnak, és frissítés előtt biztonsági mentés készül.
 
@@ -19,6 +19,8 @@ A program helye: `%LOCALAPPDATA%\Programs\GameTimeMonitor`. Az előzmények és 
 Az asztalon egy közös **Gaming Hub** parancsikon marad a megszokott kontrolleres-órás ikonnal. Ez a már futó figyelő játékgyűjteményét nyitja meg. A frissítés a régi, saját monitor- és Hub-parancsikont összevonja, és előtte menti őket.
 
 ## Játékok indítása
+
+A 2.7.2-től a háttérben futó játékkeresés megtartja a meglévő kártyákat és képeket, így nem építi újra villogva a teljes rácsot. Változatlan találatoknál megmarad a kijelölés, a billentyűzetfókusz és a görgetési hely. Az új kép csak akkor váltja le a régit, ha már elkészült.
 
 A **Játéktár** a kezdőlap: színes játékcsempék, helyi borítóképek és ikonok, gyorsindítás és rendezés a mai játékidő szerint. Keress játéknevet, vagy szűrj forrásra, majd kattints közvetlenül a játék kártyáján lévő **Indítás** gombra. Egy kattintással indul, előzetes kijelölés és külön alsó kezelősáv nélkül. A kártyán dupla kattintás vagy Enter is indít. A Steam-, Epic-, Ubisoft- és Riot-játékot a megfelelő kliensen át, Minecraftot a launcherével vagy a meglévő hivatkozásával indítja; az eredeti parancsikon argumentumai megmaradnak. Egyértelmű, önálló EXE közvetlenül is indulhat.
 
@@ -86,6 +88,8 @@ A **Statisztikák** oldalon napi diagram, napi lista és játékonkénti időbon
 A már meglévő előzményeket használja, az elrejtett, kizárt és eltávolított játékok korábban rögzített idejével együtt. Rögzített idő nélküli napok nullával jelennek meg. **A napi átlagot legkorábban a telepítés napjától számítja**, a kijelölt időszak máig eltelt napjaiból. A telepítés utáni játékmentes napok számítanak, a telepítés előtti és a jövőbeli napok nem. Alul látszik a kezdőnap és az átlag alapjául szolgáló napok száma. A telepítés dátuma frissítéskor megmarad; régi profilnál az adatbázis létrehozási idejéből és a legelső rögzített játékidőből elérhető korábbi napot használja. A figyelő telepítése előtti vagy korábban fel nem ismert játékidőt nem lehet utólag visszaállítani.
 
 ## Statisztikák összekapcsolása több gépen
+
+A 2.7.2-től a statisztikatáblázat **Gép** oszlopa megmutatja az adatot küldő számítógép nevét. Ugyanaz a játék gépenként külön sorban, külön idővel jelenik meg a teljes időszakban és a napi bontásban is. Az összesítés és a diagram továbbra is a kiválasztott gépek közös idejét mutatja. A **Gépek** listával egyetlen gépre is szűrhetsz; a helyi gépet az „ez a gép” jelzés azonosítja.
 
 A 2.7.1-től az összekapcsolási kód minden ablaknyitáskor rejtett. A **Kód mutatása / Kód elrejtése** gombbal kapcsolhatod a láthatóságát; másik ablakra váltáskor vagy az ablak elrejtésekor automatikusan visszarejti. A **Másolás** gomb rejtett kódnál is működik, és az újonnan generált kód is rejtve marad. A frissítés megtartja a korábbi kódot és az összekapcsolt gépeket.
 

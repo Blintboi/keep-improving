@@ -72,6 +72,49 @@ class QtInterfaceTests(unittest.TestCase):
         self.assertFalse(self.app.catalog.enabled(game)); self.app.toggle_hidden()
         self.assertNotIn(game.id,self.store.hidden_ids()); self.assertIn(game.id,self.app.cards)
 
+    def test_background_rediscovery_keeps_cards_artwork_focus_and_scroll(self):
+        from gametime.model import Game
+        from PySide6.QtGui import QPixmap,QColor
+        self.app.assets_timer.stop()
+        extra=[Game('extra:'+str(i),'Extra '+str(i),'Games',str(self.base/str(i))) for i in range(12)]
+        self.store.upsert(extra); self.app.catalog.games.update({g.id:g for g in extra}); self.app.render()
+        self.app.show(); self.app.resize(1000,700); self.pump(.05); self.app._art_queue=[]
+        poster=QPixmap(60,80); poster.fill(QColor('#148050'))
+        before=dict(self.app.cards)
+        for card in before.values(): card.art=(poster,None); self.app.art.cache[self.app.art.key(card.game)]=card.art
+        focused=next(iter(before.values())); focused.setFocus(); self.app.select_game(focused.game.id)
+        bar=self.app.scroll.verticalScrollBar(); bar.setValue(bar.maximum()//2); position=bar.value()
+        for _ in range(3):
+            self.app.service.results.put(('launchers',[g for g in self.games if g.source in ('Steam','Epic')],[],[],[],[],[]))
+            self.app.service.results.put(('games',[self.games[0],*extra],''))
+            self.app.drain_discovery()
+            with patch.object(self.app.grid,'reflow',wraps=self.app.grid.reflow) as reflow:
+                self.app.render(); reflow.assert_not_called()
+            for gid,card in before.items():
+                self.assertIs(self.app.cards[gid],card); self.assertEqual(card.art[0].cacheKey(),poster.cacheKey())
+            self.assertEqual(self.app.selected_id,focused.game.id); self.assertIs(self.app.focusWidget(),focused)
+            self.assertEqual(bar.value(),position); self.assertFalse(self.app._art_queue)
+
+    def test_changed_catalog_updates_only_needed_cards_and_keeps_art_while_loading(self):
+        from PySide6.QtGui import QPixmap,QColor
+        self.app.assets_timer.stop(); self.app._art_queue=[]
+        original=dict(self.app.cards); game=self.games[0]; card=original[game.id]
+        poster=QPixmap(60,80); poster.fill(QColor('#148050')); card.art=(poster,None)
+        changed=replace(game,name='Renamed fixture',metadata='new-artwork')
+        self.app.catalog.games[game.id]=changed; self.store.upsert([changed]); self.app.render()
+        self.assertIs(self.app.cards[game.id],card); self.assertEqual(card.game.name,changed.name)
+        self.assertIn(changed.name,card.play.accessibleName()); self.assertEqual(card.art[0].cacheKey(),poster.cacheKey())
+        for gid,other in original.items(): self.assertIs(self.app.cards[gid],other)
+        self.app._art_queue=[game.id]; key=self.app.art.key(changed); self.app.art.pending[key]=999
+        with patch.object(self.app.art,'artwork',return_value=(None,None)): self.app.load_next_art()
+        self.assertEqual(card.art[0].cacheKey(),poster.cacheKey())
+        self.app.art.cache[key]=(None,None)
+        with patch.object(self.app.art,'poll',return_value=[key]): self.app.poll_assets()
+        self.assertEqual(card.art,(None,None))
+        self.app.select_game(self.games[1].id); self.app.toggle_hidden()
+        self.assertNotIn(self.games[1].id,self.app.cards); self.assertIs(self.app.cards[game.id],card)
+        self.app.sort.setCurrentIndex(1); self.assertIs(self.app.cards[game.id],card)
+
     def test_language_rebuild_preserves_filters_selection_and_statistics_dates(self):
         self.app.search.setText('Beta'); self.app.select_game(self.games[1].id); self.app.switch_page(1)
         self.app.statistics.preset(7); self.app.statistics.choose_day(date.today().isoformat())
@@ -108,6 +151,34 @@ class QtInterfaceTests(unittest.TestCase):
         stats.devices.setCurrentIndex(stats.devices.findData(snapshot['device'])); self.assertEqual(stats.report.total,300)
         self.app.set_language('en'); self.pump()
         self.assertEqual(self.app.statistics.scope,snapshot['device']); self.assertEqual(self.app.statistics.report.total,300)
+
+    def test_statistics_show_named_computer_times_for_each_game_and_selected_day(self):
+        from PySide6.QtCore import Qt
+        from gametime.statistics_sync import StatisticsData
+        from gametime.store import Store
+        day=date.today().isoformat(); yesterday=(date.today()-timedelta(days=1)).isoformat(); group='a'*32
+        self.store.add_usage({(day,self.games[0].id):120,(yesterday,self.games[0].id):60})
+        self.app.settings=self.app.catalog.settings=replace(self.app.settings,statistics_sync_group=group,statistics_device_name='Main PC')
+        identities=[]
+        for index,seconds in enumerate((300,90)):
+            remote=Store(self.base/('origin'+str(index)+'.sqlite3'))
+            try:
+                remote.upsert([self.games[0]]); remote.add_usage({(day,self.games[0].id):seconds,(yesterday,self.games[0].id):30})
+                snapshot=StatisticsData(remote).snapshot(group,'Laptop'); identities.append(snapshot['device'])
+                self.app.statistics_data.ingest(snapshot,group)
+            finally: remote.close()
+        self.app.switch_page(1); stats=self.app.statistics
+        def rows():
+            return {stats.games_table.item(i,1).data(Qt.UserRole):(stats.games_table.item(i,1).text(),stats.games_table.item(i,3).text()) for i in range(stats.games_table.rowCount())}
+        self.assertEqual(stats.report.total,630); self.assertEqual(len(stats.report.games),1)
+        shown=rows(); self.assertEqual(shown['local'],('Main PC (ez a gép)','00:03:00'))
+        self.assertEqual(shown[identities[0]],('Laptop · '+identities[0][:8],'00:05:30'))
+        self.assertEqual(shown[identities[1]],('Laptop · '+identities[1][:8],'00:02:00'))
+        stats.choose_day(day); self.assertEqual(rows()['local'][1],'00:02:00'); self.assertEqual(rows()[identities[0]][1],'00:05:00')
+        stats.devices.setCurrentIndex(stats.devices.findData(identities[1])); self.assertEqual(set(rows()),{identities[1]})
+        self.app.set_language('en'); stats=self.app.statistics; self.assertEqual(stats.games_table.horizontalHeaderItem(1).text(),'Computer')
+        stats.devices.setCurrentIndex(stats.devices.findData('local')); self.assertEqual(rows()['local'][0],'Main PC (this computer)')
+        self.assertEqual(self.store.totals(day),{self.games[0].id:120})
 
     def test_sync_dialog_connects_and_disconnects_without_sharing_settings(self):
         from PySide6.QtWidgets import QLineEdit,QPushButton,QCheckBox

@@ -164,6 +164,20 @@ class StatisticsData:
             rows += list(self.store.db.execute(sql, args))
         return rows
 
+    def history_by_computer(self, start, end, group, scope='all', local_name=''):
+        """Retain each row's origin for display without changing exports or budgets."""
+        rows = [(*row, 'local', local_name or computer_name()) for row in self.local_rows(start, end)] if scope in ('all', 'local') else []
+        if group and scope != 'local':
+            sql = '''SELECT r.day,r.game_id,r.name,r.source,r.seconds,r.device_id,d.name
+                     FROM statistics_remote r JOIN statistics_devices d
+                     ON d.group_id=r.group_id AND d.device_id=r.device_id
+                     WHERE r.group_id=? AND r.day>=? AND r.day<=?'''
+            args = [group, str(start), str(end)]
+            if scope != 'all':
+                sql += ' AND r.device_id=?'; args.append(scope)
+            rows += list(self.store.db.execute(sql, args))
+        return rows
+
     def started_on(self, group, scope='all'):
         dates = [self.store.tracking_started_on()] if scope in ('all', 'local') else []
         dates += [started for identity, name, started in self.devices(group) if scope == 'all' or scope == identity]

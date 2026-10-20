@@ -63,6 +63,20 @@ class StatisticsSyncTests(unittest.TestCase):
         self.assertFalse(self.data[0].devices(GROUP)); self.assertFalse(self.data[1].devices(OTHER))
         with self.assertRaises(ValueError): self.data[0].ingest(self.snapshot(1, OTHER), GROUP)
 
+    def test_history_keeps_device_origins_filters_groups_and_updates_names(self):
+        self.stores[0].add_usage({(DAY,'steam:42'):60}); self.stores[1].add_usage({(DAY,'steam:42'):120})
+        snapshot=self.snapshot(1); self.data[0].ingest(snapshot,GROUP)
+        self.stores[2].add_usage({(DAY,'steam:42'):300}); self.data[0].ingest(self.snapshot(2,OTHER),OTHER)
+        rows=self.data[0].history_by_computer(DAY,DAY,GROUP,local_name='My desktop')
+        self.assertEqual({row[5]:(row[4],row[6]) for row in rows},{'local':(60,'My desktop'),snapshot['device']:(120,'Computer 1')})
+        self.assertEqual(sum(row[4] for row in rows),self.total(0))
+        self.assertEqual([row[5] for row in self.data[0].history_by_computer(DAY,DAY,GROUP,'local')],['local'])
+        self.assertEqual([row[5] for row in self.data[0].history_by_computer(DAY,DAY,GROUP,snapshot['device'])],[snapshot['device']])
+        self.assertFalse(self.data[0].history_by_computer('2000-01-01','2000-01-02',GROUP))
+        renamed=self.data[1].snapshot(GROUP,'Renamed laptop'); self.data[0].ingest(renamed,GROUP)
+        self.assertEqual(self.data[0].history_by_computer(DAY,DAY,GROUP,snapshot['device'])[0][6],'Renamed laptop')
+        self.assertEqual(self.stores[0].totals(DAY),{'steam:42':60})
+
     def test_full_snapshots_replace_old_data_and_reject_out_of_order_versions(self):
         self.stores[1].add_usage({(DAY, 'steam:42'): 40}); old = self.snapshot(1)
         self.assertTrue(self.data[0].ingest(old, GROUP))

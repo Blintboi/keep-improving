@@ -23,6 +23,12 @@ The retained legacy GUI smoke creates real Tk windows with synthetic fixtures. I
 
 The 1.6 bundled test redirects desktop shortcut creation into its own temporary Desktop fixture, exercises the old separate monitor/Hub-folder shortcut migration and checks one shared app icon and owned-shortcut removal during uninstall. It does not create test shortcuts on the user's actual desktop.
 
+## 2.7.2 computer origins and stable game cards
+
+All 58 focused tests passed: 25 Qt integration tests in 10.620 seconds and 33 statistics/cloud/translation tests in 7.506 seconds. New regressions feed actual background discovery result queues repeatedly and check that card instances, artwork, selection, keyboard focus, scroll position and grid layout remain stable. Changed metadata updates the existing card, old artwork remains visible during replacement work, new artwork is delivered to that same card, and hiding/sorting still works.
+
+Statistics regressions retain each computer's identity and name for matching games, check period/day totals, local and remote filters, name changes, duplicate computer-name disambiguation and group isolation, and verify local budgets remain unchanged. Hungarian and English native statistics captures at 1000×700 were inspected with synthetic profiles, both for a whole period and a selected day. No real game was started and no live cloud data was changed by these tests. Synchronization payloads, encryption and the backend are unchanged.
+
 ## 2.7.1 connection-code privacy
 
 All 54 focused tests passed: 22 Qt integration tests in 9.260 seconds and 32 statistics/cloud/translation tests in 7.230 seconds. New regressions check that existing codes open masked, copying does not reveal the code, showing and hiding are explicit, reopening starts masked, leaving or hiding the window remasks a revealed code, and generating a replacement keeps it hidden. Cancel/reopen does not change the saved connection code.

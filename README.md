@@ -1,12 +1,12 @@
 # Game Time Monitor
 
-**[Download the latest installer — 2.7.1 · Windows x64](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256)
+**[Download the latest installer — 2.7.2 · Windows x64](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256)
 
 Run the downloaded installer to install or update the app. Existing history, settings and exclusions are kept, with a backup before upgrading. [Magyar útmutató](README.hu.md).
 
 An offline Windows 11 Gaming Hub and game-time monitor in one app. Launch games from a searchable library, measure foreground gameplay against a shared daily budget, and follow daily statistics in a dark English/Hungarian interface.
 
-**Private preview 2.7.1.** The repository and installer remain private. Sign into GitHub with an account that has access on your other PC. Optional encrypted synchronization combines statistics from your computers using the same connection code, without a shared folder.
+**Private preview 2.7.2.** The repository and installer remain private. Sign into GitHub with an account that has access on your other PC. Optional encrypted synchronization combines statistics from your computers using the same connection code, without a shared folder.
 
 The 2.0 interface uses Qt Widgets: a dark sidebar, responsive game cards, a daily-budget ring, contextual game actions and a redesigned statistics page. Artwork is read from existing local Steam caches, installed-game image files or game icons; no image service, launcher credentials or artwork downloads are used. Artwork and icons keep their original aspect ratios; complete cover images fit inside the card with dark padding where needed. Missing art has a colored monogram fallback. The shared controller/clock application icon remains unchanged.
 
@@ -23,6 +23,8 @@ Program files go under `%LOCALAPPDATA%\Programs\GameTimeMonitor`. Data goes in W
 Setup adds one shared desktop **Gaming Hub** icon, a Start menu shortcut, Windows startup entries and an Installed apps entry. The desktop icon opens the integrated library in the running monitor, including when Statistics was open. The controller/clock icon stays the same. Upgrades consolidate and back up the previous owned monitor/Hub desktop entries. A fallback Startup shortcut and the Run entry share a per-profile mutex, so only one monitor runs. A restart is not required.
 
 ## Launch games
+
+From 2.7.2, background discovery keeps existing game cards and artwork instead of recreating the entire grid. Selection, keyboard focus and scroll position survive unchanged scans. Updated artwork replaces the previous image when ready.
 
 The **Library** page is the home screen, with artwork cards, quick Play buttons, search, source filters and sorting by name or today’s time. Search by name or filter by source, then click **Play** directly on the game's card. One click starts it without selecting it first or opening a separate bottom panel. Double-clicking the card or pressing Enter also starts it. Play uses Steam, Epic, Ubisoft and Riot launch routes, the Minecraft launcher or an existing shortcut with its original arguments. Standalone games with one executable can start directly. Discovery keeps the library up to date.
 
@@ -51,6 +53,8 @@ Open the **Statistics / Statisztikák** page to see recorded play time by day an
 Statistics include existing history, hidden/excluded games and removed installations. Hiding or uninstalling does not erase past time. Days without recorded time appear as zero. The daily average uses elapsed calendar days within the selected range, starting no earlier than installation; idle days after installation count, but days before installation and future dates do not. The footer shows the installation date and number of days used. That date survives upgrades; older profiles use the earlier available database creation date or first recorded activity. No activity before tracking began can be reconstructed, and the monitor does not infer unrecorded gameplay. Language changes preserve the selected date range.
 
 ## Link statistics across computers
+
+From 2.7.2, the statistics table shows a **Computer** column and separate times for each game on each computer, both for the whole period and a selected day. The overall totals and chart still combine the selected computers. Use the **Computers** selector to filter to one device; the local device is marked as this computer.
 
 From 2.7.1, the connection code is hidden each time you open **Link computers**. **Show code / Hide code** reveals it only when requested; leaving or hiding the window hides it again. **Copy** works while the code is hidden. Generating a new code also keeps it hidden. Upgrades preserve your existing code and linked computers.
 
