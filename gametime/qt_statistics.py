@@ -2,20 +2,26 @@
 from datetime import date,timedelta
 import time
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QWidget,QScrollArea,QVBoxLayout,QHBoxLayout,QLineEdit,QListWidget,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView
+from PySide6.QtWidgets import QWidget,QScrollArea,QVBoxLayout,QHBoxLayout,QLineEdit,QListWidget,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,QComboBox
 from .statistics import date_range,summarize
 from .qt_widgets import label,button,panel,duration,DailyChart
 
 class StatisticsPage(QWidget):
     def __init__(self,app):
-        super().__init__(); self.app=app; self.report=None; self.selected_day=None; self.last_refresh=0; self.updating=False
+        super().__init__(); self.app=app; self.report=None; self.selected_day=None; self.last_refresh=0; self.updating=False; self.scope='all'
         t=app.t
         shell=QVBoxLayout(self); shell.setContentsMargins(0,0,0,0)
         scroll=QScrollArea(); scroll.setWidgetResizable(True); shell.addWidget(scroll)
         content=QWidget(); scroll.setWidget(content)
         layout=QVBoxLayout(content); layout.setContentsMargins(32,25,32,22); layout.setSpacing(16)
         header=QHBoxLayout(); header.addWidget(label(t('Statistics'),'title'),1)
+        header.addWidget(button(t('Link computers'),app.statistics_sync_dialog))
+        self.sync_now=button(t('Sync now'),app.request_statistics_sync); self.sync_now.setEnabled(app.settings.statistics_sync_enabled); header.addWidget(self.sync_now)
         header.addWidget(button(t('Refresh'),self.refresh)); layout.addLayout(header)
+        devices_row=QHBoxLayout(); devices_row.addWidget(label(t('Computers'),'muted'))
+        self.devices=QComboBox(); self.devices.setMinimumWidth(250); self.devices.setMaximumWidth(320); devices_row.addWidget(self.devices)
+        self.devices.currentIndexChanged.connect(self.choose_device)
+        self.sync_label=label(app.statistics_sync_status(),'muted'); self.sync_label.setWordWrap(True); devices_row.addWidget(self.sync_label,1); layout.addLayout(devices_row)
         controls=QHBoxLayout(); controls.setSpacing(8)
         self.presets=[]
         for text,days in [('Last 7 days',7),('Last 30 days',30),('This month',0)]:
@@ -71,18 +77,33 @@ class StatisticsPage(QWidget):
         except ValueError as exc:
             self.error.setText(self.app.t(str(exc))); self.error.show(); return
         self.error.hide(); self.app.tracker.flush()
-        started=self.app.store.tracking_started_on()
-        self.report=summarize(self.app.store.history(self.start.text(),self.end.text()),self.start.text(),self.end.text(),started_on=started,as_of=date.today().isoformat())
+        self.refresh_devices()
+        group=self.app.settings.statistics_sync_group
+        started=self.app.statistics_data.started_on(group,self.scope)
+        self.report=summarize(self.app.statistics_data.history(self.start.text(),self.end.text(),group,self.scope),self.start.text(),self.end.text(),started_on=started,as_of=date.today().isoformat())
         self.total_label.setText(duration(self.report.total)); self.average_label.setText(duration(self.report.average))
         self.top_label.setText(self.report.games[0][1] if self.report.games else self.app.t('No recorded play time'))
-        explanation=self.app.t('Average uses {days} elapsed days in the selected period, no earlier than installation ({date}).',days=self.report.average_days,date=started)
-        self.average_note.setText(self.app.t('Average: {days} days · installed {date}',date=started,days=self.report.average_days))
+        explanation=self.app.t('Average uses {days} elapsed days in the selected period, starting at {date}.',days=self.report.average_days,date=started)
+        self.average_note.setText(self.app.t('Average: {days} days · since {date}',date=started,days=self.report.average_days))
         self.average_label.setToolTip(explanation); self.average_note.setToolTip(explanation)
         if self.selected_day not in self.report.days: self.selected_day=None
         self.updating=True; self.days_list.clear()
         for day,seconds in reversed(list(self.report.days.items())): self.days_list.addItem(day+'   '+duration(seconds))
         if self.selected_day: self.days_list.setCurrentRow(list(reversed(self.report.days)).index(self.selected_day))
         self.updating=False; self.show_breakdown()
+
+    def refresh_devices(self):
+        self.devices.blockSignals(True); self.devices.clear()
+        self.devices.addItem(self.app.t('All linked computers'),'all'); self.devices.addItem(self.app.t('This computer'),'local')
+        for identity,name,started in self.app.statistics_data.devices(self.app.settings.statistics_sync_group): self.devices.addItem(name,identity)
+        index=self.devices.findData(self.scope)
+        if index<0: self.scope='all'; index=0
+        self.devices.setCurrentIndex(index); self.devices.blockSignals(False)
+        self.sync_label.setText(self.app.statistics_sync_status())
+        self.sync_now.setEnabled(self.app.settings.statistics_sync_enabled)
+
+    def choose_device(self,index):
+        self.scope=self.devices.itemData(index) or 'all'; self.selected_day=None; self.refresh()
 
     def select_row(self,row):
         if self.updating or not self.report or row<0: return

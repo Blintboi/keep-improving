@@ -198,13 +198,18 @@ class ClassificationTests(unittest.TestCase):
         self.catalog.rules[norm(path)] = self.game.id
         self.assertEqual(self.catalog.resolve(path), self.game)
 
-    def test_chess_auto_exclusion_and_persistent_override(self):
-        self.catalog.settings.exclude_chess = True
+    def test_chess_counts_unless_user_excludes_it(self):
         game = Game("games:chess", "Chess Ultra", "Games", r"C:\Games\ChessUltra")
         self.catalog.games[game.id] = game
-        self.assertIsNone(self.catalog.resolve(game.root + r"\game.exe"))
+        for executable in ('game.exe','chess.exe','stockfish.exe','lc0.exe','fritz.exe','houdini.exe','komodo.exe'):
+            path = game.root + '\\' + executable
+            self.assertEqual(self.catalog.resolve(path), game)
+            self.assertFalse(self.catalog.explicitly_ignored(path))
+        self.catalog.overrides[game.id] = False
+        self.assertIsNone(self.catalog.resolve(game.root + r"\chess.exe"))
+        self.assertTrue(self.catalog.explicitly_ignored(game.root + r"\chess.exe"))
         self.catalog.overrides[game.id] = True
-        self.assertEqual(self.catalog.resolve(game.root + r"\game.exe"), game)
+        self.assertEqual(self.catalog.resolve(game.root + r"\chess.exe"), game)
 
     def test_exact_exclusion(self):
         path = self.game.root + r"\game.exe"
@@ -366,10 +371,10 @@ class TrackerTests(unittest.TestCase):
         self.tracker.reconcile([game], lambda g: g.source == "Epic")
         self.assertLessEqual(self.total(), 121)
 
-    def test_excluded_chess_does_not_count_or_backfill(self):
-        self.catalog.settings.exclude_chess = True
+    def test_manually_excluded_chess_does_not_count_or_backfill(self):
         chess = Game("chess", "Chess Ultra", "Games", r"C:\Games\Chess")
         self.catalog.games[chess.id] = chess
+        self.catalog.overrides[chess.id] = False
         for sec in range(11):
             self.sample(sec, chess)
         self.assertEqual(self.total(), 0)

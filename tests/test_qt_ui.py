@@ -88,6 +88,61 @@ class QtInterfaceTests(unittest.TestCase):
         self.app.warning.setValue(3); self.app.save_settings()
         self.assertEqual(self.store.settings().limit_seconds,300); self.assertEqual(self.store.settings().language,'hu')
 
+    def test_linked_statistics_filter_computers_without_changing_local_budget(self):
+        from gametime.store import Store
+        from gametime.model import Game
+        from gametime.statistics_sync import StatisticsData
+        day=date.today().isoformat(); group='012345abcdef'
+        self.store.add_usage({(day,self.games[0].id):120}); self.app.tracker.cache.clear()
+        remote=Store(self.base/'other.sqlite3')
+        try:
+            remote.upsert([Game('other:alpha',self.games[0].name,self.games[0].source,'D:/Other')])
+            remote.add_usage({(day,'other:alpha'):300})
+            snapshot=StatisticsData(remote).snapshot(group,'Other PC')
+        finally: remote.close()
+        self.app.settings=self.app.catalog.settings=replace(self.app.settings,statistics_sync_group=group)
+        self.app.statistics_data.ingest(snapshot,group); self.app.switch_page(1); self.app.render()
+        stats=self.app.statistics; self.assertEqual(stats.report.total,420); self.assertEqual(len(stats.report.games),1)
+        self.assertEqual(self.app.total_label.text(),'00:02:00')
+        stats.devices.setCurrentIndex(stats.devices.findData('local')); self.assertEqual(stats.report.total,120)
+        stats.devices.setCurrentIndex(stats.devices.findData(snapshot['device'])); self.assertEqual(stats.report.total,300)
+        self.app.set_language('en'); self.pump()
+        self.assertEqual(self.app.statistics.scope,snapshot['device']); self.assertEqual(self.app.statistics.report.total,300)
+
+    def test_sync_dialog_connects_and_disconnects_without_sharing_settings(self):
+        from PySide6.QtWidgets import QLineEdit,QPushButton,QCheckBox
+        from gametime.statistics_sync import StatisticsData,SyncWorker
+        from gametime.store import Store
+        shared=self.base/'Shared'; shared.mkdir(); group='012345abcdef'
+        remote=Store(self.base/'remote.sqlite3')
+        try:
+            snapshot=StatisticsData(remote).snapshot(group,'Other PC')
+            worker=SyncWorker()
+            try: worker.exchange((str(shared),group,0),snapshot)
+            finally: worker.close()
+        finally: remote.close()
+        self.app.statistics_sync_dialog(); window=self.app._dialogs[-1]
+        fields={widget.accessibleName():widget for widget in window.findChildren(QLineEdit)}
+        fields[self.app.t('Shared folder')].setText(str(shared)); fields[self.app.t('Connection code')].setText('0123-45AB-CDEF')
+        next(b for b in window.findChildren(QPushButton) if b.text()==self.app.t('Save')).click()
+        deadline=time.monotonic()+3
+        while self.app._sync_busy and time.monotonic()<deadline: self.pump(.03)
+        self.assertFalse(self.app._sync_busy); self.assertTrue(self.store.settings().statistics_sync_enabled)
+        self.assertEqual(len(self.app.statistics_data.devices(group)),1)
+        self.assertEqual(self.store.settings().limit_seconds,7200)
+        self.app.statistics_sync_dialog(); window=self.app._dialogs[-1]
+        window.findChild(QCheckBox).setChecked(False)
+        next(b for b in window.findChildren(QPushButton) if b.text()==self.app.t('Save')).click()
+        self.assertFalse(self.store.settings().statistics_sync_enabled)
+        with patch.object(self.app.statistics_sync,'request') as request:
+            self.app.poll_statistics_sync(); request.assert_not_called()
+
+    def test_hidden_link_dialog_can_close_without_leaving_a_deleted_window(self):
+        self.app.statistics_sync_dialog(); window=self.app._dialogs[-1]
+        window.hide(); window.close(); self.pump()
+        self.assertFalse(self.app._dialogs); self.app.render()
+        self.assertFalse(self.store.settings().statistics_sync_enabled)
+
     def test_statistics_average_since_installation_and_day_drilldown(self):
         today=date.today(); start=today-timedelta(days=3)
         with self.store.db: self.store.db.execute("UPDATE settings SET value=? WHERE key='tracking_started_on'",(start.isoformat(),))
@@ -118,15 +173,34 @@ class QtInterfaceTests(unittest.TestCase):
 
     def test_play_is_prepared_once_and_executes_only_on_gui_delivery(self):
         from gametime.launch import LaunchPlan
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
         class Worker:
             def __init__(me): me.results=Queue(); me.requests=[]
             def request(me,*args): me.requests.append(args)
             def close(me): pass
-        worker=Worker(); self.app.launcher=worker; self.app.select_game(self.games[0].id)
+        worker=Worker(); self.app.launcher=worker; self.app.select_game(self.games[1].id)
+        card=self.app.cards[self.games[0].id]
         with patch('gametime.launch.execute') as execute:
-            self.app.launch_selected(); self.app.launch_selected(); self.assertEqual(len(worker.requests),1); execute.assert_not_called()
+            QTest.mouseClick(card.play,Qt.LeftButton); QTest.mouseClick(card.play,Qt.LeftButton)
+            self.assertEqual(len(worker.requests),1); self.assertEqual(worker.requests[0][0].id,self.games[0].id); execute.assert_not_called()
+            self.assertFalse(card.play.isEnabled()); self.assertEqual(card.play.toolTip(),self.app.t('Starting…'))
             worker.results.put((self.games[0],LaunchPlan('executable',str(self.exe)),None)); self.app.poll_launch()
-            execute.assert_called_once(); self.assertIsNone(self.app.launching); self.assertTrue(self.app.launch_button.isEnabled())
+            execute.assert_called_once(); self.assertIsNone(self.app.launching); self.assertTrue(card.play.isEnabled())
+            self.assertFalse(hasattr(self.app,'selection_panel'))
+
+    def test_card_options_target_clicked_game_without_launching(self):
+        from PySide6.QtCore import Qt,QPoint
+        from PySide6.QtTest import QTest
+        game=self.games[1]; card=self.app.cards[game.id]
+        self.app.select_game(self.games[0].id)
+        with patch('gametime.qt_ui.QMenu') as menus,patch.object(self.app,'launch_selected') as launch:
+            QTest.mouseClick(card.more,Qt.LeftButton)
+            self.assertEqual(self.app.selected_id,game.id); launch.assert_not_called()
+            menu=menus.return_value
+            menu.exec.assert_called_once_with(card.more.mapToGlobal(QPoint(0,card.more.height())))
+            hide=next(call.args[1] for call in menu.addAction.call_args_list if call.args[0]==self.app.t('Hide / restore'))
+            hide(); self.assertIn(game.id,self.store.hidden_ids()); self.assertNotIn(self.games[0].id,self.store.hidden_ids())
 
     def test_removal_guide_close_never_executes(self):
         self.app.select_game(self.games[1].id)

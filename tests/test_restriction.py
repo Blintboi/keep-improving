@@ -140,10 +140,10 @@ class RestrictionInterfaceTests(unittest.TestCase):
         self.assertTrue(saved.restriction_enabled); self.assertEqual(saved.restriction_seconds,7500)
         self.assertEqual(saved.limit_seconds,7200); self.assertTrue(saved.overlay_enabled)
         self.reach(); self.app.render(); self.app.select_game(self.game.id)
-        self.assertFalse(self.app.restriction_banner.isHidden()); self.assertFalse(self.app.launch_button.isEnabled())
+        self.assertFalse(self.app.restriction_banner.isHidden())
         self.assertFalse(self.app.cards[self.game.id].play.isEnabled())
         self.app.settings=self.app.catalog.settings=replace(self.app.settings,restriction_enabled=False)
-        self.app.render(); self.assertTrue(self.app.restriction_banner.isHidden()); self.assertTrue(self.app.launch_button.isEnabled())
+        self.app.render(); self.assertTrue(self.app.restriction_banner.isHidden()); self.assertTrue(self.app.cards[self.game.id].play.isEnabled())
 
     def test_new_process_after_restriction_gets_its_own_escape_and_hidden_game_is_included(self):
         current=self.reach(); self.store.set_hidden(self.game.id,True)

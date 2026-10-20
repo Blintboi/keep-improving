@@ -39,15 +39,22 @@ class PreferencesTests(unittest.TestCase):
         self.store.reconcile([new], lambda game: game.source == 'Steam')
         self.assertIn(new.id, self.store.hidden_ids())
 
-    def test_fresh_profile_counts_chess_legacy_profile_preserves_exclusion(self):
+    def test_fresh_and_legacy_profiles_use_only_explicit_game_exclusions(self):
         game = Game('chess', 'Chess', 'Games', r'C:\Games\Chess')
-        self.assertFalse(self.store.settings().exclude_chess)
+        self.store.upsert([game])
         self.assertEqual(Catalog(self.store.settings(), [game]).resolve(game.root + r'\chess.exe'), game)
-        with self.store.db:
-            self.store.db.execute("INSERT INTO settings VALUES ('config',?)", (json.dumps({'games_root': r'C:\Games'}),))
-        self.assertTrue(self.store.settings().exclude_chess)
-        self.store.save_settings(self.store.settings())
-        self.assertTrue(self.store.settings().exclude_chess)
+        for legacy in ({}, {'exclude_chess': True}, {'exclude_chess': False}):
+            with self.subTest(legacy=legacy):
+                with self.store.db:
+                    self.store.db.execute("INSERT OR REPLACE INTO settings VALUES ('config',?)", (json.dumps({'games_root': r'C:\Games', **legacy}),))
+                settings=self.store.settings()
+                self.assertEqual(Catalog(settings,[game]).resolve(game.root+r'\chess.exe'),game)
+                self.store.save_settings(settings)
+                config=json.loads(self.store.db.execute("SELECT value FROM settings WHERE key='config'").fetchone()[0])
+                self.assertNotIn('exclude_chess',config)
+        self.store.set_enabled(game.id,False)
+        self.store.close(); self.store=Store(self.path)
+        self.assertIsNone(Catalog(self.store.settings(),self.store.games(),self.store.overrides()).resolve(game.root+r'\chess.exe'))
 
 
 class RemovalTests(unittest.TestCase):

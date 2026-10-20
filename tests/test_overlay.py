@@ -184,6 +184,31 @@ class OverlayInterfaceTests(unittest.TestCase):
             self.assertGreaterEqual(top,area.top()); self.assertLessEqual(top+size.height(),area.bottom()+1)
         self.assertEqual(placement(QRect(0,0,200,70),size,1,1),(0,0))
 
+    def test_bottom_position_uses_full_display_instead_of_taskbar_work_area(self):
+        from PySide6.QtCore import QPoint
+        from unittest.mock import Mock
+        from gametime.overlay import placement
+        area=self.qt.primaryScreen().geometry()
+        work_area=area.adjusted(0,0,0,-48)
+        screen=Mock(); screen.geometry.return_value=area; screen.availableGeometry.return_value=work_area
+        settings=replace(self.app.settings,overlay_x=.5,overlay_y=1)
+        overlay=self.app.overlay
+        overlay.present(1200,6000,settings,screen,preview=True)
+        self.assertEqual(overlay.pos(),QPoint(*placement(area,overlay.size(),.5,1)))
+        self.assertGreater(overlay.geometry().bottom(),work_area.bottom())
+        self.assertTrue(area.contains(overlay.geometry()))
+
+    def test_position_picker_uses_full_display_aspect_ratio(self):
+        from PySide6.QtCore import QRect
+        from unittest.mock import Mock
+        picker=self.app.overlay_picker; picker.resize(400,200)
+        screen=Mock(); screen.geometry.return_value=QRect(-1920,0,1920,1080)
+        screen.availableGeometry.return_value=QRect(-1920,0,1920,1032)
+        picker.screen=screen; picker.set_position(.5,1)
+        monitor,hud=picker.rectangles()
+        self.assertAlmostEqual(monitor.width()/monitor.height(),1920/1080)
+        self.assertAlmostEqual(hud.bottom(),monitor.bottom()-8)
+
     def test_position_picker_keyboard_and_missing_monitor_fallback(self):
         from PySide6.QtCore import Qt
         from PySide6.QtTest import QTest

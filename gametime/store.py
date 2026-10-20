@@ -58,9 +58,8 @@ class Store:
         if not row:
             return Settings()
         config = json.loads(row[0])
-        # Existing profiles had automatic chess exclusions. Preserve that choice;
-        # a fresh installation counts chess just like any other game.
-        config.setdefault("exclude_chess", True)
+        # Accept old profiles without retaining the retired category-wide filter.
+        config.pop("exclude_chess", None)
         return Settings(**config)
 
     def save_settings(self, settings):

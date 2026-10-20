@@ -1,2 +1,4 @@
 # Preserve original upstream licensing snapshots.
 packaging/licenses/** -whitespace
+downloads/*.exe binary
+downloads/*.sha256 text eol=lf

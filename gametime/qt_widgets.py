@@ -23,7 +23,6 @@ QLabel[role="section"] { font-size: 16px; font-weight: 600; }
 QLabel[role="danger"] { color: #f3a7a7; }
 QFrame#Panel { background: #192126; border: 1px solid #273238; border-radius: 16px; }
 QFrame#Budget { background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #1a332e,stop:0.7 #19282a,stop:1 #192126); border: 1px solid #2b4840; border-radius: 18px; }
-QFrame#Selected { background: #1a2529; border: 1px solid #30423f; border-radius: 15px; }
 QPushButton, QToolButton { background: #202c31; border: 1px solid #304047; border-radius: 10px; padding: 9px 14px; font-weight: 550; }
 QPushButton:hover, QToolButton:hover { background: #2b3b40; border-color: #506562; }
 QPushButton:pressed, QToolButton:pressed { background: #334c45; }
@@ -219,6 +218,7 @@ class LocalArtwork:
 class GameCard(QFrame):
     selected=Signal(str)
     launched=Signal(str)
+    options_requested=Signal(str)
     def __init__(self,game,t):
         super().__init__(); self.game=game; self.t=t; self.chosen=False; self.hovered=False; self.seconds=0; self.art=(None,None); self.show_source=False
         self.setFixedHeight(232); self.setMinimumWidth(190); self.setCursor(Qt.PointingHandCursor)
@@ -226,8 +226,12 @@ class GameCard(QFrame):
         self.play=button('',lambda:self.launched.emit(self.game.id)); self.play.setIcon(glyph('play','#b8f4db',17)); self.play.setFixedSize(34,34)
         self.play.setParent(self); self.play.setToolTip(t('▶ Play')); self.play.setAccessibleName(t('▶ Play')+' '+game.name)
         self.play.setStyleSheet('QPushButton {background:#28463c; border:1px solid #3b6352; border-radius:17px; padding:0;} QPushButton:hover {background:#3b6854;}')
+        self.more=button('',lambda:self.options_requested.emit(self.game.id)); self.more.setIcon(glyph('dots','#cee1db',18)); self.more.setFixedSize(34,34)
+        self.more.setParent(self); self.more.setToolTip(t('Game options')); self.more.setAccessibleName(t('Game options')+' '+game.name)
+        self.more.setStyleSheet('QPushButton {background:#202c31; border:1px solid #40544f; border-radius:10px; padding:0;} QPushButton:hover {background:#315143;}')
         self.setToolTip(game.name+' · '+game.source)
-    def resizeEvent(self,event): self.play.move(self.width()-49,168)
+    def resizeEvent(self,event):
+        self.play.move(self.width()-49,168); self.more.move(self.width()-46,10)
     def set_state(self,seconds,chosen,enabled=True):
         if self.seconds!=seconds or self.chosen!=chosen: self.seconds=seconds; self.chosen=chosen; self.update()
         source=self.t('Manual') if self.game.source=='Kézi' else self.t('Games folder') if self.game.source=='Games' else self.game.source

@@ -13,7 +13,7 @@ Tests cover metadata/multiple libraries, watcher races, foreground/background ti
 
 Version 1.6 adds integrated Play preparation for Steam/Epic/Ubisoft/Riot/Minecraft and standalone games, original shortcut arguments, canonical launch-only URIs, changed-link rejection, explicit EXE persistence and transactional ID migration, stale-choice cleanup and background-worker shutdown. Real UI smoke covers search/source filters, duplicate-click suppression, queued launch execution, uninterrupted tracker identity/time, language switching and returning from Statistics to the Hub inside the same window. Game execution is mocked. A real mutex/subprocess check verifies `--hub` requests the Hub page in the existing profile instead of starting another monitor.
 
-Version 1.4 adds hidden-row persistence/migration and independent history/tracking checks, fresh/legacy chess policy, validated Steam IDs, launcher fallback, exact-root MSI selection, registry command rejection, portable-file preservation and mocked interactive uninstall execution.
+Version 1.4 adds hidden-row persistence/migration and independent history/tracking checks, per-game exclusions in fresh/legacy profiles, validated Steam IDs, launcher fallback, exact-root MSI selection, registry command rejection, portable-file preservation and mocked interactive uninstall execution.
 
 Version 1.5 adds English/Hungarian language persistence and placeholder parity, translated reminders/removal guidance, strict inclusive statistics date ranges, per-game/day totals, hidden/removed/orphan history and flush/reopen accounting. Average tests cover installation-day migration/persistence, idle days since installation, custom ranges and exclusion of pre-installation/future days. GUI checks cover immediate language switching, the daily breakdown, the installation-based average, translated date errors and preservation of the selected period across language changes. The bundled upgrade checks language/installation-date preservation and retention of the Gaming Hub icon after monitor removal.
 
@@ -22,6 +22,12 @@ The retained legacy GUI smoke creates real Tk windows with synthetic fixtures. I
 `tests/bundled_install_smoke.ps1` tests the standalone payload using isolated paths and uniquely named startup/Installed apps registrations, checking fresh install, upgrade, runtime diagnosis, uninstall and preservation of history/foreign files. Check real Setup extraction/launch before release, too.
 
 The 1.6 bundled test redirects desktop shortcut creation into its own temporary Desktop fixture, exercises the old separate monitor/Hub-folder shortcut migration and checks one shared app icon and owned-shortcut removal during uninstall. It does not create test shortcuts on the user's actual desktop.
+
+## 2.6 shared-folder statistics
+
+263 automated tests passed in 99.898 seconds. After the native UI review, two further regressions were added for cancelling a background sync group and closing an already-hidden linking dialog; all 29 targeted statistics/Qt tests passed in 8.607 seconds. Isolated profiles verify two-way convergence, repeated/out-of-order snapshots, separate users sharing a parent folder, per-computer filters, unchanged local budgets, title-based manual-game matching without paths, discovery ID migration, malformed-file cache retention, offline retries, settings validation and language switching. Hungarian/English statistics at 1000×700 and the linking dialog were rendered with native Qt fonts and inspected.
+
+No real cloud folder was selected and no game execution was used for these tests. Actual provider delivery between two physical computers remains to be checked after selecting the same private shared folder and connection code on both machines. SQLite databases remain local; only explicit opt-in statistics snapshots are exchanged.
 
 ## Fullscreen evidence
 
@@ -32,7 +38,7 @@ This verifies that setup, not every exclusive fullscreen engine, display layout,
 ## Before sharing
 
 - Run relevant tests; record actual results rather than reusing an old count.
-- Check fresh installation and upgrade with history/hidden rows, and chess policy migration.
+- Check fresh installation and upgrade with history, hidden rows and per-game exclusions.
 - Check the frozen runtime without Python on PATH, including Qt platform/image plugins, icon and PowerShell bridge resources.
 - Check startup entries, data location, uninstall and foreign-file preservation.
 - Check real fullscreen gameplay using a temporary short limit; restore settings afterwards.

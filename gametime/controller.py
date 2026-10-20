@@ -15,7 +15,7 @@ class MonitorActions:
     RESTRICTION_GRACE_SECONDS = 10
 
     def sync_hub(self):
-        fingerprint = (self.settings.games_root, self.settings.hub_enabled, self.settings.exclude_chess,
+        fingerprint = (self.settings.games_root, self.settings.hub_enabled,
                        tuple(sorted((g.id, g.name, g.root, g.metadata, g.installed) for g in self.catalog.games.values())),
                        tuple(sorted(self.catalog.rules.items())), tuple(sorted(self.catalog.overrides.items())))
         if fingerprint != self.hub_fingerprint:

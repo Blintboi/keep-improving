@@ -27,7 +27,6 @@ CLIENTS.update({"riotclientservices.exe", "riotclientux.exe", "riotclientuxrende
 LAUNCHER_SOURCES = ("Steam", "Epic", "Ubisoft", "Riot", "Minecraft")
 HELPERS = re.compile(r"unins|uninstall|(^|[-_ ])setup|^install|launcher|updater|crash|"
                      r"helper|config|redist|vcredist|dxsetup|benchmark|anticheat|easyanticheat", re.I)
-CHESS = re.compile(r"chess|sakk|stockfish|(^|[\W_])(lc0|fritz|houdini|komodo)([\W_]|$)", re.I)
 
 
 def blocked(path):
@@ -49,10 +48,6 @@ class Game:
     metadata: str = ""
     installed: bool = True
 
-    @property
-    def default_enabled(self):
-        return not CHESS.search(self.name + " " + ntpath.basename(self.root))
-
 
 @dataclass
 class Settings:
@@ -63,7 +58,6 @@ class Settings:
     epic_manifest_dirs: list = field(default_factory=list)
     ubisoft_roots: list = field(default_factory=list)
     hub_enabled: bool = False
-    exclude_chess: bool = False
     language: str = "en"
     overlay_enabled: bool = False
     overlay_replace_warning: bool = True
@@ -75,8 +69,21 @@ class Settings:
     overlay_rtss_paths: list = field(default_factory=list)
     restriction_enabled: bool = False
     restriction_seconds: float = 7500
+    statistics_sync_enabled: bool = False
+    statistics_sync_folder: str = ""
+    statistics_sync_group: str = ""
+    statistics_device_name: str = ""
 
     def validate(self):
+        if (not isinstance(self.statistics_sync_enabled, bool)
+                or not isinstance(self.statistics_sync_folder, str) or len(self.statistics_sync_folder) > 32767
+                or '\0' in self.statistics_sync_folder
+                or not isinstance(self.statistics_sync_group, str)
+                or (self.statistics_sync_group and not re.fullmatch(r'[0-9a-f]{12}', self.statistics_sync_group))
+                or not isinstance(self.statistics_device_name, str) or len(self.statistics_device_name) > 80):
+            raise ValueError('Invalid statistics sync settings.')
+        if self.statistics_sync_enabled and (not self.statistics_sync_folder or not Path(self.statistics_sync_folder).is_absolute() or not self.statistics_sync_group):
+            raise ValueError('Choose a shared folder and a connection code.')
         if self.language not in ("en", "hu"):
             raise ValueError("Unsupported language")
         if not (0 < self.warning_seconds < self.limit_seconds <= 86400):
@@ -123,7 +130,7 @@ class Catalog:
         self.games.update((g.id, g) for g in games)
 
     def enabled(self, game):
-        return self.overrides.get(game.id, game.default_enabled if self.settings.exclude_chess else True)
+        return self.overrides.get(game.id, True)
 
     def resolve(self, path, fallback=True):
         if not path or blocked(path):
@@ -138,7 +145,7 @@ class Catalog:
             game = next((g for g in self.games.values() if g.source == "Minecraft" and g.installed), None)
             if game:
                 return game if self.enabled(game) else None
-        if helper(path) or (self.settings.exclude_chess and CHESS.search(ntpath.basename(path))):
+        if helper(path):
             return None
         # A more specific installation wins over a containing custom Games folder.
         candidates = sorted((g for g in self.games.values() if g.installed and g.source != "Kézi" and within(path, g.root)
@@ -170,7 +177,7 @@ class Catalog:
         return self._under(path, self.settings.games_root, "Games")
 
     def explicitly_ignored(self, path):
-        if not path or helper(path) or (self.settings.exclude_chess and CHESS.search(ntpath.basename(path))):
+        if not path or helper(path):
             return True
         key = norm(path)
         if key in self.rules:

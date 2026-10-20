@@ -18,7 +18,7 @@ import threading
 import time
 from urllib.parse import quote, unquote, urlsplit
 import uuid
-from .model import CHESS, blocked, helper, norm, within
+from .model import blocked, helper, norm, within
 
 log = logging.getLogger(__name__)
 MARKER = "GameTimeHub.v1"
@@ -324,15 +324,13 @@ class Hub:
 
     def _write_links(self, settings, games, rules, overrides, root, prior, inventory):
         eligible = [g for g in games if g.installed and not g.id.startswith("pending:") and Path(g.root).is_dir()
-                    and (overrides.get(g.id, g.default_enabled if settings.exclude_chess else True)
-                         or CHESS.search(g.name + " " + g.root))]
+                    and overrides.get(g.id, True)]
         recipes, names = [], set()
         name_counts = Counter(safe_name(game.name).casefold() for game in eligible)
         for game in sorted(eligible, key=lambda g: g.id):
-            base = root / "Chess" if settings.exclude_chess and CHESS.search(game.name + " " + game.root) else root
             recipe = self._recipe(game, inventory, rules, root)
-            for kind, folder, spec in [("launch", base, recipe),
-                                       ("folder", base / "Folders", {"kind": "link", "extension": ".lnk", "target": game.root})]:
+            for kind, folder, spec in [("launch", root, recipe),
+                                       ("folder", root / "Folders", {"kind": "link", "extension": ".lnk", "target": game.root})]:
                 if kind == "folder" and norm(game.root) == norm(root):
                     continue
                 stem = safe_name(game.name)

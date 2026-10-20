@@ -120,13 +120,13 @@ class HubTests(unittest.TestCase):
         self.assertEqual(json.loads(self.launch(game.id).read_text())["target"], str(exe))
         self.assertEqual(exe.read_bytes(), b"MZ fixture")
 
-    def test_chess_separate_and_excluded_utility_omitted(self):
-        self.settings.exclude_chess = True
+    def test_chess_uses_normal_folder_and_honors_explicit_exclusion(self):
         chess = self.game("manual:chess", "BanksiaGUI (sakk)", "Kézi", "Chess")
         utility = self.game("steam:228980", "Steamworks Common Redistributables", "Steam", "Redist")
+        self.hub.sync(self.settings, [chess, utility], {}, {utility.id: False})
+        self.assertEqual(self.launch(chess.id).parent, self.root)
         self.hub.sync(self.settings, [chess, utility], {}, {chess.id: False, utility.id: False})
-        self.assertEqual(self.launch(chess.id).parent, self.root / "Chess")
-        self.assertFalse(any(row["gid"] == utility.id for row in self.state()["links"]))
+        self.assertFalse(any(row["gid"] in {chess.id, utility.id} for row in self.state()["links"]))
 
     def test_reserved_path_characters_and_same_named_games(self):
         games = [self.game("steam:1", "CON"), self.game("steam:2", "A:/B?*"), self.game("steam:3", "A:/B?*")]

@@ -464,9 +464,6 @@ class App(MonitorActions):
         hub_enabled = tk.BooleanVar(value=self.settings.hub_enabled)
         ttk.Checkbutton(frame, text=self.t("Also maintain a shortcuts folder (optional)"),
                         variable=hub_enabled).pack(anchor="w", pady=6)
-        exclude_chess = tk.BooleanVar(value=self.settings.exclude_chess)
-        ttk.Checkbutton(frame, text=self.t("Exclude chess games by default (optional personal preference)"),
-                        variable=exclude_chess).pack(anchor="w", pady=6)
         error = tk.StringVar()
         ttk.Label(frame, textvariable=error, foreground="#ffb3b3", wraplength=650).pack(anchor="w")
         def save():
@@ -478,7 +475,7 @@ class App(MonitorActions):
                                     [p.strip() for p in variables["steam"].get().split(";") if p.strip()],
                                     [p.strip() for p in variables["epic"].get().split(";") if p.strip()],
                                     [p.strip() for p in variables["ubisoft"].get().split(";") if p.strip()],
-                                    hub_enabled.get(), exclude_chess.get(), self.settings.language).validate()
+                                    hub_enabled.get(), self.settings.language).validate()
                 self.tracker.flush()
                 self.store.save_settings(settings)
                 self.settings = self.catalog.settings = settings

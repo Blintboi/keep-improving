@@ -25,6 +25,7 @@ from .qt_widgets import STYLE,ACCENT,MUTED,label,button,panel,glyph,duration,Bud
 from .qt_statistics import StatisticsPage
 from .overlay import CountdownOverlay,PositionPicker,choose_screen,foreground_screen_name
 from .rtss import Backend as RTSSBackend, countdown as rtss_countdown, installation as rtss_installation
+from .statistics_sync import StatisticsData,SyncWorker,computer_name,group_code,display_code
 
 log=logging.getLogger(__name__)
 
@@ -58,6 +59,8 @@ class App(QMainWindow,MonitorActions):
         super().__init__()
         self.store,self.data_dir=store,Path(data_dir)
         self.settings=store.settings(); self.catalog=Catalog(self.settings,store.games(True),store.overrides(),store.rules())
+        self.statistics_data=StatisticsData(store); self.statistics_sync=SyncWorker()
+        self._sync_busy=False; self._sync_attempted=0; self._sync_status='Statistics sync is off.'
         self.tracker=Tracker(store,self.catalog); self.hub=hub or HubWorker(data_dir); self.hub_fingerprint=None
         self.service=service or DiscoveryService(self.settings)
         self.catalog.steam_libraries=self.service.discovery.libraries_from_metadata()
@@ -139,6 +142,7 @@ class App(QMainWindow,MonitorActions):
         self.search.setText(state.get('query','')); self.sort.setCurrentIndex(self.sort.findData(state.get('sort','name')))
         self.statistics.start.setText(state.get('start',self.statistics.start.text())); self.statistics.end.setText(state.get('end',self.statistics.end.text()))
         self.statistics.selected_day=state.get('day')
+        self.statistics.scope=state.get('statistics_scope','all')
         self.pages.setCurrentIndex(state.get('page',0))
         for i,item in self.nav.items(): item.setChecked(i==self.pages.currentIndex())
 
@@ -202,6 +206,77 @@ class App(QMainWindow,MonitorActions):
                     if warning: self.clients_status.setText(self.t(warning)); self.clients_status.show()
                 if self.pages.currentIndex()==3 and not self._clients_busy and time.monotonic()-self._clients_refreshed>=60: self.refresh_clients()
         except (OSError,ValueError,RuntimeError): log.warning('Optional assets/launchers unavailable',exc_info=True)
+        self.poll_statistics_sync()
+
+    def statistics_sync_status(self):
+        if not self.settings.statistics_sync_enabled: return self.t('Statistics sync is off.')
+        if self._sync_status=='Statistics synchronized.':
+            return self.t('Statistics synchronized · {count} computers',count=1+len(self.statistics_data.devices(self.settings.statistics_sync_group)))
+        return self.t(self._sync_status)
+
+    def update_statistics_sync_status(self):
+        for widget in (getattr(self,'sync_summary',None),getattr(self.statistics,'sync_label',None)):
+            if widget: widget.setText(self.statistics_sync_status())
+
+    def request_statistics_sync(self):
+        if self.closed or self._sync_busy or not self.settings.statistics_sync_enabled: return
+        self._sync_attempted=time.monotonic()
+        try:
+            self.tracker.flush()
+            snapshot=self.statistics_data.snapshot(self.settings.statistics_sync_group,self.settings.statistics_device_name)
+            self._sync_busy=self.statistics_sync.request(self.settings.statistics_sync_folder,self.settings.statistics_sync_group,snapshot)
+            self._sync_status='Synchronizing statistics…'
+        except (ValueError,OSError):
+            self._sync_status='Could not prepare statistics for synchronization.'
+            log.warning('Could not prepare statistics snapshot',exc_info=True)
+        self.update_statistics_sync_status()
+
+    def poll_statistics_sync(self):
+        while not self.statistics_sync.results.empty():
+            token,values,warning=self.statistics_sync.results.get_nowait()
+            if token!=(self.settings.statistics_sync_folder,self.settings.statistics_sync_group,self.statistics_sync.generation): continue
+            self._sync_busy=False; changed=False
+            for value in values:
+                try: changed=self.statistics_data.ingest(value,token[1]) or changed
+                except ValueError: warning='Some computer data could not be read. Sync will retry automatically.'
+            self._sync_status=warning or 'Statistics synchronized.'
+            if changed and self.pages.currentIndex()==1: self.statistics.refresh()
+            self.update_statistics_sync_status()
+        if self.settings.statistics_sync_enabled and not self._sync_busy and time.monotonic()-self._sync_attempted>=30:
+            self.request_statistics_sync()
+
+    def statistics_sync_dialog(self):
+        window=self._dialog(self.t('Link computers'),700)
+        layout=QVBoxLayout(window); layout.setContentsMargins(26,24,26,24); layout.setSpacing(14)
+        layout.addWidget(label(self.t('Link computers'),'section'))
+        note=label(self.t('On each of your computers, choose the same shared folder and enter the same connection code. Each user creates their own code.'))
+        note.setWordWrap(True); layout.addWidget(note)
+        enabled=QCheckBox(self.t('Automatically synchronize statistics')); enabled.setChecked(self.settings.statistics_sync_enabled or not self.settings.statistics_sync_folder); layout.addWidget(enabled)
+        layout.addWidget(label(self.t('Computer name'),'muted'))
+        name=QLineEdit(self.settings.statistics_device_name or computer_name()); name.setMaxLength(80); name.setMinimumHeight(40); name.setAccessibleName(self.t('Computer name')); layout.addWidget(name)
+        layout.addWidget(label(self.t('Shared folder'),'muted'))
+        folder_row=QHBoxLayout(); folder=QLineEdit(self.settings.statistics_sync_folder); folder.setMinimumHeight(40); folder.setAccessibleName(self.t('Shared folder')); folder_row.addWidget(folder,1)
+        def browse():
+            value=QFileDialog.getExistingDirectory(window,self.t('Shared folder'),folder.text())
+            if value: folder.setText(value)
+        folder_row.addWidget(button(self.t('Browse…'),browse)); layout.addLayout(folder_row)
+        layout.addWidget(label(self.t('Connection code'),'muted'))
+        code_row=QHBoxLayout(); code=QLineEdit(display_code(self.settings.statistics_sync_group or uuid.uuid4().hex[:12])); code.setMaxLength(40); code.setMinimumHeight(40); code.setAccessibleName(self.t('Connection code')); code_row.addWidget(code,1)
+        code_row.addWidget(button(self.t('New code'),lambda:code.setText(display_code(uuid.uuid4().hex[:12]))))
+        code_row.addWidget(button(self.t('Copy'),lambda:QApplication.clipboard().setText(code.text()))); layout.addLayout(code_row)
+        help_text=label(self.t('Only statistics are shared. Daily limits, exclusions, executable paths and settings stay on each computer.'),'muted'); help_text.setWordWrap(True); layout.addWidget(help_text)
+        error=label('','danger'); error.setWordWrap(True); layout.addWidget(error)
+        def save():
+            try:
+                settings=replace(self.settings,statistics_sync_enabled=enabled.isChecked(),statistics_sync_folder=folder.text().strip(),
+                                 statistics_sync_group=group_code(code.text()),statistics_device_name=name.text().strip()).validate()
+                self.store.save_settings(settings); self.settings=self.catalog.settings=settings
+                self.statistics_sync.cancel(); self._sync_busy=False; self._sync_attempted=0
+                self._sync_status='Statistics sync is off.'; self.statistics.scope='all'; self.statistics.refresh()
+                self.request_statistics_sync(); self.update_statistics_sync_status(); window.accept()
+            except (OSError,ValueError) as exc: error.setText(self.t(str(exc)))
+        actions=QHBoxLayout(); actions.addStretch(); actions.addWidget(button(self.t('Cancel'),window.reject)); actions.addWidget(button(self.t('Save'),save,'primary')); layout.addLayout(actions)
+        window.show(); dark_window(window)
 
     def refresh_sources(self):
         self.art.invalidate(); self._art_queue=list(self.cards); self.call_later(10,self.load_next_art)
@@ -228,13 +303,6 @@ class App(QMainWindow,MonitorActions):
         self.scroll=QScrollArea(); self.scroll.setWidgetResizable(True); self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.grid=CardGrid(); self.scroll.setWidget(self.grid); layout.addWidget(self.scroll,1)
         self.empty=label(self.t('No games match this view.'),'muted'); self.empty.setAlignment(Qt.AlignCenter); self.empty.hide(); layout.addWidget(self.empty)
-        selected=self.selection_panel=panel('Selected'); bottom=QHBoxLayout(selected); bottom.setContentsMargins(18,13,15,13); bottom.setSpacing(14)
-        self.selection_icon=QLabel(); self.selection_icon.setFixedSize(44,44); self.selection_icon.setPixmap(self.windowIcon().pixmap(40,40)); bottom.addWidget(self.selection_icon)
-        name_box=QVBoxLayout(); name_box.setSpacing(5)
-        self.selection_title=label('','section'); self.selection_title.setSizePolicy(QSizePolicy.Ignored,QSizePolicy.Preferred)
-        self.selection_note=label('','muted'); name_box.addWidget(self.selection_title); name_box.addWidget(self.selection_note); bottom.addLayout(name_box,1)
-        self.more=button('',self.game_menu); self.more.setIcon(glyph('dots','#cee1db')); self.more.setFixedSize(40,40); self.more.setToolTip(self.t('Game options')); bottom.addWidget(self.more)
-        self.launch_button=button(self.t('▶ Play'),self.launch_selected,'primary'); self.launch_button.setMinimumWidth(156); bottom.addWidget(self.launch_button); layout.addWidget(selected)
         self.search.textChanged.connect(self.refresh_view); self.source_filter.currentIndexChanged.connect(self.refresh_view)
         self.hidden_toggle.toggled.connect(self.refresh_view); self.sort.currentIndexChanged.connect(self.refresh_view)
         self._restore_source=state.get('source')
@@ -252,8 +320,11 @@ class App(QMainWindow,MonitorActions):
             widget.setButtonSymbols(QAbstractSpinBox.NoButtons); widget.setRange(.01,1440); widget.setDecimals(2); widget.setSingleStep(5); widget.setValue(value)
             group=QVBoxLayout(); group.addWidget(label(self.t(text),'muted')); group.addWidget(widget); fields.addLayout(group,1)
         limits_layout.addLayout(fields)
-        self.chess=QCheckBox(self.t('Exclude chess games')); self.chess.setToolTip(self.t('Exclude chess games by default (optional personal preference)')); self.chess.setChecked(self.settings.exclude_chess); limits_layout.addWidget(self.chess)
         body_layout.addWidget(limits)
+        sync=panel(); sync_layout=QVBoxLayout(sync); sync_layout.setContentsMargins(22,20,22,22); sync_layout.setSpacing(12)
+        sync_layout.addWidget(label(self.t('Linked statistics'),'section'))
+        self.sync_summary=label(self.statistics_sync_status(),'muted'); self.sync_summary.setWordWrap(True); sync_layout.addWidget(self.sync_summary)
+        sync_layout.addWidget(button(self.t('Link computers'),self.statistics_sync_dialog),0,Qt.AlignLeft); body_layout.addWidget(sync)
         body_layout.addWidget(self.build_restriction_settings())
         body_layout.addWidget(self.build_overlay_settings())
         locations=panel(); places=QVBoxLayout(locations); places.setContentsMargins(22,20,22,22); places.setSpacing(12)
@@ -441,7 +512,7 @@ class App(QMainWindow,MonitorActions):
                 steam_roots=[p.strip() for p in self.paths['steam'].text().split(';') if p.strip()],
                 epic_manifest_dirs=[p.strip() for p in self.paths['epic'].text().split(';') if p.strip()],
                 ubisoft_roots=[p.strip() for p in self.paths['ubisoft'].text().split(';') if p.strip()],
-                hub_enabled=self.hub_enabled.isChecked(),exclude_chess=self.chess.isChecked(),
+                hub_enabled=self.hub_enabled.isChecked(),
                 restriction_enabled=self.restriction_enabled.isChecked(),restriction_seconds=self.restriction_minutes.value()*60,**self.overlay_values()).validate()
             self.tracker.flush(); self.store.save_settings(settings); self.settings=self.catalog.settings=settings
             self.tracker.unclassified.clear(); self.tracker.previous=None; self.service.configure(settings)
@@ -462,7 +533,7 @@ class App(QMainWindow,MonitorActions):
     def set_language(self,language):
         if not language or language==self.settings.language: return
         state={'query':self.search.text(),'source':self.source_filter.currentData(),'sort':self.sort.currentData(),'page':self.pages.currentIndex(),
-               'show_hidden':self.hidden_toggle.isChecked(),'start':self.statistics.start.text(),'end':self.statistics.end.text(),'day':self.statistics.selected_day}
+               'show_hidden':self.hidden_toggle.isChecked(),'start':self.statistics.start.text(),'end':self.statistics.end.text(),'day':self.statistics.selected_day,'statistics_scope':self.statistics.scope}
         self.tracker.flush(); self.settings=replace(self.settings,language=language).validate(); self.catalog.settings=self.settings; self.store.save_settings(self.settings)
         self.status_text=self.t(self.status_key,**self.status_values); self._build(state); self.render()
         if self.pages.currentIndex()==1: self.statistics.refresh()
@@ -493,32 +564,28 @@ class App(QMainWindow,MonitorActions):
     def play_game(self,gid): self.select_game(gid); self.launch_selected()
 
     def update_launch_button(self):
-        if not hasattr(self,'launch_button'): return
-        game=self.selected(); restricted=bool(game and self.launch_restricted(game)); available=bool(game and game.installed and not self.launching and not restricted)
-        self.selection_panel.setVisible(game is not None)
-        self.launch_button.setEnabled(available); self.more.setEnabled(bool(game)); self.launch_button.setText(self.t('Restricted today' if restricted else 'Starting…' if self.launching else '▶ Play'))
-        if game:
-            self.selection_title.setText(game.name); self.selection_title.setToolTip(game.name)
-            self.selection_note.setText(self.source_name(game.source)+('  ·  '+self.t('Excluded') if not self.catalog.enabled(game) else ''))
-            art=self.art.cache.get((game.id,game.root,game.metadata,self.art.links.get(game.id)))
-            self.selection_icon.setPixmap(art[1].scaled(40,40,Qt.KeepAspectRatio,Qt.SmoothTransformation) if art and art[1] else self.windowIcon().pixmap(40,40))
-        else:
-            self.selection_title.clear(); self.selection_note.clear()
-        for gid,card in self.cards.items(): card.set_state(card.seconds,gid==self.selected_id,not self.launching and not self.launch_restricted(card.game))
+        for gid,card in self.cards.items():
+            restricted=self.launch_restricted(card.game)
+            card.set_state(card.seconds,gid==self.selected_id,not self.launching and not restricted)
+            card.play.setToolTip(self.t('Restricted today' if restricted else 'Starting…' if self.launching==gid else '▶ Play'))
 
-    def game_menu(self):
+    def game_menu(self,gid):
+        card=self.cards.get(gid)
+        if not card: return
+        self.select_game(gid)
         game=self.selected()
         if not game: return
         menu=QMenu(self)
         for text,callback in [('Open game folder',self.open_game_folder),('Assign EXE',self.assign_exe),('EXE rules',self.rules_dialog),
                               ('Exclude / track',self.toggle_game),('Hide / restore',self.toggle_hidden)]: menu.addAction(self.t(text),callback)
         menu.addSeparator(); menu.addAction(self.t('Uninstall game…'),self.uninstall_game)
-        menu.exec(self.more.mapToGlobal(QPoint(0,self.more.height())))
+        menu.exec(card.more.mapToGlobal(QPoint(0,card.more.height())))
 
     def _dialog(self,title,width=620):
         window=QDialog(self); window.setObjectName('Surface'); window.setWindowTitle(title); window.setAttribute(Qt.WA_DeleteOnClose); window.resize(width,300)
         self._dialogs.append(window)
         window.finished.connect(lambda result:self._dialogs.remove(window) if window in self._dialogs else None)
+        window.destroyed.connect(lambda obj=None:self._dialogs.remove(window) if window in self._dialogs else None)
         return window
 
     def message(self,text):
@@ -635,6 +702,7 @@ class App(QMainWindow,MonitorActions):
             for card in self.cards.values():
                 card.show_source=duplicates[card.game.name.casefold()]>1
                 card.selected.connect(self.select_game); card.launched.connect(self.play_game)
+                card.options_requested.connect(self.game_menu)
             self.grid.set_cards(list(self.cards.values())); self.last_rows=fingerprint
             self.empty.setVisible(not filtered)
             if self.selected_id not in self.cards: self.selected_id=None
@@ -661,6 +729,7 @@ class App(QMainWindow,MonitorActions):
     def close(self):
         if self.closed: return
         self.closed=True
+        self.statistics_sync.close()
         for timer in list(self._timers): timer.stop(); timer.deleteLater()
         self._timers.clear(); self.dismiss_popup()
         self.overlay_timer.stop()

@@ -1,14 +1,18 @@
-# Játékidőfigyelő — 2.5.0
+# Játékidőfigyelő — 2.6.0
 
-Windows 11-en futó, sötét felületű Gaming Hub és játékidőfigyelő egy alkalmazásban. A játékgyűjteményből közvetlenül indíthatod a játékokat, követheted az idődet és megnézheted a napi statisztikákat. A repó és a kiadások egyelőre **privátak**. A másik gépen is hozzáférő GitHub-fiókkal jelentkezz be a letöltéshez.
+**[Legfrissebb telepítő letöltése — 2.6.0 · Windows x64](downloads/GameTimeMonitor-Setup.exe?raw=true)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256)
 
-A 2.0-s felület Qt-ra váltott: letisztult sötét oldalsáv, átrendeződő játékkártyák, kör alakú napi keretjelző és új statisztikaoldal került bele. A kártyák meglévő helyi Steam-borítóképeket, telepített játékképeket és játékikonokat használnak, képletöltés nélkül. A borítóképek teljes egészükben, az eredeti oldalarányukat megtartva férnek a képmezőbe; a szabad hely sötét marad. A közös kontrolleres-órás alkalmazásikon megmaradt. A kijelölt játék kezelését az alsó **…** menüben találod; a nyelvválasztó az oldalsáv alján van.
+A letöltött telepítőt indítsd el a telepítéshez vagy frissítéshez. A korábbi előzmények, beállítások és kizárások megmaradnak, és frissítés előtt biztonsági mentés készül.
+
+Windows 11-en futó, sötét felületű Gaming Hub és játékidőfigyelő egy alkalmazásban. A játékgyűjteményből közvetlenül indíthatod a játékokat, követheted az idődet és megnézheted a napi statisztikákat. A repó és a telepítő egyelőre **privát**. A másik gépen is hozzáférő GitHub-fiókkal jelentkezz be a letöltéshez.
+
+A 2.0-s felület Qt-ra váltott: letisztult sötét oldalsáv, átrendeződő játékkártyák, kör alakú napi keretjelző és új statisztikaoldal került bele. A kártyák meglévő helyi Steam-borítóképeket, telepített játékképeket és játékikonokat használnak, képletöltés nélkül. A borítóképek teljes egészükben, az eredeti oldalarányukat megtartva férnek a képmezőbe; a szabad hely sötét marad. A közös kontrolleres-órás alkalmazásikon megmaradt. A játék kezelését a saját kártyájának jobb felső sarkában lévő **…** menüben találod; a nyelvválasztó az oldalsáv alján van.
 
 A rövidített felületen a mai és hátralévő idő, a játéknevek és a kezelőgombok maradnak előtérben. Az indítógomb a játék neve mellett jelenik meg. Nullás játékidő nem foglal helyet a kártyán; a forrásjelzés az azonos nevű játékokat különbözteti meg. A részletes súgó tooltipben érhető el, a további launcherútvonalakat a **Beállítások → Játékmappa → Haladó** részben találod.
 
 ## Telepítés
 
-Töltsd le a Kiadások / Releases oldalról a `GameTimeMonitor-2.5.0-Setup.exe` fájlt, és indítsd el. A Python, a Qt/PySide6 és az SQLite benne van: semmit nem kell külön telepíteni. A program megnyílik, felismeri a játékokat, és a következő Windows-bejelentkezéskor a tálcán indul. A telepítő jelenleg nincs digitálisan aláírva.
+Kattints a README legelején található **Legfrissebb telepítő letöltése** linkre, majd indítsd el a `GameTimeMonitor-Setup.exe` fájlt. A Python, a Qt/PySide6 és az SQLite benne van: semmit nem kell külön telepíteni. A program megnyílik, felismeri a játékokat, és a következő Windows-bejelentkezéskor a tálcán indul. A telepítő jelenleg nincs digitálisan aláírva.
 
 A program helye: `%LOCALAPPDATA%\Programs\GameTimeMonitor`. Az előzmények és beállítások a Windows Dokumentumok mappájában, a `GameTimeMonitor\data` alatt maradnak. A frissítés mentést készít, és megtartja az eddigi keretet, kizárásokat, EXE-szabályokat, rejtett játékokat és Hub-mappát.
 
@@ -16,7 +20,7 @@ Az asztalon egy közös **Gaming Hub** parancsikon marad a megszokott kontroller
 
 ## Játékok indítása
 
-A **Játéktár** a kezdőlap: színes játékcsempék, helyi borítóképek és ikonok, gyorsindítás és rendezés a mai játékidő szerint. Keress játéknevet, vagy szűrj forrásra, válassz ki egy játékot, majd kattints a **Játék indítása** gombra. A kártyán dupla kattintás vagy Enter is indít. A Steam-, Epic-, Ubisoft- és Riot-játékot a megfelelő kliensen át, Minecraftot a launcherével vagy a meglévő hivatkozásával indítja; az eredeti parancsikon argumentumai megmaradnak. Egyértelmű, önálló EXE közvetlenül is indulhat.
+A **Játéktár** a kezdőlap: színes játékcsempék, helyi borítóképek és ikonok, gyorsindítás és rendezés a mai játékidő szerint. Keress játéknevet, vagy szűrj forrásra, majd kattints közvetlenül a játék kártyáján lévő **Indítás** gombra. Egy kattintással indul, előzetes kijelölés és külön alsó kezelősáv nélkül. A kártyán dupla kattintás vagy Enter is indít. A Steam-, Epic-, Ubisoft- és Riot-játékot a megfelelő kliensen át, Minecraftot a launcherével vagy a meglévő hivatkozásával indítja; az eredeti parancsikon argumentumai megmaradnak. Egyértelmű, önálló EXE közvetlenül is indulhat.
 
 Ha több EXE közül kell választani, az **EXE hozzárendelése** gombbal egyszer jelöld ki a játék tényleges futtatható fájlját. Ezt az indításhoz és a méréshez is megjegyzi. A **Hozzáadás** is elmenti a választást. Az indítás előkészítése közben folytatódik az időmérés; a launcher megnyitása önmagában nem fogyasztja a keretet. A mérésből kizárt játékot is indíthatod, az eltávolítottat nem.
 
@@ -54,7 +58,7 @@ A **Beállítások → Visszaszámláló** részen kapcsolhatod be a **Megjelen�
 
 Bekapcsoláskor alapból a korai popup helyett pirosra vált a beállított figyelmeztetési küszöbnél. A szokásos 100/120 perces keretnél ez 20 perc hátralévő időt jelent. Ehhez nem küld Esc-et és nem szól hang. A korai popup külön visszakapcsolható. A **Felugró jelzés lejáratkor** ettől független kapcsoló, alapból bekapcsolva; a később indított, kereten túli játékmenetek jelzését is vezérli. Lejárat után a számláló nullán marad. A popup nem állítja le a játékot.
 
-A helyét a Beállításokban a kicsinyített kijelzőn húzással vagy nyílbillentyűkkel módosíthatod. Választhatsz automatikus vagy konkrét kijelzőt; lecsatlakoztatott kijelzőnél az elsődlegeset használja. Az **Előnézet (10 mp)** mentés nélkül megmutatja az új helyet, időmérés és előzménymódosítás nélkül. Végül nyomd meg a **Mentés** gombot. A **Szöveg fedettsége** csúszka 25–100% között csak a számjegyek áttetszőségét állítja; a környezetük teljesen átlátszó marad. A korábban mentett százalék frissítéskor megmarad, és a szövegre érvényes. Az **Értesítés próbája** gomb itt teszteli a felugró figyelmeztetést.
+A helyét a Beállításokban a kicsinyített kijelzőn húzással vagy nyílbillentyűkkel módosíthatod. A teljes kijelző területén elhelyezhető, kis szélmargóval; az alsó pozíciót nem korlátozza a Windows tálcája. Választhatsz automatikus vagy konkrét kijelzőt; lecsatlakoztatott kijelzőnél az elsődlegeset használja. Az **Előnézet (10 mp)** mentés nélkül megmutatja az új helyet, időmérés és előzménymódosítás nélkül. Végül nyomd meg a **Mentés** gombot. A **Szöveg fedettsége** csúszka 25–100% között csak a számjegyek áttetszőségét állítja; a környezetük teljesen átlátszó marad. A korábban mentett százalék frissítéskor megmarad, és a szövegre érvényes. Az **Értesítés próbája** gomb itt teszteli a felugró figyelmeztetést.
 
 Az alapértelmezett megjelenítő asztali Windows-overlay; az exkluzív teljes képernyős, emelt jogosultságú vagy védett játék eltakarhatja. A program nem változtatja meg a játék megjelenítési módját. Megjelenítési hibánál, elavult RTSS-visszajelzésnél vagy működő RTSS-kapcsolat nélküli fullscreen/foglalt Windows-állapotnál megtartja a korai popupot. Önmagában a látható, legfelül lévő asztali ablak nem bizonyítja, hogy a játék felett is látszik a számláló.
 
@@ -79,7 +83,22 @@ A **Statisztikák** oldalon napi diagram, napi lista és játékonkénti időbon
 - Az összes játékidő, a napi átlag és a legtöbbet játszott játék mellett az egyes játékok százalékos aránya is látszik.
 - Az oldal megnyitva körülbelül 10 másodpercenként frissül. A **Frissítés** az addig mért időt is elmenti és beleszámítja.
 
-A már meglévő előzményeket használja, az elrejtett, kizárt és eltávolított játékok korábban rögzített idejével együtt. Rögzített idő nélküli napok nullával jelennek meg. **A napi átlagot legkorábban a telepítés napjától számítja**, a kijelölt időszak máig eltelt napjaiból. A telepítés utáni játékmentes napok számítanak, a telepítés előtti és a jövőbeli napok nem. Alul látszik a kezdőnap és az átlag alapjául szolgáló napok száma. A telepítés dátuma frissítéskor megmarad; régi profilnál az adatbázis létrehozási idejéből és a legelső rögzített játékidőből elérhető korábbi napot használja. A figyelő telepítése előtti vagy korábban fel nem ismert játékidőt nem lehet utólag visszaállítani. A két gép előzményei külön maradnak, nincs felhőszinkron.
+A már meglévő előzményeket használja, az elrejtett, kizárt és eltávolított játékok korábban rögzített idejével együtt. Rögzített idő nélküli napok nullával jelennek meg. **A napi átlagot legkorábban a telepítés napjától számítja**, a kijelölt időszak máig eltelt napjaiból. A telepítés utáni játékmentes napok számítanak, a telepítés előtti és a jövőbeli napok nem. Alul látszik a kezdőnap és az átlag alapjául szolgáló napok száma. A telepítés dátuma frissítéskor megmarad; régi profilnál az adatbázis létrehozási idejéből és a legelső rögzített játékidőből elérhető korábbi napot használja. A figyelő telepítése előtti vagy korábban fel nem ismert játékidőt nem lehet utólag visszaállítani.
+
+## Statisztikák összekapcsolása több gépen
+
+A **Statisztikák → Gépek összekapcsolása** vagy a Beállítások azonos nevű gombjával kapcsolhatod össze a saját gépeidet. Mindegyik gépre a 2.6.0-s vagy újabb alkalmazást telepítsd.
+
+1. Az első gépen válaszd ki a saját megosztott vagy felhővel szinkronizált mappádat, és adj nevet a gépnek.
+2. Másold ki az összekapcsolási kódot, majd mentsd a beállítást.
+3. A másik gépen válaszd ki ugyanannak a közös mappának az ottani helyét, és illeszd be ugyanazt a kódot. A helyi mappaútvonalak eltérhetnek.
+4. A **Szinkronizálás** gombbal azonnal frissíthetsz; egyébként a program futás közben 30 másodpercenként próbálkozik. A felhős mappa továbbításának ideje ezen felül jelentkezik.
+
+Minden felhasználó saját mappát és saját kódot használhat. Külön kódok adatai ugyanazon szülőmappában sem keverednek az összesítésben. A kód a csoportot azonosítja; a fájlok hozzáférését a mappa megosztási jogosultságai kezelik. Csak olyan mappát használj, amelyhez a saját gépeid férnek hozzá.
+
+A **Gépek** listában az összesített előzmény, az aktuális gép vagy egy másik gép külön is megtekinthető. Az átlag a kiválasztott gépek közül a legkorábbi követéskezdethez igazodik. Az ismételt frissítés nem adja hozzá újra ugyanazt az időt. A launcherazonosítók alapján ugyanaz a játék közös sorba kerül; a kézzel felvett és önálló játékok azonos forrás és normalizált név alapján kapcsolódnak össze.
+
+Csak a gép neve és a játékonkénti napi mért idő kerül át. A napi keret, a korlátozás, a kizárások, a parancsikonok és az EXE-útvonalak gépenként maradnak. Az SQLite-adatbázist nem kell és nem szabad közös élő adatbázisként használni: az alkalmazás külön statisztikafájlokat cserél. A szinkronizálás alapból kikapcsolt. Elérhetetlen mappánál a mérés folytatódik, az utolsó átvett adatok megmaradnak, és a program később újrapróbálja. Kikapcsoláskor a már átvett előzmények helyben továbbra is elérhetők.
 
 ## Gaming Hub és játékkezelés
 
@@ -89,11 +108,11 @@ Az **Elrejtés / visszaállítás** csak a főlistát módosítja: a mérés, az
 
 A **Játék eltávolítása…** előbb útmutatót mutat, és csak a Tovább után indítja a megfelelő saját eltávolítót, launchert vagy a Windows Telepített alkalmazások oldalát. Hordozható játéknál szükség esetén megnyitja a mappát a kézi lépésekhez. Nem töröl találomra játékfájlokat, és nem ad csendes törlési kapcsolókat. A kiadó megerősítését ellenőrizd, a helyi mentésekről előtte készíts másolatot.
 
-A sakk új telepítésben rendesen számít; az alapértelmezett kizárása választható személyes beállítás. A korábbi személyes sakkos kivétel frissítéskor megmarad.
+Minden játék azonos szabályok szerint számít. Amit nem szeretnél mérni, a játék kártyájának **… → Kizárás / mérés** menüpontjával vagy egy konkrét EXE kizárásával állíthatod be.
 
 ## Adatok és eltávolítás
 
-Nincs telemetria vagy automatikus feltöltés. A program helyi telepítési jegyzékeket, folyamatútvonalakat és parancsikonokat olvas. Előzménymentés előtt lépj ki a tálcamenüből, majd másold ki az adatkönyvtárat.
+Nincs telemetria. A program helyi telepítési jegyzékeket, folyamatútvonalakat és parancsikonokat olvas. A külön bekapcsolt statisztikaszinkron csak a kiválasztott közös mappába ír; az esetleges felhős továbbítást a saját fájlszinkronizálód végzi. Előzménymentés előtt lépj ki a tálcamenüből, majd másold ki az adatkönyvtárat.
 
 A figyelőt a Windows **Gépház → Alkalmazások → Telepített alkalmazások → Game Time Monitor → Eltávolítás** útvonalon távolíthatod el. Az alkalmazás saját asztali ikonja eltűnik, a játékok, a kiegészítő mappa parancsikonjai és az előzmények megmaradnak. A részletes fejlesztői, hibakeresési és tesztleírás az [angol dokumentációban](README.md) található.
 

@@ -1,18 +1,22 @@
 # Game Time Monitor
 
+**[Download the latest installer — 2.6.0 · Windows x64](downloads/GameTimeMonitor-Setup.exe?raw=true)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256)
+
+Run the downloaded installer to install or update the app. Existing history, settings and exclusions are kept, with a backup before upgrading. [Magyar útmutató](README.hu.md).
+
 An offline Windows 11 Gaming Hub and game-time monitor in one app. Launch games from a searchable library, measure foreground gameplay against a shared daily budget, and follow daily statistics in a dark English/Hungarian interface.
 
-**Private preview 2.5.0.** The repository and release downloads remain private. Sign into GitHub with an account that has access on your other PC. Each PC keeps its own history; there is no cloud synchronization. [Magyar útmutató](README.hu.md).
+**Private preview 2.6.0.** The repository and installer remain private. Sign into GitHub with an account that has access on your other PC. Optional shared-folder synchronization combines statistics from your computers.
 
 The 2.0 interface uses Qt Widgets: a dark sidebar, responsive game cards, a daily-budget ring, contextual game actions and a redesigned statistics page. Artwork is read from existing local Steam caches, installed-game image files or game icons; no image service, launcher credentials or artwork downloads are used. Artwork and icons keep their original aspect ratios; complete cover images fit inside the card with dark padding where needed. Missing art has a colored monogram fallback. The shared controller/clock application icon remains unchanged.
 
 ## Install
 
-1. Open this repository's **Releases**, download `GameTimeMonitor-2.5.0-Setup.exe`, and run it as your normal Windows user.
+1. Download the **latest installer** using the link at the top of this README, then run `GameTimeMonitor-Setup.exe` as your normal Windows user.
 2. Python, Qt/PySide6 and SQLite are included. No separate Python, pip packages, administrator account or launcher login is needed by the monitor.
 3. The app opens and discovers installed games. It starts in the tray when you sign into Windows. Open **Settings** to change your daily limit or Gaming Hub location.
 
-The current installer is unsigned; Windows may show an unknown-publisher/SmartScreen prompt. Use the private release or a build you made yourself. A SHA-256 checksum accompanies the download.
+The current installer is unsigned; Windows may show an unknown-publisher/SmartScreen prompt. Use the installer linked above or a build you made yourself. A SHA-256 checksum accompanies the download.
 
 Program files go under `%LOCALAPPDATA%\Programs\GameTimeMonitor`. Data goes in Windows Documents under `GameTimeMonitor\data`, including redirected Documents folders. A fresh install creates `Documents\Gaming Hub`. Upgrades preserve the existing Hub location, thresholds, history, executable rules, exclusions and hidden games, and back up the data before migration.
 
@@ -20,13 +24,13 @@ Setup adds one shared desktop **Gaming Hub** icon, a Start menu shortcut, Window
 
 ## Launch games
 
-The **Library** page is the home screen, with artwork cards, quick Play buttons, search, source filters and sorting by name or today’s time. Search by name or filter by source, select a game and click **Play**, double-click its card or press Enter. Play uses Steam, Epic, Ubisoft and Riot launch routes, the Minecraft launcher or an existing shortcut with its original arguments. Standalone games with one executable can start directly. Discovery keeps the library up to date.
+The **Library** page is the home screen, with artwork cards, quick Play buttons, search, source filters and sorting by name or today’s time. Search by name or filter by source, then click **Play** directly on the game's card. One click starts it without selecting it first or opening a separate bottom panel. Double-clicking the card or pressing Enter also starts it. Play uses Steam, Epic, Ubisoft and Riot launch routes, the Minecraft launcher or an existing shortcut with its original arguments. Standalone games with one executable can start directly. Discovery keeps the library up to date.
 
 If the executable is ambiguous, use **Assign EXE** to choose it once. The app saves the choice and its tracking rule. **Add** also remembers the executable. Choices survive upgrades and discovery ID merges. Excluding a game's time does not prevent launching it. Removed games cannot launch. Preparation runs on a worker, keeping measurement and reminders responsive; opening a launcher alone does not count as gameplay.
 
-Select a card and use its **…** menu for Hide / restore, Exclude / track, Assign EXE, EXE rules, Open game folder and Uninstall game. Statistics and Settings have their own pages in the left sidebar. **Open game folder** opens the selected installation when you need its files. The desktop Gaming Hub icon and tray's Open Gaming Hub return to this page without opening a separate folder or another monitor.
+Use the **…** menu in the top-right corner of each card for Hide / restore, Exclude / track, Assign EXE, EXE rules, Open game folder and Uninstall game. Statistics and Settings have their own pages in the left sidebar. **Open game folder** opens that game's installation when you need its files. The desktop Gaming Hub icon and tray's Open Gaming Hub return to this page without opening a separate folder or another monitor.
 
-The library keeps labels brief: Today and Remaining above the cards, Play beside the game name, recorded time only when nonzero, and a source badge only when matching game names need distinguishing. The selected-game controls appear after selection. Extra help is available in tooltips; additional launcher locations are under **Settings → Games folder → Advanced**. The Settings title's tooltip shows the app version.
+The library keeps labels brief: Today and Remaining above the cards, Play beside the game name, recorded time only when nonzero, and a source badge only when matching game names need distinguishing. Game controls stay on each card. Extra help is available in tooltips; additional launcher locations are under **Settings → Games folder → Advanced**. The Settings title's tooltip shows the app version.
 
 ## Launcher clients and local artwork
 
@@ -46,6 +50,14 @@ Open the **Statistics / Statisztikák** page to see recorded play time by day an
 
 Statistics include existing history, hidden/excluded games and removed installations. Hiding or uninstalling does not erase past time. Days without recorded time appear as zero. The daily average uses elapsed calendar days within the selected range, starting no earlier than installation; idle days after installation count, but days before installation and future dates do not. The footer shows the installation date and number of days used. That date survives upgrades; older profiles use the earlier available database creation date or first recorded activity. No activity before tracking began can be reconstructed, and the monitor does not infer unrecorded gameplay. Language changes preserve the selected date range.
 
+## Link statistics across computers
+
+Install version 2.6.0 or later on each computer. In **Statistics → Link computers** (also available in Settings), choose your own shared or cloud-synchronized folder, give the computer a name, and save the generated connection code. On your other computer, select that same folder's local location and enter the same code. Folder paths may differ between computers. **Sync now** refreshes immediately; automatic exchange runs every 30 seconds while the app is running, plus your file provider's transfer delay.
+
+Each user chooses their own folder and code. Different codes keep groups separate even inside the same parent folder. The code identifies a group; folder permissions control access to its files, so use a folder restricted to your own computers. The **Computers** selector shows all linked computers, this computer, or an individual remote computer. Averages start at the earliest monitoring date among the selected computers. Launcher IDs match the same game across computers; standalone/manual entries match by source and normalized title.
+
+Only the computer name, game names/sources and cumulative daily recorded time are exchanged. Repeated synchronization replaces a computer's previous snapshot without adding it twice; imported data is never republished. Daily budgets, restrictions, exclusions, launch paths and settings remain local. Each installation keeps its own SQLite database: share the statistics folder, not a live database or a copied profile. Unavailable folders do not stop tracking; cached statistics remain available and sync retries automatically. Disabling sync retains previously received history locally. Synchronization is off until you enable it.
+
 ## Daily use
 
 Left click the tray icon to open the app. Right click for Open, Gaming Hub, Settings, Refresh games and hub, and Exit monitor. Closing the main window or using **Hide to tray** keeps tracking running. **Exit monitor** stops it until the next launch/sign-in.
@@ -62,7 +74,7 @@ In **Settings → Countdown**, enable **Show while gaming**, then save. Fresh in
 
 By default, enabling it replaces the early warning popup with red digits at your configured warning threshold (20 minutes remaining with the initial 100/120-minute settings). No Escape, sound or focus change occurs for that color warning. You can retain the early popup instead. **Popup when time expires** is a separate switch, on by default, and controls later over-budget session reminders too. The timer stays at zero after expiry. Popups keep the existing guarded Escape behavior; they do not stop games.
 
-Drag the miniature timer inside Settings to choose its position, or use the arrow keys. Choose the active game's monitor automatically or a specific display; a disconnected display falls back to the primary monitor. **Preview (10s)** shows your unsaved placement without changing time/history. Click **Save** to keep changes. **Text opacity** adjusts only the digits from 25–100%; the surrounding area remains fully transparent. Upgrades keep the saved opacity percentage and apply it to the text. **Test alert** in this section checks the expiry-style popup.
+Drag the miniature timer inside Settings to choose its position, or use the arrow keys. Placement uses the entire display with a small edge margin, so the Windows taskbar does not limit the bottom position. Choose the active game's monitor automatically or a specific display; a disconnected display falls back to the primary monitor. **Preview (10s)** shows your unsaved placement without changing time/history. Click **Save** to keep changes. **Text opacity** adjusts only the digits from 25–100%; the surrounding area remains fully transparent. Upgrades keep the saved opacity percentage and apply it to the text. **Test alert** in this section checks the expiry-style popup.
 
 The default renderer is a Windows desktop overlay. Exclusive fullscreen or elevated/protected games may hide it. The app never changes a game's display mode. A renderer error, stale in-game acknowledgement, or a Windows fullscreen/busy state without a healthy RTSS connection retains the early popup instead of silently consuming the warning. A visible/topmost desktop window alone is not treated as proof that a fullscreen game displays it.
 
@@ -101,11 +113,11 @@ Steam opens its uninstall flow. Epic/Ubisoft open the detected client with libra
 
 The app never executes arbitrary registry command text, adds silent-removal flags, or recursively deletes game files. Review the publisher's final confirmation, close running games if requested, and back up local saves. Discovery subsequently retires the removed game and unchanged owned Hub links, retaining history. A portable game's actual mapped EXE/folder must disappear before it is considered removed. Hiding does not uninstall anything.
 
-Fresh installs count chess normally. **Exclude chess games** is optional. Pre-1.4 profiles keep their previous exclusion policy during migration; explicit per-game choices take precedence.
+All games follow the same tracking rules. Use **… → Exclude / track** on a game's card or exclude a specific executable to choose what should not count.
 
 ## Privacy and removing the monitor
 
-The app has no telemetry, online account, data upload or cloud component. It reads local installation metadata, foreground process paths, game directories, local artwork assets and shortcut metadata. It does not read launcher tokens, browser history, messages or save contents. GitHub downloads are separate from the offline monitor.
+The app has no telemetry or online account. It reads local installation metadata, foreground process paths, game directories, local artwork assets and shortcut metadata. Optional statistics sync writes only to the shared folder you explicitly choose; any cloud transfer is handled by your file provider. It does not read launcher tokens, browser history, messages or save contents. GitHub downloads are separate from the monitor.
 
 Data includes `usage.sqlite3` (history, configuration including language, rules, visibility and alert markers), rotating `monitor.log`, `hub-state.json`, and the Hub icon under `assets`. Logs may contain local paths. Data, installed manifests and logs are excluded from Git. Stop the app before backing up the data folder. Whole-profile transfer is not automatic multi-PC sync: paths, EXE rules and Hub ownership are machine-specific.
 
@@ -140,5 +152,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File packaging\build.ps1 -PythonP
 ```
 
 Output is in `dist`. PyInstaller bundles the runtime; IExpress packages it with the per-user bootstrap. Setup verifies hashes, stops the old resident, backs up data, installs/verifies the app, configures startup and launches it without downloading a runtime. See [architecture](ARCHITECTURE.md), [testing](TESTING.md) and [third-party notices](THIRD-PARTY-NOTICES.md). The manual GitHub workflow produces private build artifacts and does not publish a release.
+
+To update the downloadable installer, copy the verified `dist/GameTimeMonitor-<version>-Setup.exe` to `downloads/GameTimeMonitor-Setup.exe`, regenerate its SHA-256 file using the stable filename, and update the version shown at the top of both READMEs in the same commit. The download link stays unchanged between versions.
 
 Legacy `Telepites.cmd` / `install.ps1` remain for source development and require Python. Normal users should download Setup. No open-source license has been chosen; public publication is a separate decision.

@@ -88,7 +88,7 @@ class CountdownOverlay(QWidget):
             self._state = state
             self.seconds, self.warning, self.preview, self.opacity = state
             self.update()
-        self.move(*placement(screen.availableGeometry(), self.size(),
+        self.move(*placement(screen.geometry(), self.size(),
                              settings.overlay_x, settings.overlay_y))
         newly_visible = not self.isVisible()
         if newly_visible:
@@ -132,7 +132,7 @@ class PositionPicker(QWidget):
         self.setAccessibleName("Countdown position")
 
     def rectangles(self):
-        geometry = self.screen.availableGeometry()
+        geometry = self.screen.geometry()
         ratio = geometry.width()/max(1, geometry.height())
         width = min(self.width()-8, (self.height()-8)*ratio)
         height = width/ratio
