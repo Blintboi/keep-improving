@@ -36,7 +36,7 @@ def run(output):
         csc=Path(os.environ['WINDIR'])/'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
         subprocess.run([str(csc),'/nologo','/target:winexe','/reference:System.Windows.Forms.dll',
                         '/reference:System.Drawing.dll','/out:'+str(exe),str(Path(__file__).with_name('FixtureGame.cs'))],check=True,capture_output=True)
-        settings=Settings(games_root=str(base/'Games'),language='hu',overlay_enabled=True,overlay_x=.5,overlay_y=.5)
+        settings=Settings(games_root=str(base/'Games'),language='hu',overlay_enabled=True,overlay_rtss_auto=False,overlay_x=.5,overlay_y=.5)
         store=Store(base/'usage.sqlite3'); store.save_settings(settings)
         game=Game('overlay:fixture','Synthetic overlay fixture','Kézi',str(base))
         store.upsert([game]); store.set_rule(str(exe),game.id)

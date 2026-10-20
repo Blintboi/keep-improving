@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (QApplication,QMainWindow,QWidget,QFrame,QLabel,QV
     QGridLayout,QStackedWidget,QScrollArea,QLineEdit,QComboBox,QCheckBox,QDoubleSpinBox,QDialog,QToolButton,
     QFileDialog,QInputDialog,QMenu,QAbstractSpinBox,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,QSizePolicy,QSlider)
 from .controller import MonitorActions
-from .model import Catalog,Game,Settings,norm,blocked
+from .model import Catalog,Game,Settings,norm,blocked,helper
 from .service import DiscoveryService
 from .tracker import Tracker
 from .hub import HubWorker
@@ -92,6 +92,7 @@ class App(QMainWindow,MonitorActions):
         self.resize(min(1380,screen.width()-60),min(920,screen.height()-60)); self.setMinimumSize(1000,700)
         self.overlay_failed=False; self.overlay=None; self._overlay_preview_until=0
         self.rtss=RTSSBackend(self.data_dir); self._overlay_backend='none'; self._overlay_identity=''; self._overlay_updated=0
+        self._rtss_publishing=False; self._rtss_checked=0; self._rtss_available=False
         self.overlay_timer=QTimer(self); self.overlay_timer.setInterval(200); self.overlay_timer.timeout.connect(self.update_overlay)
         self.assets_timer=QTimer(self); self.assets_timer.setInterval(1000); self.assets_timer.timeout.connect(self.poll_assets)
         self._build(); dark_window(self)
@@ -106,6 +107,7 @@ class App(QMainWindow,MonitorActions):
         if not background or not self.tray.available: self.show()
         self.assets_timer.start()
         self.tick_timer=self.call_later(200,self.tick); self.tray_timer=self.call_later(75,self.poll_tray)
+        self.call_later(20,self.prepare_rtss_profiles)
 
     def t(self,text,**values): return tr(text,self.settings.language,**values)
     def source_name(self,source): return self.t('Manual') if source=='Kézi' else self.t('Games folder') if source=='Games' else source
@@ -214,7 +216,7 @@ class App(QMainWindow,MonitorActions):
             for key in changed:
                 card=self.cards.get(key[0])
                 if card and self.art.key(card.game)==key: card.art=self.art.cache[key]; card.update()
-            if changed: self.update_launch_button()
+            if changed: self.update_launch_button(); self.prepare_rtss_profiles(changed)
             if self.client_worker:
                 while not self.client_worker.results.empty():
                     clients,warning=self.client_worker.results.get_nowait(); self._clients_busy=False; self._clients_refreshed=time.monotonic()
@@ -452,37 +454,37 @@ class App(QMainWindow,MonitorActions):
     def rtss_dialog(self):
         window=QDialog(self); window.setWindowTitle(self.t('In-game countdown (RTSS)')); window.resize(660,360)
         layout=QVBoxLayout(window)
-        note=label(self.t('Select game executables for RTSS. Save your game before restarting it.')); note.setWordWrap(True); layout.addWidget(note)
-        table=QTableWidget(0,1); table.setHorizontalHeaderLabels([self.t('Game executable')]); table.horizontalHeader().setSectionResizeMode(0,QHeaderView.Stretch)
-        table.verticalHeader().hide(); table.setCornerButtonEnabled(False)
-        table.setSelectionBehavior(QAbstractItemView.SelectRows); table.setSelectionMode(QAbstractItemView.SingleSelection); table.setEditTriggers(QAbstractItemView.NoEditTriggers); layout.addWidget(table,1)
-        paths=list(self.settings.overlay_rtss_paths)
-        def render():
-            table.setRowCount(len(paths))
-            for row,path in enumerate(paths): table.setItem(row,0,QTableWidgetItem(path))
-        render()
+        automatic=QCheckBox(self.t('Use RTSS automatically for all tracked games')); automatic.setChecked(self.settings.overlay_rtss_auto); layout.addWidget(automatic)
+        note=label(self.t('Game profiles are prepared automatically. No executable list is needed. If RTSS cannot display a game, the desktop countdown and warning popups remain available.')); note.setWordWrap(True); layout.addWidget(note)
+        restart=label(self.t('If a game was already running, save it and restart it once after enabling RTSS.'),'muted'); restart.setWordWrap(True); layout.addWidget(restart)
         status=label('' if rtss_installation() else self.t('Install RTSS 7.3.7 or newer first.'),'muted'); status.setWordWrap(True); layout.addWidget(status)
-        def add():
-            path,_=QFileDialog.getOpenFileName(window,self.t('Game executable'),'',self.t('Applications (*.exe)'))
-            if not path: return
-            game=self.catalog.resolve(path,fallback=False)
-            if not game or game.source=='Riot':
-                status.setText(self.t('Choose a tracked game executable. Riot games are not supported by this integration.')); return
-            if norm(path) not in {norm(p) for p in paths}: paths.append(str(Path(path))); render()
-        def remove():
-            row=table.currentRow()
-            if 0<=row<len(paths): paths.pop(row); render()
         def save():
-            self.settings=replace(self.settings,overlay_rtss_paths=paths).validate(); self.catalog.settings=self.settings
-            self.store.save_settings(self.settings); self.rtss.hide(); self.rtss.failed_paths.clear(); self.rtss.configured.clear()
+            self.settings=replace(self.settings,overlay_rtss_auto=automatic.isChecked()).validate(); self.catalog.settings=self.settings
+            self.store.save_settings(self.settings); self.rtss.hide(); self.rtss.failed_paths.clear()
+            if not self.settings.overlay_rtss_auto: self.rtss.cancel_preparation()
+            self._rtss_checked=0; self.prepare_rtss_profiles(); self.update_overlay()
             self.set_status('Settings saved.'); window.accept()
-        actions=QHBoxLayout(); actions.addWidget(button(self.t('Add'),add)); actions.addWidget(button(self.t('Remove'),remove)); actions.addStretch()
+        layout.addStretch(); actions=QHBoxLayout(); actions.addStretch()
         actions.addWidget(button(self.t('Save'),save,'primary')); actions.addWidget(button(self.t('Cancel'),window.reject)); layout.addLayout(actions)
         window.exec()
 
+    def rtss_available(self):
+        now=time.monotonic()
+        if not self._rtss_checked or now-self._rtss_checked>=30:
+            self._rtss_available=bool(rtss_installation()); self._rtss_checked=now
+        return self._rtss_available
+
+    def prepare_rtss_profiles(self,keys=None):
+        if self.closed or not self.settings.overlay_enabled or not self.settings.overlay_rtss_auto or not self.rtss_available(): return
+        paths=list(self.catalog.rules)
+        for key in self.art.executables if keys is None else keys: paths.extend(self.art.executables.get(key,()))
+        paths=[path for path in dict.fromkeys(paths) if not helper(path) and self.catalog.resolve(path,fallback=False)]
+        self.rtss.prepare(paths)
+
     def hide_countdown(self):
         if self.overlay: self.overlay.hide()
-        if self._overlay_backend=='rtss' or self.rtss.identity: self.rtss.hide()
+        if self._rtss_publishing or self._overlay_backend=='rtss' or self.rtss.identity: self.rtss.hide()
+        self._rtss_publishing=False
         self._overlay_backend='none'; self._overlay_identity=''; self._overlay_updated=0
         self.rtss_status.hide()
 
@@ -524,18 +526,20 @@ class App(QMainWindow,MonitorActions):
                     if 0<elapsed<=1.5 and abs((current.wall-previous.wall).total_seconds()-elapsed)<1.5 and previous.wall.date()==current.wall.date(): total+=elapsed
                 remaining=settings.limit_seconds-total; automatic=foreground_screen_name()
             screen=choose_screen(settings.overlay_screen,automatic)
-            if not preview and norm(current.path) in {norm(p) for p in settings.overlay_rtss_paths}:
-                if self.overlay: self.overlay.hide()
+            attempted=not preview and settings.overlay_rtss_auto and self.rtss_available()
+            if attempted:
                 geometry=screen.geometry(); ratio=screen.devicePixelRatio()
                 text=rtss_countdown(remaining,total>=settings.warning_seconds,settings.overlay_opacity)
+                self._rtss_publishing=True
                 healthy=self.rtss.present(current.path,current.identity,text,(settings.overlay_x,settings.overlay_y,round(geometry.width()*ratio),round(geometry.height()*ratio)))
-                self._overlay_backend='rtss'; self._overlay_identity=current.identity
-                self._overlay_updated=time.monotonic() if healthy else 0
-                self.overlay_failed=not healthy
-                self.rtss_status.setText(self.t('RTSS connected' if healthy else self.rtss.error or 'RTSS unavailable; early warning popups remain active.')); self.rtss_status.show()
-                return
-            if self.rtss.identity: self.rtss.hide()
-            self.rtss_status.hide()
+                self.rtss_status.setText(self.t('RTSS connected' if healthy else self.rtss.error or 'RTSS unavailable; using the desktop countdown.')); self.rtss_status.show()
+                if healthy:
+                    if self.overlay: self.overlay.hide()
+                    self._overlay_backend='rtss'; self._overlay_identity=current.identity; self._overlay_updated=time.monotonic(); self.overlay_failed=False
+                    return
+            else:
+                if self._rtss_publishing or self.rtss.identity: self.rtss.hide()
+                self._rtss_publishing=False; self.rtss_status.hide()
             if not self.overlay: raise RuntimeError('Desktop countdown unavailable')
             self.overlay.present(remaining,total,settings,screen,preview)
             self._overlay_backend='desktop'; self._overlay_identity='' if preview else current.identity; self._overlay_updated=time.monotonic()
@@ -557,10 +561,12 @@ class App(QMainWindow,MonitorActions):
                 hub_enabled=self.hub_enabled.isChecked(),
                 restriction_enabled=self.restriction_enabled.isChecked(),restriction_seconds=self.restriction_minutes.value()*60,**self.overlay_values()).validate()
             self.tracker.flush(); self.store.save_settings(settings); self.settings=self.catalog.settings=settings
+            if not settings.overlay_enabled: self.rtss.cancel_preparation()
             self.tracker.unclassified.clear(); self.tracker.previous=None; self.service.configure(settings)
             self.art.roots=list(dict.fromkeys(self.art.roots+settings.steam_roots)); self.art.invalidate(); self.art.refresh_links(settings.games_root)
             self._art_queue=list(self.cards); self.call_later(10,self.load_next_art)
             self.settings_error.setText(''); self.last_rows=None; self.set_status('Settings saved.'); self._overlay_preview_until=0; self.update_overlay(); self.render()
+            self.prepare_rtss_profiles()
         except (ValueError,OSError) as exc: self.settings_error.setText(self.t(str(exc)))
 
     def set_status(self,text,**values):

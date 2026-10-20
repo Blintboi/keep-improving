@@ -52,7 +52,7 @@ class OverlayInterfaceTests(unittest.TestCase):
         from gametime.model import Game
         self.tmp=tempfile.TemporaryDirectory(); self.base=Path(self.tmp.name)
         self.store=Store(self.base/'usage.sqlite3')
-        self.settings=Settings(games_root=str(self.base/'Games'),overlay_enabled=True,language='hu')
+        self.settings=Settings(games_root=str(self.base/'Games'),overlay_enabled=True,overlay_rtss_auto=False,language='hu')
         self.store.save_settings(self.settings)
         self.game=Game('overlay:fixture','Overlay fixture','Kézi',str(self.base))
         self.exe=self.base/'fixture.exe'; self.exe.write_bytes(b'MZ fixture')
@@ -69,12 +69,13 @@ class OverlayInterfaceTests(unittest.TestCase):
             def request(me,*args): pass
             def close(me): pass
         self.sound=patch('gametime.qt_ui.winsound.PlaySound'); self.sound_mock=self.sound.start()
+        self.rtss_installation=patch('gametime.rtss.installation',return_value=None); self.rtss_installation.start()
         self.desktop=patch('gametime.qt_ui.win32.desktop_overlay_available',return_value=True); self.desktop.start()
         self.app=App(self.store,self.base,background=True,service=Service(),hub=Hub())
         self.app.tick_timer.stop(); self.app.overlay_timer.stop(); self.pump(.02)
 
     def tearDown(self):
-        self.app.close(); self.pump(.02); self.sound.stop(); self.desktop.stop(); self.store.close(); self.tmp.cleanup()
+        self.app.close(); self.pump(.02); self.sound.stop(); self.desktop.stop(); self.rtss_installation.stop(); self.store.close(); self.tmp.cleanup()
 
     def pump(self,seconds=.06):
         until=time.monotonic()+seconds
@@ -257,10 +258,11 @@ class OverlayInterfaceTests(unittest.TestCase):
             self.app.update_overlay()
         with patch('gametime.qt_ui.win32.sample',return_value=self.sample(identity='other:2')): self.assertFalse(self.app.overlay_warning_visible())
 
-    def test_rtss_selection_requires_ack_and_clears_on_alt_tab(self):
-        self.app.settings=replace(self.app.settings,overlay_rtss_paths=[str(self.exe)]); self.app.catalog.settings=self.app.settings
+    def test_automatic_rtss_requires_ack_and_clears_on_alt_tab(self):
+        self.app.settings=replace(self.app.settings,overlay_rtss_auto=True); self.app.catalog.settings=self.app.settings
+        self.app._rtss_checked=time.monotonic(); self.app._rtss_available=True
         with patch.object(self.app.rtss,'present',return_value=False) as present:
-            self.display(6000); present.assert_called_once(); self.assertFalse(self.app.overlay.isVisible()); self.assertTrue(self.app.overlay_failed)
+            self.display(6000); present.assert_called_once(); self.assertTrue(self.app.overlay.isVisible()); self.assertFalse(self.app.overlay_failed)
         with patch.object(self.app.rtss,'present',return_value=True),patch('gametime.qt_ui.win32.sample',return_value=self.sample()),patch('gametime.qt_ui.win32.desktop_overlay_available',return_value=False):
             self.app.update_overlay(); self.assertTrue(self.app.overlay_warning_visible())
         with patch.object(self.app.rtss,'hide') as hide,patch('gametime.qt_ui.win32.sample',return_value=self.sample(path='')):

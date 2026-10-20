@@ -66,6 +66,8 @@ class Settings:
     overlay_x: float = 1.0
     overlay_y: float = 0.0
     overlay_screen: str = ""
+    overlay_rtss_auto: bool = True
+    # Retained when reading older profiles; automatic mode needs no EXE list.
     overlay_rtss_paths: list = field(default_factory=list)
     restriction_enabled: bool = False
     restriction_seconds: float = 7500
@@ -85,7 +87,7 @@ class Settings:
             raise ValueError("Unsupported language")
         if not (0 < self.warning_seconds < self.limit_seconds <= 86400):
             raise ValueError("Thresholds must be: 0 < warning < daily limit ≤ 1440 minutes.")
-        for value in (self.overlay_enabled, self.overlay_replace_warning, self.limit_popup_enabled):
+        for value in (self.overlay_enabled, self.overlay_replace_warning, self.limit_popup_enabled, self.overlay_rtss_auto):
             if not isinstance(value, bool):
                 raise ValueError("Overlay switches must be on or off.")
         for value, minimum, maximum in ((self.overlay_opacity,.25,1), (self.overlay_x,0,1), (self.overlay_y,0,1)):

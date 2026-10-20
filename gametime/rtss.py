@@ -4,6 +4,7 @@ RTSS is installed separately. Our .NET helper uses its documented V2 shared
 memory ABI and CLR interlocked operations, with no redistributed SDK binaries.
 """
 import configparser
+from collections import OrderedDict
 import ctypes as C
 import hashlib
 import json
@@ -42,13 +43,16 @@ def configure_profile(server, executable):
     parser = configparser.ConfigParser(interpolation=None, strict=False)
     parser.optionxform = str
     if target.exists(): parser.read(target, encoding="mbcs")
+    changed=False
     for section, values in {
         "Hooking": {"EnableHooking": "1"},
         "OSD": {"EnableOSD": "1", "EnableBgnd": "0", "EnableFill": "0", "EnableStat": "0",
                 "ZoomRatio": "1", "CoordinateSpace": "1"},
     }.items():
         if not parser.has_section(section): parser.add_section(section)
-        for key, value in values.items(): parser.set(section, key, value)
+        for key, value in values.items():
+            if parser.get(section,key,fallback=None)!=value: parser.set(section,key,value); changed=True
+    if not changed: return
     temporary = target.with_suffix(".cfg.gametime.tmp")
     try:
         with temporary.open("w", encoding="mbcs") as stream: parser.write(stream, space_around_delimiters=False)
@@ -58,6 +62,25 @@ def configure_profile(server, executable):
     library = Path(server).with_name("RTSSHooks64.dll" if C.sizeof(C.c_void_p) == 8 else "RTSSHooks.dll")
     hooks = C.CDLL(str(library)); hooks.UpdateProfiles.argtypes = []; hooks.UpdateProfiles.restype = None
     hooks.UpdateProfiles()
+
+
+def server_running():
+    """Check the existing SDK mapping without starting a bridge process."""
+    kernel=C.WinDLL('kernel32',use_last_error=True)
+    kernel.OpenFileMappingW.argtypes=[C.c_uint32,C.c_int,C.c_wchar_p]; kernel.OpenFileMappingW.restype=C.c_void_p
+    kernel.CloseHandle.argtypes=[C.c_void_p]; kernel.CloseHandle.restype=C.c_int
+    handle=kernel.OpenFileMappingW(4,False,'RTSSSharedMemoryV2')
+    if handle: kernel.CloseHandle(handle)
+    return bool(handle)
+
+
+def start_server(server):
+    info = subprocess.STARTUPINFO(); info.dwFlags = subprocess.STARTF_USESHOWWINDOW; info.wShowWindow = 0
+    # RTSS requests elevation in its manifest even in its per-user install.
+    # Start the optional renderer with the monitor's existing privileges.
+    environment=os.environ.copy(); environment['__COMPAT_LAYER']='RunAsInvoker'
+    subprocess.Popen([str(server)], cwd=server.parent, startupinfo=info,
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,env=environment)
 
 
 def countdown(remaining, warning, opacity):
@@ -98,12 +121,46 @@ class Backend:
         self.stopping = False; self.configured = set(); self.failed_paths = set()
         self.identity = ""; self.error = ""; self.operation_started = 0
         self.positions={}; self.resolutions={}
+        self.profiles=OrderedDict(); self.server=None; self.last_start=0
+
+    def prepare(self,executables):
+        """Reuse already discovered EXEs; no extra game-directory scan or IPC."""
+        with self.condition:
+            if self.stopping: return
+            for executable in executables:
+                path=Path(executable)
+                if not path.is_absolute() or path.suffix.lower()!='.exe' or helper(path): continue
+                key=norm(executable)
+                if key not in self.configured and key not in self.failed_paths and len(self.profiles)<1024:
+                    self.profiles[key]=str(executable)
+            if self.profiles:
+                self._start_worker(); self.condition.notify()
+
+    def _start_worker(self):
+        if self.thread is None:
+            self.thread = threading.Thread(target=self.run, name="rtss-countdown", daemon=True); self.thread.start()
+
+    def cancel_preparation(self):
+        with self.condition: self.profiles.clear()
+
+    def configure(self,server,executable):
+        key=norm(executable)
+        if key in self.configured: return True
+        if key in self.failed_paths: return False
+        try: configure_profile(server,executable)
+        except Exception:
+            self.failed_paths.add(key); log.warning('RTSS profile unavailable: %s',executable,exc_info=True); return False
+        self.configured.add(key); return True
+
+    def ensure_server(self,server):
+        now=time.monotonic()
+        if now-self.last_start>=10 and not server_running():
+            self.last_start=now; start_server(server)
 
     def present(self, executable, identity, text, position=None):
         with self.condition:
             self.identity = identity; self.state = (executable, identity, text, position)
-            if self.thread is None:
-                self.thread = threading.Thread(target=self.run, name="rtss-countdown", daemon=True); self.thread.start()
+            self._start_worker()
             prior, healthy, timestamp, self.error = self.result
             self.condition.notify()
         now = time.monotonic()
@@ -132,30 +189,32 @@ class Backend:
         return json.loads(line)
 
     def run(self):
-        last_start = 0; last_state = None
+        last_state = None
         try:
             while True:
                 with self.condition:
                     if self.state is None and last_state is None:
-                        self.condition.wait_for(lambda: self.stopping or self.state is not None)
+                        self.condition.wait_for(lambda: self.stopping or self.state is not None or bool(self.profiles))
                     elif self.state == last_state:
                         self.condition.wait(.2)
                     if self.stopping: break
                     state = self.state
+                    # Prepare other games only while idle; active rendering has
+                    # priority and never waits for a whole catalog of profiles.
+                    profile=self.profiles.popitem(last=False)[1] if state is None and self.profiles else None
                 self.operation_started = time.monotonic()
                 try:
                     if state is None:
-                        if self.process and self.process.poll() is None: self.exchange(clear=True)
+                        if last_state is not None and self.process and self.process.poll() is None: self.exchange(clear=True)
+                        if profile:
+                            self.server=self.server or installation()
+                            if self.server and self.configure(self.server,profile): self.ensure_server(self.server)
                         continue
                     executable, identity, text, position = state; key = norm(executable)
                     if key in self.failed_paths: continue
-                    server = installation()
+                    server = self.server or installation(); self.server=server
                     if not server: raise OSError("Install RTSS 7.3.7 or newer first.")
-                    if key not in self.configured:
-                        try: configure_profile(server, executable)
-                        except Exception:
-                            self.failed_paths.add(key); raise
-                        self.configured.add(key)
+                    if not self.configure(server,executable): continue
                     with self.condition:
                         if self.stopping or self.state != state: continue
                     if position is not None:
@@ -166,11 +225,7 @@ class Backend:
                     reply = self.exchange(identity=identity, pid=int(identity.split(":", 1)[0]), text=text)
                     if reply.get('width') and reply.get('height'):
                         self.resolutions[identity]=(reply['width'],reply['height'])
-                    if not reply.get('available') and time.monotonic() - last_start > 10:
-                        info = subprocess.STARTUPINFO(); info.dwFlags = subprocess.STARTF_USESHOWWINDOW; info.wShowWindow = 0
-                        subprocess.Popen([str(server)], cwd=server.parent, startupinfo=info,
-                            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                        last_start = time.monotonic()
+                    if not reply.get('available'): self.ensure_server(server)
                     with self.condition:
                         self.result = (identity, bool(reply.get("healthy")), time.monotonic(), reply.get("error", ""))
                 except Exception as exc:

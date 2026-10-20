@@ -73,7 +73,7 @@ class ResourceInterfaceTests(unittest.TestCase):
         with patch('gametime.qt_ui.win32.sample') as sample:
             self.app.update_overlay(); sample.assert_not_called()
             self.assertFalse(self.app.overlay_timer.isActive())
-            self.app.settings=self.app.catalog.settings=replace(self.app.settings,overlay_enabled=True)
+            self.app.settings=self.app.catalog.settings=replace(self.app.settings,overlay_enabled=True,overlay_rtss_auto=False)
             self.app.update_overlay(); sample.assert_not_called()
             self.assertFalse(self.app.overlay_timer.isActive())
         current=Sample(datetime.now().astimezone(),100,str(self.exe),'fixture:1')

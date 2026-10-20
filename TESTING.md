@@ -23,6 +23,12 @@ The retained legacy GUI smoke creates real Tk windows with synthetic fixtures. I
 
 The 1.6 bundled test redirects desktop shortcut creation into its own temporary Desktop fixture, exercises the old separate monitor/Hub-folder shortcut migration and checks one shared app icon and owned-shortcut removal during uninstall. It does not create test shortcuts on the user's actual desktop.
 
+## 2.8.0 automatic RTSS for tracked games
+
+The full 301-test suite passed in 147.148 seconds. After the final startup throttle/status refinements, all 42 RTSS, automatic-routing and overlay regressions passed in 10.086 seconds. Seven new Qt cases exercise automatic routing for Steam, Epic, Ubisoft, Minecraft, Riot, manual and custom-root games without a selected EXE, reuse of existing artwork candidates, tracking/exclusion/foreground/lock guards, missing/unhealthy renderer fallback, preview isolation and saved global mode selection. Worker tests cover cached idle preparation, helper/client rejection, no idle bridge process, one server start per throttle interval including failures, unchanged profile bytes/mtime, SDK handle cleanup, child-only inherited privileges and current renderer receipts. The bundled upgrade fixture now also preserves an explicitly disabled automatic mode and the legacy EXE list.
+
+The installed RTSS executable's elevation manifest was inspected. Its existing SDK mapping became available after a hidden launch using the monitor's current user privileges. No game was launched or injected into for that check. Tests use temporary profiles and mocked RTSS discovery/renderers; after correcting an initially escaped synthetic `fixture.exe` profile, that file was removed and a before/after comparison confirmed the real RTSS profile directory and global settings stayed unchanged throughout the complete corrected test run. This validates routing and component startup; actual rendering in every game, API, elevated process or anti-cheat environment is not established. Incompatible renderers keep desktop/popup fallback.
+
 ## 2.7.5 sidebar cleanup
 
 All 35 existing Qt interface and resource regressions passed in 18.088 seconds. The redundant sidebar Hide to tray button was removed. Native integration checks still exercise the main-window close action hiding the Hub, reopening from the tray, continued hidden time accounting and explicit shutdown signaling. Both user guides describe the top-right X as the way to hide the window; the production close handler is unchanged.

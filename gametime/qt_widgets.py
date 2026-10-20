@@ -145,7 +145,7 @@ class LocalArtwork:
     def __init__(self, data_dir, roots):
         self.data_dir=Path(data_dir); self.roots=list(roots); self.cache={}; self.links={}
         self.provider=QFileIconProvider()
-        self.worker=None; self.pending={}; self.tokens=0; self.fingerprints={}; self.origins={}
+        self.worker=None; self.pending={}; self.tokens=0; self.fingerprints={}; self.origins={}; self.executables={}
     def key(self,game): return (game.id,game.root,game.metadata,self.links.get(game.id))
     def request(self,game,rules):
         key=self.key(game); signature=tuple(sorted((p,gid) for p,gid in rules.items() if gid==game.id))
@@ -157,7 +157,7 @@ class LocalArtwork:
             self.worker=ArtworkWorker()
         self.worker.request(self.tokens,key,game,self.roots,rules)
     def invalidate(self):
-        self.cache.clear(); self.pending.clear(); self.fingerprints.clear(); self.origins.clear()
+        self.cache.clear(); self.pending.clear(); self.fingerprints.clear(); self.origins.clear(); self.executables.clear()
         if self.worker: self.worker.generation+=1
     def poll(self):
         changed=[]
@@ -167,6 +167,7 @@ class LocalArtwork:
             except Empty: break
             if self.pending.get(key)!=token: continue
             self.pending.pop(key,None)
+            self.executables[key]=tuple(executables)
             old_poster,old_icon=self.cache.get(key,(None,None))
             pix=QPixmap.fromImage(icon) if icon is not None else old_icon
             if icon is None and executables:

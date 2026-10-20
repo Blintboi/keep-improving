@@ -11,7 +11,7 @@ import time
 import unittest
 from unittest.mock import patch, Mock
 from gametime.model import Settings
-from gametime.rtss import Backend, countdown, configure_profile, native_position, position_profile
+from gametime.rtss import Backend, countdown, configure_profile, native_position, position_profile,server_running,start_server
 
 
 @unittest.skipUnless(os.name == 'nt', 'Windows required')
@@ -56,8 +56,10 @@ class RTSSTests(unittest.TestCase):
         self.assertEqual(native_position(.5,.5,1920,1080),(876,519))
         self.assertEqual(native_position(0,1,1280,720),(16,-16))
 
-    def test_settings_are_opt_in_and_invalid_paths_rejected(self):
+    def test_automatic_rtss_is_default_but_countdown_still_opt_in_and_legacy_paths_load(self):
+        self.assertTrue(Settings().overlay_rtss_auto); self.assertFalse(Settings().overlay_enabled)
         self.assertEqual(Settings().overlay_rtss_paths,[])
+        with self.assertRaises(ValueError): replace(Settings(),overlay_rtss_auto='yes').validate()
         for paths in ('all',[None],['relative.exe'],[r'C:\game\setup.exe'],[r'C:\game\file.txt']):
             with self.subTest(paths=paths),self.assertRaises(ValueError): replace(Settings(),overlay_rtss_paths=paths).validate()
         replace(Settings(),overlay_rtss_paths=[r'C:\game\Stardew Valley.exe']).validate()
@@ -72,6 +74,50 @@ class RTSSTests(unittest.TestCase):
             self.assertIn('CoordinateSpace=1',text)  # Whole framebuffer, never the game's last HUD viewport.
             self.assertIn('PositionX=-16',text); self.assertIn('PositionY=16',text)
             self.assertEqual(global_profile.read_text(),'[Hooking]\nEnableHooking=0\n')
+            before=target.read_bytes(); modified=target.stat().st_mtime_ns
+            with patch('gametime.rtss.C.CDLL') as load: configure_profile(server,executable); load.assert_not_called()
+            self.assertEqual(target.read_bytes(),before); self.assertEqual(target.stat().st_mtime_ns,modified)
+
+    def test_automatic_profile_preparation_is_cached_idle_and_starts_server_once(self):
+        backend=Backend('C:/isolated/automatic')
+        paths=['C:/fixture/Alpha.exe','C:/fixture/Beta.exe']
+        with patch('gametime.rtss.installation',return_value=Path('C:/fixture/RTSS.exe')), \
+             patch('gametime.rtss.configure_profile') as configure, \
+             patch('gametime.rtss.server_running',return_value=False),patch('gametime.rtss.start_server') as start:
+            try:
+                backend.prepare([*paths,*paths,'C:/fixture/setup.exe','C:/fixture/steam.exe','relative.exe'])
+                deadline=time.monotonic()+2
+                while len(backend.configured)<2 and time.monotonic()<deadline: time.sleep(.01)
+                self.assertEqual(configure.call_count,2); start.assert_called_once()
+                self.assertIsNone(backend.process); self.assertIsNone(backend.state)
+                backend.prepare(paths); time.sleep(.25); self.assertEqual(configure.call_count,2)
+            finally: backend.close()
+            self.assertFalse(backend.thread.is_alive())
+
+    def test_sdk_mapping_check_closes_handle_without_starting_any_process(self):
+        with patch('gametime.rtss.C.WinDLL') as load:
+            kernel=load.return_value; kernel.OpenFileMappingW.return_value=42
+            self.assertTrue(server_running()); kernel.CloseHandle.assert_called_once_with(42)
+            kernel.OpenFileMappingW.return_value=None
+            self.assertFalse(server_running()); kernel.CloseHandle.assert_called_once_with(42)
+
+    def test_server_launch_uses_existing_privileges_without_changing_parent_environment(self):
+        before=dict(os.environ)
+        with patch('gametime.rtss.subprocess.Popen') as launch:
+            start_server(Path('C:/fixture/RTSS.exe'))
+        self.assertEqual(dict(os.environ),before)
+        self.assertEqual(launch.call_args.kwargs['env']['__COMPAT_LAYER'],'RunAsInvoker')
+        self.assertFalse(launch.call_args.kwargs.get('shell',False))
+
+    def test_failed_server_start_is_also_throttled(self):
+        backend=Backend('C:/isolated/start-failure')
+        with patch('gametime.rtss.server_running',return_value=False), \
+             patch('gametime.rtss.start_server',side_effect=OSError('fixture')) as launch, \
+             patch('gametime.rtss.time.monotonic',side_effect=[100,101,111]):
+            with self.assertRaises(OSError): backend.ensure_server(Path('C:/fixture/RTSS.exe'))
+            backend.ensure_server(Path('C:/fixture/RTSS.exe'))
+            with self.assertRaises(OSError): backend.ensure_server(Path('C:/fixture/RTSS.exe'))
+        self.assertEqual(launch.call_count,2)
 
     def test_native_position_uses_signed_edge_anchors_and_profile_reload(self):
         values={}
@@ -83,7 +129,7 @@ class RTSSTests(unittest.TestCase):
             hooks.LoadProfile.assert_called_once_with(b'game.exe'); hooks.SaveProfile.assert_called_once_with(b'game.exe'); hooks.UpdateProfiles.assert_called_once()
         self.assertEqual(values,{b'PositionX':-16,b'PositionY':16,b'CoordinateSpace':1})
 
-    def test_backend_does_not_start_until_selected_and_requires_current_receipt(self):
+    def test_backend_is_lazy_and_requires_current_receipt(self):
         backend=Backend('C:/isolated/profile'); self.assertIsNone(backend.thread)
         # Supply a dormant thread so this policy test never starts RTSS.
         backend.thread=Mock()
