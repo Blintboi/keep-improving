@@ -1,12 +1,12 @@
 # Game Time Monitor
 
-**[Download the latest installer — 2.6.0 · Windows x64](downloads/GameTimeMonitor-Setup.exe?raw=true)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256)
+**[Download the latest installer — 2.7.0 · Windows x64](downloads/GameTimeMonitor-Setup.exe?raw=true)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256)
 
 Run the downloaded installer to install or update the app. Existing history, settings and exclusions are kept, with a backup before upgrading. [Magyar útmutató](README.hu.md).
 
 An offline Windows 11 Gaming Hub and game-time monitor in one app. Launch games from a searchable library, measure foreground gameplay against a shared daily budget, and follow daily statistics in a dark English/Hungarian interface.
 
-**Private preview 2.6.0.** The repository and installer remain private. Sign into GitHub with an account that has access on your other PC. Optional shared-folder synchronization combines statistics from your computers.
+**Private preview 2.7.0.** The repository and installer remain private. Sign into GitHub with an account that has access on your other PC. Optional encrypted synchronization combines statistics from your computers using the same connection code, without a shared folder.
 
 The 2.0 interface uses Qt Widgets: a dark sidebar, responsive game cards, a daily-budget ring, contextual game actions and a redesigned statistics page. Artwork is read from existing local Steam caches, installed-game image files or game icons; no image service, launcher credentials or artwork downloads are used. Artwork and icons keep their original aspect ratios; complete cover images fit inside the card with dark padding where needed. Missing art has a colored monogram fallback. The shared controller/clock application icon remains unchanged.
 
@@ -52,11 +52,13 @@ Statistics include existing history, hidden/excluded games and removed installat
 
 ## Link statistics across computers
 
-Install version 2.6.0 or later on each computer. In **Statistics → Link computers** (also available in Settings), choose your own shared or cloud-synchronized folder, give the computer a name, and save the generated connection code. On your other computer, select that same folder's local location and enter the same code. Folder paths may differ between computers. **Sync now** refreshes immediately; automatic exchange runs every 30 seconds while the app is running, plus your file provider's transfer delay.
+Install version 2.7.0 or later on each computer. Open **Statistics → Link computers** (also available in Settings), name the first computer, copy its generated code, and save with automatic synchronization enabled. On your other computer, enter that same code and save. No shared folder or separate player account is needed. **Sync now** refreshes immediately. Automatic exchange runs while the app is running, normally once a minute and gradually slowing to once every five minutes when nothing changes.
 
-Each user chooses their own folder and code. Different codes keep groups separate even inside the same parent folder. The code identifies a group; folder permissions control access to its files, so use a folder restricted to your own computers. The **Computers** selector shows all linked computers, this computer, or an individual remote computer. Averages start at the earliest monitoring date among the selected computers. Launcher IDs match the same game across computers; standalone/manual entries match by source and normalized title.
+Each user uses their own randomly generated code. The code is both the connection secret and the source of the encryption key: keep it private, because anyone who knows it can link a computer. **New code** starts a separate group; enter it on all computers you want in that group. The **Computers** selector shows all linked computers, this computer, or an individual remote computer. Averages start at the earliest monitoring date among the selected computers. Launcher IDs match the same game across computers; standalone/manual entries match by source and normalized title.
 
-Only the computer name, game names/sources and cumulative daily recorded time are exchanged. Repeated synchronization replaces a computer's previous snapshot without adding it twice; imported data is never republished. Daily budgets, restrictions, exclusions, launch paths and settings remain local. Each installation keeps its own SQLite database: share the statistics folder, not a live database or a copied profile. Unavailable folders do not stop tracking; cached statistics remain available and sync retries automatically. Disabling sync retains previously received history locally. Synchronization is off until you enable it.
+Only the computer name, game names/sources and cumulative daily recorded time are exchanged, encrypted on the computer before upload to the hosted Supabase service. The connection code and encryption key are not sent to the server. Repeated synchronization replaces a computer's previous snapshot without adding it twice; imported data is never republished. Daily budgets, restrictions, exclusions, launch paths and settings remain local. Each installation keeps its own SQLite database. Offline tracking and cached statistics remain available; sync retries automatically when the service is reachable. Disabling sync retains previously received history locally. Synchronization is off until you enable it.
+
+The backend uses the Supabase **Free** plan and is subject to its capacity limits and inactivity pausing; it is not unlimited hosting. No paid upgrade is performed by the application. See [current provider limits](https://supabase.com/pricing). Up to 20 computers can share a code. Upgrading from 2.6 preserves history but turns off the old folder synchronization; create a new connection code for internet synchronization.
 
 ## Daily use
 

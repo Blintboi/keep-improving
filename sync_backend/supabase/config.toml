@@ -1,0 +1,4 @@
+[functions.statistics-sync]
+# The function authenticates a per-user capability, not a Supabase user JWT.
+# No provider credential is shipped in the Windows installer.
+verify_jwt = false

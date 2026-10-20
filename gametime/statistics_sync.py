@@ -1,7 +1,8 @@
-"""Opt-in, per-user statistics exchange through an existing shared folder.
+"""Per-computer statistics snapshots and the separate local import cache.
 
 SQLite stays local. Only each computer's own cumulative daily measurements are
 published; imported snapshots are never republished or added to local budgets.
+The retained folder worker also supplies the cancellable queue used by HTTPS.
 """
 from datetime import date
 import hashlib
@@ -22,7 +23,7 @@ MAX_BYTES = 16 * 1024 * 1024
 MAX_ROWS = 100_000
 MAX_DEVICES = 100
 ID = re.compile(r'[0-9a-f]{32}')
-GROUP = re.compile(r'[0-9a-f]{12}')
+GROUP = re.compile(r'(?:[0-9a-f]{12}|[0-9a-f]{32})')
 
 
 def group_code(value):
@@ -149,6 +150,10 @@ class StatisticsData:
     def devices(self, group):
         return list(self.store.db.execute('SELECT device_id,name,started FROM statistics_devices WHERE group_id=? ORDER BY name,device_id', (group,)))
 
+    def revisions(self, group):
+        return {identity: str(revision) for identity, revision in self.store.db.execute(
+            'SELECT device_id,revision FROM statistics_devices WHERE group_id=?', (group,))}
+
     def history(self, start, end, group, scope='all'):
         rows = self.local_rows(start, end) if scope in ('all', 'local') else []
         if group and scope != 'local':
@@ -167,6 +172,7 @@ class StatisticsData:
 
 class SyncWorker:
     """Bounded background file I/O; never touches SQLite, widgets or launchers."""
+    failure_message = 'The shared folder is unavailable. Sync will retry automatically.'
     def __init__(self):
         self.jobs = Queue(maxsize=1)
         self.results = Queue()
@@ -259,7 +265,7 @@ class SyncWorker:
             try:
                 values, warning = self.exchange(token, snapshot)
             except (OSError, ValueError):
-                values, warning = [], 'The shared folder is unavailable. Sync will retry automatically.'
+                values, warning = [], self.failure_message
             if self.current(token):
                 self.results.put((token, values, warning))
 

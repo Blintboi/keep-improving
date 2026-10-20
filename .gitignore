@@ -8,6 +8,7 @@ install.json
 test-reports/
 build/
 dist/
+sync_backend/supabase/.temp/
 *.spec
 gametime/rtss_bridge.exe
 gametime/rtss_bridge.exe.sha256

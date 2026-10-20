@@ -60,6 +60,11 @@ class Store:
         config = json.loads(row[0])
         # Accept old profiles without retaining the retired category-wide filter.
         config.pop("exclude_chess", None)
+        # Folder identifiers were short routing labels, never internet secrets.
+        # Keep the old group's cached history but require opting into a new code.
+        if 'statistics_sync_folder' in config:
+            config.pop('statistics_sync_folder')
+            config['statistics_sync_enabled'] = False
         return Settings(**config)
 
     def save_settings(self, settings):

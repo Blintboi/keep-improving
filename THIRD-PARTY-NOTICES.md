@@ -1,5 +1,7 @@
 # Third-party notices
 
+Code-based statistics synchronization uses cryptography 50.0.2, CFFI 2.1.1 and pycparser 3.11. Their upstream license texts are included under `licenses/cryptography-*`, `licenses/cffi-*` and `licenses/pycparser-*` in the standalone installer. cryptography uses its upstream Apache/BSD licensing and its official Windows wheel includes OpenSSL 4.0.3 under Apache 2.0 (`licenses/Crypto/OpenSSL-LICENSE.txt`); no upstream libraries are modified here.
+
 RTSS is an optional, separately installed third-party product from Guru3D/Unwinder. No RTSS installer, hook DLL, SDK header or sample source is distributed here. `gametime/rtss_bridge.cs` is this project's original implementation of the documented RTSS V2 shared-memory interface. It is compiled with the Windows .NET Framework 4 compiler for source installs and release builds; the standalone installer includes that compiled helper. Windows supplies the .NET Framework runtime. RTSS's own terms and game compatibility apply independently.
 
 The standalone build includes unmodified CPython 3.12 with SQLite/standard runtime components, Qt 6.11.2 / PySide6 Essentials / Shiboken6 6.11.2 and the PyInstaller bootloader. Python and PyInstaller notices are in `licenses/Python-LICENSE.txt` and `licenses/PyInstaller-COPYING.txt`. The PyInstaller license includes its application distribution exception.

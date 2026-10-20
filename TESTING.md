@@ -23,7 +23,19 @@ The retained legacy GUI smoke creates real Tk windows with synthetic fixtures. I
 
 The 1.6 bundled test redirects desktop shortcut creation into its own temporary Desktop fixture, exercises the old separate monitor/Hub-folder shortcut migration and checks one shared app icon and owned-shortcut removal during uninstall. It does not create test shortcuts on the user's actual desktop.
 
-## 2.6 shared-folder statistics
+## 2.7 code-only internet statistics
+
+The 2.7.0 self-extracting Setup was extracted without installing, and its three contained package files matched the built payload hashes. All 35 bundled fresh-install/upgrade/uninstall smoke checks passed, including the real frozen Qt window, single-instance reopening, history/hidden-state preservation, user preferences, backups, owned-file cleanup and foreign-file retention. The separate RTSS native self-test passed ten checks. The installer includes cryptography and its pinned dependencies and upstream license texts.
+
+Hungarian and English linking dialogs and the statistics page were rendered with native Qt fonts and inspected at the minimum supported main-window size. A transactionally rolled-back PostgreSQL probe also verified 64-bit revision precision, known-version download suppression, the 20-computer cap, the global storage cap and request-rate enforcement without retaining test writes.
+
+275 automated tests passed in 106.945 seconds. Five additional Node tests cover the deployed Edge Function request boundary, derived group isolation, exact 64-bit revisions, malformed/oversized requests, configuration/rate/quota errors and redaction of provider failures. Native Qt regressions verify the code-only dialog, connect/disconnect, rejection of short legacy codes, opt-in upgrade migration and unchanged local budgets.
+
+On 2026-10-20, the actual Free-plan Supabase project `jtvdbqwmejrckjejjrdl` was migrated and `statistics-sync` deployed. A live HTTPS probe with three synthetic profiles verified same-code convergence, separate-code isolation, no re-export/double-counting, stale-revision rejection, cache persistence, and rejection of weak credentials. Real Postgres role queries verified RLS on all three tables and no client table/RPC grants; both a direct table request and RPC call with the project's publishable key returned HTTP 401. Performance advisors found no findings. The security advisor reports three informational [RLS enabled without policies](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy) entries: this is the intended deny-by-default server-only design, with the RPC executable only by `service_role`.
+
+These are separate profiles on one physical Windows computer using the real internet backend. A second physical computer still needs the same code entered by its user. Free quotas and provider inactivity pausing remain real service limits. Live synthetic records are scoped by random group hashes and removed after verification; actual user records are not used by the probes.
+
+### Earlier 2.6 evidence
 
 263 automated tests passed in 99.898 seconds. After the native UI review, two further regressions were added for cancelling a background sync group and closing an already-hidden linking dialog; all 29 targeted statistics/Qt tests passed in 8.607 seconds. Isolated profiles verify two-way convergence, repeated/out-of-order snapshots, separate users sharing a parent folder, per-computer filters, unchanged local budgets, title-based manual-game matching without paths, discovery ID migration, malformed-file cache retention, offline retries, settings validation and language switching. Hungarian/English statistics at 1000×700 and the linking dialog were rendered with native Qt fonts and inspected.
 

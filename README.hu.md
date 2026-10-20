@@ -1,6 +1,6 @@
-# Játékidőfigyelő — 2.6.0
+# Játékidőfigyelő — 2.7.0
 
-**[Legfrissebb telepítő letöltése — 2.6.0 · Windows x64](downloads/GameTimeMonitor-Setup.exe?raw=true)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256)
+**[Legfrissebb telepítő letöltése — 2.7.0 · Windows x64](downloads/GameTimeMonitor-Setup.exe?raw=true)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256)
 
 A letöltött telepítőt indítsd el a telepítéshez vagy frissítéshez. A korábbi előzmények, beállítások és kizárások megmaradnak, és frissítés előtt biztonsági mentés készül.
 
@@ -87,18 +87,20 @@ A már meglévő előzményeket használja, az elrejtett, kizárt és eltávolí
 
 ## Statisztikák összekapcsolása több gépen
 
-A **Statisztikák → Gépek összekapcsolása** vagy a Beállítások azonos nevű gombjával kapcsolhatod össze a saját gépeidet. Mindegyik gépre a 2.6.0-s vagy újabb alkalmazást telepítsd.
+A **Statisztikák → Gépek összekapcsolása** vagy a Beállítások azonos nevű gombjával kapcsolhatod össze a saját gépeidet. Mindegyik gépre a 2.7.0-s vagy újabb alkalmazást telepítsd. Közös mappa és külön felhasználói regisztráció nem szükséges.
 
-1. Az első gépen válaszd ki a saját megosztott vagy felhővel szinkronizált mappádat, és adj nevet a gépnek.
-2. Másold ki az összekapcsolási kódot, majd mentsd a beállítást.
-3. A másik gépen válaszd ki ugyanannak a közös mappának az ottani helyét, és illeszd be ugyanazt a kódot. A helyi mappaútvonalak eltérhetnek.
-4. A **Szinkronizálás** gombbal azonnal frissíthetsz; egyébként a program futás közben 30 másodpercenként próbálkozik. A felhős mappa továbbításának ideje ezen felül jelentkezik.
+1. Az első gépen adj nevet a gépnek, és másold ki a program által generált kódot.
+2. Hagyd bekapcsolva az automatikus szinkronizálást, majd kattints a **Mentés** gombra.
+3. A másik gépen ugyanebbe az ablakba illeszd be ugyanazt a kódot, és mentsd el.
+4. A **Szinkronizálás** gombbal azonnal frissíthetsz. Egyébként a program futás közben általában percenként, változatlan adatoknál fokozatosan ritkítva, legfeljebb ötpercenként szinkronizál.
 
-Minden felhasználó saját mappát és saját kódot használhat. Külön kódok adatai ugyanazon szülőmappában sem keverednek az összesítésben. A kód a csoportot azonosítja; a fájlok hozzáférését a mappa megosztási jogosultságai kezelik. Csak olyan mappát használj, amelyhez a saját gépeid férnek hozzá.
+Minden felhasználó saját, véletlenszerű kódot használ. A kód hozzáférést ad a csoporthoz, és ebből származik a titkosítási kulcs is, ezért tartsd titokban: aki ismeri, hozzákapcsolhat egy gépet. Az **Új kód** külön csoportot indít; ezt minden összekapcsolni kívánt gépen meg kell adni.
 
 A **Gépek** listában az összesített előzmény, az aktuális gép vagy egy másik gép külön is megtekinthető. Az átlag a kiválasztott gépek közül a legkorábbi követéskezdethez igazodik. Az ismételt frissítés nem adja hozzá újra ugyanazt az időt. A launcherazonosítók alapján ugyanaz a játék közös sorba kerül; a kézzel felvett és önálló játékok azonos forrás és normalizált név alapján kapcsolódnak össze.
 
-Csak a gép neve és a játékonkénti napi mért idő kerül át. A napi keret, a korlátozás, a kizárások, a parancsikonok és az EXE-útvonalak gépenként maradnak. Az SQLite-adatbázist nem kell és nem szabad közös élő adatbázisként használni: az alkalmazás külön statisztikafájlokat cserél. A szinkronizálás alapból kikapcsolt. Elérhetetlen mappánál a mérés folytatódik, az utolsó átvett adatok megmaradnak, és a program később újrapróbálja. Kikapcsoláskor a már átvett előzmények helyben továbbra is elérhetők.
+Csak a gép neve, a játéknevek/források és a játékonkénti napi mért idő kerül át, a gépen titkosítva a Supabase-szerverre való feltöltés előtt. A kód és a titkosítási kulcs nem kerül a szerverhez. A napi keret, a korlátozás, a kizárások, a parancsikonok és az EXE-útvonalak gépenként maradnak. Minden gép saját SQLite-adatbázist használ. A szinkronizálás alapból kikapcsolt. Internetkimaradásnál a mérés folytatódik, az utolsó átvett adatok megmaradnak, és a program később újrapróbálja. Kikapcsoláskor a már átvett előzmények helyben továbbra is elérhetők.
+
+A háttér a Supabase **Free**, ingyenes csomagját használja, annak kapacitási és inaktivitási korlátaival. A program nem vált fizetős csomagra. [A szolgáltató aktuális keretei](https://supabase.com/pricing). Egy kóddal legfeljebb 20 gép kapcsolható össze. A 2.6-os változat frissítése megőrzi az előzményeket, de kikapcsolja a régi mappás szinkront; az internetes összekapcsoláshoz új kódot kell létrehozni.
 
 ## Gaming Hub és játékkezelés
 

@@ -39,10 +39,16 @@ New-Item -ItemType Directory -Path $licenseDir -Force | Out-Null
 $pythonBase = (& $PythonPath -c 'import sys; print(sys.base_prefix)').Trim()
 Copy-Item -LiteralPath (Join-Path $pythonBase 'LICENSE.txt') -Destination (Join-Path $licenseDir 'Python-LICENSE.txt')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'licenses\Qt') -Destination $licenseDir -Recurse -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'licenses\Crypto') -Destination $licenseDir -Recurse -Force
 $licenseQuery = 'import importlib.metadata as m; print(m.distribution("pyinstaller").locate_file("pyinstaller-6.22.0.dist-info/licenses/COPYING.txt"))'
 $pyinstallerLicense = ($licenseQuery | & $PythonPath -).Trim()
 if (-not (Test-Path -LiteralPath $pyinstallerLicense)) { throw 'PyInstaller license was not found.' }
 Copy-Item -LiteralPath $pyinstallerLicense -Destination (Join-Path $licenseDir 'PyInstaller-COPYING.txt')
+$cryptoLicenseQuery = 'import importlib.metadata as m,json; print(json.dumps([{"package":n,"source":str(m.distribution(n).locate_file(f)),"name":f.name} for n in ("cryptography","cffi","pycparser") for f in m.distribution(n).files if ".dist-info/licenses/" in str(f)]))'
+$cryptoLicenses = ($cryptoLicenseQuery | & $PythonPath -) | ConvertFrom-Json
+foreach ($entry in $cryptoLicenses) {
+    Copy-Item -LiteralPath $entry.source -Destination (Join-Path $licenseDir ($entry.package + '-' + $entry.name)) -Force
+}
 $files = @(Get-ChildItem -LiteralPath $bundle -Recurse -File | Where-Object { $_.Name -ne 'payload-manifest.json' } | ForEach-Object {
     [ordered]@{ Path=$_.FullName.Substring($bundle.Length + 1); SHA256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash }
 })

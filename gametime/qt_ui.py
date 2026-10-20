@@ -25,7 +25,8 @@ from .qt_widgets import STYLE,ACCENT,MUTED,label,button,panel,glyph,duration,Bud
 from .qt_statistics import StatisticsPage
 from .overlay import CountdownOverlay,PositionPicker,choose_screen,foreground_screen_name
 from .rtss import Backend as RTSSBackend, countdown as rtss_countdown, installation as rtss_installation
-from .statistics_sync import StatisticsData,SyncWorker,computer_name,group_code,display_code
+from .statistics_sync import StatisticsData,computer_name,group_code,display_code
+from .statistics_cloud import CloudSyncWorker,CLOUD_CODE,SERVICE_URL,new_code
 
 log=logging.getLogger(__name__)
 
@@ -59,8 +60,9 @@ class App(QMainWindow,MonitorActions):
         super().__init__()
         self.store,self.data_dir=store,Path(data_dir)
         self.settings=store.settings(); self.catalog=Catalog(self.settings,store.games(True),store.overrides(),store.rules())
-        self.statistics_data=StatisticsData(store); self.statistics_sync=SyncWorker()
+        self.statistics_data=StatisticsData(store); self.statistics_sync=CloudSyncWorker()
         self._sync_busy=False; self._sync_attempted=0; self._sync_status='Statistics sync is off.'
+        self._sync_interval=60; self._sync_revision=None
         self.tracker=Tracker(store,self.catalog); self.hub=hub or HubWorker(data_dir); self.hub_fingerprint=None
         self.service=service or DiscoveryService(self.settings)
         self.catalog.steam_libraries=self.service.discovery.libraries_from_metadata()
@@ -222,9 +224,13 @@ class App(QMainWindow,MonitorActions):
         if self.closed or self._sync_busy or not self.settings.statistics_sync_enabled: return
         self._sync_attempted=time.monotonic()
         try:
+            if not SERVICE_URL: raise ValueError('The synchronization service is not configured yet.')
             self.tracker.flush()
             snapshot=self.statistics_data.snapshot(self.settings.statistics_sync_group,self.settings.statistics_device_name)
-            self._sync_busy=self.statistics_sync.request(self.settings.statistics_sync_folder,self.settings.statistics_sync_group,snapshot)
+            self._sync_interval=60 if snapshot['revision']!=self._sync_revision else min(300,self._sync_interval+60)
+            self._sync_revision=snapshot['revision']
+            self._sync_busy=self.statistics_sync.request(SERVICE_URL,self.settings.statistics_sync_group,snapshot,
+                                                       self.statistics_data.revisions(self.settings.statistics_sync_group))
             self._sync_status='Synchronizing statistics…'
         except (ValueError,OSError):
             self._sync_status='Could not prepare statistics for synchronization.'
@@ -234,44 +240,44 @@ class App(QMainWindow,MonitorActions):
     def poll_statistics_sync(self):
         while not self.statistics_sync.results.empty():
             token,values,warning=self.statistics_sync.results.get_nowait()
-            if token!=(self.settings.statistics_sync_folder,self.settings.statistics_sync_group,self.statistics_sync.generation): continue
+            if token!=(SERVICE_URL,self.settings.statistics_sync_group,self.statistics_sync.generation): continue
             self._sync_busy=False; changed=False
             for value in values:
                 try: changed=self.statistics_data.ingest(value,token[1]) or changed
                 except ValueError: warning='Some computer data could not be read. Sync will retry automatically.'
             self._sync_status=warning or 'Statistics synchronized.'
+            if changed: self._sync_interval=60
             if changed and self.pages.currentIndex()==1: self.statistics.refresh()
             self.update_statistics_sync_status()
-        if self.settings.statistics_sync_enabled and not self._sync_busy and time.monotonic()-self._sync_attempted>=30:
+        if self.settings.statistics_sync_enabled and not self._sync_busy and time.monotonic()-self._sync_attempted>=self._sync_interval:
             self.request_statistics_sync()
 
     def statistics_sync_dialog(self):
-        window=self._dialog(self.t('Link computers'),700)
+        window=self._dialog(self.t('Link computers'),760)
         layout=QVBoxLayout(window); layout.setContentsMargins(26,24,26,24); layout.setSpacing(14)
         layout.addWidget(label(self.t('Link computers'),'section'))
-        note=label(self.t('On each of your computers, choose the same shared folder and enter the same connection code. Each user creates their own code.'))
+        note=label(self.t('Use the generated code on your first computer, then enter that same code on your other computers. No shared folder or separate account is needed.'))
         note.setWordWrap(True); layout.addWidget(note)
-        enabled=QCheckBox(self.t('Automatically synchronize statistics')); enabled.setChecked(self.settings.statistics_sync_enabled or not self.settings.statistics_sync_folder); layout.addWidget(enabled)
+        enabled=QCheckBox(self.t('Automatically synchronize statistics')); enabled.setChecked(self.settings.statistics_sync_enabled or not CLOUD_CODE.fullmatch(self.settings.statistics_sync_group)); layout.addWidget(enabled)
         layout.addWidget(label(self.t('Computer name'),'muted'))
         name=QLineEdit(self.settings.statistics_device_name or computer_name()); name.setMaxLength(80); name.setMinimumHeight(40); name.setAccessibleName(self.t('Computer name')); layout.addWidget(name)
-        layout.addWidget(label(self.t('Shared folder'),'muted'))
-        folder_row=QHBoxLayout(); folder=QLineEdit(self.settings.statistics_sync_folder); folder.setMinimumHeight(40); folder.setAccessibleName(self.t('Shared folder')); folder_row.addWidget(folder,1)
-        def browse():
-            value=QFileDialog.getExistingDirectory(window,self.t('Shared folder'),folder.text())
-            if value: folder.setText(value)
-        folder_row.addWidget(button(self.t('Browse…'),browse)); layout.addLayout(folder_row)
         layout.addWidget(label(self.t('Connection code'),'muted'))
-        code_row=QHBoxLayout(); code=QLineEdit(display_code(self.settings.statistics_sync_group or uuid.uuid4().hex[:12])); code.setMaxLength(40); code.setMinimumHeight(40); code.setAccessibleName(self.t('Connection code')); code_row.addWidget(code,1)
-        code_row.addWidget(button(self.t('New code'),lambda:code.setText(display_code(uuid.uuid4().hex[:12]))))
+        saved_code=self.settings.statistics_sync_group if CLOUD_CODE.fullmatch(self.settings.statistics_sync_group) else new_code()
+        code_row=QHBoxLayout(); code=QLineEdit(display_code(saved_code)); code.setMaxLength(40); code.setMinimumHeight(40); code.setAccessibleName(self.t('Connection code')); code_row.addWidget(code,1)
+        code.setStyleSheet('font-family:Consolas; font-size:14px;')
+        code_row.addWidget(button(self.t('New code'),lambda:code.setText(display_code(new_code()))))
         code_row.addWidget(button(self.t('Copy'),lambda:QApplication.clipboard().setText(code.text()))); layout.addLayout(code_row)
+        secret_note=label(self.t('Keep your code private: anyone with it can link a computer. A new code starts a separate group.'),'muted'); secret_note.setWordWrap(True); layout.addWidget(secret_note)
         help_text=label(self.t('Only statistics are shared. Daily limits, exclusions, executable paths and settings stay on each computer.'),'muted'); help_text.setWordWrap(True); layout.addWidget(help_text)
         error=label('','danger'); error.setWordWrap(True); layout.addWidget(error)
         def save():
             try:
-                settings=replace(self.settings,statistics_sync_enabled=enabled.isChecked(),statistics_sync_folder=folder.text().strip(),
+                if enabled.isChecked() and not SERVICE_URL: raise ValueError('The synchronization service is not configured yet.')
+                settings=replace(self.settings,statistics_sync_enabled=enabled.isChecked(),
                                  statistics_sync_group=group_code(code.text()),statistics_device_name=name.text().strip()).validate()
                 self.store.save_settings(settings); self.settings=self.catalog.settings=settings
                 self.statistics_sync.cancel(); self._sync_busy=False; self._sync_attempted=0
+                self._sync_interval=60; self._sync_revision=None
                 self._sync_status='Statistics sync is off.'; self.statistics.scope='all'; self.statistics.refresh()
                 self.request_statistics_sync(); self.update_statistics_sync_status(); window.accept()
             except (OSError,ValueError) as exc: error.setText(self.t(str(exc)))

@@ -25,3 +25,12 @@ installer or a Releases-page-only download. Preserve existing user history,
 settings and per-game exclusions during upgrades.
 
 Documentation-only changes do not require a new application version or installer.
+
+# Statistics service
+
+Use the existing Supabase **Game Monitor** project `jtvdbqwmejrckjejjrdl` on its
+Free plan. The user explicitly does not want Sites for this feature. Do not
+create a replacement project, switch to paid hosting, or embed provider admin
+credentials in the client. Server code and schema are in `sync_backend/`.
+Preserve per-user code isolation, client-side encryption, local daily budgets
+and history, and the server-only database grants when updating synchronization.
