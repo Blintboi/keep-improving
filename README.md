@@ -1,14 +1,14 @@
 # Game Time Monitor
 
-**[Download the latest installer — 2.7.2 · Windows x64](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256)
+**[Download the latest installer — 2.7.3 · Windows x64](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256)
 
 Run the downloaded installer to install or update the app. Existing history, settings and exclusions are kept, with a backup before upgrading. [Magyar útmutató](README.hu.md).
 
 An offline Windows 11 Gaming Hub and game-time monitor in one app. Launch games from a searchable library, measure foreground gameplay against a shared daily budget, and follow daily statistics in a dark English/Hungarian interface.
 
-**Private preview 2.7.2.** The repository and installer remain private. Sign into GitHub with an account that has access on your other PC. Optional encrypted synchronization combines statistics from your computers using the same connection code, without a shared folder.
+**Private preview 2.7.3.** The repository and installer remain private. Sign into GitHub with an account that has access on your other PC. Optional encrypted synchronization combines statistics from your computers using the same connection code, without a shared folder.
 
-The 2.0 interface uses Qt Widgets: a dark sidebar, responsive game cards, a daily-budget ring, contextual game actions and a redesigned statistics page. Artwork is read from existing local Steam caches, installed-game image files or game icons; no image service, launcher credentials or artwork downloads are used. Artwork and icons keep their original aspect ratios; complete cover images fit inside the card with dark padding where needed. Missing art has a colored monogram fallback. The shared controller/clock application icon remains unchanged.
+The 2.0 interface uses Qt Widgets: a dark sidebar, responsive game cards, a daily-budget ring, contextual game actions and a redesigned statistics page. Artwork is read from existing local Steam caches, installed-game image files or game icons; no image service, launcher credentials or artwork downloads are used. From 2.7.3, every game has the same large rounded square image tile on a colored background. Icons keep their complete shape; covers use a centered square crop without stretching. Small source images retain their native resolution during loading; pixel icons are enlarged crisply when drawn. Missing art has a colored monogram fallback. The shared controller/clock application icon remains unchanged.
 
 ## Install
 
@@ -26,13 +26,13 @@ Setup adds one shared desktop **Gaming Hub** icon, a Start menu shortcut, Window
 
 From 2.7.2, background discovery keeps existing game cards and artwork instead of recreating the entire grid. Selection, keyboard focus and scroll position survive unchanged scans. Updated artwork replaces the previous image when ready.
 
-The **Library** page is the home screen, with artwork cards, quick Play buttons, search, source filters and sorting by name or today’s time. Search by name or filter by source, then click **Play** directly on the game's card. One click starts it without selecting it first or opening a separate bottom panel. Double-clicking the card or pressing Enter also starts it. Play uses Steam, Epic, Ubisoft and Riot launch routes, the Minecraft launcher or an existing shortcut with its original arguments. Standalone games with one executable can start directly. Discovery keeps the library up to date.
+The **Library** page is the home screen, with large clickable game images, search, source filters and sorting by name or today’s time. Search by name or filter by source, then click the game's image once to launch it. One click starts it without selecting it first or opening a separate bottom panel. Clicking the name selects the card; Enter starts the selected game. The **…** menu sits beside the game name at the bottom. Play uses Steam, Epic, Ubisoft and Riot launch routes, the Minecraft launcher or an existing shortcut with its original arguments. Standalone games with one executable can start directly. Discovery keeps the library up to date.
 
 If the executable is ambiguous, use **Assign EXE** to choose it once. The app saves the choice and its tracking rule. **Add** also remembers the executable. Choices survive upgrades and discovery ID merges. Excluding a game's time does not prevent launching it. Removed games cannot launch. Preparation runs on a worker, keeping measurement and reminders responsive; opening a launcher alone does not count as gameplay.
 
-Use the **…** menu in the top-right corner of each card for Hide / restore, Exclude / track, Assign EXE, EXE rules, Open game folder and Uninstall game. Statistics and Settings have their own pages in the left sidebar. **Open game folder** opens that game's installation when you need its files. The desktop Gaming Hub icon and tray's Open Gaming Hub return to this page without opening a separate folder or another monitor.
+Use the **…** menu beside the game name at the bottom of each card for Hide / restore, Exclude / track, Assign EXE, EXE rules, Open game folder and Uninstall game. Statistics and Settings have their own pages in the left sidebar. **Open game folder** opens that game's installation when you need its files. The desktop Gaming Hub icon and tray's Open Gaming Hub return to this page without opening a separate folder or another monitor.
 
-The library keeps labels brief: Today and Remaining above the cards, Play beside the game name, recorded time only when nonzero, and a source badge only when matching game names need distinguishing. Game controls stay on each card. Extra help is available in tooltips; additional launcher locations are under **Settings → Games folder → Advanced**. The Settings title's tooltip shows the app version.
+The library keeps labels brief: Today and Remaining above the cards, the **…** menu beside the game name, recorded time only when nonzero, and a source badge only when matching game names need distinguishing. Game controls stay on each card. Extra help is available in tooltips; additional launcher locations are under **Settings → Games folder → Advanced**. The Settings title's tooltip shows the app version.
 
 ## Launcher clients and local artwork
 

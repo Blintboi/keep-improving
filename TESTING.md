@@ -23,6 +23,12 @@ The retained legacy GUI smoke creates real Tk windows with synthetic fixtures. I
 
 The 1.6 bundled test redirects desktop shortcut creation into its own temporary Desktop fixture, exercises the old separate monitor/Hub-folder shortcut migration and checks one shared app icon and owned-shortcut removal during uninstall. It does not create test shortcuts on the user's actual desktop.
 
+## 2.7.3 uniform large artwork and image launching
+
+All 54 focused tests passed: 27 Qt integration tests in 11.929 seconds, 14 artwork/client tests in 3.976 seconds and 13 restriction tests in 5.830 seconds. Regressions exercise the full image as a launch button, selection-only footer clicks, double-click suppression, disabled launch targets, footer menu targeting and unchanged busy/restriction guards. Pixel checks verify equal visible size for 32- and 256-pixel icons, large square cover crops without stretching, and readable native icons after asynchronous delivery. The bounded Minecraft fixture reads both the real square pack icon and title logo without extracting any archive entry; small image decoding retains the source resolution.
+
+Hungarian and English native library captures were inspected at 1380×920 and 1000×700 with a temporary profile containing the existing local catalog and artwork. Discovery/Hub workers were inert, tracker/overlay timers were stopped and cloud synchronization was disabled in the fixture. No real game or launcher was started, no connection code was copied into the preview and the original profile was not changed.
+
 ## 2.7.2 computer origins and stable game cards
 
 All 58 focused tests passed: 25 Qt integration tests in 10.620 seconds and 33 statistics/cloud/translation tests in 7.506 seconds. New regressions feed actual background discovery result queues repeatedly and check that card instances, artwork, selection, keyboard focus, scroll position and grid layout remain stable. Changed metadata updates the existing card, old artwork remains visible during replacement work, new artwork is delivered to that same card, and hiding/sorting still works.

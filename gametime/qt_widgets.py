@@ -169,7 +169,7 @@ class LocalArtwork:
             pix=QPixmap.fromImage(icon) if icon is not None else old_icon
             if icon is None and executables:
                 try:
-                    candidate=self.provider.icon(QFileInfo(executables[0])).pixmap(96,96)
+                    candidate=self.provider.icon(QFileInfo(executables[0])).pixmap(256,256)
                     if not candidate.isNull(): pix=candidate
                 except (OSError,RuntimeError): pass
             pix=normalize_icon(pix)
@@ -209,11 +209,28 @@ class LocalArtwork:
                     if len(candidate.drive)==2 and candidate.suffix.lower()=='.ico' and candidate.is_file(): icon=QIcon(str(candidate))
                 except (OSError,ValueError,configparser.Error): pass
             elif Path(source).suffix.lower()=='.lnk': icon=self.provider.icon(QFileInfo(source))
-        pix=icon.pixmap(96,96) if not icon.isNull() else None
+        pix=icon.pixmap(256,256) if not icon.isNull() else None
         pix=normalize_icon(pix)
         result=(poster,pix)
         self.cache[key]=result
         return result
+
+class ImageLaunchButton(QPushButton):
+    """The artwork itself is an accessible button; its play cue appears on hover."""
+    def paintEvent(self,event):
+        if not self.isEnabled() or not (self.underMouse() or self.hasFocus()): return
+        p=QPainter(self); p.setRenderHint(QPainter.Antialiasing)
+        p.setPen(Qt.NoPen); p.setBrush(QColor(8,17,21,42)); p.drawRoundedRect(QRectF(self.rect()),14,14)
+        center=self.rect().center(); x,y=center.x(),center.y()
+        p.setBrush(QColor(12,28,24,220)); p.drawEllipse(QRectF(x-25,y-25,50,50))
+        triangle=QPainterPath(); triangle.moveTo(x-5,y-10); triangle.lineTo(x+11,y); triangle.lineTo(x-5,y+10); triangle.closeSubpath()
+        p.fillPath(triangle,QColor(ACCENT))
+        if self.hasFocus():
+            p.setBrush(Qt.NoBrush); p.setPen(QPen(QColor(ACCENT),1.5)); p.drawRoundedRect(QRectF(self.rect()).adjusted(2,2,-2,-2),13,13)
+    def enterEvent(self,event): super().enterEvent(event); self.update()
+    def leaveEvent(self,event): super().leaveEvent(event); self.update()
+    def mouseDoubleClickEvent(self,event): event.accept()
+
 
 class GameCard(QFrame):
     selected=Signal(str)
@@ -221,17 +238,17 @@ class GameCard(QFrame):
     options_requested=Signal(str)
     def __init__(self,game,t):
         super().__init__(); self.game=game; self.t=t; self.chosen=False; self.hovered=False; self.seconds=0; self.art=(None,None); self.show_source=False
-        self.setFixedHeight(232); self.setMinimumWidth(190); self.setCursor(Qt.PointingHandCursor)
+        self.setFixedHeight(260); self.setMinimumWidth(190); self.setCursor(Qt.PointingHandCursor)
         self.setFocusPolicy(Qt.StrongFocus); self.setAccessibleName(game.name)
-        self.play=button('',lambda:self.launched.emit(self.game.id)); self.play.setIcon(glyph('play','#b8f4db',17)); self.play.setFixedSize(34,34)
-        self.play.setParent(self); self.play.setToolTip(t('▶ Play')); self.play.setAccessibleName(t('▶ Play')+' '+game.name)
-        self.play.setStyleSheet('QPushButton {background:#28463c; border:1px solid #3b6352; border-radius:17px; padding:0;} QPushButton:hover {background:#3b6854;}')
+        self.play=ImageLaunchButton('',self); self.play.clicked.connect(lambda:self.launched.emit(self.game.id))
+        self.play.setCursor(Qt.PointingHandCursor); self.play.setToolTip(t('▶ Play')); self.play.setAccessibleName(t('▶ Play')+' '+game.name)
+        self.play.setStyleSheet('background:transparent; border:none; padding:0;')
         self.more=button('',lambda:self.options_requested.emit(self.game.id)); self.more.setIcon(glyph('dots','#cee1db',18)); self.more.setFixedSize(34,34)
         self.more.setParent(self); self.more.setToolTip(t('Game options')); self.more.setAccessibleName(t('Game options')+' '+game.name)
         self.more.setStyleSheet('QPushButton {background:#202c31; border:1px solid #40544f; border-radius:10px; padding:0;} QPushButton:hover {background:#315143;}')
         self.setToolTip(game.name+' · '+game.source)
     def resizeEvent(self,event):
-        self.play.move(self.width()-49,168); self.more.move(self.width()-46,10)
+        self.play.setGeometry(1,1,self.width()-2,187); self.more.move(self.width()-49,198)
     def set_game(self,game):
         if self.game==game: return
         self.game=game; self.setAccessibleName(game.name)
@@ -247,7 +264,7 @@ class GameCard(QFrame):
     def mousePressEvent(self,event):
         if event.button()==Qt.LeftButton: self.selected.emit(self.game.id); self.setFocus()
     def mouseDoubleClickEvent(self,event):
-        if event.button()==Qt.LeftButton: self.launched.emit(self.game.id)
+        self.mousePressEvent(event)
     def keyPressEvent(self,event):
         if event.key() in (Qt.Key_Return,Qt.Key_Enter): self.launched.emit(self.game.id)
         elif event.key()==Qt.Key_Space: self.selected.emit(self.game.id)
@@ -256,38 +273,43 @@ class GameCard(QFrame):
         p=QPainter(self); p.setRenderHint(QPainter.Antialiasing)
         rect=QRectF(1,1,self.width()-2,self.height()-2); clip=QPainterPath(); clip.addRoundedRect(rect,15,15)
         p.setClipPath(clip); p.fillRect(rect,QColor('#202d33' if self.hovered else PANEL))
-        poster,icon=self.art
-        if poster:
-            # Fit the complete image into the shared art area without stretching
-            # or cropping portrait/landscape artwork. The panel fills spare space.
-            art_area=QRectF(0,0,self.width(),156)
-            fitted=poster.scaled(int(art_area.width()),int(art_area.height()),Qt.KeepAspectRatio,Qt.SmoothTransformation)
-            p.fillRect(art_area,QColor('#152329'))
-            p.drawPixmap(int((self.width()-fitted.width())/2),int((156-fitted.height())/2),fitted)
-        else:
-            seed=hashlib.sha256(self.game.name.encode()).digest(); color=QColor.fromHsv(seed[0]*359//255,105,77)
-            grad=QLinearGradient(0,0,self.width(),160); grad.setColorAt(0,color); grad.setColorAt(1,QColor('#14262c'))
-            p.fillRect(QRectF(0,0,self.width(),160),grad)
-            p.setPen(Qt.NoPen); p.setBrush(QColor(255,255,255,9)); p.drawEllipse(QRectF(self.width()-160,-76,240,240))
-            p.setBrush(QColor(255,255,255,6)); p.drawEllipse(QRectF(-60,45,180,180))
-            if icon and not icon.isNull():
-                scaled=icon.scaled(80,80,Qt.KeepAspectRatio,Qt.SmoothTransformation)
-                p.drawPixmap(int((self.width()-scaled.width())/2),int(82-scaled.height()/2),scaled)
+        seed=hashlib.sha256(self.game.name.encode()).digest(); color=QColor.fromHsv(seed[0]*359//255,105,77)
+        grad=QLinearGradient(0,0,self.width(),188); grad.setColorAt(0,color); grad.setColorAt(1,QColor('#14262c'))
+        p.fillRect(QRectF(0,0,self.width(),188),grad)
+        p.setPen(Qt.NoPen); p.setBrush(QColor(255,255,255,9)); p.drawEllipse(QRectF(self.width()-160,-76,240,240))
+        p.setBrush(QColor(255,255,255,6)); p.drawEllipse(QRectF(-60,45,180,180))
+        fade=QLinearGradient(0,130,0,202); fade.setColorAt(0,QColor(25,33,38,0)); fade.setColorAt(1,QColor(PANEL)); p.fillRect(QRectF(0,130,self.width(),76),fade)
+        # Every source uses the same large tile. Icons stay complete; cover-only
+        # games receive a centered square crop without stretching their artwork.
+        tile=QRectF((self.width()-156)/2,16,156,156); area=tile.adjusted(6,6,-6,-6)
+        p.setBrush(QColor(12,23,29,105)); p.setPen(QPen(QColor(255,255,255,23),1)); p.drawRoundedRect(tile,18,18)
+        poster,icon=self.art; image=poster; cover=True
+        if icon is not None and not icon.isNull() and (poster is None or poster.isNull() or max(poster.width(),poster.height())<128 or not .5<=poster.width()/poster.height()<=2.5): image=icon; cover=False
+        if image is not None and not image.isNull():
+            p.save(); image_clip=QPainterPath(); image_clip.addRoundedRect(area,13,13); p.setClipPath(image_clip,Qt.IntersectClip)
+            ratio=image.width()/image.height()
+            if cover and .5<=ratio<=2.5:
+                size=min(image.width(),image.height()); source_rect=QRectF((image.width()-size)/2,(image.height()-size)/2,size,size)
+                p.setRenderHint(QPainter.SmoothPixmapTransform); p.drawPixmap(area,image,source_rect)
             else:
-                p.setPen(QColor('#c1d9d7')); p.setFont(QFont('Segoe UI',30,QFont.Bold))
-                initials=''.join(part[0] for part in self.game.name.split()[:2]).upper()
-                p.drawText(QRectF(0,38,self.width(),88),Qt.AlignCenter,initials)
-        fade=QLinearGradient(0,68,0,166); fade.setColorAt(0,QColor(25,33,38,0)); fade.setColorAt(1,QColor(PANEL)); p.fillRect(QRectF(0,60,self.width(),108),fade)
+                transform=Qt.FastTransformation if max(image.width(),image.height())<=64 else Qt.SmoothTransformation
+                scaled=image.scaled(144,144,Qt.KeepAspectRatio,transform)
+                p.drawPixmap(int(area.center().x()-scaled.width()/2),int(area.center().y()-scaled.height()/2),scaled)
+            p.restore()
+        else:
+            p.setPen(QColor('#c1d9d7')); p.setFont(QFont('Segoe UI',40,QFont.Bold))
+            initials=''.join(part[0] for part in self.game.name.split()[:2]).upper()
+            p.drawText(tile,Qt.AlignCenter,initials)
         source=self.t('Manual') if self.game.source=='Kézi' else self.t('Games folder') if self.game.source=='Games' else self.game.source
         if self.show_source:
             p.setFont(QFont('Segoe UI',8,QFont.DemiBold)); badge_width=p.fontMetrics().horizontalAdvance(source)+18
             p.setPen(Qt.NoPen); p.setBrush(QColor(12,22,25,205)); p.drawRoundedRect(QRectF(12,12,badge_width,23),7,7)
             p.setPen(QColor('#c5d9d5')); p.drawText(QRectF(21,12,badge_width-12,23),Qt.AlignVCenter,source)
         p.setFont(QFont('Segoe UI',11,QFont.DemiBold)); p.setPen(QColor(TEXT))
-        p.drawText(QRectF(15,164,self.width()-78,42),Qt.TextWordWrap|Qt.AlignVCenter,self.game.name)
+        p.drawText(QRectF(15,193,self.width()-78,42),Qt.TextWordWrap|Qt.AlignVCenter,self.game.name)
         p.setFont(QFont('Segoe UI',9)); p.setPen(QColor(MUTED))
         caption=(duration(self.seconds) if self.seconds else '') if self.game.installed else self.t('Removed')
-        p.drawText(QRectF(15,209,self.width()-30,17),Qt.AlignVCenter,caption)
+        p.drawText(QRectF(15,239,self.width()-30,17),Qt.AlignVCenter,caption)
         p.setClipping(False); p.setBrush(Qt.NoBrush); p.setPen(QPen(QColor(ACCENT if self.chosen else '#3b514e' if self.hovered else '#2b393f'),1.6 if self.chosen else 1))
         p.drawRoundedRect(rect,15,15)
 

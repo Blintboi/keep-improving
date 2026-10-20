@@ -84,7 +84,7 @@ class AssetClientInterfaceTests(unittest.TestCase):
         self.assertEqual(found[0].path,str(cover)); self.assertFalse(any('saves' in a.path or 'stone.png' in a.path for a in found))
         self.app.art.invalidate(); self.app.art.artwork(self.game,{str(self.exe):self.game.id}); self.settle()
         poster,icon=self.app.art.cache[self.app.art.key(self.game)]
-        self.assertEqual((poster.width(),poster.height()),(640,320)); self.assertIsNotNone(icon)
+        self.assertEqual((poster.width(),poster.height()),(600,300)); self.assertIsNotNone(icon)
         self.assertEqual(self.app.art.origins[self.app.art.key(self.game)],str(cover))
     def test_standalone_steam_id_reuses_matching_cache_only(self):
         steam=self.base/'Steam'; self.image(steam/'appcache/librarycache/42_header.jpg',(460,215))
@@ -113,13 +113,17 @@ class AssetClientInterfaceTests(unittest.TestCase):
         with patch('PySide6.QtGui.QImageReader.size') as size:
             from PySide6.QtCore import QSize
             size.return_value=QSize(100000,100000); self.assertIsNone(decode(Asset(str(huge),1)))
-    def test_minecraft_known_jar_logo_is_read_without_extraction(self):
+    def test_minecraft_known_jar_logo_and_square_icon_are_read_without_extraction(self):
         png=self.image(self.base/'fixture.png',(256,64)); jar=self.base/'versions/fixture/fixture.jar'; jar.parent.mkdir(parents=True)
+        icon=self.image(self.base/'pack.png',(128,128))
         member='assets/minecraft/textures/gui/title/minecraft.png'
-        with zipfile.ZipFile(jar,'w') as archive: archive.writestr(member,png.read_bytes()); archive.writestr('../../outside.png',png.read_bytes())
+        with zipfile.ZipFile(jar,'w') as archive:
+            archive.writestr(member,png.read_bytes()); archive.writestr('pack.png',icon.read_bytes()); archive.writestr('../../outside.png',png.read_bytes())
         game=Game('minecraft:java','Minecraft Java Edition','Minecraft',str(self.base))
-        found,_=candidates(game,[],{}); asset=next(a for a in found if a.member)
+        found,_=candidates(game,[],{}); asset=next(a for a in found if a.member==member)
         image=decode(asset); self.assertIsNotNone(image); self.assertEqual(image.width()/image.height(),4)
+        square=decode(next(a for a in found if a.member=='pack.png' and a.icon))
+        self.assertEqual((square.width(),square.height()),(128,128))
         self.assertFalse((self.base.parent/'outside.png').exists())
     def test_depth_drive_and_reparse_guards_keep_search_bounded(self):
         self.image(self.base/'a/b/c/d/e/splash.png')
@@ -162,6 +166,6 @@ class AssetClientInterfaceTests(unittest.TestCase):
         rendered=card.grab().toImage()
         green=sum(1 for y in range(30,140) for x in range(40,200)
                   if rendered.pixelColor(x,y).green()>100 and rendered.pixelColor(x,y).red()<30)
-        self.assertGreater(green,3500)  # A readable ~80 px mark, not the former ~13 px dot.
+        self.assertGreater(green,10000)  # The shared large tile, including a low-resolution shell icon.
 
 if __name__=='__main__': unittest.main()

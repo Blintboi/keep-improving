@@ -1,14 +1,14 @@
-# Játékidőfigyelő — 2.7.2
+# Játékidőfigyelő — 2.7.3
 
-**[Legfrissebb telepítő letöltése — 2.7.2 · Windows x64](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256)
+**[Legfrissebb telepítő letöltése — 2.7.3 · Windows x64](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256)
 
 A letöltött telepítőt indítsd el a telepítéshez vagy frissítéshez. A korábbi előzmények, beállítások és kizárások megmaradnak, és frissítés előtt biztonsági mentés készül.
 
 Windows 11-en futó, sötét felületű Gaming Hub és játékidőfigyelő egy alkalmazásban. A játékgyűjteményből közvetlenül indíthatod a játékokat, követheted az idődet és megnézheted a napi statisztikákat. A repó és a telepítő egyelőre **privát**. A másik gépen is hozzáférő GitHub-fiókkal jelentkezz be a letöltéshez.
 
-A 2.0-s felület Qt-ra váltott: letisztult sötét oldalsáv, átrendeződő játékkártyák, kör alakú napi keretjelző és új statisztikaoldal került bele. A kártyák meglévő helyi Steam-borítóképeket, telepített játékképeket és játékikonokat használnak, képletöltés nélkül. A borítóképek teljes egészükben, az eredeti oldalarányukat megtartva férnek a képmezőbe; a szabad hely sötét marad. A közös kontrolleres-órás alkalmazásikon megmaradt. A játék kezelését a saját kártyájának jobb felső sarkában lévő **…** menüben találod; a nyelvválasztó az oldalsáv alján van.
+A 2.0-s felület Qt-ra váltott: letisztult sötét oldalsáv, átrendeződő játékkártyák, kör alakú napi keretjelző és új statisztikaoldal került bele. A kártyák meglévő helyi Steam-borítóképeket, telepített játékképeket és játékikonokat használnak, képletöltés nélkül. A 2.7.3-tól minden játék azonos, nagy, lekerekített négyzetes képkeretet kap a színes háttér előtt. Az ikonok teljes alakja megmarad; a borítókból torzítás nélkül, középre igazított négyzetes kivágás készül. A kis pixelikonok betöltése nem nagyítja és homályosítja előre a forrást. A közös kontrolleres-órás alkalmazásikon megmaradt. A játék kezelését a saját kártyájának alsó részén, a neve mellett lévő **…** menüben találod; a nyelvválasztó az oldalsáv alján van.
 
-A rövidített felületen a mai és hátralévő idő, a játéknevek és a kezelőgombok maradnak előtérben. Az indítógomb a játék neve mellett jelenik meg. Nullás játékidő nem foglal helyet a kártyán; a forrásjelzés az azonos nevű játékokat különbözteti meg. A részletes súgó tooltipben érhető el, a további launcherútvonalakat a **Beállítások → Játékmappa → Haladó** részben találod.
+A rövidített felületen a mai és hátralévő idő, a játéknevek és a kezelőgombok maradnak előtérben. A játék nagy képére kattintva indíthatsz; a **…** menü a neve mellett van. Nullás játékidő nem foglal helyet a kártyán; a forrásjelzés az azonos nevű játékokat különbözteti meg. A részletes súgó tooltipben érhető el, a további launcherútvonalakat a **Beállítások → Játékmappa → Haladó** részben találod.
 
 ## Telepítés
 
@@ -22,7 +22,7 @@ Az asztalon egy közös **Gaming Hub** parancsikon marad a megszokott kontroller
 
 A 2.7.2-től a háttérben futó játékkeresés megtartja a meglévő kártyákat és képeket, így nem építi újra villogva a teljes rácsot. Változatlan találatoknál megmarad a kijelölés, a billentyűzetfókusz és a görgetési hely. Az új kép csak akkor váltja le a régit, ha már elkészült.
 
-A **Játéktár** a kezdőlap: színes játékcsempék, helyi borítóképek és ikonok, gyorsindítás és rendezés a mai játékidő szerint. Keress játéknevet, vagy szűrj forrásra, majd kattints közvetlenül a játék kártyáján lévő **Indítás** gombra. Egy kattintással indul, előzetes kijelölés és külön alsó kezelősáv nélkül. A kártyán dupla kattintás vagy Enter is indít. A Steam-, Epic-, Ubisoft- és Riot-játékot a megfelelő kliensen át, Minecraftot a launcherével vagy a meglévő hivatkozásával indítja; az eredeti parancsikon argumentumai megmaradnak. Egyértelmű, önálló EXE közvetlenül is indulhat.
+A **Játéktár** a kezdőlap: színes játékcsempék, helyi borítóképek és ikonok, gyorsindítás és rendezés a mai játékidő szerint. Keress játéknevet, vagy szűrj forrásra, majd kattints közvetlenül a játék nagy képére. Egy kattintással indul, előzetes kijelölés és külön alsó kezelősáv nélkül. A névre kattintás kijelöl; a kijelölt játék Enterrel is indítható. A Steam-, Epic-, Ubisoft- és Riot-játékot a megfelelő kliensen át, Minecraftot a launcherével vagy a meglévő hivatkozásával indítja; az eredeti parancsikon argumentumai megmaradnak. Egyértelmű, önálló EXE közvetlenül is indulhat.
 
 Ha több EXE közül kell választani, az **EXE hozzárendelése** gombbal egyszer jelöld ki a játék tényleges futtatható fájlját. Ezt az indításhoz és a méréshez is megjegyzi. A **Hozzáadás** is elmenti a választást. Az indítás előkészítése közben folytatódik az időmérés; a launcher megnyitása önmagában nem fogyasztja a keretet. A mérésből kizárt játékot is indíthatod, az eltávolítottat nem.
 
@@ -36,7 +36,7 @@ A kliensek az aktív játékkorlát mellett is megnyithatók, így a könyvtár,
 
 Minden játékkártyához háttérben keres helyi képet: az adott játék Steam-gyorsítótárában, a telepítési mappában és annak kép-, splash-, resource- és content-mappáiban. Az önálló játék `steam_appid.txt` fájlját is használhatja a megfelelő helyi Steam-kép azonosítására. Borítót, fejlécet, bannert, splash képet, címlogót vagy ikont keres. Minecraftnál a telepített verzió JAR-jából is beolvashatja az ismert címlogót, kicsomagolás és programfuttatás nélkül.
 
-A keresés korlátozott mélységű és idejű, nem járja be az egész meghajtót, nem követ mappahivatkozásokat, nem olvas launcherfiókokat, és kihagyja a mentéseket, képernyőképeket, modokat és naplókat. A sérült vagy túl nagy képeket átugorja. A saját/titkosított játékcsomagokat nem bontja ki. Ha nincs megfelelő helyi borító, játékikont vagy a tényleges EXE ikonját használja; végső esetben marad a monogram. Nem tölt le és nem talál ki borítókat. Az oldalarány megmarad, a szabad hely sötét marad.
+A keresés korlátozott mélységű és idejű, nem járja be az egész meghajtót, nem követ mappahivatkozásokat, nem olvas launcherfiókokat, és kihagyja a mentéseket, képernyőképeket, modokat és naplókat. A sérült vagy túl nagy képeket átugorja. A saját/titkosított játékcsomagokat nem bontja ki. Ha nincs megfelelő helyi borító, játékikont vagy a tényleges EXE ikonját használja; végső esetben marad a monogram. Nem tölt le és nem talál ki borítókat. A megjelenítés torzítás nélkül, a közös négyzetes képkeretben történik.
 
 A tálcamenü **Játékok és Hub frissítése** pontja a képkeresést is újraindítja. A játékfájlokat és előzményeket nem módosítja, a képeket nem tölti fel.
 

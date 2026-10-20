@@ -94,6 +94,7 @@ def candidates(game,roots,rules,stopped=lambda:False):
             jars=sorted((p for p in jars if p.is_file() and not reparse(p)),key=lambda p:p.stat().st_mtime,reverse=True)[:4]
             for jar in jars:
                 if jar.stat().st_size<128*1024*1024:
+                    assets.append(Asset(str(jar),100,True,'pack.png'))
                     assets.append(Asset(str(jar),95,False,'assets/minecraft/textures/gui/title/minecraft.png'))
         except (OSError,ValueError): pass
     assets=sorted(assets,key=lambda item:(-item.score,item.path.casefold()))
@@ -141,7 +142,8 @@ def decode(asset):
             reader.jumpToImage(best)
         size=reader.size()
         if not size.isValid() or min(size.width(),size.height())<24 or size.width()*size.height()>32_000_000: return None
-        reader.setAutoTransform(True); reader.setScaledSize(size.scaled(QSize(640,420),Qt.KeepAspectRatio))
+        reader.setAutoTransform(True)
+        if size.width()>640 or size.height()>420: reader.setScaledSize(size.scaled(QSize(640,420),Qt.KeepAspectRatio))
         image=reader.read()
         if image.isNull(): return None
         image.setDevicePixelRatio(1); return image

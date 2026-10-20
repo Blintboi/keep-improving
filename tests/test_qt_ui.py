@@ -332,6 +332,22 @@ class QtInterfaceTests(unittest.TestCase):
             hide=next(call.args[1] for call in menu.addAction.call_args_list if call.args[0]==self.app.t('Hide / restore'))
             hide(); self.assertIn(game.id,self.store.hidden_ids()); self.assertNotIn(self.games[0].id,self.store.hidden_ids())
 
+    def test_artwork_is_the_launch_button_footer_only_selects_and_double_click_starts_once(self):
+        from PySide6.QtCore import Qt,QPoint
+        from PySide6.QtTest import QTest
+        card=self.app.cards[self.games[0].id]; card.resize(260,260); card.grab()
+        self.assertGreater(card.play.width(),card.width()-5); self.assertEqual(card.play.y(),1)
+        self.assertGreater(card.more.y(),card.play.geometry().bottom())
+        self.assertGreater(card.more.x(),card.width()-60)
+        with patch.object(self.app,'launch_selected') as launch:
+            QTest.mouseClick(card,Qt.LeftButton,pos=QPoint(25,215)); launch.assert_not_called()
+            self.assertEqual(self.app.selected_id,card.game.id)
+            QTest.mouseClick(card.play,Qt.LeftButton)
+            QTest.mouseDClick(card.play,Qt.LeftButton); QTest.mouseRelease(card.play,Qt.LeftButton)
+            launch.assert_called_once()
+            card.set_state(0,False,False); QTest.mouseClick(card.play,Qt.LeftButton)
+            launch.assert_called_once()
+
     def test_removal_guide_close_never_executes(self):
         self.app.select_game(self.games[1].id)
         with patch('gametime.removal.execute') as execute:
@@ -390,15 +406,15 @@ class QtInterfaceTests(unittest.TestCase):
             self.app.load_next_art()
         self.app.render(); self.assertEqual(len(self.app.cards),3)
 
-    def test_wide_and_portrait_art_preserve_square_geometry(self):
+    def test_wide_and_portrait_covers_use_the_same_large_square_without_distortion(self):
         from PySide6.QtGui import QPixmap,QPainter,QColor
         from gametime.qt_widgets import GameCard
         for width,height in ((200,100),(100,200)):
             image=QPixmap(width,height); image.fill(QColor('#c02020'))
-            painter=QPainter(image); painter.fillRect(int(width*.6),10,20,20,QColor('#00ff00')); painter.end()
-            card=GameCard(self.games[0],self.app.t); card.resize(240,232); card.art=(image,None)
+            painter=QPainter(image); painter.fillRect(width//2-10,height//2-10,20,20,QColor('#00ff00')); painter.end()
+            card=GameCard(self.games[0],self.app.t); card.resize(240,260); card.art=(image,None)
             rendered=card.grab().toImage(); pixels=[]
-            for y in range(1,59):
+            for y in range(22,166):
                 for x in range(1,239):
                     color=rendered.pixelColor(x,y)
                     if color.green()>180 and color.red()<40 and color.blue()<40: pixels.append((x,y))
@@ -406,10 +422,23 @@ class QtInterfaceTests(unittest.TestCase):
             span_x=max(x for x,y in pixels)-min(x for x,y in pixels)
             span_y=max(y for x,y in pixels)-min(y for x,y in pixels)
             self.assertLessEqual(abs(span_x-span_y),2)
-            # Padding is present above wide art and beside portrait art.
-            sample=rendered.pixelColor(120,8) if width>height else rendered.pixelColor(45,30)
-            self.assertLess(sample.red(),80)
+            self.assertGreater(span_x,25)
+            self.assertGreater(rendered.pixelColor(120,25).red(),100)
+            self.assertLess(rendered.pixelColor(30,80).red(),100)
             card.deleteLater()
+
+    def test_small_and_large_icons_keep_the_same_visible_size(self):
+        from PySide6.QtGui import QPixmap,QColor
+        from gametime.qt_widgets import GameCard
+        bounds=[]
+        for size in (32,256):
+            image=QPixmap(size,size); image.fill(QColor('#00ff00'))
+            card=GameCard(self.games[0],self.app.t); card.resize(240,260); card.art=(None,image)
+            rendered=card.grab().toImage()
+            pixels=[(x,y) for y in range(15,175) for x in range(30,210) if rendered.pixelColor(x,y).green()>200 and rendered.pixelColor(x,y).red()<30]
+            bounds.append((min(x for x,y in pixels),max(x for x,y in pixels),min(y for x,y in pixels),max(y for x,y in pixels)))
+            card.deleteLater()
+        self.assertEqual(bounds[0],bounds[1]); self.assertGreater(bounds[0][1]-bounds[0][0],140)
 
     def test_small_window_is_responsive_and_cards_reflow(self):
         self.app.show(); self.app.resize(1000,700); self.pump()
