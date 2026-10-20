@@ -5,6 +5,8 @@ import hmac
 import json
 import os
 import re
+import random
+import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, HTTPRedirectHandler, build_opener
@@ -15,7 +17,7 @@ from .statistics_sync import ID, MAX_BYTES, MAX_DEVICES, SyncWorker, validate_sn
 CLOUD_FORMAT = 'GameTimeMonitor.sync.v1'
 CLOUD_CODE = re.compile(r'[0-9a-f]{32}')
 MAX_ENCRYPTED = 512 * 1024
-MAX_RESPONSE = 16 * 1024 * 1024
+MAX_RESPONSE = 2 * 1024 * 1024
 MAX_CLOUD_DEVICES = 20
 SERVICE_URL = 'https://jtvdbqwmejrckjejjrdl.supabase.co/functions/v1/statistics-sync'
 
@@ -89,6 +91,13 @@ class NoRedirect(HTTPRedirectHandler):
         return None
 
 
+class SyncUnavailable(OSError):
+    def __init__(self, message, retry_after=0, status=0):
+        super().__init__(message)
+        self.retry_after=retry_after
+        self.status=status
+
+
 class CloudSyncWorker(SyncWorker):
     failure_message = 'The synchronization service is unavailable. Sync will retry automatically.'
 
@@ -96,9 +105,21 @@ class CloudSyncWorker(SyncWorker):
         super().__init__()
         self.allow_local_http = allow_local_http
         self.published = {}
+        self.retries = {}
         self.opener = build_opener(NoRedirect())
 
+    def retry_delay(self, service, code):
+        return max(0,self.retries.get((service,code),(0,0))[0]-time.monotonic())
+
+    def failure_warning(self,error):
+        if getattr(error,'status',0)==403:
+            return 'Cloud sync is not enabled for this connection code. Local statistics are kept.'
+        if getattr(error,'status',0) in (429,507):
+            return 'The sync limit was reached. Local statistics are kept; synchronization will retry later.'
+        return self.failure_message
+
     def request(self, service, code, snapshot, known=None):
+        if self.retry_delay(service,code): return False
         return super().request(service, code, (snapshot, dict(known or {})))
 
     def post(self, service, authorization, body):
@@ -111,11 +132,24 @@ class CloudSyncWorker(SyncWorker):
                                    'Accept': 'application/json', 'User-Agent': 'GameTimeMonitor/statistics-v1'})
         try:
             with self.opener.open(request, timeout=12) as response:
-                raw = response.read(MAX_RESPONSE + 1)
-                if len(raw) > MAX_RESPONSE:
-                    raise ValueError('Invalid synchronized statistics.')
+                deadline=time.monotonic()+20; chunks=[]; size=0
+                while True:
+                    chunk=response.read1(min(65536,MAX_RESPONSE+1-size))
+                    if time.monotonic()>deadline: raise OSError(self.failure_message)
+                    if not chunk: break
+                    size+=len(chunk)
+                    if size>MAX_RESPONSE: raise ValueError('Invalid synchronized statistics.')
+                    chunks.append(chunk)
+                raw=b''.join(chunks)
                 return json.loads(raw.decode('utf-8'))
-        except (HTTPError, URLError, UnicodeError, RecursionError):
+        except HTTPError as error:
+            try:
+                header=error.headers.get('Retry-After','')
+                delay=min(86400,max(1,int(header))) if re.fullmatch(r'[0-9]{1,8}',header) else 0
+                if error.code in (401,403): delay=max(delay,3600)
+                raise SyncUnavailable(self.failure_message,delay,error.code) from None
+            finally: error.close()
+        except (URLError, UnicodeError, RecursionError):
             raise OSError(self.failure_message) from None
 
     def exchange(self, token, job):
@@ -133,10 +167,17 @@ class CloudSyncWorker(SyncWorker):
         version = str(snapshot['revision'])
         body = dict(format=CLOUD_FORMAT, device=snapshot['device'], revision=version, known=known,
                     payload=None if self.published.get(cache_key) == version else seal(snapshot, code))
-        result = self.post(service, authorization, body)
-        if isinstance(result, dict) and result.get('need_upload') is True and body['payload'] is None and self.current(token):
-            body['payload'] = seal(snapshot, code)
+        try:
             result = self.post(service, authorization, body)
+            if isinstance(result, dict) and result.get('need_upload') is True and body['payload'] is None and self.current(token):
+                body['payload'] = seal(snapshot, code)
+                result = self.post(service, authorization, body)
+        except (OSError,ValueError) as error:
+            failures=min(7,self.retries.get((service,code),(0,0))[1]+1)
+            delay=max(getattr(error,'retry_after',0),min(3600,30*2**failures)+random.uniform(0,15))
+            if len(self.retries)>=8: self.retries.clear()
+            self.retries[service,code]=(time.monotonic()+delay,failures)
+            raise
         if (not isinstance(result, dict) or result.get('format') != CLOUD_FORMAT or result.get('need_upload') is not False
                 or not isinstance(result.get('snapshots'), list) or len(result['snapshots']) > MAX_CLOUD_DEVICES):
             raise ValueError('Invalid synchronized statistics.')
@@ -147,6 +188,7 @@ class CloudSyncWorker(SyncWorker):
                 raise ValueError('Invalid synchronized statistics.')
             seen.add(value['device']); values.append(value)
         if self.current(token):
+            self.retries.pop((service,code),None)
             if len(self.published) >= 8:
                 self.published.clear()
             self.published[cache_key] = version

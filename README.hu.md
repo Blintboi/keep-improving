@@ -1,8 +1,10 @@
-# Játékidőfigyelő — 2.8.0
+# Játékidőfigyelő — 2.9.0
 
-**[Legfrissebb telepítő letöltése — 2.8.0 · Windows x64](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256)
+**[Legfrissebb telepítő letöltése — 2.9.0 · Windows x64](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256)
 
 A letöltött telepítőt indítsd el a telepítéshez vagy frissítéshez. A korábbi előzmények, beállítások és kizárások megmaradnak, és frissítés előtt biztonsági mentés készül.
+
+A 2.9.0 Windows-fiókhoz kötött védelemmel tárolja az összekapcsolási kódot, szigorú szerveroldali kvótákat és adatellenőrzést használ, törli a 90 napja inaktív szervermásolatokat, és hiba esetén ritkítja az újrapróbálkozást. A meglévő gépkapcsolatok működnek. **Új felhőcsoporthoz jelenleg üzemeltetői engedély kell; a szabad nyilvános regisztráció még zárva van.** A védelmek és a nyitás előfeltételei a [biztonsági leírásban](SECURITY.md) találhatók.
 
 A 2.7.4 kevesebb felesleges háttérmunkát végez: a rejtett vagy minimalizált ablak a játéktárat és a statisztikanézetet visszanyitáskor frissíti, az üres feldolgozási várólistákat ritkábban ellenőrzi, az overlay gyors időzítője pedig csak játék vagy előnézet közben fut. A tálcán tovább működik az időmérés, a figyelmeztetés és a szinkronizálás.
 
@@ -102,11 +104,13 @@ A **Statisztikák → Gépek összekapcsolása** vagy a Beállítások azonos ne
 3. A másik gépen ugyanebbe az ablakba illeszd be ugyanazt a kódot, és mentsd el.
 4. A **Szinkronizálás** gombbal azonnal frissíthetsz. Egyébként a program futás közben általában percenként, változatlan adatoknál fokozatosan ritkítva, legfeljebb ötpercenként szinkronizál.
 
-Minden felhasználó saját, véletlenszerű kódot használ. A kód hozzáférést ad a csoporthoz, és ebből származik a titkosítási kulcs is, ezért tartsd titokban: aki ismeri, hozzákapcsolhat egy gépet. Az **Új kód** külön csoportot indít; ezt minden összekapcsolni kívánt gépen meg kell adni.
+Minden felhasználó saját, véletlenszerű kódot használ. A kód hozzáférést ad a csoporthoz, és ebből származik a titkosítási kulcs is, ezért tartsd titokban: aki ismeri, hozzákapcsolhat egy gépet. Az **Új kód** külön csoportot választ, amelyhez előbb szerveroldali engedély szükséges. Az engedélyezett kódot minden összekapcsolni kívánt gépen meg kell adni.
 
 A **Gépek** listában az összesített előzmény, az aktuális gép vagy egy másik gép külön is megtekinthető. Az átlag a kiválasztott gépek közül a legkorábbi követéskezdethez igazodik. Az ismételt frissítés nem adja hozzá újra ugyanazt az időt. A launcherazonosítók alapján ugyanaz a játék közös sorba kerül; a kézzel felvett és önálló játékok azonos forrás és normalizált név alapján kapcsolódnak össze.
 
 Csak a gép neve, a játéknevek/források és a játékonkénti napi mért idő kerül át, a gépen titkosítva a Supabase-szerverre való feltöltés előtt. A kód és a titkosítási kulcs nem kerül a szerverhez. A napi keret, a korlátozás, a kizárások, a parancsikonok és az EXE-útvonalak gépenként maradnak. Minden gép saját SQLite-adatbázist használ. A szinkronizálás alapból kikapcsolt. Internetkimaradásnál a mérés folytatódik, az utolsó átvett adatok megmaradnak, és a program később újrapróbálja. Kikapcsoláskor a már átvett előzmények helyben továbbra is elérhetők.
+
+A 2.9.0-tól a mentett kódot a Windows DPAPI az aktuális Windows-fiókhoz köti. Másik fiókba átmásolt adatbázisnál ugyanazt a kódot újra meg kell adni. A régi biztonsági mentések még tartalmazhatják a korábban nyíltan tárolt kódot; tartsd őket bizalmasan. A 90 napja nem használt szervermásolatok lejárnak, a helyi előzmények és a korábban átvett statisztikák megmaradnak. Visszacsatlakozáskor a gép újratöltheti saját előzményeit. Kvótatúllépés csak a felhőszinkront késlelteti; az ingyenes háttér nem garantál folyamatos elérhetőséget támadó kérésáradat esetén.
 
 A háttér a Supabase **Free**, ingyenes csomagját használja, annak kapacitási és inaktivitási korlátaival. A program nem vált fizetős csomagra. [A szolgáltató aktuális keretei](https://supabase.com/pricing). Egy kóddal legfeljebb 20 gép kapcsolható össze. A 2.6-os változat frissítése megőrzi az előzményeket, de kikapcsolja a régi mappás szinkront; az internetes összekapcsoláshoz új kódot kell létrehozni.
 
@@ -122,7 +126,7 @@ Minden játék azonos szabályok szerint számít. Amit nem szeretnél mérni, a
 
 ## Adatok és eltávolítás
 
-Nincs telemetria. A program helyi telepítési jegyzékeket, folyamatútvonalakat és parancsikonokat olvas. A külön bekapcsolt statisztikaszinkron csak a kiválasztott közös mappába ír; az esetleges felhős továbbítást a saját fájlszinkronizálód végzi. Előzménymentés előtt lépj ki a tálcamenüből, majd másold ki az adatkönyvtárat.
+Nincs általános telemetria. A program helyi telepítési jegyzékeket, folyamatútvonalakat és parancsikonokat olvas. A külön bekapcsolt statisztikaszinkron titkosított csomagokat továbbít a Supabase-háttérhez; a szolgáltató a hálózati kérésekről is vezethet naplót. Előzménymentés előtt lépj ki a tálcamenüből, majd másold ki az adatkönyvtárat.
 
 A figyelőt a Windows **Gépház → Alkalmazások → Telepített alkalmazások → Game Time Monitor → Eltávolítás** útvonalon távolíthatod el. Az alkalmazás saját asztali ikonja eltűnik, a játékok, a kiegészítő mappa parancsikonjai és az előzmények megmaradnak. A részletes fejlesztői, hibakeresési és tesztleírás az [angol dokumentációban](README.md) található.
 

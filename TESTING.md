@@ -2,6 +2,47 @@
 
 Use isolated temporary profiles and synthetic game installations. Never uninstall a real user game to test removal; mock the execution boundary.
 
+## 2.9.0 security hardening
+
+The full **311-test** application suite passed in **143.766 seconds** on the
+final CPython **3.13.16 / OpenSSL 3.5.9** runtime. Credential, cloud, snapshot and
+Qt regressions cover snapshot-only legacy migration, mixed cache revisions and
+unadmitted codes. Tests use temporary databases and HTTP
+fixtures: DPAPI roundtrip/tamper rejection, unchanged encrypted saves, another
+Windows user's credential failure, active database/WAL plaintext removal,
+lossless cache/history/revision migration, `Retry-After`, backoff and recovery.
+
+All 12 Node handler tests passed: strict schema/ciphertext, size/deadline limits,
+cancelled rejected uploads, admission before allocation, credential/group
+isolation, trusted-last proxy hashing, bounded cache/concurrency/retry hints and
+generic errors. `sync_backend/tests/hardening.sql` passed against the actual
+PostgreSQL project, rolling back admission/isolation/replay/quota/kill-switch/
+pagination/retention/accounting fixtures. The hourly retention job is active.
+
+Live HTTPS checks passed for two synthetic encrypted profiles, existing user
+connectivity, unknown group rejection, no-store responses, malformed credential,
+schema, ciphertext and content type. Oversized HTTP probes stalled at the
+provider ingress and hit the probe's network timeout; an HTTP 413 response was
+not established live. Oversize rejection/cancellation is verified locally and
+no probe allocated unexpected database rows. All synthetic groups/devices were
+removed; the original group, two devices, 872 ciphertext bytes and exact storage
+counters remained. No load/flood test was performed against the Free project.
+
+Supabase security advisors reported no errors/warnings; four informational
+RLS-without-policy notices describe intentionally service-only tables. The new
+retention index has an informational unused-index notice on this tiny database.
+See [the advisor explanation](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy).
+The pinned Python dependency audit found no known vulnerabilities; SHA-256
+locked Windows wheels were downloaded and verified before building. This does
+not establish absence of unknown vulnerabilities, publisher signing, operator
+MFA, public onboarding or DDoS resistance. See [launch status](SECURITY.md).
+
+The Python distribution archive was checked against the official release
+manifest SHA-256 before extraction. The build rejects an older Python/OpenSSL
+baseline. Source installation has 20 passing checks on the new runtime. The
+standalone smoke has 37 checks, including legacy credential/cache migration in
+the actual frozen GUI, with synchronization disabled on its isolated fixture.
+
 ```powershell
 python -B -m unittest discover -s tests -v
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\install_smoke.ps1 -ReportPath test-reports\source-install.json

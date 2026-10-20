@@ -26,7 +26,7 @@ DAY = date.today().isoformat()
 class Relay:
     """Protocol fixture, not a replacement for testing the Supabase SQL/RLS."""
     def __init__(self):
-        self.rows = {}; self.requests = []; self.status = 200; self.corrupt = False
+        self.rows = {}; self.requests = []; self.status = 200; self.corrupt = False; self.retry_after=None
         relay = self
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, *args): pass
@@ -47,6 +47,7 @@ class Relay:
                     result['snapshots'][0]['payload'] = 'broken'
                 raw = json.dumps(result).encode()
                 self.send_response(relay.status); self.send_header('Content-Type', 'application/json')
+                if relay.retry_after is not None: self.send_header('Retry-After',relay.retry_after)
                 self.send_header('Content-Length', str(len(raw))); self.end_headers(); self.wfile.write(raw)
         self.server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
         self.url = 'http://127.0.0.1:' + str(self.server.server_port)
@@ -170,6 +171,28 @@ class StatisticsCloudTests(unittest.TestCase):
         token, values, warning = self.worker.results.get(timeout=3)
         self.assertEqual(warning, self.worker.failure_message); self.assertFalse(values)
         self.relay.status = 200
+        self.worker.retries.clear()
         self.worker.request(self.relay.url, CODE, self.snapshot(), {})
         token, values, warning = self.worker.results.get(timeout=3)
         self.assertFalse(warning)
+
+    def test_failed_background_requests_wait_and_success_resets_backoff(self):
+        self.relay.status=429
+        self.relay.retry_after='3600'
+        self.worker.request(self.relay.url,CODE,self.snapshot(),{})
+        self.worker.results.get(timeout=3)
+        self.assertGreaterEqual(self.worker.retry_delay(self.relay.url,CODE),3599)
+        count=len(self.relay.requests)
+        self.assertFalse(self.worker.request(self.relay.url,CODE,self.snapshot(),{}))
+        self.assertEqual(len(self.relay.requests),count)
+        self.relay.status=200
+        self.worker.exchange((self.relay.url,CODE,0),(self.snapshot(),{}))
+        self.assertEqual(self.worker.retry_delay(self.relay.url,CODE),0)
+
+    def test_unadmitted_code_is_explained_without_leaking_server_errors(self):
+        self.relay.status=403
+        self.worker.request(self.relay.url,CODE,self.snapshot(),{})
+        token,values,warning=self.worker.results.get(timeout=3)
+        self.assertFalse(values)
+        self.assertEqual(warning,'Cloud sync is not enabled for this connection code. Local statistics are kept.')
+        self.assertGreaterEqual(self.worker.retry_delay(self.relay.url,CODE),3599)

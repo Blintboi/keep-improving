@@ -33,6 +33,10 @@ def group_code(value):
 def display_code(value):
     return '-'.join(value[i:i+4].upper() for i in range(0, len(value), 4))
 
+def local_group(group):
+    if not group or group.startswith('local-v1:'): return group
+    return 'local-v1:'+hashlib.sha256(('GameTimeMonitor/local-group/v1\0'+group).encode()).hexdigest()
+
 
 def computer_name():
     return socket.gethostname()[:80] or 'Computer'
@@ -98,6 +102,37 @@ class StatisticsData:
               seconds REAL NOT NULL,
               PRIMARY KEY(group_id, device_id, day, game_id));
         ''')
+        self._migrate_group_labels()
+        store.checkpoint_credentials()
+
+    def _migrate_group_labels(self):
+        # Routing labels and snapshot-state keys must not duplicate the secret.
+        groups={row[0] for row in self.store.db.execute('SELECT group_id FROM statistics_devices UNION SELECT group_id FROM statistics_remote') if GROUP.fullmatch(row[0])}
+        migrated=bool(groups)
+        with self.store.db:
+            for group in groups:
+                label=local_group(group)
+                for identity,revision in self.store.db.execute('SELECT device_id,revision FROM statistics_devices WHERE group_id=?',(group,)).fetchall():
+                    current=self.store.db.execute('SELECT revision FROM statistics_devices WHERE group_id=? AND device_id=?',(label,identity)).fetchone()
+                    if current and current[0]>=revision:
+                        self.store.db.execute('DELETE FROM statistics_remote WHERE group_id=? AND device_id=?',(group,identity))
+                        self.store.db.execute('DELETE FROM statistics_devices WHERE group_id=? AND device_id=?',(group,identity))
+                    else:
+                        self.store.db.execute('DELETE FROM statistics_remote WHERE group_id=? AND device_id=?',(label,identity))
+                        self.store.db.execute('DELETE FROM statistics_devices WHERE group_id=? AND device_id=?',(label,identity))
+                        self.store.db.execute('UPDATE statistics_devices SET group_id=? WHERE group_id=? AND device_id=?',(label,group,identity))
+                self.store.db.execute('UPDATE OR IGNORE statistics_remote SET group_id=? WHERE group_id=?',(label,group))
+                self.store.db.execute('DELETE FROM statistics_remote WHERE group_id=?',(group,))
+            for key,value in self.store.db.execute("SELECT key,value FROM settings WHERE key LIKE 'statistics_snapshot:%'").fetchall():
+                group=key.partition(':')[2]
+                if GROUP.fullmatch(group):
+                    migrated=True
+                    new_key='statistics_snapshot:'+local_group(group)
+                    current=self.store.db.execute('SELECT value FROM settings WHERE key=?',(new_key,)).fetchone()
+                    if not current or json.loads(current[0])['revision']<json.loads(value)['revision']:
+                        self.store.db.execute('INSERT OR REPLACE INTO settings VALUES (?,?)',(new_key,value))
+                    self.store.db.execute('DELETE FROM settings WHERE key=?',(key,))
+            if migrated: self.store._secret_migrated=True
 
     def device_id(self):
         row = self.store.db.execute("SELECT value FROM settings WHERE key='statistics_device_id'").fetchone()
@@ -119,7 +154,7 @@ class StatisticsData:
         value = dict(format=FORMAT, group=group, device=self.device_id(),
                      name=name or computer_name(), started=self.store.tracking_started_on(), rows=self.local_rows())
         digest = hashlib.sha256(json.dumps(value, ensure_ascii=False, allow_nan=False).encode()).hexdigest()
-        key = 'statistics_snapshot:' + group
+        key = 'statistics_snapshot:' + local_group(group)
         row = self.store.db.execute('SELECT value FROM settings WHERE key=?', (key,)).fetchone()
         old = json.loads(row[0]) if row else {}
         revision = old.get('revision', 0)
@@ -135,7 +170,7 @@ class StatisticsData:
         validate_snapshot(value, group)
         if value['device'] == self.device_id():
             return False
-        key = (group, value['device'])
+        key = (local_group(group), value['device'])
         old = self.store.db.execute('SELECT revision FROM statistics_devices WHERE group_id=? AND device_id=?', key).fetchone()
         if old and old[0] >= value['revision']:
             return False
@@ -148,17 +183,17 @@ class StatisticsData:
         return True
 
     def devices(self, group):
-        return list(self.store.db.execute('SELECT device_id,name,started FROM statistics_devices WHERE group_id=? ORDER BY name,device_id', (group,)))
+        return list(self.store.db.execute('SELECT device_id,name,started FROM statistics_devices WHERE group_id=? ORDER BY name,device_id', (local_group(group),)))
 
     def revisions(self, group):
         return {identity: str(revision) for identity, revision in self.store.db.execute(
-            'SELECT device_id,revision FROM statistics_devices WHERE group_id=?', (group,))}
+            'SELECT device_id,revision FROM statistics_devices WHERE group_id=?', (local_group(group),))}
 
     def history(self, start, end, group, scope='all'):
         rows = self.local_rows(start, end) if scope in ('all', 'local') else []
         if group and scope != 'local':
             sql = 'SELECT day,game_id,name,source,seconds FROM statistics_remote WHERE group_id=? AND day>=? AND day<=?'
-            args = [group, str(start), str(end)]
+            args = [local_group(group), str(start), str(end)]
             if scope != 'all':
                 sql += ' AND device_id=?'; args.append(scope)
             rows += list(self.store.db.execute(sql, args))
@@ -172,7 +207,7 @@ class StatisticsData:
                      FROM statistics_remote r JOIN statistics_devices d
                      ON d.group_id=r.group_id AND d.device_id=r.device_id
                      WHERE r.group_id=? AND r.day>=? AND r.day<=?'''
-            args = [group, str(start), str(end)]
+            args = [local_group(group), str(start), str(end)]
             if scope != 'all':
                 sql += ' AND r.device_id=?'; args.append(scope)
             rows += list(self.store.db.execute(sql, args))
@@ -187,6 +222,7 @@ class StatisticsData:
 class SyncWorker:
     """Bounded background file I/O; never touches SQLite, widgets or launchers."""
     failure_message = 'The shared folder is unavailable. Sync will retry automatically.'
+    def failure_warning(self,error): return self.failure_message
     def __init__(self):
         self.jobs = Queue(maxsize=1)
         self.results = Queue()
@@ -270,20 +306,21 @@ class SyncWorker:
 
     def run(self):
         while not self.stopping.is_set():
-            try:
-                token, snapshot = self.jobs.get(timeout=.2)
-            except Empty:
-                continue
+            job=self.jobs.get()
+            if job is None: break
+            token,snapshot=job
             if not self.current(token):
                 continue
             try:
                 values, warning = self.exchange(token, snapshot)
-            except (OSError, ValueError):
-                values, warning = [], self.failure_message
+            except (OSError, ValueError) as error:
+                values, warning = [], self.failure_warning(error)
             if self.current(token):
                 self.results.put((token, values, warning))
 
     def close(self):
         self.stopping.set()
+        try: self.jobs.put_nowait(None)
+        except Full: pass
         if self.thread:
             self.thread.join(timeout=.25)

@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import sqlite3
 from .model import Game, Settings, norm, LAUNCHER_SOURCES
+from .secrets import PREFIX,protect,unprotect
 
 
 class Store:
@@ -12,6 +13,8 @@ class Store:
         self.db = sqlite3.connect(str(path), timeout=5)
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA synchronous=FULL")
+        self.db.execute("PRAGMA secure_delete=ON")
+        self.credentials_unavailable=False; self._unavailable_credential=''; self._secret_migrated=False
         self.db.executescript("""
             CREATE TABLE IF NOT EXISTS games (
               id TEXT PRIMARY KEY, name TEXT NOT NULL, source TEXT NOT NULL,
@@ -65,13 +68,39 @@ class Store:
         if 'statistics_sync_folder' in config:
             config.pop('statistics_sync_folder')
             config['statistics_sync_enabled'] = False
-        return Settings(**config)
+        credential=config.get('statistics_sync_group','')
+        if credential.startswith(PREFIX):
+            try:
+                config['statistics_sync_group']=unprotect(credential)
+                self.credentials_unavailable=False; self._unavailable_credential=''
+            except (OSError,ValueError):
+                self.credentials_unavailable=True; self._unavailable_credential=credential
+                config['statistics_sync_group']=''; config['statistics_sync_enabled']=False
+        settings=Settings(**config)
+        if credential and not credential.startswith(PREFIX):
+            self.save_settings(settings); self._secret_migrated=True
+        return settings
 
     def save_settings(self, settings):
         settings.validate()
+        config=asdict(settings); credential=settings.statistics_sync_group
+        if credential:
+            current=self.db.execute("SELECT value FROM settings WHERE key='config'").fetchone()
+            saved=json.loads(current[0]).get('statistics_sync_group','') if current else ''
+            try: reuse=saved.startswith(PREFIX) and unprotect(saved)==credential
+            except (OSError,ValueError): reuse=False
+            config['statistics_sync_group']=saved if reuse else protect(credential)
+            self.credentials_unavailable=False; self._unavailable_credential=''
+        elif self._unavailable_credential:
+            config['statistics_sync_group']=self._unavailable_credential
         with self.db:
             self.db.execute("INSERT OR REPLACE INTO settings VALUES ('config',?)",
-                            (json.dumps(asdict(settings), ensure_ascii=False),))
+                            (json.dumps(config, ensure_ascii=False),))
+
+    def checkpoint_credentials(self):
+        if self._secret_migrated:
+            self.db.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+            self._secret_migrated=False
 
     def games(self, installed_only=False):
         sql = "SELECT id,name,source,root,metadata,installed FROM games"

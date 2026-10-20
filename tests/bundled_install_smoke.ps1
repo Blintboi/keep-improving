@@ -67,6 +67,18 @@ try {
     if ($process.ExitCode -ne 0) { throw 'Language selection failed.' }
     'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); c.update(restriction_enabled=True,restriction_seconds=7500,overlay_enabled=True,overlay_replace_warning=True,limit_popup_enabled=False,overlay_opacity=0.55,overlay_x=0.2,overlay_y=0.8,overlay_screen="missing-fixture-monitor",overlay_rtss_auto=False,overlay_rtss_paths=[r"C:\Fixture\game.exe"]); d.execute("UPDATE settings SET value=? WHERE key=?",(json.dumps(c),"config")); d.commit()' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     if ($LASTEXITCODE -ne 0) { throw 'Overlay fixture settings failed.' }
+    @'
+import json,sqlite3,sys
+d=sqlite3.connect(sys.argv[1]); code='1'*32; day='2026-01-01'
+c=json.loads(d.execute("SELECT value FROM settings WHERE key='config'").fetchone()[0])
+c.update(statistics_sync_group=code,statistics_sync_enabled=False)
+d.execute("UPDATE settings SET value=? WHERE key='config'",(json.dumps(c),))
+d.execute('INSERT INTO statistics_devices VALUES (?,?,?,?,?)',(code,'a'*32,'Other fixture PC',99,day))
+d.execute('INSERT INTO statistics_remote VALUES (?,?,?,?,?,?,?)',(code,'a'*32,day,'steam:42','Example','Steam',120))
+d.execute('INSERT INTO settings VALUES (?,?)',('statistics_snapshot:'+code,json.dumps({'revision':99,'digest':'fixture'})))
+d.commit(); d.close()
+'@ | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    if ($LASTEXITCODE -ne 0) { throw 'Legacy credential fixture failed.' }
     $trackingStart = 'import sqlite3,sys; d=sqlite3.connect(sys.argv[1]); print(d.execute("SELECT value FROM settings WHERE key=?",("tracking_started_on",)).fetchone()[0])' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
     $report.startup_registered = (Get-ItemPropertyValue -LiteralPath $runKey -Name $name) -like ('"' + $exe + '" --background*')
@@ -98,6 +110,26 @@ try {
     'preserve' | Set-Content -LiteralPath $foreign
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $setup -InstallDir $app -DataDir $data -GamesRoot $games -DesktopDir $desktop -StartupName $name -Quiet -NoStart
     if ($LASTEXITCODE -ne 0) { throw 'Upgrade failed.' }
+    # Run the actual frozen startup migration, with cloud sync disabled.
+    $securityGui=Start-Process -FilePath $exe -ArgumentList @('--background','--data-dir',('"'+$data+'"')) -WindowStyle Hidden -PassThru
+    try {
+        Start-Sleep -Seconds 2
+        $stop=Start-Process -FilePath $exe -ArgumentList @('--stop-wait','20','--data-dir',('"'+$data+'"')) -WindowStyle Hidden -Wait -PassThru
+        if ($stop.ExitCode -ne 0 -or -not $securityGui.WaitForExit(10000)) { throw 'Frozen credential migration did not stop safely.' }
+    } finally { if (-not $securityGui.HasExited) { Stop-Process -Id $securityGui.Id -Force } }
+    $credentialCheck=@'
+import json,sqlite3,sys
+from pathlib import Path
+from gametime.secrets import PREFIX,unprotect
+from gametime.statistics_sync import local_group
+p=Path(sys.argv[1]); d=sqlite3.connect(p); code='1'*32
+c=json.loads(d.execute("SELECT value FROM settings WHERE key='config'").fetchone()[0])
+print(c['statistics_sync_group'].startswith(PREFIX) and unprotect(c['statistics_sync_group'])==code and not c['statistics_sync_enabled'])
+print(d.execute('SELECT name,revision FROM statistics_devices WHERE group_id=?',(local_group(code),)).fetchone()==('Other fixture PC',99) and d.execute('SELECT seconds FROM statistics_remote WHERE group_id=?',(local_group(code),)).fetchone()==(120.0,))
+d.close()
+'@ | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    $report.windows_credential_protected_on_upgrade=$credentialCheck[0] -eq 'True'
+    $report.cached_statistics_migrated_on_upgrade=$credentialCheck[1] -eq 'True'
     $process = Start-Process -FilePath $exe -ArgumentList @('--diagnose','--data-dir',('"' + $data + '"'),'--report',('"' + $diag + '"')) -WindowStyle Hidden -Wait -PassThru
     $report.obsolete_owned_file_removed = -not (Test-Path -LiteralPath $obsoleteOwned)
     $report.modified_obsolete_file_preserved = (Get-Content -LiteralPath $obsoleteEdited) -eq 'user modified document'

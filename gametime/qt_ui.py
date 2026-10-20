@@ -234,6 +234,7 @@ class App(QMainWindow,MonitorActions):
         if self.assets_timer.interval()!=interval: self.assets_timer.setInterval(interval)
 
     def statistics_sync_status(self):
+        if self.store.credentials_unavailable: return self.t('Enter your connection code again on this Windows account to reconnect.')
         if not self.settings.statistics_sync_enabled: return self.t('Statistics sync is off.')
         if self._sync_status=='Statistics synchronized.':
             return self.t('Statistics synchronized · {count} computers',count=1+len(self.statistics_data.devices(self.settings.statistics_sync_group)))
@@ -245,6 +246,7 @@ class App(QMainWindow,MonitorActions):
 
     def request_statistics_sync(self):
         if self.closed or self._sync_busy or not self.settings.statistics_sync_enabled: return
+        if self.statistics_sync.retry_delay(SERVICE_URL,self.settings.statistics_sync_group): return
         self._sync_attempted=time.monotonic()
         try:
             if not SERVICE_URL: raise ValueError('The synchronization service is not configured yet.')

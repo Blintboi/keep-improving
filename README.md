@@ -1,12 +1,14 @@
 # Game Time Monitor
 
-**[Download the latest installer — 2.8.0 · Windows x64](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256)
+**[Download the latest installer — 2.9.0 · Windows x64](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256)
 
 Run the downloaded installer to install or update the app. Existing history, settings and exclusions are kept, with a backup before upgrading. [Magyar útmutató](README.hu.md).
 
 An offline Windows 11 Gaming Hub and game-time monitor in one app. Launch games from a searchable library, measure foreground gameplay against a shared daily budget, and follow daily statistics in a dark English/Hungarian interface.
 
-**Private preview 2.8.0.** The repository and installer remain private. Sign into GitHub with an account that has access on your other PC. Optional encrypted synchronization combines statistics from your computers using the same connection code, without a shared folder.
+**Private preview 2.9.0.** The repository and installer remain private. Sign into GitHub with an account that has access on your other PC. Optional encrypted synchronization combines statistics from your computers using the same connection code, without a shared folder.
+
+Version 2.9.0 adds Windows-user-bound credential protection, server admission and transactional request/storage/traffic limits, expiry of inactive server snapshots, and client retry backoff. Existing linked computers keep working. **New cloud groups currently require operator approval; unrestricted public signup is closed.** See [security, launch status and remaining limitations](SECURITY.md).
 
 Version 2.7.4 reduces idle background work: the hidden/minimized Hub defers library and statistics refreshes until restored, empty worker queues are polled less often, and the countdown's fast timer runs only during tracked gameplay or preview. Time accounting, reminders and synchronization continue in the tray.
 
@@ -62,9 +64,11 @@ From 2.7.1, the connection code is hidden each time you open **Link computers**.
 
 Install version 2.7.0 or later on each computer. Open **Statistics → Link computers** (also available in Settings), name the first computer, copy its generated code, and save with automatic synchronization enabled. On your other computer, enter that same code and save. No shared folder or separate player account is needed. **Sync now** refreshes immediately. Automatic exchange runs while the app is running, normally once a minute and gradually slowing to once every five minutes when nothing changes.
 
-Each user uses their own randomly generated code. The code is both the connection secret and the source of the encryption key: keep it private, because anyone who knows it can link a computer. **New code** starts a separate group; enter it on all computers you want in that group. The **Computers** selector shows all linked computers, this computer, or an individual remote computer. Averages start at the earliest monitoring date among the selected computers. Launcher IDs match the same game across computers; standalone/manual entries match by source and normalized title.
+Each user uses their own randomly generated code. The code is both the connection secret and the source of the encryption key: keep it private, because anyone who knows it can link a computer. **New code** selects a separate group that needs server approval before cloud synchronization; enter the approved code on all computers you want in that group. The **Computers** selector shows all linked computers, this computer, or an individual remote computer. Averages start at the earliest monitoring date among the selected computers. Launcher IDs match the same game across computers; standalone/manual entries match by source and normalized title.
 
 Only the computer name, game names/sources and cumulative daily recorded time are exchanged, encrypted on the computer before upload to the hosted Supabase service. The connection code and encryption key are not sent to the server. Repeated synchronization replaces a computer's previous snapshot without adding it twice; imported data is never republished. Daily budgets, restrictions, exclusions, launch paths and settings remain local. Each installation keeps its own SQLite database. Offline tracking and cached statistics remain available; sync retries automatically when the service is reachable. Disabling sync retains previously received history locally. Synchronization is off until you enable it.
+
+From 2.9.0, the saved code is protected by Windows DPAPI for the current Windows account. On another account, re-enter the same code to reconnect. Old backup copies can contain the old plaintext credential; keep backups private. Server snapshots inactive for 90 days expire; full local history and downloaded caches remain. A reconnecting computer can reupload its own history. Server quotas delay cloud exchange without stopping local tracking. Free hosting does not guarantee availability against request floods.
 
 The backend uses the Supabase **Free** plan and is subject to its capacity limits and inactivity pausing; it is not unlimited hosting. No paid upgrade is performed by the application. See [current provider limits](https://supabase.com/pricing). Up to 20 computers can share a code. Upgrading from 2.6 preserves history but turns off the old folder synchronization; create a new connection code for internet synchronization.
 
@@ -143,7 +147,7 @@ Remove the monitor via **Windows Settings → Apps → Installed apps → Game T
 
 ## Develop and build
 
-Source uses Python 3.10+ and Qt for Python, pinned in `requirements-runtime.txt`. The standalone build targets **Windows 11 x64**, tested with CPython 3.12.10. ARM64 and 32-bit builds are not provided/tested.
+Source uses Python 3.10+ and Qt for Python, pinned in `requirements-runtime.txt`. Release builds require patched **CPython 3.13.16 / OpenSSL 3.5.9 or newer** and target **Windows 11 x64**. The locked wheels target CPython 3.13 x64. ARM64 and 32-bit builds are not provided/tested.
 
 ```powershell
 python -m pip install -r requirements-runtime.txt
@@ -157,7 +161,7 @@ Build on Windows x64 with Python, PowerShell and built-in IExpress:
 
 ```powershell
 python -m venv .venv
-.venv\Scripts\python.exe -m pip install -r packaging\requirements-build.txt
+.venv\Scripts\python.exe -m pip install --require-hashes -r packaging\requirements-build.lock
 powershell -NoProfile -ExecutionPolicy Bypass -File packaging\build.ps1 -PythonPath .venv\Scripts\python.exe
 ```
 

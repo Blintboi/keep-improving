@@ -7,6 +7,8 @@
 )
 $ErrorActionPreference = 'Stop'
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+& $PythonPath -B -c "import sys,ssl; sys.exit('Release builds require patched Python 3.13.16 / OpenSSL 3.5.9 or newer') if sys.version_info < (3,13,16) or ssl.OPENSSL_VERSION_INFO < (3,5,0,9,0) else None"
+if ($LASTEXITCODE -ne 0) { throw 'Release runtime security baseline was not met.' }
 . (Join-Path $repo 'common.ps1')
 Build-GameTimeRTSSBridge $repo
 $OutputDir = [IO.Path]::GetFullPath($OutputDir)
@@ -31,7 +33,7 @@ $bundle = Join-Path $BuildDir 'frozen\GameTimeMonitor'
 if (Test-Path -LiteralPath (Join-Path $bundle '_internal\icuuc.dll')) { throw 'Unexpected app-local ICU: Qt on Windows 11 must use the Windows ICU runtime.' }
 if ($FreezeOnly) { Write-Output $bundle; return }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'uninstall-bundled.ps1') -Destination $bundle
-foreach ($name in @('README.md','README.hu.md','TESTING.md','ARCHITECTURE.md','THIRD-PARTY-NOTICES.md')) {
+foreach ($name in @('README.md','README.hu.md','TESTING.md','ARCHITECTURE.md','THIRD-PARTY-NOTICES.md','SECURITY.md')) {
     Copy-Item -LiteralPath (Join-Path $repo $name) -Destination $bundle
 }
 $licenseDir = Join-Path $bundle 'licenses'
