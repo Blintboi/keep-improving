@@ -1,8 +1,10 @@
-# Játékidőfigyelő — 2.7.3
+# Játékidőfigyelő — 2.7.4
 
-**[Legfrissebb telepítő letöltése — 2.7.3 · Windows x64](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256)
+**[Legfrissebb telepítő letöltése — 2.7.4 · Windows x64](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256)
 
 A letöltött telepítőt indítsd el a telepítéshez vagy frissítéshez. A korábbi előzmények, beállítások és kizárások megmaradnak, és frissítés előtt biztonsági mentés készül.
+
+A 2.7.4 kevesebb felesleges háttérmunkát végez: a rejtett vagy minimalizált ablak a játéktárat és a statisztikanézetet visszanyitáskor frissíti, az üres feldolgozási várólistákat ritkábban ellenőrzi, az overlay gyors időzítője pedig csak játék vagy előnézet közben fut. A tálcán tovább működik az időmérés, a figyelmeztetés és a szinkronizálás.
 
 Windows 11-en futó, sötét felületű Gaming Hub és játékidőfigyelő egy alkalmazásban. A játékgyűjteményből közvetlenül indíthatod a játékokat, követheted az idődet és megnézheted a napi statisztikákat. A repó és a telepítő egyelőre **privát**. A másik gépen is hozzáférő GitHub-fiókkal jelentkezz be a letöltéshez.
 

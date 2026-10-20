@@ -23,6 +23,12 @@ The retained legacy GUI smoke creates real Tk windows with synthetic fixtures. I
 
 The 1.6 bundled test redirects desktop shortcut creation into its own temporary Desktop fixture, exercises the old separate monitor/Hub-folder shortcut migration and checks one shared app icon and owned-shortcut removal during uninstall. It does not create test shortcuts on the user's actual desktop.
 
+## 2.7.4 lower idle resource usage
+
+The full 291-test suite passed in 123.388 seconds. After the final transient tray-update retry guard, all 13 resource/tray regressions passed in 5.423 seconds. Coverage includes foreground accounting while hidden, deferred library queries, fresh totals/statistics on show and restore, adaptive result polling with hidden synchronization, launcher refresh visibility, countdown timer activation/idle shutdown, explicit shutdown signaling and retrying failed native tooltip updates. The RTSS worker regression verifies one clear on hide, no repeated idle IPC, fresh receipts after resume and prompt shutdown. Existing alert, restriction, artwork, cloud and legacy-controller regressions also passed. Game execution/input uses isolated fixtures and mocks.
+
+An eight-second controlled idle trial used the same three-game temporary profile, synthetic foreground samples and native Qt event loop on each version, with synchronization disabled. Routine artwork queue polls fell from 73 to 8, overlay update calls from 47 to 8, library renders from 8 to 0 and SQLite SELECTs from 24 to 8. The remaining overlay calls come from the unchanged one-second tracker; its separate fast timer is stopped. This short scheduling check establishes reduced background work in that scenario; runtime CPU and memory depend on the catalog, renderer, display and activity.
+
 ## 2.7.3 uniform large artwork and image launching
 
 All 54 focused tests passed: 27 Qt integration tests in 11.929 seconds, 14 artwork/client tests in 3.976 seconds and 13 restriction tests in 5.830 seconds. Regressions exercise the full image as a launch button, selection-only footer clicks, double-click suppression, disabled launch targets, footer menu targeting and unchanged busy/restriction guards. Pixel checks verify equal visible size for 32- and 256-pixel icons, large square cover crops without stretching, and readable native icons after asynchronous delivery. The bounded Minecraft fixture reads both the real square pack icon and title logo without extracting any archive entry; small image decoding retains the source resolution.

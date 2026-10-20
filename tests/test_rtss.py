@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import threading
 import tempfile
 import time
 import unittest
@@ -15,6 +16,29 @@ from gametime.rtss import Backend, countdown, configure_profile, native_position
 
 @unittest.skipUnless(os.name == 'nt', 'Windows required')
 class RTSSTests(unittest.TestCase):
+    def test_backend_clears_once_then_sleeps_until_resumed_or_closed(self):
+        backend=Backend('C:/isolated/idle-rtss'); cleared=threading.Event()
+        backend.process=Mock(); backend.process.poll.return_value=None
+        def exchange(**request):
+            if request.get('clear'): cleared.set()
+            return {'available':True,'healthy':True}
+        with patch('gametime.rtss.installation',return_value=Path('C:/fixture/RTSS.exe')), \
+             patch('gametime.rtss.configure_profile'), patch.object(backend,'exchange',side_effect=exchange) as calls:
+            try:
+                backend.present('C:/fixture/game.exe','7:8','00:20:00')
+                deadline=time.monotonic()+2
+                while not backend.result[1] and time.monotonic()<deadline: time.sleep(.01)
+                self.assertTrue(backend.result[1])
+                backend.hide(); self.assertTrue(cleared.wait(1))
+                for _ in range(3): backend.hide(); time.sleep(.15)
+                self.assertEqual(sum(bool(call.kwargs.get('clear')) for call in calls.call_args_list),1)
+                backend.present('C:/fixture/game.exe','7:9','00:19:59')
+                deadline=time.monotonic()+2
+                while backend.result[0]!='7:9' and time.monotonic()<deadline: time.sleep(.01)
+                self.assertEqual(backend.result[0],'7:9'); self.assertTrue(backend.result[1])
+            finally: backend.close()
+            self.assertFalse(backend.thread.is_alive())
+
     def test_native_protocol_bounds_ownership_lock_and_acknowledgement(self):
         root=Path(__file__).resolve().parents[1]
         subprocess.run(['powershell.exe','-NoProfile','-ExecutionPolicy','Bypass','-Command',

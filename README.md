@@ -1,12 +1,14 @@
 # Game Time Monitor
 
-**[Download the latest installer — 2.7.3 · Windows x64](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256)
+**[Download the latest installer — 2.7.4 · Windows x64](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256)
 
 Run the downloaded installer to install or update the app. Existing history, settings and exclusions are kept, with a backup before upgrading. [Magyar útmutató](README.hu.md).
 
 An offline Windows 11 Gaming Hub and game-time monitor in one app. Launch games from a searchable library, measure foreground gameplay against a shared daily budget, and follow daily statistics in a dark English/Hungarian interface.
 
-**Private preview 2.7.3.** The repository and installer remain private. Sign into GitHub with an account that has access on your other PC. Optional encrypted synchronization combines statistics from your computers using the same connection code, without a shared folder.
+**Private preview 2.7.4.** The repository and installer remain private. Sign into GitHub with an account that has access on your other PC. Optional encrypted synchronization combines statistics from your computers using the same connection code, without a shared folder.
+
+Version 2.7.4 reduces idle background work: the hidden/minimized Hub defers library and statistics refreshes until restored, empty worker queues are polled less often, and the countdown's fast timer runs only during tracked gameplay or preview. Time accounting, reminders and synchronization continue in the tray.
 
 The 2.0 interface uses Qt Widgets: a dark sidebar, responsive game cards, a daily-budget ring, contextual game actions and a redesigned statistics page. Artwork is read from existing local Steam caches, installed-game image files or game icons; no image service, launcher credentials or artwork downloads are used. From 2.7.3, every game has the same large rounded square image tile on a colored background. Icons keep their complete shape; covers use a centered square crop without stretching. Small source images retain their native resolution during loading; pixel icons are enlarged crisply when drawn. Missing art has a colored monogram fallback. The shared controller/clock application icon remains unchanged.
 

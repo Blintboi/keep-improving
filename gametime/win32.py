@@ -417,6 +417,7 @@ class Tray:
 
     def _add(self):
         self.available = bool(s.Shell_NotifyIconW(0, C.byref(self.data)))
+        self._last_tip = self.data.szTip if self.available else None
         if not self.available:
             log.warning("Tray icon unavailable; main window remains accessible.")
         self.data.uVersion = 4
@@ -486,8 +487,10 @@ class Tray:
             {"open": self.on_open, "menu": self.on_menu, "devices": self.on_devices}[event]()
 
     def update(self, text):
-        self.data.szTip = text[:127]
-        s.Shell_NotifyIconW(1, C.byref(self.data))
+        text = text[:127]
+        self.data.szTip = text
+        if self._last_tip != text and s.Shell_NotifyIconW(1, C.byref(self.data)):
+            self._last_tip = text
 
     def close(self):
         if self.closed:

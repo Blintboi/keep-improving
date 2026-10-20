@@ -123,7 +123,9 @@ def glyph(name, color=ACCENT, size=20):
 class BudgetRing(QWidget):
     def __init__(self):
         super().__init__(); self.ratio=0; self.setFixedSize(66,66)
-    def set_ratio(self,value): self.ratio=max(0,min(1,value)); self.update()
+    def set_ratio(self,value):
+        value=max(0,min(1,value))
+        if self.ratio!=value: self.ratio=value; self.update()
     def paintEvent(self,event):
         p=QPainter(self); p.setRenderHint(QPainter.Antialiasing)
         p.setPen(QPen(QColor('#2e4941'),5)); p.drawEllipse(QRectF(7,7,52,52))

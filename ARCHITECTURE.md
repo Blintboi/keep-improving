@@ -2,6 +2,8 @@
 
 The app combines a Qt Widgets interface (PySide6 Essentials) with the existing standard-library tracker and native Windows APIs. QApplication owns UI state on its main thread. Workers communicate through queues; the native tray callback must never invoke widgets directly. CLI diagnostics/configuration commands do not import Qt.
 
+The one-second tracker continues while the Hub is hidden/minimized, including alerts, restrictions, discovery/Hub result handling and tray totals. Its Qt render hook skips library queries and widget refreshes in that state; show/restore events refresh the current view immediately. Hidden statistics and launcher pages do not run periodic presentation refreshes. Worker result polling uses 100 ms only while artwork, client discovery or sync is pending, otherwise 1000 ms; the existing synchronization interval is unchanged. The 200 ms countdown timer starts for tracked gameplay/preview and stops while idle or disabled; the tracker detects gameplay start. RTSS clears once on hide, then its condition variable sleeps until resumed or stopped, preserving active receipt refreshes. Unchanged tray tooltips and budget-ring values cause no native update/repaint. Explicit shutdown signals QApplication directly instead of a separate 100 ms exit-poll timer.
+
 | Module | Responsibility |
 | --- | --- |
 | `main.py` | CLI, per-profile mutex, logging, diagnostics and lifecycle; frozen builds separate writable data from program files. |

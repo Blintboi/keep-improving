@@ -29,6 +29,15 @@ settings and per-game exclusions during upgrades.
 
 Documentation-only changes do not require a new application version or installer.
 
+# Resource usage
+
+Keep CPU, memory, disk and network usage low, especially while the Hub is hidden
+or minimized during gameplay. Prefer event-driven work and cached results;
+poll fast only while work is pending or a visible countdown requires it. Preserve
+foreground time accounting, warning/restriction responsiveness, synchronization
+and upgrade durability when optimizing. Avoid repeatedly rebuilding unchanged
+widgets or reading the catalog for a hidden window.
+
 # Statistics service
 
 Use the existing Supabase **Game Monitor** project `jtvdbqwmejrckjejjrdl` on its

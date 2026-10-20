@@ -14,6 +14,9 @@ log=logging.getLogger(__name__)
 class MonitorActions:
     RESTRICTION_GRACE_SECONDS = 10
 
+    def render_tick(self):
+        self.render()
+
     def sync_hub(self):
         fingerprint = (self.settings.games_root, self.settings.hub_enabled,
                        tuple(sorted((g.id, g.name, g.root, g.metadata, g.installed) for g in self.catalog.games.values())),
@@ -369,7 +372,7 @@ class MonitorActions:
                 elif alert.day != today:
                     self.tracker.alerts.popleft()
                     self.tracker.queued.difference_update((alert.day, key) for key in alert.keys)
-            self.render()
+            self.render_tick()
         except Exception as exc:
             log.exception("Game time measurement failed")
             self.set_status("An error occurred; see monitor.log: " + str(exc))

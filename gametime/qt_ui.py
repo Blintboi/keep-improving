@@ -9,7 +9,7 @@ import os
 import time
 import uuid
 import winsound
-from PySide6.QtCore import Qt,QTimer,QPoint,QEventLoop,QObject,QEvent
+from PySide6.QtCore import Qt,QTimer,QPoint,QEventLoop,QObject,QEvent,Signal
 from PySide6.QtGui import QIcon,QFont,QAction
 from PySide6.QtWidgets import (QApplication,QMainWindow,QWidget,QFrame,QLabel,QVBoxLayout,QHBoxLayout,
     QGridLayout,QStackedWidget,QScrollArea,QLineEdit,QComboBox,QCheckBox,QDoubleSpinBox,QDialog,QToolButton,
@@ -68,6 +68,8 @@ class AlertDialog(QDialog):
         event.accept()
 
 class App(QMainWindow,MonitorActions):
+    shutdown=Signal()
+
     def __init__(self,store,data_dir,background=False,service=None,hub=None):
         super().__init__()
         self.store,self.data_dir=store,Path(data_dir)
@@ -90,6 +92,8 @@ class App(QMainWindow,MonitorActions):
         self.resize(min(1380,screen.width()-60),min(920,screen.height()-60)); self.setMinimumSize(1000,700)
         self.overlay_failed=False; self.overlay=None; self._overlay_preview_until=0
         self.rtss=RTSSBackend(self.data_dir); self._overlay_backend='none'; self._overlay_identity=''; self._overlay_updated=0
+        self.overlay_timer=QTimer(self); self.overlay_timer.setInterval(200); self.overlay_timer.timeout.connect(self.update_overlay)
+        self.assets_timer=QTimer(self); self.assets_timer.setInterval(1000); self.assets_timer.timeout.connect(self.poll_assets)
         self._build(); dark_window(self)
         try: self.overlay=CountdownOverlay(self)
         except Exception:
@@ -100,8 +104,7 @@ class App(QMainWindow,MonitorActions):
         self.tray=win32.Tray(self.show,self.tray_menu,self.devices_changed)
         self.refresh_manual_availability(); self.service.start(); self.render()
         if not background or not self.tray.available: self.show()
-        self.overlay_timer=QTimer(self); self.overlay_timer.setInterval(200); self.overlay_timer.timeout.connect(self.update_overlay); self.overlay_timer.start()
-        self.assets_timer=QTimer(self); self.assets_timer.setInterval(100); self.assets_timer.timeout.connect(self.poll_assets); self.assets_timer.start()
+        self.assets_timer.start()
         self.tick_timer=self.call_later(200,self.tick); self.tray_timer=self.call_later(75,self.poll_tray)
 
     def t(self,text,**values): return tr(text,self.settings.language,**values)
@@ -176,6 +179,7 @@ class App(QMainWindow,MonitorActions):
             self.client_worker=ClientWorker(self.data_dir)
         self._clients_busy=True; self.clients_refresh.setEnabled(False); self.clients_status.setText(self.t('Finding installed launchers…')); self.clients_status.show()
         self.client_worker.request(self.settings)
+        self.update_assets_interval()
 
     def render_clients(self):
         if not hasattr(self,'clients_layout'): return
@@ -218,9 +222,15 @@ class App(QMainWindow,MonitorActions):
                     if clients is not None: self.clients=clients
                     self.render_clients()
                     if warning: self.clients_status.setText(self.t(warning)); self.clients_status.show()
-                if self.pages.currentIndex()==3 and not self._clients_busy and time.monotonic()-self._clients_refreshed>=60: self.refresh_clients()
+                if self.isVisible() and not self.isMinimized() and self.pages.currentIndex()==3 and not self._clients_busy and time.monotonic()-self._clients_refreshed>=60: self.refresh_clients()
         except (OSError,ValueError,RuntimeError): log.warning('Optional assets/launchers unavailable',exc_info=True)
         self.poll_statistics_sync()
+        self.update_assets_interval()
+
+    def update_assets_interval(self):
+        # Workers still return promptly; an empty queue needs no 100 ms wakeups.
+        interval=100 if self.art.pending or self._clients_busy or self._sync_busy else 1000
+        if self.assets_timer.interval()!=interval: self.assets_timer.setInterval(interval)
 
     def statistics_sync_status(self):
         if not self.settings.statistics_sync_enabled: return self.t('Statistics sync is off.')
@@ -248,6 +258,7 @@ class App(QMainWindow,MonitorActions):
             self._sync_status='Could not prepare statistics for synchronization.'
             log.warning('Could not prepare statistics snapshot',exc_info=True)
         self.update_statistics_sync_status()
+        self.update_assets_interval()
 
     def poll_statistics_sync(self):
         while not self.statistics_sync.results.empty():
@@ -259,7 +270,7 @@ class App(QMainWindow,MonitorActions):
                 except ValueError: warning='Some computer data could not be read. Sync will retry automatically.'
             self._sync_status=warning or 'Statistics synchronized.'
             if changed: self._sync_interval=60
-            if changed and self.pages.currentIndex()==1: self.statistics.refresh()
+            if changed and self.isVisible() and not self.isMinimized() and self.pages.currentIndex()==1: self.statistics.refresh()
             self.update_statistics_sync_status()
         if self.settings.statistics_sync_enabled and not self._sync_busy and time.monotonic()-self._sync_attempted>=self._sync_interval:
             self.request_statistics_sync()
@@ -489,8 +500,12 @@ class App(QMainWindow,MonitorActions):
         if self.closed: return
         preview=time.monotonic()<self._overlay_preview_until
         settings=replace(self.settings,**self.overlay_values()) if preview else self.settings
-        if not settings.overlay_enabled:
+        # The one-second tracker starts this timer when gameplay begins. Keep
+        # the 200 ms foreground/lock guard while a countdown can be visible.
+        if not settings.overlay_enabled or (not preview and self.tracker.active is None):
+            self.overlay_timer.stop()
             self.hide_countdown(); return
+        if not self.overlay_timer.isActive(): self.overlay_timer.start()
         try:
             current=win32.sample()
             if not current.interactive:
@@ -571,6 +586,7 @@ class App(QMainWindow,MonitorActions):
         for n,item in self.nav.items(): item.setChecked(n==index)
         if index==1: self.statistics.refresh()
         if index==3: self.refresh_clients()
+        if index==0: self.render()
     def settings_dialog(self): self.switch_page(2); self.show()
     def show(self):
         if self.closed: return
@@ -584,6 +600,16 @@ class App(QMainWindow,MonitorActions):
     def closeEvent(self,event):
         if self.closed: event.accept()
         else: event.ignore(); self.hide()
+    def showEvent(self,event):
+        super().showEvent(event)
+        if not self.closed:
+            if self.pages.currentIndex()==1: self.statistics.refresh()
+            self.render()
+    def changeEvent(self,event):
+        super().changeEvent(event)
+        if event.type()==QEvent.WindowStateChange and self.isVisible() and not self.isMinimized() and not self.closed:
+            if self.pages.currentIndex()==1: self.statistics.refresh()
+            self.render()
     def selected(self): return self.catalog.games.get(self.selected_id) or next((g for g in self.store.games() if g.id==self.selected_id),None)
     def refresh_view(self,*args):
         if not hasattr(self,'pages') or not hasattr(self,'statistics'): return
@@ -706,6 +732,18 @@ class App(QMainWindow,MonitorActions):
     def dismiss_popup(self):
         if self.popup_window: self.popup_window.close(); self.popup_window=self.popup_day=None
 
+    def render_tick(self):
+        # Tracking, alerts, Hub discovery and cloud sync continue in the tray.
+        # Refresh widgets on return instead of reading/repainting a hidden UI.
+        if self.isVisible() and not self.isMinimized(): self.render()
+        else:
+            self.sync_hub()
+            self.update_tray()
+
+    def update_tray(self):
+        total=sum(self.tracker.totals(datetime.now().date().isoformat()).values())
+        self.tray.update(self.t('Game Time Monitor\nToday: {total} · remaining: {remaining}\nLeft click: open · right click: menu',total=duration(total),remaining=duration(self.settings.limit_seconds-total)))
+
     def render(self):
         self.sync_hub()
         day=datetime.now().date().isoformat(); totals=self.tracker.totals(day); total=sum(totals.values())
@@ -752,8 +790,8 @@ class App(QMainWindow,MonitorActions):
         self.restriction_label.setText(self.t('Play restriction active · {minutes:g} min',minutes=self.settings.restriction_seconds/60))
         for gid,card in self.cards.items(): card.set_state(totals.get(gid,0),gid==self.selected_id,not self.launching and not self.launch_restricted(card.game))
         self.update_launch_button()
-        self.tray.update(self.t('Game Time Monitor\nToday: {total} · remaining: {remaining}\nLeft click: open · right click: menu',total=duration(total),remaining=duration(self.settings.limit_seconds-total)))
-        if self.pages.currentIndex()==1 and time.monotonic()-self.statistics.last_refresh>=10: self.statistics.refresh()
+        self.update_tray()
+        if self.isVisible() and not self.isMinimized() and self.pages.currentIndex()==1 and time.monotonic()-self.statistics.last_refresh>=10: self.statistics.refresh()
 
     def load_next_art(self):
         if self.closed or not self._art_queue: return
@@ -765,6 +803,7 @@ class App(QMainWindow,MonitorActions):
             except (OSError,ValueError,TypeError,AttributeError):
                 log.warning('Local game artwork unavailable: %s',gid,exc_info=True)
             card.update()
+        self.update_assets_interval()
         if self._art_queue: self.call_later(15,self.load_next_art)
         else: self.update_launch_button()
 
@@ -786,10 +825,13 @@ class App(QMainWindow,MonitorActions):
         self.tracker.close(); self.service.close(); self.hub.close()
         if self.launcher: self.launcher.close()
         self.tray.close(); QMainWindow.close(self)
+        self.shutdown.emit()
 
 def run(store,data_dir,background=False):
     qapp=setup_application(); window=App(store,data_dir,background)
     # Closing the window hides it; only the controller's Exit/stop request ends exec.
-    timer=QTimer(); timer.setInterval(100); timer.timeout.connect(lambda:qapp.quit() if window.closed else None); timer.start()
+    window.shutdown.connect(qapp.quit)
     try: return qapp.exec()
-    finally: timer.stop(); window.close()
+    finally:
+        window.shutdown.disconnect(qapp.quit)
+        window.close()

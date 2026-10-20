@@ -132,11 +132,14 @@ class Backend:
         return json.loads(line)
 
     def run(self):
-        last_start = 0
+        last_start = 0; last_state = None
         try:
             while True:
                 with self.condition:
-                    self.condition.wait(.2)
+                    if self.state is None and last_state is None:
+                        self.condition.wait_for(lambda: self.stopping or self.state is not None)
+                    elif self.state == last_state:
+                        self.condition.wait(.2)
                     if self.stopping: break
                     state = self.state
                 self.operation_started = time.monotonic()
@@ -171,11 +174,12 @@ class Backend:
                     with self.condition:
                         self.result = (identity, bool(reply.get("healthy")), time.monotonic(), reply.get("error", ""))
                 except Exception as exc:
+                    if state is None: self.terminate_bridge()
                     error = str(exc)
                     with self.condition: self.result = ("", False, 0, error)
                     if error != self.error: log.warning("RTSS countdown: %s", error)
                     self.error = error
-                finally: self.operation_started = 0
+                finally: self.operation_started = 0; last_state = state
         finally:
             if self.process:
                 try:
