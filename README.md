@@ -87,6 +87,8 @@ To back up your profile, exit the app from the tray and copy the data folder. Un
 
 This is a personal project, maintained as time permits. Others are welcome to use it, report reproducible bugs and suggest improvements through [GitHub Issues](https://github.com/Blintboi/windows-game-time-monitor/issues). Include your app version, Windows version, game source and reproduction steps. Keep connection codes, tokens and personal databases out of public reports.
 
+If you find Game Time Monitor useful, you can [support its development through GitHub Sponsors](https://github.com/sponsors/Blintboi). Sponsorship is entirely optional; the app remains free and open source.
+
 The project's own code and documentation use the [MIT license](LICENSE). Game artwork and bundled dependencies retain their respective rights and licenses; see [Third-party notices](THIRD-PARTY-NOTICES.md).
 
 For source setup and builds, see [Development](docs/DEVELOPMENT.md). Technical details are in [Architecture](ARCHITECTURE.md), [Testing](TESTING.md) and [Security](SECURITY.md).

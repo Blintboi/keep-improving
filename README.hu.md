@@ -87,6 +87,8 @@ Mentéshez lépj ki a tálcamenüből, majd másold ki az adatmappát. Az eltáv
 
 Személyes projekt, amelyet a szabadidőmhöz igazodva tartok karban. Mások is szabadon használhatják, jelezhetnek reprodukálható hibákat és javasolhatnak fejlesztéseket a [GitHub Issues](https://github.com/Blintboi/windows-game-time-monitor/issues) felületén. Hibajelzéshez add meg az alkalmazás és a Windows verzióját, a játék forrását és a reprodukálás lépéseit. Kapcsolati kódot, tokent vagy személyes adatbázist ne tölts fel nyilvánosan.
 
+Ha hasznosnak találod a Game Time Monitort, [GitHub Sponsorson keresztül támogathatod a fejlesztését](https://github.com/sponsors/Blintboi). A támogatás teljesen önkéntes; az alkalmazás továbbra is ingyenes és nyílt forráskódú.
+
 A projekt saját forráskódja és dokumentációja [MIT licencű](LICENSE). A képeken látható játékborítók és a csomagolt függőségek jogai, illetve licencei megmaradnak; részletek a [külső összetevők leírásában](THIRD-PARTY-NOTICES.md).
 
 A forrásból történő futtatáshoz és csomagoláshoz lásd a [fejlesztői útmutatót](docs/DEVELOPMENT.md). További műszaki leírás: [felépítés](ARCHITECTURE.md), [tesztelés](TESTING.md), [biztonság](SECURITY.md).
