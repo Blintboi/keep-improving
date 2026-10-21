@@ -22,8 +22,9 @@ For each new application version:
    workflow. Verify that the remote README version and installer match.
 
 The user has authorized these routine GitHub updates for future versions; do not
-ask for the same authorization again. Keep the repository private and use the
-README download as the primary distribution path. Do not substitute a local-only
+ask for the same authorization again. The user authorized public distribution
+on 2026-10-21; keep the repository public and use the README download as the
+primary distribution path. Do not substitute a local-only
 installer or a Releases-page-only download. Preserve existing user history,
 settings and per-game exclusions during upgrades.
 

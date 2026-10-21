@@ -1,5 +1,7 @@
 # Kódos statisztikaszinkron
 
+[English deployment and operator guide](README.md)
+
 **Állapot:** éles Supabase-háttér a felhasználó meglévő **Game Monitor** projektjében,
 ellenőrzött **Free** csomagban. Projektazonosító: `jtvdbqwmejrckjejjrdl`;
 régió: `eu-west-1`; PostgreSQL 17. A kliens 2.7.0-tól használja a kódos felületet.

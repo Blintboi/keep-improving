@@ -13,7 +13,7 @@ if ($bundle) {
     return
 }
 $manifest = Read-GameTimeManifest $InstallDir
-if (-not $manifest) { throw 'Installation marker is missing. Run Telepites.cmd first.' }
+if (-not $manifest) { throw 'Installation marker is missing. Run Install.cmd first.' }
 foreach ($file in Get-GameTimeFiles) {
     if (-not (Test-Path -LiteralPath (Join-Path $InstallDir $file) -PathType Leaf)) { throw "Missing file: $file" }
 }

@@ -2,6 +2,34 @@
 
 Use isolated temporary profiles and synthetic game installations. Never uninstall a real user game to test removal; mock the execution boundary.
 
+## Public distribution preparation — 2026-10-21
+
+The 2.11.0 runtime is unchanged from the combined release below. Publication adds
+MIT licensing, privacy and development documentation, an English backend guide,
+English-named source-install entry points and three English UI screenshots.
+Screenshots use an isolated offline profile, real local game artwork and synthetic
+history. Native tracking, launch, overlay, sound and minimization actions were
+disabled in that screenshot fixture.
+
+Gitleaks 8.30.1 scanned all 36 existing commits and the staged publication changes.
+Its only historical match was an intentionally invalid JWT/refresh-token test
+fixture; the reviewed exact fingerprint is recorded in `.gitleaksignore`.
+No real credential was found. An additional review covered 630 historical text
+blobs for private keys, provider secrets and personal path/identity patterns.
+Upstream attribution email addresses remain intact. No historical Actions runs,
+artifacts or issue content existed at preparation time. This is a targeted
+publication audit, not a guarantee that unknown vulnerabilities do not exist.
+
+All 20 isolated source install/upgrade/uninstall checks passed after renaming the
+entry points. The documentation-only installer repack preserves every previously
+recorded runtime/dependency file hash. Actual self-extractor output is compared
+with the packaged inputs, the integrity manifest is verified, and all 41 bundled
+install/upgrade/uninstall checks pass, including the ten-check RTSS helper
+self-test. The installer contains the matching MIT/privacy notices and screenshots.
+Local documentation links and the stable installer checksum are checked before
+publication. No application or backend behavior changed, so the full runtime
+suite recorded below was not repeated for this documentation delivery.
+
 ## 2.11.0 combined release: sync security and capacity
 
 All **335 application tests passed in 160.093 seconds** on CPython 3.13.16 /
@@ -216,7 +244,7 @@ This verifies that setup, not every exclusive fullscreen engine, display layout,
 - Check the frozen runtime without Python on PATH, including Qt platform/image plugins, icon and PowerShell bridge resources.
 - Check startup entries, data location, uninstall and foreign-file preservation.
 - Check real fullscreen gameplay using a temporary short limit; restore settings afterwards.
-- Verify private visibility and absence of data/logs/installed manifests from archives.
+- Verify intended repository visibility and absence of data/logs/installed manifests from archives.
 
 The second physical PC, ARM64 and other games' fullscreen modes still require user testing. Preview installers are unsigned.
 
@@ -248,7 +276,7 @@ All 249 automated tests passed in 92.656 seconds. Ten added regressions cover pe
 
 RTSS 7.3.7 was installed separately on the development PC from the official Guru3D mirror specified by Microsoft's WinGet manifest. The archive SHA-256 matched the manifest and the installer Authenticode signature was valid. SDK queries confirmed Global detection 0 and Stardew Valley detection 1. The bridge opened the real server mapping, published into its own slot and released it. The game's OpenGL hook then acknowledged OSD frames at 1920 × 1080 while Windows reported exclusive fullscreen.
 
-The user confirmed the timer was visible in Stardew Valley exclusive fullscreen. Its initial text-coordinate placement was offset. The final renderer uses RTSS native per-game position properties, signed edge anchors and full-framebuffer coordinates instead of absolute hypertext layers. The user then confirmed the saved top-right position was correct. The title/menu screen was tested; gameplay beyond the title screen, other games and the second physical PC still need verification. No game display mode was changed. Window captures did not reliably include the RTSS text, so screenshots alone are not treated as visibility evidence. The repo/release remains private.
+The user confirmed the timer was visible in Stardew Valley exclusive fullscreen. Its initial text-coordinate placement was offset. The final renderer uses RTSS native per-game position properties, signed edge anchors and full-framebuffer coordinates instead of absolute hypertext layers. The user then confirmed the saved top-right position was correct. The title/menu screen was tested; gameplay beyond the title screen, other games and the second physical PC still need verification. No game display mode was changed. Window captures did not reliably include the RTSS text, so screenshots alone are not treated as visibility evidence. The repository was private during that validation.
 
 Hungarian/English RTSS settings captures used a copied SQLite profile, inert discovery/Hub fixtures and stopped tracker/overlay timers. Source-install and bundled-install fixtures include the compiled helper's native self-test and preservation of selected RTSS executables across upgrades. The source installer passed 20 checks and the bundled installer passed 35 checks. Each release reruns its bundled fixture against the final payload before deployment.
 

@@ -62,7 +62,7 @@ if ($old -and $old.StartupName -ne $StartupName) {
 & (Join-Path $InstallDir 'verify.ps1') -InstallDir $InstallDir
 Write-Host "Installed: $InstallDir"
 Write-Host "Games folder: $GamesRoot"
-Write-Host 'Open Inditas.cmd. Use the Popup proba button to test the notification.'
+Write-Host 'Open Launch.cmd. Reminder test controls are available in Settings.'
 if (-not $NoStart) {
     $arguments = '-B "' + (Join-Path $InstallDir 'main.py') + '" --data-dir "' + (Join-Path $InstallDir 'data') + '"'
     Start-Process -FilePath $python.Pythonw -ArgumentList $arguments -WorkingDirectory $InstallDir -WindowStyle Hidden

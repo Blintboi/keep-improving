@@ -1,4 +1,4 @@
-name: Build private Windows installer
+name: Build Windows installer
 on:
   workflow_dispatch:
 permissions:

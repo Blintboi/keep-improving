@@ -33,8 +33,13 @@ $bundle = Join-Path $BuildDir 'frozen\GameTimeMonitor'
 if (Test-Path -LiteralPath (Join-Path $bundle '_internal\icuuc.dll')) { throw 'Unexpected app-local ICU: Qt on Windows 11 must use the Windows ICU runtime.' }
 if ($FreezeOnly) { Write-Output $bundle; return }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'uninstall-bundled.ps1') -Destination $bundle
-foreach ($name in @('README.md','README.hu.md','TESTING.md','ARCHITECTURE.md','THIRD-PARTY-NOTICES.md','SECURITY.md')) {
+foreach ($name in @('README.md','README.hu.md','TESTING.md','ARCHITECTURE.md','THIRD-PARTY-NOTICES.md','SECURITY.md','LICENSE','PRIVACY.md')) {
     Copy-Item -LiteralPath (Join-Path $repo $name) -Destination $bundle
+}
+foreach ($name in @('docs\DEVELOPMENT.md','docs\images\library-en.png','docs\images\statistics-en.png','docs\images\bedtime-en.png')) {
+    $target = Join-Path $bundle $name
+    New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $repo $name) -Destination $target
 }
 $licenseDir = Join-Path $bundle 'licenses'
 New-Item -ItemType Directory -Path $licenseDir -Force | Out-Null

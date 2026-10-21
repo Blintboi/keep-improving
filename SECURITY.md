@@ -7,8 +7,9 @@ linking on the existing Supabase Free project.** GitHub OAuth, the native PKCE
 round trip, token refresh, session revocation and existing-group ownership have
 been checked against the live service. GitHub profile/email access is read-only;
 email/password and anonymous sign-in are disabled. Registration is open within
-the initial limits below, not unlimited. The repository and installer remain
-private; this update does not change distribution visibility.
+the initial limits below, not unlimited. The repository and installer are public.
+This is a personal-use project shared for others who find it useful, with no
+promised release schedule or hosted-service availability.
 
 Native sign-in uses PKCE S256 and a nonce-bearing, ephemeral `127.0.0.1` callback,
 allowed only at `http://127.0.0.1:*/gametime/callback/*`. Supabase access/refresh
@@ -60,9 +61,10 @@ code-based capability authorization for existing computers. Signing out of
 management alone does not revoke a connection code. The server cannot recover
 the encryption key for a lost code, even for its verified owner.
 
-The desktop app remains usable offline without cloud registration. The repository
-and installer remain private. Public distribution requires a separate release
-decision; this update does not change repository visibility.
+The desktop app remains usable offline without cloud registration. Public
+distribution was authorized on 2026-10-21. The original source is MIT-licensed;
+third-party components retain their own licenses. Cloud admission and resource
+limits remain in place for the shared Free service.
 
 ## What is protected
 
@@ -219,7 +221,7 @@ without copying secrets, replace the code through its verified owner,
 reconnect affected machines, and investigate how the code escaped. For a server
 credential compromise, revoke/rotate it in Supabase and redeploy; do not embed
 the replacement in a client release. Report security issues privately to the
-repository owner, not in an issue containing codes, tokens or private statistics.
+repository owner through [GitHub private vulnerability reporting](https://github.com/Blintboi/windows-game-time-monitor/security/advisories/new), not in an issue containing codes, tokens or private statistics. If that form is unavailable, open an issue asking for a private contact without including the vulnerability or any secrets.
 
 Provider references: [Free plan limits](https://supabase.com/pricing),
 [Edge authentication](https://supabase.com/docs/guides/functions/auth-headers),

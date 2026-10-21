@@ -1,176 +1,92 @@
 # Game Time Monitor — 2.11.0
 
-**[Download the latest installer — 2.11.0 · Windows x64](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256)
+**[Download for Windows x64 — 2.11.0](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256) · [Magyar](README.hu.md)
 
-Run the downloaded installer to install or update the app. Existing history, settings and exclusions are kept, with a backup before upgrading. [Magyar útmutató](README.hu.md).
+A Windows 11 gaming hub that tracks foreground play time, shows your daily budget and reminds you when it is time to finish. It also includes a configurable bedtime reminder.
 
-**2.11.0 integrates the bedtime reminder.** In **Settings → Bedtime reminder**, set separate reminder (**23:55**), bedtime (**00:00**) and morning resume (**06:00**) times. Optionally minimize the foreground window **every 10 seconds** between bedtime and resume, including browsers and other apps, without sending Escape. The Hub remains accessible so you can change the settings. The test button only previews the reminder. Scheduling uses local time while the monitor is running, including in the tray; it does not wake the PC or catch up missed reminders. The first minimization allows ten seconds, and morning resume stops it automatically.
+I built this for my own daily use and am sharing it for anyone who finds it useful. The desktop features work offline, without an account. Linking statistics between your computers is optional.
 
-On the first start of the usual profile, the app imports the known, enabled standalone `BedtimeReminder` 23:55 task: it enables the integrated reminder, backs up the task XML under the data folder's `backups` directory and disables the old task. Its files are preserved. Fresh profiles start with bedtime disabled; minimization always requires a separate opt-in. Bedtime settings and daily game budgets are independent.
+![Game library and daily play-time budget](docs/images/library-en.png)
+*English interface with real games and locally available artwork. Play-history values are demonstration data; game artwork belongs to its respective owners.*
 
-An offline Windows 11 Gaming Hub and game-time monitor in one app. Launch games from a searchable library, measure foreground gameplay against a shared daily budget, and follow daily statistics in a dark English/Hungarian interface.
+## Features
 
-**Private preview 2.11.0.** The repository and installer remain private. Sign into GitHub with an account that has access on your other PC. Optional encrypted synchronization combines statistics from your computers using the same connection code, without a shared folder.
+- **Foreground time tracking.** Counts time while a tracked game is active. Browsers, launchers, background games, sleep and locked sessions do not consume the daily budget.
+- **Daily budget and reminders.** A shared local budget across tracked games, an early warning and an expiry reminder. Thresholds are configurable; the day resets at local midnight.
+- **Gaming Hub.** Find and launch installed games, search and filter the library, hide cards, assign executables and exclude individual games from tracking. Covers and icons come from local files.
+- **In-game countdown.** Optional transparent countdown with monitor, position and opacity controls. Supports a desktop overlay and integration with a separately installed RTSS.
+- **Play restriction.** Optional repeated minimization after a separate daily threshold, with ten seconds to save and quit on each return to a tracked game.
+- **Bedtime reminder.** Separate reminder, bedtime and morning-resume times. Optional minimization of the foreground window every ten seconds during bedtime, including browsers and other apps, without sending Escape.
+- **Statistics and computer linking.** Daily charts, date ranges and per-game totals, with optional encrypted synchronization and filtering by computer.
+- **English and Hungarian.** Switch languages from the sidebar.
 
-Version 2.10.0 adds verified GitHub sign-in to create, replace or revoke a connection code. Other computers still join using that code. Tokens and pending code changes use Windows-user-bound protection; existing connections/history are preserved. Version 2.11.0 admits up to **100 active groups** with fair request/traffic shares, bounded Auth state and stronger spam protection. This ceiling is not a guaranteed number of always-online users. Automatic sync runs every 5 minutes while Statistics is visible, otherwise every 15 minutes; manual sync is limited to once a minute and honors server limits. Update both computers to save the shared Free allowance. See [security, launch status and remaining limitations](SECURITY.md).
+## Supported platforms and games
 
-Version 2.7.4 reduces idle background work: the hidden/minimized Hub defers library and statistics refreshes until restored, empty worker queues are polled less often, and the countdown's fast timer runs only during tracked gameplay or preview. Time accounting, reminders and synchronization continue in the tray.
-
-The 2.0 interface uses Qt Widgets: a dark sidebar, responsive game cards, a daily-budget ring, contextual game actions and a redesigned statistics page. Artwork is read from existing local Steam caches, installed-game image files or game icons; no image service, launcher credentials or artwork downloads are used. From 2.7.3, every game has the same large rounded square image tile on a colored background. Icons keep their complete shape; covers use a centered square crop without stretching. Small source images retain their native resolution during loading; pixel icons are enlarged crisply when drawn. Missing art has a colored monogram fallback. The shared controller/clock application icon remains unchanged.
-
-## Install
-
-1. Download the **latest installer** using the link at the top of this README, then run `GameTimeMonitor-Setup.exe` as your normal Windows user.
-2. Python, Qt/PySide6 and SQLite are included. No separate Python, pip packages, administrator account or launcher login is needed by the monitor.
-3. The app opens and discovers installed games. It starts in the tray when you sign into Windows. Open **Settings** to change your daily limit or Gaming Hub location.
-
-The current installer is unsigned; Windows may show an unknown-publisher/SmartScreen prompt. Use the installer linked above or a build you made yourself. A SHA-256 checksum accompanies the download.
-
-Program files go under `%LOCALAPPDATA%\Programs\GameTimeMonitor`. Data goes in Windows Documents under `GameTimeMonitor\data`, including redirected Documents folders. A fresh install creates `Documents\Gaming Hub`. Upgrades preserve the existing Hub location, thresholds, history, executable rules, exclusions and hidden games, and back up the data before migration.
-
-Setup adds one shared desktop **Gaming Hub** icon, a Start menu shortcut, Windows startup entries and an Installed apps entry. The desktop icon opens the integrated library in the running monitor, including when Statistics was open. The controller/clock icon stays the same. Upgrades consolidate and back up the previous owned monitor/Hub desktop entries. A fallback Startup shortcut and the Run entry share a per-profile mutex, so only one monitor runs. A restart is not required.
-
-## Launch games
-
-From 2.7.2, background discovery keeps existing game cards and artwork instead of recreating the entire grid. Selection, keyboard focus and scroll position survive unchanged scans. Updated artwork replaces the previous image when ready.
-
-The **Library** page is the home screen, with large clickable game images, search, source filters and sorting by name or today’s time. Search by name or filter by source, then click the game's image once to launch it. One click starts it without selecting it first or opening a separate bottom panel. Clicking the name selects the card; Enter starts the selected game. The **…** menu sits beside the game name at the bottom. Play uses Steam, Epic, Ubisoft and Riot launch routes, the Minecraft launcher or an existing shortcut with its original arguments. Standalone games with one executable can start directly. Discovery keeps the library up to date.
-
-If the executable is ambiguous, use **Assign EXE** to choose it once. The app saves the choice and its tracking rule. **Add** also remembers the executable. Choices survive upgrades and discovery ID merges. Excluding a game's time does not prevent launching it. Removed games cannot launch. Preparation runs on a worker, keeping measurement and reminders responsive; opening a launcher alone does not count as gameplay.
-
-Use the **…** menu beside the game name at the bottom of each card for Hide / restore, Exclude / track, Assign EXE, EXE rules, Open game folder and Uninstall game. Statistics and Settings have their own pages in the left sidebar. **Open game folder** opens that game's installation when you need its files. The desktop Gaming Hub icon and tray's Open Gaming Hub return to this page without opening a separate folder or another monitor.
-
-The library keeps labels brief: Today and Remaining above the cards, the **…** menu beside the game name, recorded time only when nonzero, and a source badge only when matching game names need distinguishing. Game controls stay on each card. Extra help is available in tooltips; additional launcher locations are under **Settings → Games folder → Advanced**. The Settings title's tooltip shows the app version.
-
-## Launcher clients and local artwork
-
-Open **Launchers** in the sidebar for a separate client library: installed **Steam, Epic Games Launcher, Riot Client, Ubisoft Connect and Minecraft Launcher** appear with their own icons and **Open** buttons. Detection uses local Start menu/Desktop shortcut targets, known installation roots and installation-only registry/index records. Shortcuts with game-specific arguments are ignored for generic client opening; the executable path is rechecked before opening without shell command text or extra arguments. No client opens automatically. Refresh repeats detection, and the visible page refreshes about once a minute. A missing client shows a clear message.
-
-Launcher clients remain accessible when the voluntary game restriction is active, so libraries, downloads and updates still work. Their foreground time does not consume the game budget. Starting an actual tracked game, including through a client, still follows the normal time/restriction policy.
-
-Artwork discovery runs on a background worker for each library card. It tries the exact Steam app's local cache (including hashed filenames), an installed game's `steam_appid.txt` when available, and named cover/header/banner/splash/title/logo/icon files in the recognized installation. A bounded search prefers artwork/resource/content folders and skips saves, screenshots, mods, backups, logs, engine folders and reparse points. It does not scan whole drives or read launcher accounts. Minecraft can use its known title-logo PNG directly from a local version JAR, without extraction or execution. Images are decoded at thumbnail size with file/dimension/memory limits; corrupt/unsupported files are skipped. Only ordinary image files and that specific Minecraft image entry are supported; proprietary/encrypted game packs are not unpacked.
-
-If no cover exists locally, the app uses a local game icon or the actual game's executable icon, then a monogram if neither is available. It does not invent or download covers. Images keep their complete aspect ratio with dark padding. **Refresh games and hub** repeats the artwork search, for example after an update adds new assets. This feature does not move/change game files, upload local images or change tracking history.
-
-## Language and statistics
-
-Choose **English** or **Magyar** from **Language / Nyelv** at the bottom of the sidebar. The main interface changes immediately and the choice is saved. New dialogs, tray menus and game-time reminders use that language. English remains the default for new installations.
-
-Open the **Statistics / Statisztikák** page to see recorded play time by day and by game. Choose the last 7 days, last 30 days, this month, or enter an inclusive date range in `YYYY-MM-DD` format (up to 366 days). Click a chart bar or a date row to inspect that day's games; **Whole period** returns to the range-wide breakdown. The table shows play time and each game's percentage of the selected total. The summary shows total time, daily average and the most-played game. The visible page refreshes roughly every 10 seconds; Refresh also saves pending time before reading history.
-
-Statistics include existing history, hidden/excluded games and removed installations. Hiding or uninstalling does not erase past time. Days without recorded time appear as zero. The daily average uses elapsed calendar days within the selected range, starting no earlier than installation; idle days after installation count, but days before installation and future dates do not. The footer shows the installation date and number of days used. That date survives upgrades; older profiles use the earlier available database creation date or first recorded activity. No activity before tracking began can be reconstructed, and the monitor does not infer unrecorded gameplay. Language changes preserve the selected date range.
-
-## Link statistics across computers
-
-From 2.7.2, the statistics table shows a **Computer** column and separate times for each game on each computer, both for the whole period and a selected day. The overall totals and chart still combine the selected computers. Use the **Computers** selector to filter to one device; the local device is marked as this computer.
-
-From 2.7.1, the connection code is hidden each time you open **Link computers**. **Show code / Hide code** reveals it only when requested; leaving or hiding the window hides it again. **Copy** works while the code is hidden. Generating a new code also keeps it hidden. Upgrades preserve your existing code and linked computers.
-
-Open **Statistics → Link computers** (also available in Settings). On the first computer, use version 2.10.0 or later, click **Sign in with GitHub**, return to the app, name the computer and save with automatic synchronization enabled. Copy the generated code to your other computer and save there. Joining an existing code needs no additional login or shared folder; 2.7.0+ clients remain compatible. **Sync now** requests an immediate exchange, at most once per minute, subject to server limits. Automatic exchange runs every 5 minutes while Statistics is visible and every 15 minutes in the background. A countdown prevents repeated clicks. Hidden windows do not rebuild statistics to refresh this control.
-
-Each user uses their own randomly generated code. The code is both the connection secret and the source of the encryption key: keep it private, because anyone who knows it can read or falsify the group's statistics. One verified GitHub account manages one current code. Saving **New code** asks before replacing that account's old code, deleting its server copies and disconnecting its computers; local history remains. Enter the new code on your other computers. **Revoke cloud connection** removes your managed server group after confirmation. **Sign out** ends account management on this computer and leaves code-based sync enabled. The **Computers** selector shows all linked computers, this computer, or an individual remote computer. Averages start at the earliest monitoring date among the selected computers. Launcher IDs match games across computers; standalone/manual entries match by source and normalized title.
-
-Only the computer name, game names/sources and cumulative daily recorded time are exchanged, encrypted on the computer before upload to the hosted Supabase service. The connection code and encryption key are not sent to the server. Repeated synchronization replaces a computer's previous snapshot without adding it twice; imported data is never republished. Daily budgets, restrictions, exclusions, launch paths and settings remain local. Each installation keeps its own SQLite database. Offline tracking and cached statistics remain available; sync retries automatically when the service is reachable. Disabling sync retains previously received history locally. Synchronization is off until you enable it.
-
-From 2.9.0, the saved code is protected by Windows DPAPI for the current Windows account. On another account, re-enter the same code to reconnect. Old backup copies can contain the old plaintext credential; keep backups private. Server snapshots inactive for 90 days expire; full local history and downloaded caches remain. A reconnecting computer can reupload its own history. Server quotas delay cloud exchange without stopping local tracking. Free hosting does not guarantee availability against request floods.
-
-The backend uses the Supabase **Free** plan and is subject to its capacity limits and inactivity pausing; it is not unlimited hosting. No paid upgrade is performed by the application. See [current provider limits](https://supabase.com/pricing). Up to 20 computers can share a code. Upgrading from 2.6 preserves history but turns off the old folder synchronization; create a new connection code for internet synchronization.
-
-## Daily use
-
-Left click the tray icon to open the app. Right click for Open, Gaming Hub, Settings, Refresh games and hub, and Exit monitor. The **X** at the top right hides the main window to the tray and keeps tracking running. **Exit monitor** stops it until the next launch/sign-in.
-
-Only a tracked game in the foreground counts. Browsers, launcher clients, background games, locked sessions and sleep do not count. Cutscenes still count; keyboard inactivity alone does not pause a game. Samples are taken once a second and saved regularly to SQLite. Midnight starts a new daily total.
-
-The initial daily limit is **120 minutes**, with a warning at **100 minutes**. Alerts are reminders and do not kill games. The separate optional play restriction is described below. For an enabled popup at a threshold, the app tries one Escape in the currently tracked game, waits 200 ms, then displays an independent topmost alert. It verifies the foreground process identity and avoids sending Escape with modifier keys held. Hidden/minimized main windows do not suppress alerts. **Test alert** checks the popup itself, without simulating a gameplay threshold.
-
-The earlier Tk version was confirmed over Minecraft Java fullscreen at real 20/30-second thresholds. The Qt version retains the guarded Escape/topmost mechanism and has independent hidden/minimized-window integration tests; repeat the real Minecraft trial before treating this preview as fullscreen-validated. Other fullscreen engines or elevated games may behave differently; see [testing](TESTING.md).
-
-## In-game countdown (optional)
-
-In **Settings → Countdown**, enable **Show while gaming**, then save. Fresh installs and older profiles keep it off until you enable it. Only the remaining-time digits appear, white on a fully transparent background, without a panel, border, caption or progress bar. The timer appears during tracked foreground gameplay and disappears when you switch to another app or lock Windows. Hiding the Hub does not hide the timer. The timer never accepts mouse/keyboard input or takes focus.
-
-By default, enabling it replaces the early warning popup with red digits at your configured warning threshold (20 minutes remaining with the initial 100/120-minute settings). No Escape, sound or focus change occurs for that color warning. You can retain the early popup instead. **Popup when time expires** is a separate switch, on by default, and controls later over-budget session reminders too. The timer stays at zero after expiry. Popups keep the existing guarded Escape behavior; they do not stop games.
-
-Drag the miniature timer inside Settings to choose its position, or use the arrow keys. Placement uses the entire display with a small edge margin, so the Windows taskbar does not limit the bottom position. Choose the active game's monitor automatically or a specific display; a disconnected display falls back to the primary monitor. **Preview (10s)** shows your unsaved placement without changing time/history. Click **Save** to keep changes. **Text opacity** adjusts only the digits from 25–100%; the surrounding area remains fully transparent. Upgrades keep the saved opacity percentage and apply it to the text. **Test alert** in this section checks the expiry-style popup.
-
-The default renderer is a Windows desktop overlay. Exclusive fullscreen or elevated/protected games may hide it. The app never changes a game's display mode. A renderer error, stale in-game acknowledgement, or a Windows fullscreen/busy state without a healthy RTSS connection retains the early popup instead of silently consuming the warning. A visible/topmost desktop window alone is not treated as proof that a fullscreen game displays it.
-
-For exclusive fullscreen, install **RTSS 7.3.7 or newer** separately from its [official Guru3D page](https://www.guru3d.com/download/rtss-rivatuner-statistics-server-download/). From 2.8.0, enabling the countdown uses RTSS automatically for every tracked game when RTSS is installed. No per-game EXE list is needed. The Hub prepares profiles from its existing executable rules and artwork discovery, starts RTSS when needed and follows the exact foreground game. Newly encountered game executables are prepared on use. Excluded games, launchers and other untracked programs are skipped. Existing global RTSS detection/performance settings are preserved; Global detection can stay at None. If a game was already running before its profile was prepared, save and restart it once. **Settings → Countdown → In-game countdown (RTSS)…** can disable automatic RTSS and use the desktop renderer instead.
-
-The RTSS timer uses the same daily budget, warning color, text opacity and position, with no panel or controls. Native RTSS anchors use the whole framebuffer, including games with a separate HUD viewport. Other RTSS clients in that game share its profile origin and can move with it. It renders on the game's active display; the monitor selector and ten-second desktop preview apply to the desktop renderer. **RTSS connected** means the game is acknowledging OSD updates, not that a person has verified the pixels. An unavailable or unresponsive RTSS renderer falls back to the desktop countdown; fullscreen warning safeguards remain active. Protected or incompatible games can refuse in-game overlays, including some anti-cheat games. Test in actual fullscreen gameplay before relying on it. Disabling RTSS stops the Hub's text; prepared profiles remain editable in RTSS. RTSS profiles identify executables by filename, while the Hub publishes only for the exact tracked foreground path. RTSS is not bundled or automatically uninstalled with the Hub.
-
-## Optional play restriction
-
-Enable **Settings → Play restriction → Enable play restriction**, choose the total daily minutes, and save. It is off by default on fresh installs and upgrades; the initial threshold is **125 minutes**. This threshold is independent of the reminder budget (initially 120 minutes).
-
-At or above the threshold, the monitor allows **10 seconds to save and quit** before intervening. The grace starts when a tracked game is observed in the foreground, including the first threshold crossing and every return to the game. Only after that grace does it try a guarded Escape, wait 200 ms, and request minimization of that exact process/window before opening the Hub. Every retry, including after a failed minimization, gets a fresh full grace. Switching away, locking Windows, sleep, a clock jump or a stalled monitor restarts the grace; normal foreground time still counts. Escape is attempted once per running process/day in the resident session so retries do not keep toggling its menu. The Hub blocks Play too, including already-prepared launch requests. External launcher starts are detected through foreground tracking. The shared total survives restarts, resets at local midnight, and includes hidden games; excluded games/apps remain outside this policy. A persistent banner explains the restriction and keeps Settings accessible. Disable it or change the threshold there at any time.
-
-This is a voluntary interruption tool, not tamper-resistant parental control. It does not terminate/suspend processes, delete saves, block the keyboard/mouse, lock Windows or require admin rights. Minimizing may not pause a game, especially online play. Save/leave matches before the threshold. Unknown, elevated or protected games may need manual handling. Input/window actions are rechecked against the current interactive foreground process identity; switching apps, locking Windows or disabling the option during the delay cancels the pending action. If minimization is refused, a status message explains it and the monitor retries only on tracked foreground gameplay. After restriction, its banner replaces queued reminder popups.
-
-## Discovery and Gaming Hub
-
-Sources: **Steam, Epic Games, Ubisoft Connect, Riot including VALORANT, Minecraft Java**, and standalone games under the configured Games/Hub folder. Installation metadata and file/registry events update the catalog and shortcuts; repair scans cover missed events. Multiple Steam libraries and extra launcher locations can be configured.
-
-Games outside known locations cannot always be recognized safely. Use **Add** to select the actual game EXE and name it. **Assign EXE** maps an executable to an existing game and remembers it for Play. Browsers and launcher clients are blocked. Shared `javaw.exe` is not globally treated as Minecraft; known Minecraft runtime locations or an exact manual rule are required.
-
-The existing shortcuts folder is an optional companion, controlled by **Maintain game shortcuts** in Settings. The integrated library and Play work with this option off too. Installations and saves are not moved. In the companion folder, original shortcuts retain arguments, working directory and icons; an unknown launch command produces a folder link. `Folders` contains installation links and `Launchers` contains client shortcuts. Separate real installations of the same title are labeled by source.
-
-Only unchanged shortcuts recorded as owned are removed when a game disappears. Edited/unowned files are preserved. A disconnected/unreadable library is kept until a successful scan. A Hub root has one authoritative profile owner and a lock to prevent duplication; do not delete `.gametime-hub.json` or share one Hub between independent profiles.
-
-## Hide, exclude and uninstall
-
-| Action | Result |
+| Platform or source | Support |
 | --- | --- |
-| **Hide / restore** | Hides the selected game from the integrated Hub. Tracking, history and optional folder links stay. Enable Show hidden games, select it and click again to restore. Survives restart and discovery. |
-| **Exclude / track** | Changes whether future time counts; history stays. |
-| **EXE rules** | Excludes or maps an individual executable. |
-| **Uninstall game…** | Shows a guide, then opens an external removal tool only after Continue. |
+| Windows 11 x64 | Supported desktop platform; no administrator rights needed for normal installation and use. |
+| Steam | Automatic discovery from local installation metadata, including multiple libraries. |
+| Epic Games Launcher | Automatic discovery of installed games from local manifests. |
+| Ubisoft Connect | Installed-game discovery and launch integration. |
+| Riot Client | Installed-game discovery and launch integration; Riot Client and Vanguard are excluded from game time. |
+| Minecraft: Java Edition | Discovery from the official Java game data and recognition of its dedicated runtime. |
+| Standalone and other games | Discovery in the configured games folder, plus manual executable assignment. |
+| RTSS 7.3.7+ | Optional in-game countdown integration; [RTSS is a separate download](https://www.guru3d.com/download/rtss-rivatuner-statistics-server-download/). |
 
-Steam opens its uninstall flow. Epic/Ubisoft open the detected client with library removal instructions, or Installed apps if the client is missing. Riot/Minecraft use Windows Installed apps. Standalone games use an exact-match Windows Installer product removal or an identified uninstaller in that installation. Otherwise the game folder opens with manual instructions and an Installed apps fallback.
+macOS, Linux and Windows ARM64 are not supported builds. Minecraft Bedrock and Xbox/Microsoft Store games have no dedicated automatic discovery. Manual tracking requires an accessible game executable. Elevated, protected and anti-cheat games can limit foreground inspection, overlays or minimization; compatibility varies by game.
 
-The app never executes arbitrary registry command text, adds silent-removal flags, or recursively deletes game files. Review the publisher's final confirmation, close running games if requested, and back up local saves. Discovery subsequently retires the removed game and unchanged owned Hub links, retaining history. A portable game's actual mapped EXE/folder must disappear before it is considered removed. Hiding does not uninstall anything.
+## Install or update
 
-All games follow the same tracking rules. Use **… → Exclude / track** on a game's card or exclude a specific executable to choose what should not count.
+1. Download **GameTimeMonitor-Setup.exe** using the link at the top.
+2. Run the installer. Python, Qt and the required runtime libraries are included.
+3. Open **Gaming Hub** from the desktop or tray icon. It starts in the tray on subsequent Windows sign-ins.
 
-## Privacy and removing the monitor
+Updates preserve history, settings, hidden games and tracking exclusions, and create a profile backup first. The installer is currently **unsigned**, so Windows may show a publisher or reputation warning.
 
-The app has no general telemetry. It reads local installation metadata, foreground process paths, game directories, local artwork assets and shortcut metadata. Optional sync uploads encrypted statistics to Supabase. GitHub account management shares your profile and verified email with Supabase Auth; provider network/security logs can also exist. Supabase session tokens are protected with Windows DPAPI; GitHub provider tokens are discarded. The app does not read launcher tokens, browser history, messages or save contents. See [the service privacy notice](https://jtvdbqwmejrckjejjrdl.supabase.co/functions/v1/statistics-sync/about). Local tracking works without an account.
+The main window's **X** hides it to the tray; tracking and reminders continue. Use **Exit monitor** from the tray menu to stop the app.
 
-Data includes `usage.sqlite3` (history, configuration including language, rules, visibility and alert markers), rotating `monitor.log`, `hub-state.json`, and the Hub icon under `assets`. Logs may contain local paths. Data, installed manifests and logs are excluded from Git. Stop the app before backing up the data folder. Whole-profile transfer is not automatic multi-PC sync: paths, EXE rules and Hub ownership are machine-specific.
+## Set your limits
 
-Remove the monitor via **Windows Settings → Apps → Installed apps → Game Time Monitor → Uninstall**. Its uninstaller removes owned program files, app shortcuts including the integrated Hub desktop icon, and startup entries. Games, companion-folder links and data stay. To erase history afterwards, check your backup and delete the data folder manually. Removing the monitor never uninstalls games.
+Open **Settings**, change the values and select **Save**.
 
-## Troubleshooting
+| Setting | Initial value |
+| --- | --- |
+| Daily game-time budget | 120 minutes |
+| Early warning | After 100 minutes |
+| Optional play-restriction threshold | 125 minutes |
+| Bedtime reminder / bedtime / morning resume | 23:55 / 00:00 / 06:00 |
 
-- **No time counted:** check the active-game name while the actual game has focus, and inspect its tracking option in the **…** menu. Use Add / Assign EXE for unknown standalone games. EXE exclusions take precedence; a launcher alone does not count.
-- **Missing after sign-in:** check Task Manager → Startup apps; Windows lets you disable startup. Launch from the Start menu. Setup errors are recorded in `%TEMP%\GameTimeMonitor-setup.log`.
-- **Fullscreen alert hidden:** compare in borderless mode and check privilege levels. The monitor does not request administrator access. Report the game, display mode, time and relevant log lines privately.
-- **Stale link:** use Refresh games and hub. Unreadable libraries and edited/unowned links are intentionally preserved. Removing only a shortcut does not remove the installed game.
-- **Setup failed:** read its log and rerun after resolving the error. Setup refuses an unowned existing target folder and checks payload hashes. File copying is not a transactional MSI operation; a failed upgrade may need rerunning. The data backup stays.
+The countdown, play restriction, bedtime reminder and cloud synchronization are off on a fresh profile until enabled. The daily game budget and bedtime schedule are independent. Bedtime uses the local clock while the monitor runs; it does not wake the PC or catch up a missed reminder.
 
-## Develop and build
+![Configurable bedtime reminder](docs/images/bedtime-en.png)
 
-Source uses Python 3.10+ and Qt for Python, pinned in `requirements-runtime.txt`. Release builds require patched **CPython 3.13.16 / OpenSSL 3.5.9 or newer** and target **Windows 11 x64**. The locked wheels target CPython 3.13 x64. ARM64 and 32-bit builds are not provided/tested.
+Minimizing a game may leave it running, particularly in online play. The Hub remains accessible so you can change or disable restrictions. This is a personal reminder tool, not tamper-resistant parental control.
 
-```powershell
-python -m pip install -r requirements-runtime.txt
-python -B main.py
-python -B -m unittest discover -s tests -v
-```
+## Statistics and optional synchronization
 
-Always use temporary `--data-dir` paths for testing. Source launchers reuse an installed profile to prevent split catalogs. Commands include `--diagnose --report report.json`, `--configure`, `--scan-once`, `--sync-hub` and `--stop-wait 20`. Stop the resident app before configuration commands. Never point test Hubs at real game folders.
+**Statistics** shows daily play time, date-range summaries and a breakdown by game and computer.
 
-Build on Windows x64 with Python, PowerShell and built-in IExpress:
+![Daily statistics and per-game history](docs/images/statistics-en.png)
 
-```powershell
-python -m venv .venv
-.venv\Scripts\python.exe -m pip install --require-hashes -r packaging\requirements-build.lock
-powershell -NoProfile -ExecutionPolicy Bypass -File packaging\build.ps1 -PythonPath .venv\Scripts\python.exe
-```
+To link your own computers:
 
-Output is in `dist`. PyInstaller bundles the runtime; IExpress packages it with the per-user bootstrap. Setup verifies hashes, stops the old resident, backs up data, installs/verifies the app, configures startup and launches it without downloading a runtime. See [architecture](ARCHITECTURE.md), [testing](TESTING.md) and [third-party notices](THIRD-PARTY-NOTICES.md). The manual GitHub workflow produces private build artifacts and does not publish a release.
+1. On the first computer, open **Statistics → Link computers**, sign in with GitHub, enable synchronization and save.
+2. Copy the generated connection code. Paste it into the same dialog on the other computer and save. Joining an existing code does not require another GitHub sign-in.
 
-To update the downloadable installer, copy the verified `dist/GameTimeMonitor-<version>-Setup.exe` to `downloads/GameTimeMonitor-Setup.exe`, regenerate its SHA-256 file using the stable filename, and update the version shown at the top of both READMEs in the same commit. The download link stays unchanged between versions.
+Automatic sync runs every five minutes while Statistics is visible and every fifteen minutes in the background. **Sync now** permits a manual request once a minute, within server limits. The charts can combine linked computers; daily budgets and exclusions remain local to each computer.
 
-Legacy `Telepites.cmd` / `install.ps1` remain for source development and require Python. Normal users should download Setup. No open-source license has been chosen; public publication is a separate decision.
+**Keep the connection code private:** it provides access to the linked group's encrypted history. The shared hosted service has registration and usage limits and no guaranteed availability. Local tracking continues when sync is unavailable.
+
+## Your data
+
+History and settings are stored locally in the Windows Documents folder under `GameTimeMonitor\data`. Account-free tracking has no analytics or general telemetry. Optional sync encrypts game history and computer names on the client before uploading them; GitHub sign-in is used to manage the cloud connection.
+
+To back up your profile, exit the app from the tray and copy the data folder. Uninstalling the app preserves the history. See [Privacy](PRIVACY.md) for the data handled by optional online features and their deletion controls.
+
+## Project and support
+
+This is a personal project, maintained as time permits. Others are welcome to use it, report reproducible bugs and suggest improvements through [GitHub Issues](https://github.com/Blintboi/windows-game-time-monitor/issues). Include your app version, Windows version, game source and reproduction steps. Keep connection codes, tokens and personal databases out of public reports.
+
+The project's own code and documentation use the [MIT license](LICENSE). Game artwork and bundled dependencies retain their respective rights and licenses; see [Third-party notices](THIRD-PARTY-NOTICES.md).
+
+For source setup and builds, see [Development](docs/DEVELOPMENT.md). Technical details are in [Architecture](ARCHITECTURE.md), [Testing](TESTING.md) and [Security](SECURITY.md).

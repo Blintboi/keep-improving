@@ -1,0 +1,3 @@
+# Deliberately invalid JWT and refresh token in a local-only Auth fixture.
+# This exact historical finding was reviewed before public publication.
+b8357ff752e812c314e680dff7187716cb2790e2:tests/test_statistics_auth.py:generic-api-key:20
