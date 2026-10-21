@@ -99,6 +99,12 @@ try {
             if (-not $check) { break }
         }
         New-Item -ItemType Directory -Path $parent -Force | Out-Null
+        if (Test-Path -LiteralPath $target) {
+            if ((Get-Item -LiteralPath $target).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Application file is a reparse point.' }
+            # RTSS and other resident helpers can still map an unchanged runtime
+            # DLL after the monitor exits. Verify and retain identical files.
+            if ((Get-PayloadHash $target) -eq $file.SHA256) { continue }
+        }
         Copy-Item -LiteralPath (Join-Path $taskStage $file.Path) -Destination $target -Force
     }
     $exe = Join-Path $InstallDir 'GameTimeMonitor.exe'

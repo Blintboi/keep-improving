@@ -126,3 +126,32 @@ test('health exposes only status; writes require a configured backend', async ()
   assert.equal((await handle(new Request('https://example.com/statistics-sync'))).status,405);
   assert.equal((await handle(request())).status,503);
 });
+
+test('random invalid capabilities cannot cause unbounded SQL calls within one isolate', async () => {
+  let now=100000;
+  const {handle,calls}=fixture({admission:false,clock:()=>now});
+  for(let i=0;i<60;i++) assert.equal((await handle(request(data(),'Bearer '+i.toString(16).padStart(64,'0')))).status,403);
+  assert.equal((await handle(request(data(),'Bearer '+'f'.repeat(64)))).status,429);
+  assert.equal(calls.length,60);
+  now+=60000;
+  assert.equal((await handle(request(data(),'Bearer '+'f'.repeat(64)))).status,403);
+});
+
+test('varying proxy addresses cannot bypass the isolate-wide database-work limit', async () => {
+  const {handle,calls}=fixture({admission:false});
+  for(let i=0;i<240;i++) assert.equal((await handle(request(data(),'Bearer '+i.toString(16).padStart(64,'0'),{'x-forwarded-for':'192.0.2.'+i}))).status,403);
+  assert.equal((await handle(request(data(),undefined,{'x-forwarded-for':'198.51.100.1'}))).status,429);
+  assert.equal(calls.length,240);
+});
+
+test('SQL rejection starts a short cooldown before another upload is read or queried', async () => {
+  let now=100000;
+  const {handle,calls}=fixture({clock:()=>now,exchange:()=>({error:'quota',retry_after:3600})});
+  assert.equal((await handle(request())).status,507);
+  const blocked=new Request('https://example.com/statistics-sync',{method:'POST',headers:{authorization:'Bearer '+credential,'content-type':'application/json'},body:'invalid JSON'});
+  assert.equal((await handle(blocked)).status,507);
+  assert.equal(calls.length,2);
+  now+=60001;
+  assert.equal((await handle(request())).status,507);
+  assert.equal(calls.length,4);
+});

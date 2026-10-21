@@ -2,6 +2,51 @@
 
 Use isolated temporary profiles and synthetic game installations. Never uninstall a real user game to test removal; mock the execution boundary.
 
+## 2.11.0 combined release: sync security and capacity
+
+All **335 application tests passed in 160.093 seconds** on CPython 3.13.16 /
+OpenSSL 3.5.9, including the integrated bedtime feature and the manual-sync
+cooldown, visible/background cadence and server-retry regressions. All 22 Node
+endpoint tests passed, including varied-credential/IP throttling, early cooldowns
+and verified-owner management limits. SQL tests use bounded fixtures and roll
+back all writes; no traffic flood was sent to the public endpoints.
+
+The eight PostgreSQL probes cover account/identity isolation, persistent quotas,
+retention, signup and token gates, fair capacity, saturated-counter tuple
+stability, the total code registry, metadata and combined OAuth state bounds,
+global/fair upload churn budgets and rotation-safe upload counters.
+The bundled upgrade regression holds an unchanged runtime DLL open against writes,
+reproducing a resident RTSS helper. Setup hashes and retains identical files;
+replacement targets reject leaf reparse points as well as parent junctions.
+Live GitHub PKCE login, Auth-hook invoker permissions, metadata-free JWT claims,
+refresh, unchanged ownership and logout passed using a temporary session; the
+installed app's saved primary session was untouched. Source and installed-app
+history, codes and exclusions are verified separately during delivery.
+
+The new controls are application/storage safeguards. They do not establish
+distributed DDoS resistance, unlimited Free capacity or absence of unknown bugs.
+The capacity examples in SECURITY.md are request arithmetic, not load-test
+results. Custom Auth-table triggers require revalidation after provider upgrades.
+
+## 2.11.0 integrated bedtime reminder
+
+All 13 bedtime tests passed: default opt-in, input/order validation, custom and
+cross-midnight schedules, morning release, once-per-cycle durable reminders,
+cached reads, missed-minute/lock/sleep/clock changes, ten-awake-second cadence,
+independent browser minimization without keyboard injection, preserved history
+and exclusions, scoped one-time task handover, translated Qt controls and popup.
+The Hungarian settings card and popup were rendered and visually inspected.
+A real self-closing Windows fixture was acquired in the foreground and minimized
+through the new native path; its actual iconic state was verified.
+
+The 20 isolated source install/upgrade/uninstall checks passed with the new
+modules and migration script. Source checks ran with `PYTHONUTF8=1` so native
+PowerShell output retained the accented checkout path.
+
+```powershell
+python -B -m unittest discover -s tests -p test_bedtime.py -v
+```
+
 ## 2.10.0 verified account admission
 
 All **320 application tests passed in 153.871 seconds** on CPython 3.13.16 /

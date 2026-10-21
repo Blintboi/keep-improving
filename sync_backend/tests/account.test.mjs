@@ -64,3 +64,12 @@ test('bounded streams/timeouts/concurrency and local request throttle',async()=>
   for(let i=0;i<60;i++)assert.equal((await throttled.handler(request())).status,401);
   assert.equal((await throttled.handler(request())).status,429);assert.equal(throttled.calls.length,60);
 });
+
+test('checked account management limit survives changes of IP and capability',async()=>{
+  const {handler,calls}=fixture();
+  for(let i=0;i<12;i++)assert.equal((await handler(request({action:'activate',capability:i.toString(16).padStart(64,'0')},undefined,{'x-forwarded-for':'192.0.2.'+i}))).status,200);
+  const response=await handler(request(undefined,undefined,{'x-forwarded-for':'198.51.100.1'}));
+  assert.equal(response.status,429);
+  assert.equal(calls.filter(c=>c.url.endsWith('/gametime_sync_account')).length,12);
+  assert.equal(calls.filter(c=>c.url.endsWith('/user')).length,13);
+});

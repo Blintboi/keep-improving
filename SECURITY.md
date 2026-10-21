@@ -2,7 +2,7 @@
 
 ## Current launch status
 
-**2.10.0 supports verified GitHub account admission and code-based computer
+**2.11.0 supports verified GitHub account admission and code-based computer
 linking on the existing Supabase Free project.** GitHub OAuth, the native PKCE
 round trip, token refresh, session revocation and existing-group ownership have
 been checked against the live service. GitHub profile/email access is read-only;
@@ -26,16 +26,32 @@ ciphertext and retires that code, retaining local history and owner quota
 counters. A pending replacement is DPAPI-protected before the request, allowing
 recovery if the dialog/app closes after server acceptance.
 
-Initial admission limits are ten active groups, five new owners per UTC day,
+Admission limits are 100 active groups, 25 new owners per UTC day,
 and three group creations/claims/replacements per owner per UTC month. An Auth
 Before User Created hook additionally restricts the provider, reserves at most
-five signup slots per UTC day and fifty total signup slots, before Auth can
+25 signup slots per UTC day and 500 total signup slots, before Auth can
 allocate unbounded users. Failed signups may conservatively consume a
 slot; inspect failures before reconciling slots, never reset them to bypass abuse.
 The hook is explicitly activated in the dashboard before opening registration.
-Existing users can still sign in when new registrations are paused. Provider
-Auth sessions, OAuth flow state and provider logs have their own lifecycle and
-rate controls; the application quotas do not bound every provider resource.
+Existing users can still sign in when new registrations are paused. A Custom Access Token hook permits only verified GitHub OAuth/refresh with a
+live session, caps sessions at ten per user, and token issues at 12/minute and
+120/UTC day per user, 1,000/UTC day globally. A denied token issue rolls back
+Auth session/refresh-token creation in the same transaction. The usage ledger
+has one row per Auth user. Access tokens omit editable metadata. Dashboard IP
+limits are 30 token requests, ten verifications and ten signups per five minutes;
+these do not protect OAuth /authorize flow allocation by themselves.
+
+Invoker triggers additionally cap account metadata at 32 KiB and the combined
+Auth flow_state/oauth_client_states registry at 1,000 rows, each at most 16 KiB.
+The combined ceiling covers orphan OAuth-client state created before a rejected
+flow insert. Admission serializes on a nonblocking transaction advisory lock;
+denied inserts allocate no counter rows. A five-minute cron job removes state
+older than one hour, preserves active flows and sessions, and prunes its own run
+logs to seven days. These custom triggers attach to provider-managed Auth tables;
+recheck their presence, privileges, schema compatibility and real login after a
+Supabase Auth upgrade. The limit can deliberately reject new sign-ins during
+abuse; existing code-based synchronization and local history remain usable.
+Provider logs and upstream resources still have their own limits.
 
 The account endpoint has bounded bodies/deadlines/concurrency and an additional
 bounded isolate-local throttle; this is not a distributed WAF. Account management
@@ -119,11 +135,40 @@ that no vulnerability exists.
 
 ## Before a broader public rollout
 
-Keep the initial ten-group ceiling and review actual invocations, Auth traffic,
+Keep the 100-group admission ceiling and review actual invocations, Auth traffic,
 database size and egress before increasing capacity. Account verification and
-signup reservations limit stored users and statistics, not upstream request
-floods. They do not prove one human per GitHub account. Retired group hashes and
+signup reservations, Auth-state limits and statistics quotas bound stored app data, not upstream request floods. They do not prove one human per GitHub account. Retired group hashes and
 owner quota ledgers are retained so revocation and rotation cannot reset limits.
+The total code registry, including retired codes, is capped at 10,000 rows.
+Saturated group/device/IP/management counters stop updating tuple versions.
+Management has a durable 12/minute per-user throttle in addition to Edge checks.
+Normal sync has a bounded isolate-local 60/IP/minute and 240/minute throttle,
+plus short rate/quota cooldowns before body reading or database work. These
+local guards are performance protection, not a distributed rate limiter.
+New objects created by postgres no longer automatically grant public client
+table/sequence/function access; migrations explicitly grant the required roles.
+
+Each group has 2 MiB stored ciphertext. Monthly requests per group AND owner are
+min(12,000, floor(350,000/max(25, enabled groups))); monthly response bytes are
+min(128 MiB, floor(3 GiB/max(25, enabled groups))). Daily ingress/response caps
+are 8 MiB per group and owner. Upload churn has a global 64 MiB/UTC day and
+1 GiB/UTC month ceiling; each group AND owner gets monthly upload bytes of
+min(64 MiB, floor(1 GiB/max(25, enabled groups))). These count accepted full
+payloads, including replacements, not just net stored growth; they limit WAL,
+dead tuples and write pressure. The new counters were seeded from retained bytes
+at rollout because earlier uploads were not recorded monthly. Global 200 MiB storage, 350,000 exchanges and
+4 GiB response ceilings remain. Owner counters survive rotation. The fair share
+can shrink as users join; it does not reserve upstream capacity against floods.
+
+The 2.11 client polls every 15 minutes in the background, five minutes with
+Statistics visible, and permits manual sync once a minute without bypassing
+Retry-After. Two always-online computers at 15-minute cadence use about 5,760
+exchanges per 30 days: the global budget covers about 60 such users before any
+manual/visible-view traffic or reserve. Two computers running eight hours/day
+use about 1,920: 100 groups fit that request estimate with reserve. These are
+request-only estimates, not load-test results; ciphertext size, egress, Auth,
+manual requests and rejection traffic also matter. All computers should upgrade;
+older clients remain compatible but poll more frequently.
 
 Set up operator MFA on Supabase and GitHub, restrict project/repository admins,
 retain offline backups, monitor provider invocations/egress/database usage and
@@ -152,7 +197,7 @@ update public.gametime_sync_budget set enabled=true where singleton;
 update public.gametime_sync_groups set enabled=false where group_hash='<hash>';
 -- Inspect pressure without reading ciphertext or connection codes.
 select enabled,registration_enabled,account_limit,auth_signup_total,
-       auth_signup_day,auth_signups_today,used_bytes,device_count,month_requests,month_egress
+       auth_signup_day,auth_signups_today,auth_token_day,auth_tokens_today,used_bytes,device_count,month_requests,month_egress
 from public.gametime_sync_budget;
 select count(*) as groups, count(*) filter(where enabled) as enabled_groups
 from public.gametime_sync_groups;

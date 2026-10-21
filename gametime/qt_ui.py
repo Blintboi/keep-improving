@@ -10,11 +10,11 @@ import time
 import uuid
 import winsound
 from sqlite3 import Error as SQLiteError
-from PySide6.QtCore import Qt,QTimer,QPoint,QEventLoop,QObject,QEvent,Signal
+from PySide6.QtCore import Qt,QTimer,QPoint,QEventLoop,QObject,QEvent,Signal,QTime
 from PySide6.QtGui import QIcon,QFont,QAction
 from PySide6.QtWidgets import (QApplication,QMainWindow,QWidget,QFrame,QLabel,QVBoxLayout,QHBoxLayout,
     QGridLayout,QStackedWidget,QScrollArea,QLineEdit,QComboBox,QCheckBox,QDoubleSpinBox,QDialog,QToolButton,
-    QFileDialog,QInputDialog,QMenu,QAbstractSpinBox,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,QSizePolicy,QSlider)
+    QFileDialog,QInputDialog,QMenu,QAbstractSpinBox,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,QSizePolicy,QSlider,QTimeEdit)
 from .controller import MonitorActions
 from .model import Catalog,Game,Settings,norm,blocked,helper
 from .service import DiscoveryService
@@ -75,12 +75,14 @@ class App(QMainWindow,MonitorActions):
     def __init__(self,store,data_dir,background=False,service=None,hub=None):
         super().__init__()
         self.store,self.data_dir=store,Path(data_dir)
+        from .bedtime_legacy import migrate
+        migrate(store,self.data_dir)
         self.settings=store.settings(); self.catalog=Catalog(self.settings,store.games(True),store.overrides(),store.rules())
         self.statistics_data=StatisticsData(store); self.statistics_sync=CloudSyncWorker()
         self.account_auth=AuthWorker(); self.account_session=store.account_session()
         self._auth_busy=False; self._auth_callback=None
         self._sync_busy=False; self._sync_attempted=0; self._sync_status='Statistics sync is off.'
-        self._sync_interval=60; self._sync_revision=None
+        self._sync_interval=900; self._sync_revision=None
         self.tracker=Tracker(store,self.catalog); self.hub=hub or HubWorker(data_dir); self.hub_fingerprint=None
         self.service=service or DiscoveryService(self.settings)
         self.catalog.steam_libraries=self.service.discovery.libraries_from_metadata()
@@ -149,6 +151,11 @@ class App(QMainWindow,MonitorActions):
         self.restriction_label=label(); self.restriction_label.setWordWrap(True); self.restriction_label.setStyleSheet('color:#ffc5cc;')
         banner_layout.addWidget(self.restriction_label,1); banner_layout.addWidget(button(self.t('Settings'),self.settings_dialog))
         right.addWidget(self.restriction_banner); self.restriction_banner.hide()
+        self.bedtime_banner=QFrame(); self.bedtime_banner.setStyleSheet('QFrame {background:#382b45; border:0;}')
+        bedtime_row=QHBoxLayout(self.bedtime_banner); bedtime_row.setContentsMargins(30,12,24,12)
+        bedtime_note=label(self.t('Bedtime: the foreground window is minimized every 10 seconds. You can turn this off in Settings.'))
+        bedtime_note.setWordWrap(True); bedtime_row.addWidget(bedtime_note,1)
+        bedtime_row.addWidget(button(self.t('Settings'),self.settings_dialog)); right.addWidget(self.bedtime_banner); self.bedtime_banner.hide()
         self.pages=QStackedWidget(); right.addWidget(self.pages,1)
         self.hub_page=self._build_library(state); self.pages.addWidget(self.hub_page)
         self.statistics=StatisticsPage(self); self.pages.addWidget(self.statistics)
@@ -275,16 +282,33 @@ class App(QMainWindow,MonitorActions):
     def update_statistics_sync_status(self):
         for widget in (getattr(self,'sync_summary',None),getattr(self.statistics,'sync_label',None)):
             if widget: widget.setText(self.statistics_sync_status())
+        self.update_statistics_sync_controls()
+
+    def statistics_sync_interval(self):
+        return 300 if self.isVisible() and not self.isMinimized() and self.pages.currentIndex()==1 else 900
+
+    def update_statistics_sync_controls(self):
+        page=getattr(self,'statistics',None)
+        if not page: return
+        delay=max(self.statistics_sync.retry_delay(SERVICE_URL,self.settings.statistics_sync_group),
+                  max(0,60-(time.monotonic()-self._sync_attempted)) if self._sync_attempted else 0)
+        allowed=self.settings.statistics_sync_enabled and not self._sync_busy and not delay
+        if page.sync_now.isEnabled()!=bool(allowed): page.sync_now.setEnabled(bool(allowed))
+        # Reuse the existing GUI timer only while a visible countdown is useful.
+        if not self.isVisible() or self.isMinimized() or self.pages.currentIndex()!=1: return
+        text=self.t('Sync in {seconds}s',seconds=int(delay)+1) if 0<delay<=60 else self.t('Sync later' if delay else 'Sync now')
+        if page.sync_now.text()!=text: page.sync_now.setText(text)
 
     def request_statistics_sync(self):
         if self.closed or self._sync_busy or not self.settings.statistics_sync_enabled: return
         if self.statistics_sync.retry_delay(SERVICE_URL,self.settings.statistics_sync_group): return
+        if self._sync_attempted and time.monotonic()-self._sync_attempted<60: return
         self._sync_attempted=time.monotonic()
         try:
             if not SERVICE_URL: raise ValueError('The synchronization service is not configured yet.')
             self.tracker.flush()
             snapshot=self.statistics_data.snapshot(self.settings.statistics_sync_group,self.settings.statistics_device_name)
-            self._sync_interval=60 if snapshot['revision']!=self._sync_revision else min(300,self._sync_interval+60)
+            self._sync_interval=self.statistics_sync_interval()
             self._sync_revision=snapshot['revision']
             self._sync_busy=self.statistics_sync.request(SERVICE_URL,self.settings.statistics_sync_group,snapshot,
                                                        self.statistics_data.revisions(self.settings.statistics_sync_group))
@@ -304,9 +328,10 @@ class App(QMainWindow,MonitorActions):
                 try: changed=self.statistics_data.ingest(value,token[1]) or changed
                 except ValueError: warning='Some computer data could not be read. Sync will retry automatically.'
             self._sync_status=warning or 'Statistics synchronized.'
-            if changed: self._sync_interval=60
             if changed and self.isVisible() and not self.isMinimized() and self.pages.currentIndex()==1: self.statistics.refresh()
             self.update_statistics_sync_status()
+        self._sync_interval=self.statistics_sync_interval()
+        self.update_statistics_sync_controls()
         if self.settings.statistics_sync_enabled and not self._sync_busy and time.monotonic()-self._sync_attempted>=self._sync_interval:
             self.request_statistics_sync()
 
@@ -362,6 +387,7 @@ class App(QMainWindow,MonitorActions):
         self.sync_summary=label(self.statistics_sync_status(),'muted'); self.sync_summary.setWordWrap(True); sync_layout.addWidget(self.sync_summary)
         sync_layout.addWidget(button(self.t('Link computers'),self.statistics_sync_dialog),0,Qt.AlignLeft); body_layout.addWidget(sync)
         body_layout.addWidget(self.build_restriction_settings())
+        body_layout.addWidget(self.build_bedtime_settings())
         body_layout.addWidget(self.build_overlay_settings())
         locations=panel(); places=QVBoxLayout(locations); places.setContentsMargins(22,20,22,22); places.setSpacing(12)
         places.addWidget(label(self.t('Games folder'),'section'))
@@ -394,6 +420,28 @@ class App(QMainWindow,MonitorActions):
         row.addWidget(self.restriction_minutes); layout.addLayout(row)
         note=label(self.t('10 seconds to save and quit before each minimization.'),'muted')
         note.setWordWrap(True); layout.addWidget(note); return card
+
+    def build_bedtime_settings(self):
+        card=panel(); layout=QVBoxLayout(card); layout.setContentsMargins(22,20,22,22); layout.setSpacing(12)
+        layout.addWidget(label(self.t('Bedtime reminder'),'section'))
+        self.bedtime_enabled=QCheckBox(self.t('Enable bedtime reminder')); self.bedtime_enabled.setChecked(self.settings.bedtime_enabled)
+        layout.addWidget(self.bedtime_enabled)
+        self.bedtime_controls=QWidget(); controls=QVBoxLayout(self.bedtime_controls); controls.setContentsMargins(0,0,0,0); controls.setSpacing(12)
+        fields=QHBoxLayout(); self.bedtime_times={}
+        for key,text in (('bedtime_warning_minute','Remind at'),('bedtime_minute','Bedtime'),('bedtime_resume_minute','Resume at')):
+            minute=getattr(self.settings,key); edit=QTimeEdit(QTime(minute//60,minute%60)); edit.setDisplayFormat('HH:mm'); edit.setButtonSymbols(QAbstractSpinBox.NoButtons); edit.setAccessibleName(self.t(text))
+            group=QVBoxLayout(); group.addWidget(label(self.t(text),'muted')); group.addWidget(edit); fields.addLayout(group,1); self.bedtime_times[key]=edit
+        controls.addLayout(fields)
+        self.bedtime_minimize=QCheckBox(self.t('Minimize the foreground window every 10 seconds after bedtime'))
+        self.bedtime_minimize.setChecked(self.settings.bedtime_minimize); controls.addWidget(self.bedtime_minimize)
+        note=label(self.t('Local time, every day, including browsers and other apps. Minimization stops at Resume at. The Hub stays accessible; no Escape is sent.'),'muted')
+        note.setWordWrap(True); controls.addWidget(note)
+        controls.addWidget(button(self.t('Test bedtime reminder'),self.test_bedtime_popup,'quiet'),0,Qt.AlignLeft)
+        layout.addWidget(self.bedtime_controls); self.bedtime_controls.setEnabled(self.bedtime_enabled.isChecked()); self.bedtime_enabled.toggled.connect(self.bedtime_controls.setEnabled)
+        return card
+
+    def update_bedtime_banner(self,active):
+        if self.bedtime_banner.isHidden()==bool(active): self.bedtime_banner.setVisible(active)
 
     def build_overlay_settings(self):
         card=panel(); layout=QVBoxLayout(card); layout.setContentsMargins(22,20,22,22); layout.setSpacing(12)
@@ -555,6 +603,8 @@ class App(QMainWindow,MonitorActions):
                 epic_manifest_dirs=[p.strip() for p in self.paths['epic'].text().split(';') if p.strip()],
                 ubisoft_roots=[p.strip() for p in self.paths['ubisoft'].text().split(';') if p.strip()],
                 hub_enabled=self.hub_enabled.isChecked(),
+                bedtime_enabled=self.bedtime_enabled.isChecked(),bedtime_minimize=self.bedtime_minimize.isChecked(),
+                **{key:edit.time().hour()*60+edit.time().minute() for key,edit in self.bedtime_times.items()},
                 restriction_enabled=self.restriction_enabled.isChecked(),restriction_seconds=self.restriction_minutes.value()*60,**self.overlay_values()).validate()
             self.tracker.flush(); self.store.save_settings(settings); self.settings=self.catalog.settings=settings
             if not settings.overlay_enabled: self.rtss.cancel_preparation()
@@ -563,6 +613,8 @@ class App(QMainWindow,MonitorActions):
             self._art_queue=list(self.cards); self.call_later(10,self.load_next_art)
             self.settings_error.setText(''); self.last_rows=None; self.set_status('Settings saved.'); self._overlay_preview_until=0; self.update_overlay(); self.render()
             self.prepare_rtss_profiles()
+            from .bedtime import phase
+            self.update_bedtime_banner(settings.bedtime_minimize and phase(settings,datetime.now())[0]=='bedtime')
         except (ValueError,OSError) as exc: self.settings_error.setText(self.t(str(exc)))
 
     def set_status(self,text,**values):
@@ -709,10 +761,11 @@ class App(QMainWindow,MonitorActions):
     def popup(self,alert):
         if self.popup_window: return False
         window=AlertDialog(self); self.popup_window=window; self.popup_day=alert.day
-        window.setWindowTitle(self.t('Game time alert')); window.setFixedSize(590,300)
+        bedtime=alert.kind=='bedtime'; caption=self.t('Bedtime reminder' if bedtime else 'Game time alert')
+        window.setWindowTitle(caption); window.setFixedSize(590,300)
         layout=QVBoxLayout(window); layout.setContentsMargins(30,26,30,25); layout.setSpacing(17)
-        eyebrow=label('●  '+self.t('Game time alert'),'eyebrow'); eyebrow.setStyleSheet('color:#a5eacf;'); layout.addWidget(eyebrow)
-        title=label(self.t('Time to stop playing' if alert.kind in ('limit','session') else 'Game time reminder'),'title'); title.setWordWrap(True); layout.addWidget(title)
+        eyebrow=label('●  '+caption,'eyebrow'); eyebrow.setStyleSheet('color:#a5eacf;'); layout.addWidget(eyebrow)
+        title=label(self.t('Get ready for bed' if bedtime else 'Time to stop playing' if alert.kind in ('limit','session') else 'Game time reminder'),'title'); title.setWordWrap(True); layout.addWidget(title)
         text=label(alert.text); text.setWordWrap(True); layout.addWidget(text,1)
         acknowledge=button(self.t(alert.button),window.accept,'primary'); acknowledge.setDefault(True); layout.addWidget(acknowledge,0,Qt.AlignRight)
         window.finished.connect(lambda result:self._popup_finished(window))

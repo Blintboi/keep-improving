@@ -43,6 +43,10 @@ api(u, "GetUserObjectInformationW", [W.HANDLE, C.c_int, C.c_void_p, W.DWORD, C.P
 api(u, "SetForegroundWindow", [W.HWND], W.BOOL)
 api(u, "SetWindowPos", [W.HWND, W.HWND, C.c_int, C.c_int, C.c_int, C.c_int, W.UINT], W.BOOL)
 api(u, "IsWindowVisible", [W.HWND], W.BOOL)
+api(u, "IsIconic", [W.HWND], W.BOOL)
+api(u, "GetShellWindow", [], W.HWND)
+api(u, "GetDesktopWindow", [], W.HWND)
+api(u, "GetClassNameW", [W.HWND, W.LPWSTR, C.c_int], C.c_int)
 api(u, "ShowWindowAsync", [W.HWND, C.c_int], W.BOOL)
 api(u, "GetAsyncKeyState", [C.c_int], W.SHORT)
 api(s, "SHQueryUserNotificationState", [C.POINTER(C.c_int)], C.c_long)
@@ -124,6 +128,21 @@ def minimize_game(expected_path, expected_identity):
             or u.GetForegroundWindow() != hwnd):
         return False
     return bool(u.ShowWindowAsync(hwnd, 6))  # SW_MINIMIZE
+
+
+def minimize_foreground():
+    """Bedtime: minimize the current application, with no injected keys."""
+    if not interactive_desktop(): return False
+    hwnd = u.GetForegroundWindow()
+    if not hwnd or hwnd in (u.GetShellWindow(), u.GetDesktopWindow()) or u.IsIconic(hwnd): return False
+    pid = W.DWORD()
+    if not u.GetWindowThreadProcessId(hwnd, C.byref(pid)) or pid.value == os.getpid(): return False
+    name = C.create_unicode_buffer(256)
+    if not u.GetClassNameW(hwnd, name, len(name)): return False
+    if name.value in ('Shell_TrayWnd', 'Shell_SecondaryTrayWnd', 'Progman', 'WorkerW'): return False
+    path, identity = process_image(pid.value)
+    if not path or not identity or u.GetForegroundWindow() != hwnd: return False
+    return minimize_game(path, identity)
 
 
 def present_notification(hwnd):

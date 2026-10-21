@@ -340,6 +340,37 @@ class MonitorActions:
             log.exception("Play restriction could not minimize the game")
             self.set_status("Could not minimize the game. Close it manually or change Play restriction in Settings.")
 
+    def bedtime_tick(self, current):
+        from .bedtime import Bedtime, clock_text
+        if not hasattr(self, 'bedtime'):
+            self.bedtime = Bedtime(self.store)
+        state, marker, minimize = self.bedtime.update(self.settings, current)
+        if marker:
+            if self.popup_window: self.dismiss_popup()
+            alert = Alert(str(current.wall.date()), (), 'bedtime',
+                          self.t('It is {time}. Finish what you are doing and get ready for bed at {bedtime}.',
+                                 time=clock_text(self.settings.bedtime_warning_minute), bedtime=clock_text(self.settings.bedtime_minute)),
+                          self.t('OK, I’ll finish'))
+            # Bedtime is independent of game budgets, exclusions and Escape.
+            if self.popup(alert): self.bedtime.delivered(marker)
+        active = state == 'bedtime' and self.settings.bedtime_minimize
+        update = getattr(self, 'update_bedtime_banner', None)
+        if update: update(active)
+        if minimize:
+            try:
+                win32.minimize_foreground()
+            except Exception:
+                log.exception('Bedtime could not minimize the foreground window')
+                self.set_status('Could not minimize the window. Change Bedtime reminder in Settings.')
+        return active
+
+    def test_bedtime_popup(self):
+        from .bedtime import clock_text
+        self.popup(Alert(str(datetime.now().date()), (), 'bedtime',
+                   self.t('It is {time}. Finish what you are doing and get ready for bed at {bedtime}.',
+                          time=clock_text(self.settings.bedtime_warning_minute), bedtime=clock_text(self.settings.bedtime_minute)),
+                   self.t('OK, I’ll finish')))
+
     def tick(self):
         self.tick_timer = None
         if self.closed:
@@ -360,7 +391,12 @@ class MonitorActions:
             self.tracker.tick(current)
             update_overlay = getattr(self, 'update_overlay', None)
             if update_overlay: update_overlay()
-            restricting = self.enforce_gameplay(current)
+            bedtime_restricting = self.bedtime_tick(current)
+            if bedtime_restricting:
+                self._restriction_grace = None
+                if getattr(self, 'restriction_timer', None) is not None:
+                    self.restriction_timer.stop(); self.restriction_timer = None
+            restricting = bedtime_restricting or self.enforce_gameplay(current)
             today = datetime.now().date().isoformat()
             if self.popup_window and self.popup_day != today:
                 self.dismiss_popup()

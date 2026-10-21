@@ -24,7 +24,7 @@ begin
   result:=public.gametime_sync_exchange(a,ip,device,'5',null,'{}');
   if result->>'error'<>'rate' then raise exception 'Per-device rate limit failed'; end if;
   delete from public.gametime_sync_rate;
-  update public.gametime_sync_groups set used_bytes=4194304 where group_hash=b;
+  update public.gametime_sync_groups set used_bytes=2097152 where group_hash=b;
   result:=public.gametime_sync_exchange(b,ip,device,'1',repeat('A',44),'{}');
   if result->>'error'<>'quota' then raise exception 'Per-group storage limit failed'; end if;
   update public.gametime_sync_groups set used_bytes=0,month_requests=60000 where group_hash=b;
@@ -47,7 +47,7 @@ begin
   update public.gametime_sync_budget set enabled=true where singleton;
   delete from public.gametime_sync_rate;
   for i in 1..3 loop
-    result:=public.gametime_sync_exchange(b,ip,lpad(i::text,32,'0'),'1',repeat('A',699052),'{}');
+    result:=public.gametime_sync_exchange(b,ip,lpad(i::text,32,'0'),'1',repeat('A',699048),'{}');
     if result ? 'error' then raise exception 'Fixture large upload failed: %',result; end if;
   end loop;
   result:=public.gametime_sync_exchange(b,ip,device,'1',null,'{}');

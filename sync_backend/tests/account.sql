@@ -43,7 +43,7 @@ begin
  update public.gametime_sync_accounts set month_requests=60000 where owner_id=u;
  r:=public.gametime_sync_exchange(a,ip,device,'1',repeat('A',44),'{}');
  if r->>'error' is distinct from 'rate' then raise exception 'Owner request quota bypassed'; end if;
- update public.gametime_sync_accounts set month_requests=100,day_ingress=500 where owner_id=u;
+ update public.gametime_sync_accounts set month_requests=100,day_ingress=500,month_ingress=1000 where owner_id=u;
  r:=public.gametime_sync_exchange(a,ip,device,'1',repeat('A',44),'{}');
  if r ? 'error' then raise exception 'Owned exchange failed: %',r; end if;
  r:=public.gametime_sync_account(u,s,'activate',b);
@@ -51,14 +51,15 @@ begin
  r:=public.gametime_sync_account(u,s,'rotate',b);
  if r->>'ok' is distinct from 'true' then raise exception 'Explicit rotation failed: %',r; end if;
  if public.gametime_sync_authorize(a) or exists(select 1 from public.gametime_sync_devices where group_hash=a) then raise exception 'Old code/ciphertext survived revocation'; end if;
- if (select month_requests from public.gametime_sync_accounts where owner_id=u)<>101 or (select day_ingress from public.gametime_sync_accounts where owner_id=u)<>544 then raise exception 'Rotation reset owner quotas'; end if;
+ if (select month_requests from public.gametime_sync_accounts where owner_id=u)<>101 or (select day_ingress from public.gametime_sync_accounts where owner_id=u)<>544
+   or (select month_ingress from public.gametime_sync_accounts where owner_id=u)<>1044 then raise exception 'Rotation reset owner quotas'; end if;
  r:=public.gametime_sync_account(u,s,'rotate',a);
  if r->>'error' is distinct from 'revoked' then raise exception 'Retired code reused'; end if;
  r:=public.gametime_sync_account(u,s,'rotate',c);
  if r->>'ok' is distinct from 'true' then raise exception 'Third monthly creation failed'; end if;
  r:=public.gametime_sync_account(u,s,'rotate',d);
  if r->>'error' is distinct from 'rotation_limit' then raise exception 'Rotation quota bypass'; end if;
- update public.gametime_sync_budget set account_limit=account_limit+1,admissions_today=5 where singleton;
+ update public.gametime_sync_budget set account_limit=account_limit+1,admissions_today=25 where singleton;
  r:=public.gametime_sync_account(v,t,'activate',d);
  if r->>'error' is distinct from 'capacity' then raise exception 'Daily admission limit bypass'; end if;
  update public.gametime_sync_budget set admissions_today=0 where singleton;

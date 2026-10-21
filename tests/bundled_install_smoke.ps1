@@ -34,6 +34,8 @@ try {
     $report.runtime_and_profile_verified = $process.ExitCode -eq 0 -and $first.data -eq $data -and $first.games_root -eq $games -and $first.hub_enabled -and $first.language -eq 'en'
     $report.fresh_overlay_is_opt_in = -not $first.overlay_enabled -and $first.overlay_replace_warning -and $first.limit_popup_enabled
     $report.fresh_restriction_is_opt_in = -not $first.restriction_enabled -and $first.restriction_seconds -eq 7500
+    $report.fresh_bedtime_is_opt_in = -not $first.bedtime_enabled -and -not $first.bedtime_minimize -and $first.bedtime_warning_minute -eq 1435 -and $first.bedtime_minute -eq 0 -and $first.bedtime_resume_minute -eq 360
+    $report.bedtime_handover_script_bundled = Test-Path -LiteralPath (Join-Path $app '_internal\gametime\bedtime_legacy.ps1')
     $hubIcon = Join-Path $data 'assets\gaming-hub.ico'
     $report.hub_icon_installed = (Test-Path -LiteralPath $hubIcon) -and (Get-FileHash -LiteralPath $hubIcon).Hash -eq (Get-FileHash -LiteralPath (Join-Path $app '_internal\gametime\app.ico')).Hash
     $shell = New-Object -ComObject WScript.Shell
@@ -65,7 +67,7 @@ try {
     }
     $process = Start-Process -FilePath $exe -ArgumentList @('--configure','--language','hu','--data-dir',('"' + $data + '"')) -WindowStyle Hidden -Wait -PassThru
     if ($process.ExitCode -ne 0) { throw 'Language selection failed.' }
-    'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); c.update(restriction_enabled=True,restriction_seconds=7500,overlay_enabled=True,overlay_replace_warning=True,limit_popup_enabled=False,overlay_opacity=0.55,overlay_x=0.2,overlay_y=0.8,overlay_screen="missing-fixture-monitor",overlay_rtss_auto=False,overlay_rtss_paths=[r"C:\Fixture\game.exe"]); d.execute("UPDATE settings SET value=? WHERE key=?",(json.dumps(c),"config")); d.commit()' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); c.update(bedtime_enabled=True,bedtime_minimize=True,bedtime_minute=30,restriction_enabled=True,restriction_seconds=7500,overlay_enabled=True,overlay_replace_warning=True,limit_popup_enabled=False,overlay_opacity=0.55,overlay_x=0.2,overlay_y=0.8,overlay_screen="missing-fixture-monitor",overlay_rtss_auto=False,overlay_rtss_paths=[r"C:\Fixture\game.exe"]); d.execute("UPDATE settings SET value=? WHERE key=?",(json.dumps(c),"config")); d.commit()' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     if ($LASTEXITCODE -ne 0) { throw 'Overlay fixture settings failed.' }
     @'
 import json,sqlite3,sys
@@ -108,8 +110,15 @@ d.commit(); d.close()
     $oldHub.TargetPath = $games; $oldHub.Arguments = ''; $oldHub.Description = 'Game Time Monitor Gaming Hub'; $oldHub.Save()
     $foreign = Join-Path $desktop 'unrelated.txt'
     'preserve' | Set-Content -LiteralPath $foreign
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $setup -InstallDir $app -DataDir $data -GamesRoot $games -DesktopDir $desktop -StartupName $name -Quiet -NoStart
-    if ($LASTEXITCODE -ne 0) { throw 'Upgrade failed.' }
+    # Reproduce a resident helper still mapping an identical runtime DLL.
+    $lockedRuntime = Join-Path $app '_internal\VCRUNTIME140_1.dll'
+    $runtimeHash = (Get-FileHash -LiteralPath $lockedRuntime).Hash
+    $runtimeLock = [IO.File]::Open($lockedRuntime,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
+    try {
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $setup -InstallDir $app -DataDir $data -GamesRoot $games -DesktopDir $desktop -StartupName $name -Quiet -NoStart
+        if ($LASTEXITCODE -ne 0) { throw 'Upgrade failed with an unchanged locked runtime DLL.' }
+        $report.locked_unchanged_runtime_preserved = (Get-FileHash -LiteralPath $lockedRuntime).Hash -eq $runtimeHash
+    } finally { $runtimeLock.Dispose() }
     # Run the actual frozen startup migration, with cloud sync disabled.
     $securityGui=Start-Process -FilePath $exe -ArgumentList @('--background','--data-dir',('"'+$data+'"')) -WindowStyle Hidden -PassThru
     try {
@@ -136,6 +145,7 @@ d.close()
     $report.language_preserved_on_upgrade = (Get-Content -LiteralPath $diag -Raw -Encoding UTF8 | ConvertFrom-Json).language -eq 'hu'
     $overlayConfig = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); print(c["restriction_enabled"] and c["restriction_seconds"]==7500 and c["overlay_enabled"] and c["overlay_replace_warning"] and not c["limit_popup_enabled"] and c["overlay_opacity"]==0.55 and c["overlay_x"]==0.2 and c["overlay_y"]==0.8 and c["overlay_screen"]=="missing-fixture-monitor")' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     $report.overlay_and_restriction_preferences_preserved_on_upgrade = $overlayConfig -eq 'True'
+    $report.bedtime_preferences_preserved_on_upgrade = (Get-Content -LiteralPath $diag -Raw -Encoding UTF8 | ConvertFrom-Json).bedtime_minute -eq 30 -and (Get-Content -LiteralPath $diag -Raw -Encoding UTF8 | ConvertFrom-Json).bedtime_minimize
     $rtssConfig = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); print(c["overlay_rtss_auto"] is False and c["overlay_rtss_paths"]==[r"C:\Fixture\game.exe"])' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     $report.rtss_selection_preserved_on_upgrade = $rtssConfig -eq 'True'
     $trackingStartAfter = 'import sqlite3,sys; d=sqlite3.connect(sys.argv[1]); print(d.execute("SELECT value FROM settings WHERE key=?",("tracking_started_on",)).fetchone()[0])' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')

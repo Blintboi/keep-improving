@@ -126,6 +126,11 @@ def main():
                               "limit_popup_enabled": store.settings().limit_popup_enabled,
                               "restriction_enabled": store.settings().restriction_enabled,
                               "restriction_seconds": store.settings().restriction_seconds,
+                              "bedtime_enabled": store.settings().bedtime_enabled,
+                              "bedtime_warning_minute": store.settings().bedtime_warning_minute,
+                              "bedtime_minute": store.settings().bedtime_minute,
+                              "bedtime_resume_minute": store.settings().bedtime_resume_minute,
+                              "bedtime_minimize": store.settings().bedtime_minimize,
                               "tracking_started_on": store.tracking_started_on(),
                               "today_seconds": sum(store.totals(datetime.now().date()).values())})
         if args.configure or args.scan_once or args.diagnose or args.sync_hub:

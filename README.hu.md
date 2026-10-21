@@ -1,10 +1,14 @@
-# Játékidőfigyelő — 2.10.0
+# Játékidőfigyelő — 2.11.0
 
-**[Legfrissebb telepítő letöltése — 2.10.0 · Windows x64](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256)
+**[Legfrissebb telepítő letöltése — 2.11.0 · Windows x64](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256)
 
 A letöltött telepítőt indítsd el a telepítéshez vagy frissítéshez. A korábbi előzmények, beállítások és kizárások megmaradnak, és frissítés előtt biztonsági mentés készül.
 
-A 2.10.0 GitHub-belépést ad az összekapcsolási kód létrehozásához, cseréjéhez és visszavonásához. További gép továbbra is ugyanazzal a kóddal csatlakozik. A tokeneket és a függő kódcserét Windows-fiókhoz kötött védelem tárolja; a meglévő kapcsolatok és előzmények megmaradnak. Az ingyenes háttér kezdetben **10 aktív csoportot** fogad, regisztrációs, kérés-, tárhely- és forgalmi korlátokkal. Részletek a [biztonsági leírásban](SECURITY.md).
+A **2.11.0-ban a lefekvési emlékeztető is a Játékfigyelő része**. A **Beállítások → Lefekvési emlékeztető** alatt külön állítható a figyelmeztetés (alapból **23:55**), a lefekvés (**00:00**) és a reggeli feloldás (**06:00**). Opcionálisan a lefekvéstől a feloldásig **10 másodpercenként minimalizálja az előtérben lévő ablakot**, böngészőnél és más alkalmazásoknál is, Esc küldése nélkül. A Hub és a beállítások elérhetők maradnak. A próbagomb csak a figyelmeztetést mutatja meg. Mindez helyi idő szerint, a tálcán is működik, amíg a Játékfigyelő fut; nem ébreszti a gépet és nem pótolja az elmulasztott figyelmeztetést. Az első minimalizálás előtt 10 másodpercet hagy, feloldáskor automatikusan leáll.
+
+A meglévő külön `BedtimeReminder` saját, 23:55-ös ütemezett feladatát az új program a szokásos profil első indításakor automatikusan átveszi: bekapcsolja az emlékeztetőt, menti a régi feladat XML-jét az adatmappa `backups` könyvtárába, és letiltja azt. A korábbi fájlokat megtartja. Új telepítésen az esti funkció kikapcsolva indul, a minimalizálást mindig külön kell bekapcsolni. Az esti időpontok és a napi játékkeret egymástól függetlenek.
+
+A 2.10.0 GitHub-belépést ad az összekapcsolási kód létrehozásához, cseréjéhez és visszavonásához. További gép továbbra is ugyanazzal a kóddal csatlakozik. A tokeneket és a függő kódcserét Windows-fiókhoz kötött védelem tárolja; a meglévő kapcsolatok és előzmények megmaradnak. A 2.11.0 legfeljebb **100 aktív csoportot** fogad, arányosan megosztott kérés- és forgalmi kerettel, a bejelentkezési adatok és a spam korlátozásával. Ez belépési plafon, nem 100 folyamatosan aktív felhasználó garanciája. A közös ingyenes keret kíméléséhez mindkét gépet frissítsd. Részletek a [biztonsági leírásban](SECURITY.md).
 
 A 2.7.4 kevesebb felesleges háttérmunkát végez: a rejtett vagy minimalizált ablak a játéktárat és a statisztikanézetet visszanyitáskor frissíti, az üres feldolgozási várólistákat ritkábban ellenőrzi, az overlay gyors időzítője pedig csak játék vagy előnézet közben fut. A tálcán tovább működik az időmérés, a figyelmeztetés és a szinkronizálás.
 
@@ -102,7 +106,7 @@ A **Statisztikák → Gépek összekapcsolása** vagy a Beállítások azonos ne
 1. Az első gépen kattints a **Bejelentkezés GitHubbal** gombra, majd térj vissza az alkalmazásba és adj nevet a gépnek.
 2. Hagyd bekapcsolva az automatikus szinkronizálást, majd kattints a **Mentés** gombra.
 3. Másold ki a kódot, a másik gépen ugyanebbe az ablakba illeszd be, és mentsd el. Meglévő kódhoz nem szükséges újabb bejelentkezés.
-4. A **Szinkronizálás** gombbal azonnal frissíthetsz. Egyébként a program futás közben általában percenként, változatlan adatoknál fokozatosan ritkítva, legfeljebb ötpercenként szinkronizál.
+4. A **Szinkronizálás** gombbal azonnali frissítést kérhetsz, percenként legfeljebb egyszer, a szerver korlátain belül. Visszaszámlálás védi az ismételt kattintástól. Automatikusan a megnyitott Statisztikák mellett 5 percenként, háttérben 15 percenként frissít; a rejtett ablak nem építi újra emiatt a statisztikákat.
 
 Minden felhasználó saját, véletlenszerű kódot használ. A kód hozzáférést ad a csoporthoz és a titkosítási kulcshoz, ezért tartsd titokban: aki ismeri, olvashatja és meghamisíthatja a csoport statisztikáit. Egy ellenőrzött GitHub-fiók egy aktuális kódot kezel. Az **Új kód** mentése megerősítést kér a korábbi kezelt kód lecseréléséhez: annak szerveroldali másolatai törlődnek, gépei leválnak, a helyi előzmények megmaradnak. A többi gépen is add meg az új kódot. A **Felhős kapcsolat visszavonása** megerősítés után törli a kezelt szervercsoportot. A **Kijelentkezés** a fiókkezelést zárja le ezen a gépen; a kódos szinkronizálás tovább működik.
 

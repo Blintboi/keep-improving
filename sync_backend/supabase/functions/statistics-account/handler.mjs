@@ -18,7 +18,7 @@ async function bodyJSON(request,timeout){
 }
 export function createAccountHandler({url,serviceKey,fetcher=fetch,clock=Date.now,bodyTimeoutMs=5000}){
   let active=0,minute=-1,total=0;
-  const requests=new Map();
+  const requests=new Map(),owners=new Map();
   const handle=async request=>{
     if(request.method!=='POST')return reply(405,{error:'method'});
     const authorization=request.headers.get('authorization')||'';
@@ -31,7 +31,7 @@ export function createAccountHandler({url,serviceKey,fetcher=fetch,clock=Date.no
     // Best-effort isolate-local throttle. Durable storage is never allocated here.
     // Provider invocation limits still apply before this code can execute.
     const bucket=Math.floor(clock()/60000);
-    if(bucket!==minute){minute=bucket;total=0;requests.clear();}
+    if(bucket!==minute){minute=bucket;total=0;requests.clear();owners.clear();}
     const ip=(request.headers.get('x-forwarded-for')||'unknown').split(',').at(-1).trim().slice(0,80);
     const hits=(requests.get(ip)||0)+1;
     if(requests.size<512||requests.has(ip))requests.set(ip,Math.min(hits,61));
@@ -61,6 +61,12 @@ export function createAccountHandler({url,serviceKey,fetcher=fetch,clock=Date.no
         if(claims.sub!==user.id||claims.role!=='authenticated'||claims.iss!==base+'/auth/v1'
           ||typeof claims.session_id!=='string'||!UUID.test(claims.session_id)||!Number.isSafeInteger(claims.exp)||claims.exp*1000<=clock())throw Error('claims');
       }catch{return reply(401,{error:'session'});}
+      // The key comes only from Auth's checked user. Changing IP, JWT or the
+      // requested capability cannot bypass this account's management throttle.
+      const ownerHits=(owners.get(user.id)||0)+1;
+      if(owners.size>=512&&!owners.has(user.id))return reply(429,{error:'rate'},60);
+      owners.set(user.id,Math.min(ownerHits,13));
+      if(ownerHits>12)return reply(429,{error:'rate'},60);
       let group=null;
       if(body.capability!==null)group=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(body.capability))),v=>v.toString(16).padStart(2,'0')).join('');
       const response=await fetcher(base+'/rest/v1/rpc/gametime_sync_account',{method:'POST',

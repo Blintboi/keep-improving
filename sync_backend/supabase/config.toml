@@ -10,3 +10,13 @@ verify_jwt = true
 [auth.hook.before_user_created]
 enabled = true
 uri = "pg-functions://postgres/public/gametime_before_user_created"
+
+[auth.hook.custom_access_token]
+enabled = true
+uri = "pg-functions://postgres/public/gametime_access_token_guard"
+
+[auth.rate_limit]
+# Provider IP limits; OAuth /authorize flow creation is outside these controls.
+token_refresh = 30
+token_verifications = 10
+sign_in_sign_ups = 10

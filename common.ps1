@@ -86,6 +86,7 @@ function Build-GameTimeRTSSBridge([string]$SourceRoot) {
 }
 
 function Get-GameTimeFiles {
+    @('gametime\bedtime.py','gametime\bedtime_legacy.py','gametime\bedtime_legacy.ps1')
     @('SECURITY.md','requirements-runtime.lock')
     @('gametime\statistics_auth.py','gametime\qt_account.py')
     @('gametime\artwork.py','gametime\clients.py','gametime\overlay.py','gametime\rtss.py','gametime\rtss_bridge.cs','gametime\rtss_bridge.exe','gametime\rtss_bridge.exe.sha256','requirements-runtime.txt','gametime\controller.py','gametime\qt_ui.py','gametime\qt_widgets.py','gametime\qt_statistics.py','gametime\icons\chevron.svg','gametime\icons\check.svg','main.py','gametime\__init__.py','gametime\model.py','gametime\discovery.py',

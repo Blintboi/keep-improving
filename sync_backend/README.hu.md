@@ -5,7 +5,7 @@ ellenőrzött **Free** csomagban. Projektazonosító: `jtvdbqwmejrckjejjrdl`;
 régió: `eu-west-1`; PostgreSQL 17. A kliens 2.7.0-tól használja a kódos felületet.
 A végpont: `https://jtvdbqwmejrckjejjrdl.supabase.co/functions/v1/statistics-sync`.
 
-**2.10.0: ellenőrzött GitHub-belépés és kódos gépösszekapcsolás.** A
+**2.11.0: védett bejelentkezés, ritkább szinkron és arányos Free-keretek.** A
 szolgáltató, a helyi PKCE-visszatérés, a tokenfrissítés és a kijelentkezés éles
 ellenőrzése sikeres. Az új regisztráció a kezdeti kereteken belül nyitva van.
 Egy fiók egy aktuális kódot kezel; másik gép a meglévő kóddal csatlakozhat.
@@ -14,8 +14,8 @@ kérésáradat elleni elérhetőséget nem garantál; részletek a
 [biztonsági leírásban](../SECURITY.md).
 
 A `Before User Created` SQL Auth Hook a fiók tárolása előtt korlátozza a
-szolgáltatót és a regisztrációkat: napi 5, kezdetben összesen 50 lefoglalt
-regisztrációs hely. A csoportkeret kezdetben 10 aktív csoport, napi 5 új
+szolgáltatót és a regisztrációkat: napi 25, összesen 500 lefoglalt
+regisztrációs hely. A csoportkeret 100 aktív csoport, napi 25 új
 tulajdonos; fiókonként havi 3 létrehozás/átvétel/kódcsere. A kódcsere nem
 nullázza a fiók forgalmi keretét. Sikertelen regisztráció is foglalhat helyet;
 ellenőrzés nélkül ne nullázd a számlálókat. A titkosított csoportadatok mellett
@@ -84,11 +84,13 @@ A saját korlátok az éles adatbázisban tranzakciósan érvényesülnek:
 | --- | --- |
 | Gépek | 20/csoport, globálisan 10 000 |
 | Titkosított csomag | legfeljebb 512 KiB/gép, a base64 boríték legfeljebb 699 052 bájt |
-| Tárolt base64-adat | 4 MiB/csoport, globálisan 200 MiB (nem a teljes adatbázisméret) |
+| Tárolt base64-adat | 2 MiB/csoport, globálisan 200 MiB (nem a teljes adatbázisméret) |
 | Percenkénti kérések | 4/gép, 40/csoport, 600/IP-lenyomat |
-| Sikeres havi adatcserék | 60 000/csoport, globálisan 350 000 |
-| Számolt havi válaszforgalom | 512 MiB/csoport, globálisan 4 GiB |
-| Napi fel- és válaszforgalom | irányonként 64 MiB/csoport |
+| Sikeres havi adatcserék | min(12 000, 350 000 / max(25, aktív csoportok)), globálisan 350 000 |
+| Számolt havi válaszforgalom | min(128 MiB, 3 GiB / max(25, aktív csoportok)), globálisan 4 GiB |
+| Napi fel- és válaszforgalom | irányonként 8 MiB/csoport és tulajdonos |
+| Összes feltöltés | globálisan 64 MiB/UTC-nap és 1 GiB/UTC-hónap; teljes felülírásokat is számol |
+| Havi feltöltés csoportonként és tulajdonosonként | min(64 MiB, 1 GiB / max(25, aktív csoportok)) |
 | Válasz | legfeljebb kb. 1 MiB titkosított pillanatkép, többlépéses felzárkózás |
 | Edge kérés | 750 000 bájt, 5 másodperces beolvasás; legfeljebb 8 párhuzamos kérés/isolate |
 | Inaktív szervermásolat | 90 nap után törlődik az óránkénti karbantartásban |
@@ -103,12 +105,25 @@ napos `Retry-After` értéket követ, hibánál növekvő, véletlen eltérésse
 A saját kvóta nem a szolgáltató fogyasztásmérője: az elutasított kérés,
 HTTP-fejléc, hálózati többlet és más Supabase-forgalom is terhelheti a keretet.
 A Free csomag jelenleg 500 000 Edge-hívást, 5 GB egress-t és 500 MB
-adatbázist tartalmaz; ez nem garantált felhasználószám. Példa: két mindig
-futó gép ötpercenkénti üresjárati szinkronja 30 nap alatt kb. 17 280 kérés,
-így a saját 350 000-es plafon kb. 20 ilyen felhasználót fed le, tartalék nélkül.
-Folyamatos percenkénti aktív szinkronnál ugyanez 86 400 kérés/felhasználó,
-ami már egy csoport havi kvótáját is eléri. Kezdj kevés meghívottal, és az
-éles szolgáltatói mérések alapján méretezz; a tárhely önmagában félrevezető.
+adatbázist tartalmaz; ez nem garantált felhasználószám. A 2.11 háttérben 15, a megnyitott Statisztikák mellett 5 percenként frissít.
+A kézi kérés percenként egyszer engedélyezett, a szerver késleltetését is betartva.
+Két mindig futó gép 15 perces frissítéssel 30 nap alatt kb. 5760 kérés/fő:
+a 350 000-es globális plafon kb. 60 főt fed le, kézi kérések és tartalék nélkül.
+Ha mindkét gép napi 8 órát fut, kb. 1920 kérés/fő/hó: 100 csoport beleférhet
+ebbe a kérésbecslésbe. Ez nem mért felhasználói kapacitás vagy garancia; a
+forgalmi méret, a látható nézet, a kézi kérések és az elutasítások is számítanak.
+Mindegyik gépet frissítsd: a régi kliensek kompatibilisek, de sűrűbben kérdeznek.
+
+A Custom Access Token Hook felhasználónként legfeljebb 10 munkamenetet,
+percenként 12 és UTC-naponként 120 tokenkiadást, globálisan napi 1000-et enged.
+A bejelentkezési állapotok két Auth-táblájában összesen legfeljebb 1000 sor,
+soronként 16 KiB, a fiókmetaadatban 32 KiB tárolható. Ötpercenként takarítja
+az egy óránál régebbi belépési állapotokat, az aktív munkameneteket megtartva.
+A provider Auth-tábláihoz csatolt invoker triggerek frissítés után újraellenőrzendők.
+Az üzemeltetői hozzáférés nem kerül a klienshez. A visszavont kódokat is számoló
+nyilvántartás 10 000 sorra korlátozott. A telített percenkénti számlálók nem
+íródnak újra minden elutasított kérésnél. Ez tárolási védelem; az elutasított
+kérések továbbra is fogyaszthatnak szolgáltatói híváskeretet.
 
 Új felhasználó a kliens GitHub-belépésével hozhat létre kódot a megadott
 kereten belül. A `registration_enabled=false` csak az új regisztrációt és

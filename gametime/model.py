@@ -71,11 +71,25 @@ class Settings:
     overlay_rtss_paths: list = field(default_factory=list)
     restriction_enabled: bool = False
     restriction_seconds: float = 7500
+    bedtime_enabled: bool = False
+    bedtime_warning_minute: int = 1435
+    bedtime_minute: int = 0
+    bedtime_resume_minute: int = 360
+    bedtime_minimize: bool = False
     statistics_sync_enabled: bool = False
     statistics_sync_group: str = ""
     statistics_device_name: str = ""
 
     def validate(self):
+        if not isinstance(self.bedtime_enabled, bool) or not isinstance(self.bedtime_minimize, bool):
+            raise ValueError('Bedtime switches must be on or off.')
+        for value in (self.bedtime_warning_minute, self.bedtime_minute, self.bedtime_resume_minute):
+            if type(value) is not int or not 0 <= value < 1440:
+                raise ValueError('Choose valid bedtime times.')
+        warning_gap = (self.bedtime_minute-self.bedtime_warning_minute) % 1440
+        sleep_gap = (self.bedtime_resume_minute-self.bedtime_minute) % 1440
+        if not warning_gap or not sleep_gap or warning_gap+sleep_gap >= 1440:
+            raise ValueError('Times must follow this order: reminder, bedtime, resume, then the next reminder.')
         if (not isinstance(self.statistics_sync_enabled, bool)
                 or not isinstance(self.statistics_sync_group, str)
                 or (self.statistics_sync_group and not re.fullmatch(r'(?:[0-9a-f]{12}|[0-9a-f]{32})', self.statistics_sync_group))

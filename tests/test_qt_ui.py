@@ -53,6 +53,36 @@ class QtInterfaceTests(unittest.TestCase):
         until=time.monotonic()+seconds
         while time.monotonic()<until: self.qt.processEvents(); time.sleep(.005)
 
+    def test_manual_sync_cooldown_and_hidden_window_cadence(self):
+        code='d'*32
+        self.app.settings=replace(self.app.settings,statistics_sync_enabled=True,statistics_sync_group=code)
+        self.app.pages.setCurrentIndex(1)
+        with patch('gametime.qt_ui.time.monotonic',return_value=100000),patch.object(self.app.statistics_sync,'request',return_value=True) as request:
+            self.app.request_statistics_sync()
+            self.app._sync_busy=False
+            self.app.request_statistics_sync()
+            self.assertEqual(request.call_count,1)
+            self.app.statistics.refresh()
+            self.assertFalse(self.app.statistics.sync_now.isEnabled())
+            self.assertEqual(self.app.statistics_sync_interval(),900)
+        with patch('gametime.qt_ui.time.monotonic',return_value=100061),patch.object(self.app.statistics_sync,'request',return_value=True) as request:
+            self.app.update_statistics_sync_controls()
+            self.assertTrue(self.app.statistics.sync_now.isEnabled())
+            self.app.request_statistics_sync(); request.assert_called_once()
+
+    def test_visible_statistics_cadence_and_server_retry_cannot_be_bypassed(self):
+        code='e'*32
+        self.app.settings=replace(self.app.settings,statistics_sync_enabled=True,statistics_sync_group=code)
+        self.app.pages.setCurrentIndex(1)
+        with patch.object(self.app,'isVisible',return_value=True),patch.object(self.app,'isMinimized',return_value=False):
+            self.assertEqual(self.app.statistics_sync_interval(),300)
+            self.app.pages.setCurrentIndex(0)
+            self.assertEqual(self.app.statistics_sync_interval(),900)
+        with patch.object(self.app.statistics_sync,'retry_delay',return_value=3600),patch.object(self.app.statistics_sync,'request') as request:
+            self.app.request_statistics_sync(); request.assert_not_called()
+            self.app.update_statistics_sync_controls()
+            self.assertFalse(self.app.statistics.sync_now.isEnabled())
+
     def test_search_source_sort_and_keyboard_card_selection(self):
         from PySide6.QtCore import Qt
         from PySide6.QtTest import QTest
