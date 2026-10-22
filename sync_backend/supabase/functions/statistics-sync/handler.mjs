@@ -21,7 +21,7 @@ A Windows game-time monitor with encrypted statistics synchronization. GitHub si
 
 Kapcsolat / Contact: https://github.com/Blintboi
 `;
-const FORMAT = 'GameTimeMonitor.sync.v1';
+const FORMAT = 'GameTimeMonitor.sync.v2';
 const ID = /^[0-9a-f]{32}$/;
 const KEY = /^[0-9a-f]{64}$/;
 const VERSION = /^[1-9][0-9]{0,18}$/;
@@ -100,6 +100,10 @@ export function createHandler({ url, serviceKey, fetcher = fetch, clock = Date.n
       {status:200,headers:{...HEADERS,'content-type':'text/plain; charset=utf-8'}});
     if (request.method === 'GET' && new URL(request.url).pathname.endsWith('/health')) return reply(200, { format: FORMAT, status: 'ok' });
     if (request.method !== 'POST') return reply(405, { error: 'method' });
+    // Retired automatic clients stop here: no body read, hashing or database RPC.
+    // This is protocol negotiation, not a secret; SQL still enforces fair use.
+    if (request.headers.get('x-gametime-sync') !== 'event-driven-v2')
+      return reply(426, { error: 'upgrade_required', minimum_version: '2.12.0' }, 86400);
     const authorization = request.headers.get('authorization') || '';
     if (!authorization.startsWith('Bearer ') || !KEY.test(authorization.slice(7))) return reply(401, { error: 'credential' });
     if (!/^application\/json(?:\s*;|$)/i.test(request.headers.get('content-type') || '')
@@ -139,13 +143,14 @@ export function createHandler({ url, serviceKey, fetcher = fetch, clock = Date.n
         { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
       const ipHash = Array.from(new Uint8Array(await crypto.subtle.sign('HMAC', ipKey, new TextEncoder().encode(ip))),
         value => value.toString(16).padStart(2, '0')).join('');
-      const result = await rpc('gametime_sync_exchange', { p_group: group, p_ip: ipHash,
+      const result = await rpc('gametime_sync_exchange_limited', { p_group: group, p_ip: ipHash,
         p_device: body.device, p_revision: body.revision, p_payload: body.payload, p_known: body.known });
-      if (result.error === 'rate' || result.error === 'quota') {
-        const status = result.error === 'rate' ? 429 : 507;
+      if (result.error === 'rate' || result.error === 'quota' || result.error === 'cooldown') {
+        const status = result.error === 'quota' ? 507 : 429;
         const retry = Number.isFinite(result.retry_after) ? Math.max(1, Math.min(86400, result.retry_after)) : 60;
         // Rejected traffic must not repeatedly update SQL rate rows or scan payloads.
-        remember(cooling, group, { status, error: result.error, until: clock() + Math.min(60, retry) * 1000 });
+        // Device cooldown must not block a different computer in the same group.
+        if (result.error !== 'cooldown') remember(cooling, group, { status, error: result.error, until: clock() + Math.min(60, retry) * 1000 });
         return reply(status, { error: result.error }, retry);
       }
       if (result.error === 'admission') { admitted.delete(group); return reply(403, { error: 'admission' }, 3600); }

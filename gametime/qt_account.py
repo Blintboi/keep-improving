@@ -22,7 +22,7 @@ def statistics_dialog(app):
     login=button(t('Sign in with GitHub'),lambda:authenticate('login'))
     logout=button(t('Sign out'),lambda:authenticate('logout'))
     account_row.addWidget(login); account_row.addWidget(logout); layout.addLayout(account_row)
-    enabled=QCheckBox(t('Automatically synchronize statistics')); enabled.setChecked(app.settings.statistics_sync_enabled or not CLOUD_CODE.fullmatch(app.settings.statistics_sync_group)); layout.addWidget(enabled)
+    enabled=QCheckBox(t('Enable statistics sync')); enabled.setChecked(app.settings.statistics_sync_enabled or not CLOUD_CODE.fullmatch(app.settings.statistics_sync_group)); layout.addWidget(enabled)
     layout.addWidget(label(t('Computer name'),'muted'))
     name=QLineEdit(app.settings.statistics_device_name or computer_name()); name.setMaxLength(80); name.setMinimumHeight(40); name.setAccessibleName(t('Computer name')); layout.addWidget(name)
     layout.addWidget(label(t('Connection code'),'muted'))
@@ -66,8 +66,8 @@ def statistics_dialog(app):
             statistics_sync_group=settings.statistics_sync_group,statistics_device_name=settings.statistics_device_name).validate()
         app.store.save_settings(settings); app.settings=app.catalog.settings=settings
         app.store.pending_connection(clear=True)
-        app.statistics_sync.cancel(); app._sync_busy=False; app._sync_attempted=0
-        app._sync_interval=900; app._sync_revision=None
+        app.statistics_sync.cancel(); app._sync_busy=False; app._sync_startup_pending=False
+        app._sync_event_pending=False; app.statistics_event_timer.stop()
         app._sync_status='Statistics sync is off.'; app.statistics.scope='all'; app.statistics.refresh()
         app.request_statistics_sync(); app.update_statistics_sync_status(); window.accept()
     def provision(settings,action='activate'):

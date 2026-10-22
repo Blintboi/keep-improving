@@ -1,6 +1,6 @@
-# Game Time Monitor — 2.11.0
+# Game Time Monitor — 2.12.0
 
-**[Download for Windows x64 — 2.11.0](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256) · [Magyar](README.hu.md)
+**[Download for Windows x64 — 2.12.0](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256) · [Magyar](README.hu.md)
 
 A Windows 11 gaming hub that tracks foreground play time, shows your daily budget and reminds you when it is time to finish. It also includes a configurable bedtime reminder.
 
@@ -73,7 +73,7 @@ To link your own computers:
 1. On the first computer, open **Statistics → Link computers**, sign in with GitHub, enable synchronization and save.
 2. Copy the generated connection code. Paste it into the same dialog on the other computer and save. Joining an existing code does not require another GitHub sign-in.
 
-Automatic sync runs every five minutes while Statistics is visible and every fifteen minutes in the background. **Sync now** permits a manual request once a minute, within server limits. The charts can combine linked computers; daily budgets and exclusions remain local to each computer.
+Sync runs once at startup, when tracked gameplay starts, and after gameplay stops (nearby changes are combined after one quiet minute). There is no periodic background sync. **Sync now** also works manually. Each computer waits at least ten minutes between requests; pending gameplay changes wait for that guard. Linked computers share a server limit of 20 successful requests per UTC day and 600 per UTC month, also enforced per code owner across code changes. Restarting the app does not reset the guard. All linked computers need version 2.12.0 or newer for cloud sync; existing codes and encrypted history remain valid. The charts can combine computers; daily budgets and exclusions remain local. A computer must stay online until its pending upload completes for its latest time to appear elsewhere.
 
 **Keep the connection code private:** it provides access to the linked group's encrypted history. The shared hosted service has registration and usage limits and no guaranteed availability. Local tracking continues when sync is unavailable.
 

@@ -104,6 +104,21 @@ class StatisticsData:
         ''')
         self._migrate_group_labels()
         store.checkpoint_credentials()
+        row = store.db.execute("SELECT value FROM settings WHERE key='statistics_sync_not_before'").fetchone()
+        try: delay = min(86400, max(0, float(row[0])-time.time())) if row else 0
+        except (ValueError, TypeError): delay = 0
+        self._sync_not_before = time.monotonic()+delay
+
+    def sync_delay(self):
+        return max(0, self._sync_not_before-time.monotonic())
+
+    def defer_sync(self, seconds):
+        """Cache the guard in memory and retain it across restarts/code changes."""
+        delay = min(86400, max(self.sync_delay(), seconds))
+        self._sync_not_before = time.monotonic()+delay
+        with self.store.db:
+            self.store.db.execute("INSERT OR REPLACE INTO settings VALUES ('statistics_sync_not_before',?)",
+                                  (str(time.time()+delay),))
 
     def _migrate_group_labels(self):
         # Routing labels and snapshot-state keys must not duplicate the secret.

@@ -53,7 +53,7 @@ class QtInterfaceTests(unittest.TestCase):
         until=time.monotonic()+seconds
         while time.monotonic()<until: self.qt.processEvents(); time.sleep(.005)
 
-    def test_manual_sync_cooldown_and_hidden_window_cadence(self):
+    def test_manual_sync_cooldown_survives_restart_and_code_change(self):
         code='d'*32
         self.app.settings=replace(self.app.settings,statistics_sync_enabled=True,statistics_sync_group=code)
         self.app.pages.setCurrentIndex(1)
@@ -64,24 +64,80 @@ class QtInterfaceTests(unittest.TestCase):
             self.assertEqual(request.call_count,1)
             self.app.statistics.refresh()
             self.assertFalse(self.app.statistics.sync_now.isEnabled())
-            self.assertEqual(self.app.statistics_sync_interval(),900)
-        with patch('gametime.qt_ui.time.monotonic',return_value=100061),patch.object(self.app.statistics_sync,'request',return_value=True) as request:
+            from gametime.statistics_sync import StatisticsData
+            restored=StatisticsData(self.store)
+            self.assertGreater(restored.sync_delay(),599)
+            self.app.settings=replace(self.app.settings,statistics_sync_group='f'*32)
+            self.app.request_statistics_sync()
+            self.assertEqual(request.call_count,1)
+        with patch('gametime.qt_ui.time.monotonic',return_value=100601),patch.object(self.app.statistics_sync,'request',return_value=True) as request:
             self.app.update_statistics_sync_controls()
             self.assertTrue(self.app.statistics.sync_now.isEnabled())
             self.app.request_statistics_sync(); request.assert_called_once()
 
-    def test_visible_statistics_cadence_and_server_retry_cannot_be_bypassed(self):
+    def test_startup_once_without_periodic_sync_or_automatic_retry(self):
         code='e'*32
         self.app.settings=replace(self.app.settings,statistics_sync_enabled=True,statistics_sync_group=code)
-        self.app.pages.setCurrentIndex(1)
-        with patch.object(self.app,'isVisible',return_value=True),patch.object(self.app,'isMinimized',return_value=False):
-            self.assertEqual(self.app.statistics_sync_interval(),300)
-            self.app.pages.setCurrentIndex(0)
-            self.assertEqual(self.app.statistics_sync_interval(),900)
+        self.app._sync_startup_pending=True
+        with patch.object(self.app.statistics_sync,'request',return_value=True) as request:
+            self.app.poll_statistics_sync(); request.assert_called_once()
+            self.app._sync_busy=False
+            self.app.statistics_data._sync_not_before=0
+            for visible,page in ((True,1),(True,0),(False,1)):
+                self.app.pages.setCurrentIndex(page)
+                with patch.object(self.app,'isVisible',return_value=visible):
+                    self.app.poll_statistics_sync()
+            request.assert_called_once()
+        # A guarded startup is consumed once; expiration never queues a retry.
+        self.app._sync_startup_pending=True
         with patch.object(self.app.statistics_sync,'retry_delay',return_value=3600),patch.object(self.app.statistics_sync,'request') as request:
-            self.app.request_statistics_sync(); request.assert_not_called()
+            self.app.poll_statistics_sync(); self.app.request_statistics_sync(); request.assert_not_called()
             self.app.update_statistics_sync_controls()
             self.assertFalse(self.app.statistics.sync_now.isEnabled())
+        with patch.object(self.app.statistics_sync,'request') as request:
+            self.app.poll_statistics_sync(); request.assert_not_called()
+
+    def test_gameplay_events_coalesce_and_share_the_durable_guard(self):
+        from gametime.tracker import Sample
+        code='e'*32
+        self.app.settings=replace(self.app.settings,statistics_sync_enabled=True,statistics_sync_group=code)
+        start=datetime.now().astimezone()
+        with patch.object(self.app,'schedule_statistics_event') as schedule:
+            with patch('gametime.controller.win32.sample',return_value=Sample(start,100,str(self.exe),'fixture:1')):
+                self.app.tick()
+            with patch('gametime.controller.win32.sample',return_value=Sample(start+timedelta(seconds=1),101)):
+                self.app.tick()
+            self.assertEqual([call.args for call in schedule.call_args_list],[(0,),(60,)])
+        self.app.statistics_data.defer_sync(600)
+        with patch.object(self.app.statistics_sync,'request') as request:
+            for playing in (True,False,True,False): self.app.statistics_activity_changed(playing)
+            request.assert_not_called()
+            self.assertTrue(self.app.statistics_event_timer.isSingleShot())
+            self.assertGreater(self.app.statistics_event_timer.remainingTime(),598000)
+            self.app.statistics_event_timer.stop()
+            self.app.statistics_data._sync_not_before=0
+            request.return_value=True
+            self.app.sync_statistics_event(); request.assert_called_once()
+            self.app._sync_busy=False
+            self.app.poll_statistics_sync(); request.assert_called_once()
+            self.assertFalse(self.app._sync_event_pending)
+        self.app.settings=replace(self.app.settings,statistics_sync_enabled=False)
+        self.app.statistics_activity_changed(True)
+        self.assertFalse(self.app.statistics_event_timer.isActive())
+
+    def test_server_delay_is_persisted_without_scheduling_error_retries(self):
+        from gametime.qt_ui import SERVICE_URL
+        from gametime.statistics_sync import StatisticsData
+        code='f'*32
+        self.app.settings=replace(self.app.settings,statistics_sync_enabled=True,statistics_sync_group=code)
+        self.app._sync_busy=True
+        self.app.statistics_sync.results.put(((SERVICE_URL,code,self.app.statistics_sync.generation),[],
+            self.app.statistics_sync.failure_message))
+        with patch.object(self.app.statistics_sync,'retry_delay',return_value=3600):
+            self.app.poll_statistics_sync()
+        self.assertGreater(StatisticsData(self.store).sync_delay(),3599)
+        self.assertFalse(self.app.statistics_event_timer.isActive())
+        self.assertFalse(self.app._sync_startup_pending)
 
     def test_search_source_sort_and_keyboard_card_selection(self):
         from PySide6.QtCore import Qt

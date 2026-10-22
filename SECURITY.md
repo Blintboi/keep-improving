@@ -2,7 +2,7 @@
 
 ## Current launch status
 
-**2.11.0 supports verified GitHub account admission and code-based computer
+**2.12.0 supports verified GitHub account admission and code-based computer
 linking on the existing Supabase Free project.** GitHub OAuth, the native PKCE
 round trip, token refresh, session revocation and existing-group ownership have
 been checked against the live service. GitHub profile/email access is read-only;
@@ -151,7 +151,7 @@ New objects created by postgres no longer automatically grant public client
 table/sequence/function access; migrations explicitly grant the required roles.
 
 Each group has 2 MiB stored ciphertext. Monthly requests per group AND owner are
-min(12,000, floor(350,000/max(25, enabled groups))); monthly response bytes are
+min(600, floor(350,000/max(25, enabled groups))); monthly response bytes are
 min(128 MiB, floor(3 GiB/max(25, enabled groups))). Daily ingress/response caps
 are 8 MiB per group and owner. Upload churn has a global 64 MiB/UTC day and
 1 GiB/UTC month ceiling; each group AND owner gets monthly upload bytes of
@@ -162,15 +162,27 @@ at rollout because earlier uploads were not recorded monthly. Global 200 MiB sto
 4 GiB response ceilings remain. Owner counters survive rotation. The fair share
 can shrink as users join; it does not reserve upstream capacity against floods.
 
-The 2.11 client polls every 15 minutes in the background, five minutes with
-Statistics visible, and permits manual sync once a minute without bypassing
-Retry-After. Two always-online computers at 15-minute cadence use about 5,760
-exchanges per 30 days: the global budget covers about 60 such users before any
-manual/visible-view traffic or reserve. Two computers running eight hours/day
-use about 1,920: 100 groups fit that request estimate with reserve. These are
-request-only estimates, not load-test results; ciphertext size, egress, Auth,
-manual requests and rejection traffic also matter. All computers should upgrade;
-older clients remain compatible but poll more frequently.
+The 2.12 client exchanges once at startup, on tracked gameplay start/stop events,
+and manually. A one-minute quiet period combines nearby stops. Requests share a
+ten-minute guard, persisted locally across restarts and checked independently per
+device in PostgreSQL. Pending gameplay events wait for the guard; errors alone do
+not schedule retries. Each linked group AND code owner is limited to 20 successful
+requests per UTC day and 600 per UTC month, including missing-copy probes. Owner
+daily/monthly ledgers survive code rotation; changing device IDs cannot reset them.
+The existing service-only core exchange is called only through the limited RPC by
+the Edge handler. Public client roles cannot invoke either function directly.
+
+Cloud synchronization requires version 2.12.0 or newer. Requests without the v2
+policy header receive HTTP 426 with Retry-After 86400 before body reading, hashing
+or database work. The policy header is public protocol negotiation, not identity
+or proof of an authentic binary. A caller that imitates it still meets the SQL
+guards. Existing codes, encrypted snapshots and cached/local history remain valid.
+Rejected traffic still consumes provider invocations; this is not flood protection.
+
+Two computers each starting once a day generate about 60 startup requests per
+30 days, plus gameplay events, manual requests and any missing-copy repairs. The
+600 monthly cap is a fair-use ceiling, not predicted consumption or measured user
+capacity. No increase to the 100-group admission ceiling or paid hosting is made.
 
 Set up operator MFA on Supabase and GitHub, restrict project/repository admins,
 retain offline backups, monitor provider invocations/egress/database usage and

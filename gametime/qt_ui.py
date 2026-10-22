@@ -27,7 +27,7 @@ from .qt_statistics import StatisticsPage
 from .overlay import CountdownOverlay,PositionPicker,choose_screen,foreground_screen_name
 from .rtss import Backend as RTSSBackend, countdown as rtss_countdown, installation as rtss_installation
 from .statistics_sync import StatisticsData
-from .statistics_cloud import CloudSyncWorker,SERVICE_URL
+from .statistics_cloud import CloudSyncWorker,SERVICE_URL,SYNC_COOLDOWN
 from .statistics_auth import AuthWorker
 
 log=logging.getLogger(__name__)
@@ -81,8 +81,11 @@ class App(QMainWindow,MonitorActions):
         self.statistics_data=StatisticsData(store); self.statistics_sync=CloudSyncWorker()
         self.account_auth=AuthWorker(); self.account_session=store.account_session()
         self._auth_busy=False; self._auth_callback=None
-        self._sync_busy=False; self._sync_attempted=0; self._sync_status='Statistics sync is off.'
-        self._sync_interval=900; self._sync_revision=None
+        self._sync_busy=False; self._sync_status='Sync runs at startup, around gameplay or manually.'
+        self._sync_startup_pending=self.settings.statistics_sync_enabled
+        self._sync_event_pending=False
+        self.statistics_event_timer=QTimer(self); self.statistics_event_timer.setSingleShot(True)
+        self.statistics_event_timer.timeout.connect(self.sync_statistics_event)
         self.tracker=Tracker(store,self.catalog); self.hub=hub or HubWorker(data_dir); self.hub_fingerprint=None
         self.service=service or DiscoveryService(self.settings)
         self.catalog.steam_libraries=self.service.discovery.libraries_from_metadata()
@@ -284,32 +287,30 @@ class App(QMainWindow,MonitorActions):
             if widget: widget.setText(self.statistics_sync_status())
         self.update_statistics_sync_controls()
 
-    def statistics_sync_interval(self):
-        return 300 if self.isVisible() and not self.isMinimized() and self.pages.currentIndex()==1 else 900
-
     def update_statistics_sync_controls(self):
         page=getattr(self,'statistics',None)
         if not page: return
         delay=max(self.statistics_sync.retry_delay(SERVICE_URL,self.settings.statistics_sync_group),
-                  max(0,60-(time.monotonic()-self._sync_attempted)) if self._sync_attempted else 0)
+                  self.statistics_data.sync_delay())
         allowed=self.settings.statistics_sync_enabled and not self._sync_busy and not delay
         if page.sync_now.isEnabled()!=bool(allowed): page.sync_now.setEnabled(bool(allowed))
         # Reuse the existing GUI timer only while a visible countdown is useful.
         if not self.isVisible() or self.isMinimized() or self.pages.currentIndex()!=1: return
-        text=self.t('Sync in {seconds}s',seconds=int(delay)+1) if 0<delay<=60 else self.t('Sync later' if delay else 'Sync now')
+        text=(self.t('Sync in {seconds}s',seconds=int(delay)+1) if 0<delay<=60 else
+              self.t('Sync in {minutes} min',minutes=int(delay/60)+1) if delay else self.t('Sync now'))
         if page.sync_now.text()!=text: page.sync_now.setText(text)
 
     def request_statistics_sync(self):
         if self.closed or self._sync_busy or not self.settings.statistics_sync_enabled: return
         if self.statistics_sync.retry_delay(SERVICE_URL,self.settings.statistics_sync_group): return
-        if self._sync_attempted and time.monotonic()-self._sync_attempted<60: return
-        self._sync_attempted=time.monotonic()
+        if self.statistics_data.sync_delay(): return
+        self._sync_startup_pending=False
         try:
             if not SERVICE_URL: raise ValueError('The synchronization service is not configured yet.')
+            self.statistics_data.defer_sync(SYNC_COOLDOWN)
+            self._sync_event_pending=False; self.statistics_event_timer.stop()
             self.tracker.flush()
             snapshot=self.statistics_data.snapshot(self.settings.statistics_sync_group,self.settings.statistics_device_name)
-            self._sync_interval=self.statistics_sync_interval()
-            self._sync_revision=snapshot['revision']
             self._sync_busy=self.statistics_sync.request(SERVICE_URL,self.settings.statistics_sync_group,snapshot,
                                                        self.statistics_data.revisions(self.settings.statistics_sync_group))
             self._sync_status='Synchronizing statistics…'
@@ -319,6 +320,28 @@ class App(QMainWindow,MonitorActions):
         self.update_statistics_sync_status()
         self.update_assets_interval()
 
+    def statistics_activity_changed(self, playing):
+        # Foreground transitions already observed for accounting; no process scans.
+        # One quiet minute coalesces Alt-Tab/game-ending events into a single upload.
+        self.schedule_statistics_event(0 if playing else 60)
+
+    def schedule_statistics_event(self, quiet_seconds=0):
+        if self.closed or not self.settings.statistics_sync_enabled: return
+        self._sync_event_pending=True
+        delay=max(quiet_seconds,self.statistics_data.sync_delay(),
+                  self.statistics_sync.retry_delay(SERVICE_URL,self.settings.statistics_sync_group))
+        self.statistics_event_timer.start(max(1,int(delay*1000)+1))
+
+    def sync_statistics_event(self):
+        if self.closed or not self.settings.statistics_sync_enabled:
+            self._sync_event_pending=False; return
+        if self._sync_busy: return  # Completion arms the one pending event.
+        if (self.statistics_data.sync_delay() or
+            self.statistics_sync.retry_delay(SERVICE_URL,self.settings.statistics_sync_group)):
+            self.schedule_statistics_event(); return
+        self._sync_event_pending=False
+        self.request_statistics_sync()
+
     def poll_statistics_sync(self):
         while not self.statistics_sync.results.empty():
             token,values,warning=self.statistics_sync.results.get_nowait()
@@ -326,13 +349,17 @@ class App(QMainWindow,MonitorActions):
             self._sync_busy=False; changed=False
             for value in values:
                 try: changed=self.statistics_data.ingest(value,token[1]) or changed
-                except ValueError: warning='Some computer data could not be read. Sync will retry automatically.'
+                except ValueError: warning='Some computer data could not be read. Try syncing manually later.'
+            delay=self.statistics_sync.retry_delay(SERVICE_URL,self.settings.statistics_sync_group)
+            if delay: self.statistics_data.defer_sync(delay)
             self._sync_status=warning or 'Statistics synchronized.'
+            if self._sync_event_pending and not self.statistics_event_timer.isActive():
+                self.schedule_statistics_event()
             if changed and self.isVisible() and not self.isMinimized() and self.pages.currentIndex()==1: self.statistics.refresh()
             self.update_statistics_sync_status()
-        self._sync_interval=self.statistics_sync_interval()
         self.update_statistics_sync_controls()
-        if self.settings.statistics_sync_enabled and not self._sync_busy and time.monotonic()-self._sync_attempted>=self._sync_interval:
+        if self._sync_startup_pending:
+            self._sync_startup_pending=False
             self.request_statistics_sync()
 
     def statistics_sync_dialog(self):
@@ -864,6 +891,7 @@ class App(QMainWindow,MonitorActions):
     def close(self):
         if self.closed: return
         self.closed=True
+        self.statistics_event_timer.stop()
         self.statistics_sync.close(); self.account_auth.close()
         for timer in list(self._timers): timer.stop(); timer.deleteLater()
         self._timers.clear(); self.dismiss_popup()

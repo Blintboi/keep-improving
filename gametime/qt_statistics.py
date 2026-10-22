@@ -19,7 +19,7 @@ class StatisticsPage(QWidget):
         header=QHBoxLayout(); header.addWidget(label(t('Statistics'),'title'),1)
         header.addWidget(button(t('Link computers'),app.statistics_sync_dialog))
         self.sync_now=button(t('Sync now'),app.request_statistics_sync); self.sync_now.setEnabled(app.settings.statistics_sync_enabled); header.addWidget(self.sync_now)
-        self.sync_now.setToolTip(t('Automatic sync runs every 5 minutes while Statistics is open, otherwise every 15 minutes. Manual sync is limited to once a minute and follows server limits.'))
+        self.sync_now.setToolTip(t('Sync runs at startup, when gameplay starts and after it stops, or manually. Requests wait at least 10 minutes; nearby game changes are combined. Server limits also apply.'))
         header.addWidget(button(t('Refresh'),self.refresh)); layout.addLayout(header)
         devices_row=QHBoxLayout(); devices_row.addWidget(label(t('Computers'),'muted'))
         self.devices=QComboBox(); self.devices.setMinimumWidth(250); self.devices.setMaximumWidth(320); devices_row.addWidget(self.devices)

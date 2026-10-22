@@ -388,7 +388,11 @@ class MonitorActions:
                 self.show()
             self.drain_discovery()
             current = win32.sample()
+            was_playing = self.tracker.active is not None
             self.tracker.tick(current)
+            activity_changed = getattr(self, 'statistics_activity_changed', None)
+            if activity_changed and was_playing != (self.tracker.active is not None):
+                activity_changed(self.tracker.active is not None)
             update_overlay = getattr(self, 'update_overlay', None)
             if update_overlay: update_overlay()
             bedtime_restricting = self.bedtime_tick(current)

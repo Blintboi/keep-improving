@@ -14,7 +14,9 @@ import zlib
 
 from .statistics_sync import ID, MAX_BYTES, MAX_DEVICES, SyncWorker, validate_snapshot
 
-CLOUD_FORMAT = 'GameTimeMonitor.sync.v1'
+CLOUD_FORMAT = 'GameTimeMonitor.sync.v2'
+SYNC_POLICY = 'event-driven-v2'
+SYNC_COOLDOWN = 600
 CLOUD_CODE = re.compile(r'[0-9a-f]{32}')
 MAX_ENCRYPTED = 512 * 1024
 MAX_RESPONSE = 2 * 1024 * 1024
@@ -99,7 +101,7 @@ class SyncUnavailable(OSError):
 
 
 class CloudSyncWorker(SyncWorker):
-    failure_message = 'The synchronization service is unavailable. Sync will retry automatically.'
+    failure_message = 'The synchronization service is unavailable. Try syncing manually later.'
 
     def __init__(self, *, allow_local_http=False):
         super().__init__()
@@ -115,7 +117,9 @@ class CloudSyncWorker(SyncWorker):
         if getattr(error,'status',0)==403:
             return 'Cloud sync is not enabled for this connection code. Local statistics are kept.'
         if getattr(error,'status',0) in (429,507):
-            return 'The sync limit was reached. Local statistics are kept; synchronization will retry later.'
+            return 'The sync limit was reached. Local statistics are kept; try syncing manually later.'
+        if getattr(error,'status',0)==426:
+            return 'Update Game Time Monitor to synchronize statistics. Local statistics are kept.'
         return self.failure_message
 
     def request(self, service, code, snapshot, known=None):
@@ -129,7 +133,8 @@ class CloudSyncWorker(SyncWorker):
             raise ValueError('Invalid synchronization service address.')
         request = Request(service, data=json.dumps(body, separators=(',', ':')).encode('utf-8'), method='POST',
                           headers={'Authorization': 'Bearer ' + authorization, 'Content-Type': 'application/json',
-                                   'Accept': 'application/json', 'User-Agent': 'GameTimeMonitor/statistics-v1'})
+                                   'Accept': 'application/json', 'User-Agent': 'GameTimeMonitor/statistics-v2',
+                                   'X-GameTime-Sync': SYNC_POLICY})
         try:
             with self.opener.open(request, timeout=12) as response:
                 deadline=time.monotonic()+20; chunks=[]; size=0
@@ -147,6 +152,7 @@ class CloudSyncWorker(SyncWorker):
                 header=error.headers.get('Retry-After','')
                 delay=min(86400,max(1,int(header))) if re.fullmatch(r'[0-9]{1,8}',header) else 0
                 if error.code in (401,403): delay=max(delay,3600)
+                if error.code==426: delay=max(delay,86400)
                 raise SyncUnavailable(self.failure_message,delay,error.code) from None
             finally: error.close()
         except (URLError, UnicodeError, RecursionError):

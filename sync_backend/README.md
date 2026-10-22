@@ -38,7 +38,8 @@ Limits are enforced transactionally in the supplied migrations. They protect sto
 | Encrypted device snapshot | 512 KiB; base64 envelope up to 699,052 bytes |
 | Stored base64 data | 2 MiB per group; 200 MiB globally |
 | Requests per minute | 4 per device; 40 per group; 600 per keyed IP hash |
-| Successful monthly exchanges | `min(12,000, 350,000 / max(25, active groups))` per group; 350,000 globally |
+| Successful exchanges | 20 per UTC day and `min(600, 350,000 / max(25, active groups))` per UTC month, per group AND owner; 350,000 globally per month |
+| Device cooldown | Ten minutes between completed exchanges; persistent server check |
 | Counted monthly response traffic | `min(128 MiB, 3 GiB / max(25, active groups))` per group; 4 GiB globally |
 | Daily upload and response traffic | 8 MiB in each direction per group and owner |
 | Global uploads | 64 MiB per UTC day; 1 GiB per UTC month, including overwrites |
@@ -46,9 +47,25 @@ Limits are enforced transactionally in the supplied migrations. They protect sto
 | HTTP request body | 750,000 bytes; 5-second read deadline; 8 concurrent requests per isolate |
 | Inactive device snapshots | Removed after 90 days by hourly maintenance |
 
-The client syncs every five minutes while Statistics is visible and every fifteen minutes in the background. Manual sync is limited to once per minute and honors server delays. Idle workers block on their queues. Errors use bounded retry delays with backoff and jitter; local tracking and the last downloaded statistics remain available.
+The 2.12 client syncs once at startup, on tracked gameplay start/stop events and
+manually. One quiet minute coalesces nearby stops; a single-shot event timer waits
+for the ten-minute guard or server Retry-After. No periodic network timer or
+error-only retry is scheduled. The guard is cached locally and persisted across
+restarts/code changes. SQL applies device cooldowns and combined group/owner daily
+and monthly quotas transactionally; owner quotas survive rotation. Missing-copy
+probes consume request quotas but permit an immediate repair upload.
 
-Two continuously running computers at a fifteen-minute cadence generate about 5,760 requests in a 30-day month. That is request arithmetic, not measured user capacity. Visible statistics, manual sync, rejected requests and traffic sizes also consume resources. Provider metering includes overhead and work outside the application's successful-exchange counters. Check [current Supabase pricing](https://supabase.com/pricing) before estimating capacity.
+All linked computers need 2.12.0 or newer. Requests without the v2 policy header
+are rejected with 426 before body/SQL work. The public header is not authentication;
+imitating it cannot bypass the SQL guards. Encryption, existing codes, local
+history and budgets are preserved. Local tracking and cached statistics remain
+available offline. A source computer must stay online until its pending upload
+completes for its latest time to reach another computer.
+
+Two computers starting once daily generate about 60 startup requests per 30 days,
+plus gameplay/manual/repair requests. Provider metering also includes rejected
+requests, headers and other project traffic. These are request counts, not
+measured capacity or flood resistance; see [current pricing](https://supabase.com/pricing).
 
 Auth hooks and provider-table triggers also bound sessions, token issues, metadata and OAuth state. Their exact limits, upgrade checks and remaining threats are documented in [Security](../SECURITY.md). Failed registrations may reserve capacity. Code rotation preserves owner quotas and retired-code records. Do not reset accounting or erase retired records to bypass limits.
 

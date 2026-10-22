@@ -3,12 +3,12 @@ import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { createHandler } from '../supabase/functions/statistics-sync/handler.mjs';
 
-const FORMAT = 'GameTimeMonitor.sync.v1', credential = 'a'.repeat(64), secret = 'server-administration-key';
+const FORMAT = 'GameTimeMonitor.sync.v2', credential = 'a'.repeat(64), secret = 'server-administration-key';
 const device = 'b'.repeat(32);
 const data = () => ({ format: FORMAT, device, revision: '1792512345678901234', known: {},
   payload: Buffer.concat([Buffer.from('GTM1'), Buffer.alloc(60)]).toString('base64') });
 const request = (body = data(), auth = 'Bearer '+credential, headers = {}) => new Request('https://example.com/statistics-sync', {
-  method: 'POST', headers: { authorization: auth, 'content-type': 'application/json', ...headers }, body: JSON.stringify(body),
+  method: 'POST', headers: { authorization: auth, 'content-type': 'application/json', 'x-gametime-sync':'event-driven-v2', ...headers }, body: JSON.stringify(body),
 });
 function fixture({ admission = true, exchange = () => ({ need_upload:false, snapshots:[] }), clock, bodyTimeoutMs } = {}) {
   const calls = [];
@@ -19,13 +19,37 @@ function fixture({ admission = true, exchange = () => ({ need_upload:false, snap
     } });
   return { handle, calls };
 }
+
+test('legacy clients are rejected before SQL or reading even a stalled upload', async () => {
+  const {handle,calls}=fixture();
+  for (const policy of [null,'','automatic-v1']) {
+    let cancelled=false;
+    const headers={authorization:'Bearer '+credential,'content-type':'application/json'};
+    if(policy!==null) headers['x-gametime-sync']=policy;
+    const body=new ReadableStream({cancel(){cancelled=true;}});
+    const response=await handle(new Request('https://example.com/statistics-sync',{
+      method:'POST',headers,body,duplex:'half'}));
+    assert.equal(response.status,426); assert.equal(response.headers.get('retry-after'),'86400');
+    assert.equal((await response.json()).minimum_version,'2.12.0');
+    assert.equal(cancelled,true);
+  }
+  assert.equal(calls.length,0);
+});
+
+test('device cooldown does not block another computer sharing the code', async () => {
+  const {handle}=fixture({exchange:args=>args.p_device===device?
+    {error:'cooldown',retry_after:600}:{need_upload:false,snapshots:[]}});
+  const response=await handle(request());
+  assert.equal(response.status,429); assert.equal(response.headers.get('retry-after'),'600');
+  assert.equal((await handle(request({...data(),device:'c'.repeat(32)}))).status,200);
+});
 test('only group/IP hashes reach SQL; exact revisions and server-only credentials', async () => {
   const {handle,calls} = fixture();
   const body=data(); body.known['c'.repeat(32)]='1792512345678901233';
   const response=await handle(request(body,undefined,{'x-forwarded-for':'192.0.2.5'}));
   assert.equal(response.status,200);
   assert.deepEqual(await response.json(),{format:FORMAT,need_upload:false,snapshots:[]});
-  const exchange=calls.at(-1); assert.ok(exchange.url.endsWith('gametime_sync_exchange'));
+  const exchange=calls.at(-1); assert.ok(exchange.url.endsWith('gametime_sync_exchange_limited'));
   assert.equal(exchange.options.headers.apikey,secret);
   assert.equal(exchange.args.p_group,createHash('sha256').update(credential).digest('hex'));
   assert.equal(exchange.args.p_revision,body.revision); assert.deepEqual(exchange.args.p_known,body.known);
@@ -36,13 +60,13 @@ test('only group/IP hashes reach SQL; exact revisions and server-only credential
 test('different credentials remain isolated', async () => {
   const {handle,calls}=fixture();
   await handle(request()); await handle(request(data(),'Bearer '+'d'.repeat(64)));
-  const groups=calls.filter(c=>c.url.endsWith('gametime_sync_exchange')).map(c=>c.args.p_group);
+  const groups=calls.filter(c=>c.url.endsWith('gametime_sync_exchange_limited')).map(c=>c.args.p_group);
   assert.equal(groups.length,2); assert.notEqual(groups[0],groups[1]);
 });
 test('unknown keys are denied before body parsing or storage allocation', async () => {
   const {handle,calls}=fixture({admission:false});
   const bad=new Request('https://example.com/statistics-sync',{method:'POST',
-    headers:{authorization:'Bearer '+credential,'content-type':'application/json'},body:'not JSON'});
+    headers:{authorization:'Bearer '+credential,'content-type':'application/json','x-gametime-sync':'event-driven-v2'},body:'not JSON'});
   assert.equal((await handle(bad)).status,403);
   assert.equal((await handle(request())).status,403);
   assert.equal(calls.length,1); assert.ok(calls[0].url.endsWith('gametime_sync_authorize'));
@@ -56,7 +80,7 @@ test('strict envelope, canonical ciphertext and bounded revision/cache values', 
     {payload:Buffer.alloc(64).toString('base64')},{group:'untrusted'},{payload:undefined}]) {
     assert.equal((await handle(request({...data(),...fields}))).status,400,JSON.stringify(Object.keys(fields)));
   }
-  assert.equal(calls.filter(c=>c.url.endsWith('gametime_sync_exchange')).length,0);
+  assert.equal(calls.filter(c=>c.url.endsWith('gametime_sync_exchange_limited')).length,0);
 });
 test('oversized declared body and unsupported content are rejected before SQL', async () => {
   const {handle,calls}=fixture();
@@ -70,7 +94,8 @@ test('early rejections cancel unread uploads', async () => {
   let cancelled=false;
   const {handle,calls}=fixture();
   const body=new ReadableStream({cancel(){cancelled=true;}});
-  const response=await handle(new Request('https://example.com/statistics-sync',{method:'POST',body,duplex:'half'}));
+  const response=await handle(new Request('https://example.com/statistics-sync',{
+    method:'POST',headers:{'x-gametime-sync':'event-driven-v2'},body,duplex:'half'}));
   assert.equal(response.status,401); assert.equal(cancelled,true); assert.equal(calls.length,0);
 });
 test('stream size and slow body deadline are enforced', async () => {
@@ -81,7 +106,7 @@ test('stream size and slow body deadline are enforced', async () => {
     new ReadableStream({start(){},cancel(){return new Promise(()=>{});}}),
   ]) {
     const response=await handle(new Request('https://example.com/statistics-sync',{method:'POST',
-      headers:{authorization:'Bearer '+credential,'content-type':'application/json'},body,duplex:'half'}));
+      headers:{authorization:'Bearer '+credential,'content-type':'application/json','x-gametime-sync':'event-driven-v2'},body,duplex:'half'}));
     assert.equal(response.status,400);
   }
   assert.equal((await handle(request())).status,200);
@@ -90,7 +115,7 @@ test('nearest proxy address is used only as an additional rate identity', async 
   const {handle,calls}=fixture();
   await handle(request(data(),undefined,{'x-forwarded-for':'spoofed, 192.0.2.5'}));
   await handle(request(data(),undefined,{'x-forwarded-for':'different, 192.0.2.5'}));
-  const identities=calls.filter(c=>c.url.endsWith('gametime_sync_exchange')).map(c=>c.args.p_ip);
+  const identities=calls.filter(c=>c.url.endsWith('gametime_sync_exchange_limited')).map(c=>c.args.p_ip);
   assert.equal(identities[0],identities[1]);
 });
 test('admission cache expires and failed admission never enters storage', async () => {
@@ -148,7 +173,7 @@ test('SQL rejection starts a short cooldown before another upload is read or que
   let now=100000;
   const {handle,calls}=fixture({clock:()=>now,exchange:()=>({error:'quota',retry_after:3600})});
   assert.equal((await handle(request())).status,507);
-  const blocked=new Request('https://example.com/statistics-sync',{method:'POST',headers:{authorization:'Bearer '+credential,'content-type':'application/json'},body:'invalid JSON'});
+  const blocked=new Request('https://example.com/statistics-sync',{method:'POST',headers:{authorization:'Bearer '+credential,'content-type':'application/json','x-gametime-sync':'event-driven-v2'},body:'invalid JSON'});
   assert.equal((await handle(blocked)).status,507);
   assert.equal(calls.length,2);
   now+=60001;

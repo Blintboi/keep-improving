@@ -1,6 +1,14 @@
 """Small explicit English/Hungarian catalog. Stored IDs and paths never translate."""
 LANGUAGES = {"English": "en", "Magyar": "hu"}
 HU = {
+    'Enable statistics sync': 'Statisztikák szinkronizálása',
+    'Sync runs at startup, around gameplay or manually.': 'Szinkronizálás induláskor, játékkezdéskor és játék után, vagy kézzel.',
+    'Sync runs at startup, when gameplay starts and after it stops, or manually. Requests wait at least 10 minutes; nearby game changes are combined. Server limits also apply.': 'Induláskor, játékkezdéskor és játék után automatikusan, illetve kézzel frissít. A kérések között legalább 10 perc telik el; a közeli játékváltásokat összevonja. A szerver korlátai is érvényesek.',
+    'Sync in {minutes} min': 'Szinkronizálás {minutes} perc múlva',
+    'The synchronization service is unavailable. Try syncing manually later.': 'A szinkronizáló szolgáltatás nem érhető el. Később próbáld meg kézzel.',
+    'Some computer data could not be read. Try syncing manually later.': 'Néhány gép adatait nem sikerült beolvasni. Később próbáld meg kézzel.',
+    'The sync limit was reached. Local statistics are kept; try syncing manually later.': 'Elérted a szinkronizálási korlátot. A helyi statisztikák megmaradnak; később próbáld meg kézzel.',
+    'Update Game Time Monitor to synchronize statistics. Local statistics are kept.': 'A szinkronizáláshoz frissítsd a Játékidőfigyelőt. A helyi statisztikák megmaradnak.',
     'Bedtime reminder': 'Lefekvési emlékeztető',
     'Enable bedtime reminder': 'Lefekvési emlékeztető bekapcsolása',
     'Remind at': 'Figyelmeztetés',

@@ -1,6 +1,6 @@
-# Játékidőfigyelő — 2.11.0
+# Játékidőfigyelő — 2.12.0
 
-**[Letöltés Windows x64-re — 2.11.0](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256) · [English](README.md)
+**[Letöltés Windows x64-re — 2.12.0](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256) · [English](README.md)
 
 Windows 11-es Gaming Hub, amely méri az előtérben töltött játékidőt, mutatja a napi keretet, és emlékeztet a befejezésre. Beállítható lefekvési emlékeztetőt is tartalmaz.
 
@@ -73,7 +73,7 @@ A saját gépeid összekapcsolása:
 1. Az első gépen nyisd meg a **Statisztikák → Gépek összekapcsolása** ablakot, jelentkezz be GitHubbal, kapcsold be a szinkronizálást, és ments.
 2. Másold ki a létrehozott kapcsolati kódot. A másik gépen illeszd be ugyanebbe az ablakba, és ments. Meglévő kódhoz csatlakozáshoz nem kell újabb GitHub-belépés.
 
-Automatikusan a megnyitott Statisztikák mellett ötpercenként, háttérben tizenöt percenként frissít. A **Szinkronizálás** gomb percenként egy kézi kérést enged, a szerver korlátain belül. A diagramok összevonhatják a kapcsolt gépek adatait; a napi keretek és kizárások gépenként maradnak.
+Induláskor egyszer, követett játék kezdésekor és játék után automatikusan frissít; a közeli váltásokat egy nyugodt perc után összevonja. Nincs időszakos háttérszinkron. A **Szinkronizálás** gombbal kézzel is frissíthetsz. Gépenként legalább tíz perc telik el két kérés között; a függőben lévő játékesemény kivárja ezt. Az összekapcsolt gépek közös szerverkerete UTC-naponként 20, havonta 600 sikeres kérés; a tulajdonos kerete kódcsere után is megmarad. Az újraindítás nem nullázza a várakozást. A felhőszinkronhoz mindegyik gépen legalább 2.12.0 szükséges; a meglévő kód és titkosított előzmények továbbra is használhatók. A napi keretek és kizárások helyben maradnak. A legutóbbi játékidő átviteléhez a gépnek a függő feltöltés befejezéséig bekapcsolva és online kell maradnia.
 
 **A kapcsolati kódot tartsd titokban:** hozzáférést ad az összekapcsolt csoport titkosított előzményeihez. A közös háttérszolgáltatás regisztrációs és használati korlátokkal működik, folyamatos elérhetőségre vállalás nélkül. Szinkronkimaradáskor a helyi mérés tovább működik.
 

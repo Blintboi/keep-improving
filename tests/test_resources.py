@@ -56,8 +56,9 @@ class ResourceInterfaceTests(unittest.TestCase):
         self.assertEqual(self.app.assets_timer.interval(),100)
         self.app.art.pending.clear()
         self.app.settings=replace(self.app.settings,statistics_sync_enabled=True)
-        self.app._sync_attempted=0
+        self.app._sync_startup_pending=True
         with patch.object(self.app,'request_statistics_sync') as sync:
+            self.app.poll_assets(); sync.assert_called_once()
             self.app.poll_assets(); sync.assert_called_once()
         self.assertEqual(self.app.assets_timer.interval(),1000)
 

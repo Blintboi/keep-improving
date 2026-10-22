@@ -26,7 +26,7 @@ DAY = date.today().isoformat()
 class Relay:
     """Protocol fixture, not a replacement for testing the Supabase SQL/RLS."""
     def __init__(self):
-        self.rows = {}; self.requests = []; self.status = 200; self.corrupt = False; self.retry_after=None
+        self.rows = {}; self.requests = []; self.policies=[]; self.status = 200; self.corrupt = False; self.retry_after=None
         relay = self
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, *args): pass
@@ -34,6 +34,7 @@ class Relay:
                 body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
                 authorization = self.headers['Authorization']
                 relay.requests.append((self.path, authorization, body))
+                relay.policies.append(self.headers.get('X-GameTime-Sync'))
                 if self.path == '/redirect':
                     self.send_response(302); self.send_header('Location', relay.url+'/target'); self.end_headers(); return
                 rows = relay.rows.setdefault(authorization, {})
@@ -89,6 +90,17 @@ class StatisticsCloudTests(unittest.TestCase):
         self.assertNotIn(CODE, authorization)
         for bad in ('1234', 'x'*32, '../escape', None):
             with self.assertRaises(ValueError): keys(bad)
+
+    def test_protocol_upgrade_keeps_encryption_and_sends_event_policy(self):
+        self.exchange(0)
+        self.assertEqual(self.relay.policies,['event-driven-v2'])
+        self.assertEqual(self.relay.requests[0][2]['format'],'GameTimeMonitor.sync.v2')
+        self.relay.status=426; self.relay.retry_after='86400'
+        self.worker.request(self.relay.url,CODE,self.snapshot(),{})
+        token,values,warning=self.worker.results.get(timeout=3)
+        self.assertFalse(values)
+        self.assertIn('Update Game Time Monitor',warning)
+        self.assertGreater(self.worker.retry_delay(self.relay.url,CODE),86399)
 
     def test_folder_upgrade_preserves_local_and_cached_history_without_exposing_short_code(self):
         store=self.stores[0]; old='012345abcdef'

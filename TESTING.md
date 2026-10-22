@@ -2,6 +2,26 @@
 
 Use isolated temporary profiles and synthetic game installations. Never uninstall a real user game to test removal; mock the execution boundary.
 
+## 2.12.0 event-driven statistics sync — 2026-10-22
+
+All **338 application tests passed in 158.719 seconds** on CPython 3.13.16 /
+OpenSSL 3.5.9. All **24 Node endpoint tests passed**. New regressions cover
+startup-only idle behavior, foreground gameplay transitions, one-shot event
+coalescing, the shared ten-minute guard, restart/code-change persistence and
+persisted Retry-After without automatic error retries. Transport tests retain
+v1 ciphertext compatibility while sending the v2 event policy and test the
+upgrade-required response. Existing linked-code, history, local budget and
+exclusion tests remain passing.
+
+All **nine PostgreSQL probes passed** against the hosted Free project's actual
+engine, rolling back fixture users, ciphertext and quota writes. The new probe
+checks durable device cooldowns, no tuple updates on rejected requests, separate
+computer access, daily/monthly group AND owner caps, rotation-safe owner ledgers,
+UTC-day reset, missing-copy repair and server-only grants. The other eight
+security/account/Auth/storage probes were rerun successfully. Node tests reject
+legacy requests before body/SQL work and ensure a device cooldown cannot block
+another computer in the same linked group. No request flood was sent.
+
 ## Public distribution preparation — 2026-10-21
 
 The 2.11.0 runtime is unchanged from the combined release below. Publication adds

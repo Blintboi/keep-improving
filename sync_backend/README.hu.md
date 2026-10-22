@@ -7,7 +7,7 @@ ellenőrzött **Free** csomagban. Projektazonosító: `jtvdbqwmejrckjejjrdl`;
 régió: `eu-west-1`; PostgreSQL 17. A kliens 2.7.0-tól használja a kódos felületet.
 A végpont: `https://jtvdbqwmejrckjejjrdl.supabase.co/functions/v1/statistics-sync`.
 
-**2.11.0: védett bejelentkezés, ritkább szinkron és arányos Free-keretek.** A
+**2.12.0: eseményvezérelt szinkron, tartós gépenkénti és közös keretek.** A
 szolgáltató, a helyi PKCE-visszatérés, a tokenfrissítés és a kijelentkezés éles
 ellenőrzése sikeres. Az új regisztráció a kezdeti kereteken belül nyitva van.
 Egy fiók egy aktuális kódot kezel; másik gép a meglévő kóddal csatlakozhat.
@@ -88,7 +88,8 @@ A saját korlátok az éles adatbázisban tranzakciósan érvényesülnek:
 | Titkosított csomag | legfeljebb 512 KiB/gép, a base64 boríték legfeljebb 699 052 bájt |
 | Tárolt base64-adat | 2 MiB/csoport, globálisan 200 MiB (nem a teljes adatbázisméret) |
 | Percenkénti kérések | 4/gép, 40/csoport, 600/IP-lenyomat |
-| Sikeres havi adatcserék | min(12 000, 350 000 / max(25, aktív csoportok)), globálisan 350 000 |
+| Sikeres adatcserék | UTC-naponként 20, havonta min(600, 350 000 / max(25, aktív csoportok)) csoportonként ÉS tulajdonosonként; globálisan havi 350 000 |
+| Gépenkénti várakozás | Legalább 10 perc két befejezett adatcsere között, szerveroldalon is |
 | Számolt havi válaszforgalom | min(128 MiB, 3 GiB / max(25, aktív csoportok)), globálisan 4 GiB |
 | Napi fel- és válaszforgalom | irányonként 8 MiB/csoport és tulajdonos |
 | Összes feltöltés | globálisan 64 MiB/UTC-nap és 1 GiB/UTC-hónap; teljes felülírásokat is számol |
@@ -101,20 +102,27 @@ A hozzáférési kulcs és a nyers IP nem kerül az adatbázisba. Az IP az utols
 proxycím szerverkulccsal képzett HMAC-lenyomata, kiegészítő védelem; nem
 használható egyetlen megbízható felhasználói azonosítóként. A kvóta elérésekor
 a helyi követés és a letöltött statisztika megmarad. A kliens legfeljebb egy
-napos `Retry-After` értéket követ, hibánál növekvő, véletlen eltéréssel ritkított
-újrapróbálkozást használ. Az üres szinkronszál várólistán alszik.
+napos `Retry-After` értéket követ; hiba önmagában nem indít automatikus újrapróbálkozást. Az üres szinkronszál várólistán alszik.
 
 A saját kvóta nem a szolgáltató fogyasztásmérője: az elutasított kérés,
 HTTP-fejléc, hálózati többlet és más Supabase-forgalom is terhelheti a keretet.
 A Free csomag jelenleg 500 000 Edge-hívást, 5 GB egress-t és 500 MB
-adatbázist tartalmaz; ez nem garantált felhasználószám. A 2.11 háttérben 15, a megnyitott Statisztikák mellett 5 percenként frissít.
-A kézi kérés percenként egyszer engedélyezett, a szerver késleltetését is betartva.
-Két mindig futó gép 15 perces frissítéssel 30 nap alatt kb. 5760 kérés/fő:
-a 350 000-es globális plafon kb. 60 főt fed le, kézi kérések és tartalék nélkül.
-Ha mindkét gép napi 8 órát fut, kb. 1920 kérés/fő/hó: 100 csoport beleférhet
-ebbe a kérésbecslésbe. Ez nem mért felhasználói kapacitás vagy garancia; a
-forgalmi méret, a látható nézet, a kézi kérések és az elutasítások is számítanak.
-Mindegyik gépet frissítsd: a régi kliensek kompatibilisek, de sűrűbben kérdeznek.
+adatbázist tartalmaz; ez nem garantált felhasználószám. A 2.12 induláskor egyszer,
+játékkezdéskor és játék után, valamint kézzel frissít. A közeli váltásokat egy
+nyugodt perc után összevonja. Nincs rendszeres hálózati lekérdezés. Az egyszeri
+eseményidőzítő kivárja a 10 perces gépenkénti korlátot és a szerver késleltetését.
+Az újraindítás és a kódcsere nem nullázza a helyi várakozást. A szerver a gép
+várakozásán túl csoportonként és tulajdonosonként is napi 20/havi 600 sikeres
+kérést enged; a tulajdonosi keret kódcsere után megmarad.
+
+Két naponta egyszer induló gép 30 nap alatt kb. 60 induláskori kérést jelent,
+a játékesemények, kézi frissítés és hiányzó szervermásolat javítása ezen felül jön.
+Ez kérésbecslés, nem mért kapacitás vagy támadásvédelmi garancia.
+Mindegyik gépet legalább 2.12.0-ra kell frissíteni. A régi protokoll 426 választ
+kap az adatbázis és a törzs beolvasása előtt, egynapos várakozási javaslattal.
+Az új nyilvános protokollfejléc nem hitelesítés; utánzásakor is érvényesek az
+adatbázis korlátai. A kód, titkosított másolatok és helyi előzmények megmaradnak.
+A friss játékidő átviteléhez a forrásgép a függő feltöltés végéig maradjon online.
 
 A Custom Access Token Hook felhasználónként legfeljebb 10 munkamenetet,
 percenként 12 és UTC-naponként 120 tokenkiadást, globálisan napi 1000-et enged.
