@@ -41,7 +41,7 @@ def run(output):
         game=Game('overlay:fixture','Synthetic overlay fixture','Kézi',str(base))
         store.upsert([game]); store.set_rule(str(exe),game.id)
         class Service:
-            def __init__(self): self.results=Queue(); self.discovery=Discovery(settings,[],[],base/'none',ubisoft=False,riot=False)
+            def __init__(self): self.results=Queue(); self.discovery=Discovery(settings,[],[],base/'none',platforms=False, ubisoft=False,riot=False)
             def start(self): pass
             def close(self): pass
             def request(self,*args): pass

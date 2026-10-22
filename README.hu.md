@@ -1,12 +1,12 @@
-# Játékidőfigyelő — 2.12.1
+# Játékidőfigyelő — 2.13.0
 
-**[Letöltés Windows x64-re — 2.12.1](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256) · [English](README.md)
+**[Letöltés Windows x64-re — 2.13.0](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256) · [English](README.md)
 
 Windows 11-es Gaming Hub, amely méri az előtérben töltött játékidőt, mutatja a napi keretet, és emlékeztet a befejezésre. Beállítható lefekvési emlékeztetőt is tartalmaz.
 
 Elsősorban a saját mindennapi használatomra készítettem, és megosztom azokkal, akiknek szintén hasznos lehet. A helyi funkciók internet és fiók nélkül működnek. A saját számítógépeid statisztikáinak összekapcsolása választható.
 
-**Újdonság a 2.12.1-ben:** a beállítások mezői fölötti görgetés már nem módosítja az értékeket. Pontosabb szinkronállapot, egyértelmű játékmenük és súgószövegek váltják a félreérthető feliratokat. A visszaszámláló helyét beállító mező a kereten belül tartja az időfeliratot, és kívülről nem enged húzást indítani. Frissítéskor az előzmények, kapcsolati kódok, beállítások és játékonkénti kizárások megmaradnak.
+**Újdonság a 2.13.0-ban:** EA app, Battle.net, GOG Galaxy, Xbox, Rockstar Games Launcher és Amazon Games támogatás. A telepített játékokat helyi telepítési adatokból ismeri fel; a hiányzó kliensekhez nem jelenít meg üres kártyákat. A kliensek és segédfolyamataik ideje nem számít játékidőnek. Frissítéskor az előzmények, kapcsolati kódok, beállítások és játékonkénti kizárások megmaradnak.
 
 ![Játéktár és napi játékidőkeret](docs/images/library-en.png)
 *Angol felület valódi játékokkal és helyi játékborítókkal. A játékidők bemutatóadatok; a játékok képei a megfelelő jogtulajdonosokhoz tartoznak.*
@@ -31,11 +31,17 @@ Elsősorban a saját mindennapi használatomra készítettem, és megosztom azok
 | Epic Games Launcher | Telepített játékok automatikus felismerése a helyi jegyzékekből. |
 | Ubisoft Connect | Telepített játékok felismerése és kliensen keresztüli indítása. |
 | Riot Client | Telepített játékok felismerése és indítása; a Riot Client és a Vanguard ideje nem számít játékidőnek. |
+| EA app / Origin | Felismerés a helyi telepítési bejegyzésekből; kiadói indítóhivatkozás vagy hozzárendelt játék-EXE. |
+| Battle.net | Felismerés a telepítési bejegyzésekből és a helyi Agent-jegyzékből; felismert termékek indítása a klienssel. |
+| GOG Galaxy / offline GOG-játékok | Bejegyzett játékok felismerése, Galaxy-indítás és helyi elsődleges indítási feladatok Galaxy nélkül. |
+| Xbox / Microsoft Store | Telepített GDK- és Xbox Live-játékcsomagok; indítás a Windowsban bejegyzett alkalmazásazonosítóval. |
+| Rockstar Games Launcher | Telepített játékok felismerése és indítása a kiadó kliensével. |
+| Amazon Games | Telepített játékok felismerése a helyi adatbázisból és kiadói indítóhivatkozások. |
 | Minecraft: Java Edition | Felismerés a hivatalos Java-adatkönyvtárból és a hozzá tartozó külön futtatókörnyezet azonosítása. |
 | Önálló és egyéb játékok | Felismerés a beállított játékmappában, illetve kézi EXE-hozzárendelés. |
 | RTSS 7.3.7+ | Választható játékon belüli számláló; az [RTSS külön tölthető le](https://www.guru3d.com/download/rtss-rivatuner-statistics-server-download/). |
 
-macOS-re, Linuxra és Windows ARM64-re nincs támogatott kiadás. Minecraft Bedrockhoz és Xbox/Microsoft Store-játékokhoz nincs külön automatikus felismerés. A kézi méréshez hozzáférhető játék-EXE szükséges. Emelt jogosultságú, védett vagy csalásvédelemmel ellátott játékok korlátozhatják az előtér felismerését, a számlálót vagy a minimalizálást; a kompatibilitás játékonként eltérhet.
+macOS-re, Linuxra és Windows ARM64-re nincs támogatott kiadás. A felismerhető GDK- vagy Xbox Live-adatok nélküli Store-játékokhoz, illetve olvasható helyi telepítési adatok nélküli kiadói játékokhoz kézi EXE-hozzárendelésre lehet szükség. A kézi méréshez hozzáférhető játék-EXE szükséges. Emelt jogosultságú, védett vagy csalásvédelemmel ellátott játékok korlátozhatják az előtér felismerését, a számlálót vagy a minimalizálást; a kompatibilitás játékonként eltérhet.
 
 ## Telepítés és frissítés
 

@@ -36,6 +36,12 @@ The build generates `dist/GameTimeMonitor-<version>-Setup.exe` and its SHA-256 f
 
 `-SkipFreeze` repackages an existing, verified frozen runtime with documentation changes. Verify the runtime hashes before and after such a repack; it must not substitute for rebuilding changed application code. `-FreezeOnly` stops after creating the frozen runtime.
 
+## Local testing before publication
+
+Deliver development changes to the user's local installation before publishing them. First run the relevant tests and verify the built installer with temporary profiles. Then gracefully stop the installed monitor, back up its existing profile, install the verified build into the existing application directory, and check that settings, synchronization credentials, history and per-game exclusions were preserved. Restart and open that installed application so the user can try the changes. A successful build or GitHub upload does not update an already running local installation.
+
+Keep these changes local until the user explicitly asks to publish them. After that request, deliver the matching source, verified installer, stable download checksum and both README version/link updates together, following [AGENTS.md](../AGENTS.md). Documentation-only workflow changes do not require another application build.
+
 ## Optional backend
 
 The supplied shared service is operated on a limited Supabase Free project. Using or contributing to the desktop app does not require deploying a replacement backend. Do not put administrative keys into the client, a public issue or Git history.

@@ -28,6 +28,9 @@ def launch_uri(game, uri):
         return "steam://rungameid/" + appid
     if game.source == "Ubisoft":
         return "uplay://launch/" + appid + "/0"
+    if game.source in {'Amazon', 'EA'}:
+        from .platforms import game_recipe
+        return game_recipe(game)['url']
     product = unquote(urlsplit(uri).path).strip("/")
     return "com.epicgames.launcher://apps/" + quote(product, safe="") + "?action=launch&silent=true"
 
@@ -44,6 +47,8 @@ def prepare(game, settings, rules, hub, preferred=""):
     recipe = hub.launch_recipe(game, settings, rules)
     if recipe.get("folder"):
         raise ValueError("Choose the game's executable with Assign EXE, then try Play again.")
+    if recipe.get('app_id'):
+        return LaunchPlan('app', recipe['app_id'])
     if recipe["kind"] == "url":
         return LaunchPlan("uri", launch_uri(game, recipe["url"]))
     if recipe["kind"] == "copy":
@@ -56,14 +61,19 @@ def prepare(game, settings, rules, hub, preferred=""):
     target = Path(recipe["target"])
     if target.suffix.lower() != ".exe" or not target.is_file():
         raise ValueError("The game's executable is unavailable. Refresh the library or assign its EXE.")
-    # Generated link recipes have only structured Riot flags, never raw registry commands.
-    arguments = tuple(recipe.get("arguments", "").split())
+    # Publisher recipes supply argv directly, preserving paths containing spaces.
+    arguments = tuple(recipe.get('argument_list', recipe.get("arguments", "").split()))
     return LaunchPlan("executable", str(target), arguments, recipe.get("working") or str(target.parent))
 
 
 def execute(plan):
-    if plan.kind == "uri":
-        if urlsplit(plan.target).scheme not in {"steam", "uplay", "com.epicgames.launcher"}:
+    if plan.kind == 'app':
+        from .platforms import AUMID
+        if not AUMID.fullmatch(plan.target):
+            raise ValueError('Unsupported game launcher')
+        os.startfile('shell:AppsFolder\\' + plan.target)
+    elif plan.kind == "uri":
+        if urlsplit(plan.target).scheme not in {"steam", "uplay", "com.epicgames.launcher", "amazon-games", "origin2"}:
             raise ValueError("Unsupported game launcher")
         os.startfile(plan.target)
     elif plan.kind == "shortcut":

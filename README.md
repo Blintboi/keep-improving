@@ -1,12 +1,12 @@
-# Game Time Monitor — 2.12.1
+# Game Time Monitor — 2.13.0
 
-**[Download for Windows x64 — 2.12.1](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256) · [Magyar](README.hu.md)
+**[Download for Windows x64 — 2.13.0](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256) · [Magyar](README.hu.md)
 
 A Windows 11 gaming hub that tracks foreground play time, shows your daily budget and reminds you when it is time to finish. It also includes a configurable bedtime reminder.
 
 I built this for my own daily use and am sharing it for anyone who finds it useful. The desktop features work offline, without an account. Linking statistics between your computers is optional.
 
-**New in 2.12.1:** scrolling over settings fields no longer changes their values. Clearer sync status, game-menu actions and help text replace ambiguous labels. The countdown position editor keeps the timer inside its frame and ignores dragging started outside it. Existing history, connection codes, settings and game exclusions are preserved on upgrade.
+**New in 2.13.0:** support for EA app, Battle.net, GOG Galaxy, Xbox, Rockstar Games Launcher and Amazon Games. Local installation records identify installed games; missing clients do not create placeholder cards. Publisher clients and their helpers do not consume game time. Existing history, connection codes, settings and game exclusions are preserved on upgrade.
 
 ![Game library and daily play-time budget](docs/images/library-en.png)
 *English interface with real games and locally available artwork. Play-history values are demonstration data; game artwork belongs to its respective owners.*
@@ -31,11 +31,17 @@ I built this for my own daily use and am sharing it for anyone who finds it usef
 | Epic Games Launcher | Automatic discovery of installed games from local manifests. |
 | Ubisoft Connect | Installed-game discovery and launch integration. |
 | Riot Client | Installed-game discovery and launch integration; Riot Client and Vanguard are excluded from game time. |
+| EA app / Origin | Discovery from local installation registrations; publisher launch links or an assigned game EXE. |
+| Battle.net | Discovery from installation registrations and the local Agent index; publisher launch integration for recognized products. |
+| GOG Galaxy / offline GOG games | Registered installed games, Galaxy launch integration and local primary play tasks without Galaxy. |
+| Xbox / Microsoft Store | Installed GDK and Xbox Live game packages; launch through the registered Windows application identity. |
+| Rockstar Games Launcher | Installed-game registrations and launch through the publisher's client. |
+| Amazon Games | Installed games from the local installation database and publisher launch links. |
 | Minecraft: Java Edition | Discovery from the official Java game data and recognition of its dedicated runtime. |
 | Standalone and other games | Discovery in the configured games folder, plus manual executable assignment. |
 | RTSS 7.3.7+ | Optional in-game countdown integration; [RTSS is a separate download](https://www.guru3d.com/download/rtss-rivatuner-statistics-server-download/). |
 
-macOS, Linux and Windows ARM64 are not supported builds. Minecraft Bedrock and Xbox/Microsoft Store games have no dedicated automatic discovery. Manual tracking requires an accessible game executable. Elevated, protected and anti-cheat games can limit foreground inspection, overlays or minimization; compatibility varies by game.
+macOS, Linux and Windows ARM64 are not supported builds. Store games without recognizable GDK or Xbox Live metadata, and publisher installations without readable local records, may require manual EXE assignment. Manual tracking requires an accessible game executable. Elevated, protected and anti-cheat games can limit foreground inspection, overlays or minimization; compatibility varies by game.
 
 ## Install or update
 

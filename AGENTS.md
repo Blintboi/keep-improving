@@ -1,8 +1,20 @@
 # Version delivery
 
-The user requires every new installable version to be available directly from
-the GitHub repository's README. Publishing these updates is part of delivering
-a version, not an optional follow-up.
+Develop and deliver changes locally first. After the relevant checks and
+installer verification, update the user's actual local installation, preserve
+their profile, and restart/open the updated application so they can try it.
+Building an installer or updating the repository alone does not update the
+user's running application. Use temporary profiles for automated tests before
+updating the real installation; preserve history, settings, synchronization
+credentials and per-game exclusions during the local upgrade.
+
+Let the user try the local changes before publishing. Do not push a new version
+or installer to GitHub until the user explicitly asks to publish those changes.
+A local development or testing request is not permission to publish.
+
+When the user requests publication, every new installable version must be
+available directly from the GitHub repository's README. Publishing all the
+matching files below is part of delivering that public version.
 
 For each new application version:
 
@@ -21,12 +33,12 @@ For each new application version:
    then push them to the GitHub default branch through the repository's allowed
    workflow. Verify that the remote README version and installer match.
 
-The user has authorized these routine GitHub updates for future versions; do not
-ask for the same authorization again. The user authorized public distribution
-on 2026-10-21; keep the repository public and use the README download as the
-primary distribution path. Do not substitute a local-only
-installer or a Releases-page-only download. Preserve existing user history,
-settings and per-game exclusions during upgrades.
+Once the user asks to publish a version, these routine GitHub delivery steps
+are authorized; do not ask for the same authorization again. The user authorized
+public distribution on 2026-10-21; keep the repository public and use the README
+download as the primary distribution path. For a public delivery, do not
+substitute a local-only installer or a Releases-page-only download. Preserve
+existing user history, settings and per-game exclusions during upgrades.
 
 Documentation-only changes do not require a new application version or installer.
 

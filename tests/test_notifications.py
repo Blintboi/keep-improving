@@ -31,7 +31,7 @@ class NotificationTests(unittest.TestCase):
         self.store.upsert([self.game])
         self.store.set_rule(self.exe, self.game.id)
         service = DiscoveryService(settings, discovery=Discovery(
-            settings, [], [], base / "none.dat", ubisoft=False, riot=False))
+            settings, [], [], base / "none.dat", platforms=False, ubisoft=False, riot=False))
         self.root = tk.Tk()
         self.app = App(self.root, self.store, base, service=service)
         self.addCleanup(self.close_app)

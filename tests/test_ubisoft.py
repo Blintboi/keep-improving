@@ -86,7 +86,7 @@ class UbisoftTests(unittest.TestCase):
 
     def test_discovery_combines_ubisoft_without_walking_game_files(self):
         self.record()
-        discovery = Discovery(Settings(games_root=str(self.base / "Games")), [], [], self.base / "none.dat", ubisoft=self.source, riot=False)
+        discovery = Discovery(Settings(games_root=str(self.base / "Games")), [], [], self.base / "none.dat", platforms=False, ubisoft=self.source, riot=False)
         with patch("os.walk", side_effect=AssertionError("Don't scan Ubisoft game content")):
             result = discovery.scan_launchers()
         self.assertEqual(result[0].source, "Ubisoft")
@@ -164,7 +164,7 @@ class RegistryNotificationTests(unittest.TestCase):
             base = Path(temp)
             settings = Settings(games_root=str(base / "Games"))
             source = UbisoftSource(registry=WindowsUbisoftRegistry())
-            discovery = Discovery(settings, [], [], base / "none.dat", ubisoft=source, riot=False)
+            discovery = Discovery(settings, [], [], base / "none.dat", platforms=False, ubisoft=source, riot=False)
             service = DiscoveryService(settings, discovery=discovery)
             def await_source(predicate, timeout=10):
                 deadline = time.monotonic() + timeout

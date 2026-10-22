@@ -33,7 +33,7 @@ class DiscoveryTests(unittest.TestCase):
         self.base = Path(self.temp.name)
         self.steam, self.epic, self.games = self.base / "Steam", self.base / "Manifests", self.base / "Games"
         self.settings = Settings(games_root=str(self.games))
-        self.discovery = Discovery(self.settings, [str(self.steam)], [str(self.epic)], self.base / "LauncherInstalled.dat", ubisoft=False, riot=False)
+        self.discovery = Discovery(self.settings, [str(self.steam)], [str(self.epic)], self.base / "LauncherInstalled.dat", platforms=False, ubisoft=False, riot=False)
 
     def test_vdf_escaping_nested_legacy_and_comments(self):
         data = parse_vdf('// hi\n"libraryfolders" {"0" {"path" "D:\\\\SteamLibrary"} "1" "E:\\\\Games"}')
@@ -128,7 +128,7 @@ class DiscoveryTests(unittest.TestCase):
     def test_install_while_stopped_detected_on_next_start(self):
         self.assertEqual(self.discovery.scan_launchers(), [])
         manifest(self.steam)
-        replacement = Discovery(self.settings, [str(self.steam)], [], self.base / "no-launcher.dat", ubisoft=False, riot=False)
+        replacement = Discovery(self.settings, [str(self.steam)], [], self.base / "no-launcher.dat", platforms=False, ubisoft=False, riot=False)
         self.assertEqual(replacement.scan_launchers()[0].id, "steam:10")
 
     def test_watch_specs_missing_games_ancestor_is_nonrecursive(self):
@@ -140,7 +140,7 @@ class DiscoveryTests(unittest.TestCase):
         file, root = manifest(self.steam)
         saved = self.discovery.scan_launchers()[0]
         write(file, '"AppState" {')
-        fresh = Discovery(self.settings, [str(self.steam)], [], self.base / "none.dat", ubisoft=False, riot=False)
+        fresh = Discovery(self.settings, [str(self.steam)], [], self.base / "none.dat", platforms=False, ubisoft=False, riot=False)
         games = fresh.scan_launchers()
         self.assertEqual(preserve_unreadable(games, [saved], fresh.errors), [saved])
 
@@ -153,7 +153,7 @@ class DiscoveryTests(unittest.TestCase):
 
     def test_shared_watch_ancestor_preserves_all_missing_targets(self):
         roots = [str(self.base / "SteamA"), str(self.base / "SteamB")]
-        discovery = Discovery(self.settings, roots, [], self.base / "none.dat", ubisoft=False, riot=False)
+        discovery = Discovery(self.settings, roots, [], self.base / "none.dat", platforms=False, ubisoft=False, riot=False)
         targets = discovery.watch_specs()[(str(self.base), False, "launchers")]
         self.assertTrue(any(within(t, roots[0]) for t in targets))
         self.assertTrue(any(within(t, roots[1]) for t in targets))

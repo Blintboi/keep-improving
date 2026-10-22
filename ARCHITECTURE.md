@@ -1,5 +1,37 @@
 # Architecture
 
+Additional publisher support lives in `launcher_defs.py`, `platforms.py` and
+`battlenet.py`. Client identities are shared by the launcher page, Hub shortcut
+collection and foreground exclusions. EA, GOG, Battle.net and Rockstar use
+installation registrations in user/machine and 32/64-bit registry views.
+Battle.net also reads a bounded subset of its local Agent protobuf index;
+Amazon's installation database is opened read-only and closed after each scan.
+Only installed records with existing dedicated local directories become games.
+Registry notifications and narrowly scoped directory watches trigger debounced
+discovery; these sources add no periodic disk scans or network requests.
+Previously measured folder/manual games and reidentified publisher entries
+retain their usage, rules, hidden state and exclusions when their exact root
+becomes a recognized publisher game. Existing Steam/Epic/etc. roots take
+priority over duplicate publisher registrations.
+
+Xbox discovery reads current-user package registrations and bounded manifests.
+GDK configuration or Xbox Live declarations distinguish games from ordinary
+Store apps. Package roots are resolved to their physical installation location;
+launches use the registered application identity. Only an installed
+`Microsoft.GamingApp` package creates the packaged Xbox client entry. Provider
+arguments are structured argv, with proper Windows quoting when creating Hub
+links. EA/Amazon URLs are reconstructed as launch-only operations; GOG can use
+its bounded local primary play task without Galaxy. Publisher removals open
+Windows Installed apps and retain publisher/Windows confirmation.
+
+Installation format references: [MicrosoftGame.config](https://learn.microsoft.com/en-us/gaming/gdk/docs/features/common/game-config/microsoftgameconfig-overview),
+[Battle.net index schema](https://github.com/overtools/TACTLib/blob/master/TACTLib/Agent/Protobuf/ProtoDatabase.cs),
+and the independently implemented local registration/launch formats documented
+by the [Playnite library integrations](https://github.com/JosefNemec/PlayniteExtensions/tree/master/source/Libraries).
+Clients not present on this development machine are covered with synthetic
+registry, package, protobuf, SQLite and launch-boundary fixtures; compatibility
+with every protected game or publisher build is not implied.
+
 The local bedtime schedule (`bedtime.py`) shares the existing one-second monitor
 tick; it adds no resident process, fast timer, network request or catalog scan.
 Reminder/bedtime/resume times form a validated daily interval across midnight.

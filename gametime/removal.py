@@ -6,6 +6,7 @@ import re
 import subprocess
 from .model import norm, within
 from .i18n import tr
+from .launcher_defs import PLATFORM_SOURCES
 
 APPS = "ms-settings:appsfeatures"
 GUID = re.compile(r"\{[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\}", re.I)
@@ -51,9 +52,11 @@ def registrations():
 
 
 def apps_plan(game):
+    extra = ('For Riot games, close Riot Client and the game first. ' if game.source == 'Riot' else
+             'For Minecraft Java, look for Minecraft Launcher; worlds and game files may remain. ' if game.source == 'Minecraft' else '')
     return RemovalPlan("Open Windows Installed apps",
                        f'Find "{game.name}" in Settings → Apps → Installed apps. Open its menu and choose Uninstall. '
-                       "For Riot games, close Riot Client and the game first. Windows or the publisher may ask for confirmation.",
+                       + extra + "Windows or the publisher may ask for confirmation.",
                        "uri", APPS)
 
 
@@ -92,7 +95,7 @@ def plan_removal(game, entries=None):
                                f'In the launcher, find "{game.name}" and choose {steps}. '
                                "Finish the publisher's confirmation there. Back up local saves first.", "exe", client)
         return apps_plan(game)
-    if game.source in ("Riot", "Minecraft"):
+    if game.source in ("Riot", "Minecraft", *PLATFORM_SOURCES):
         return apps_plan(game)
     root = Path(game.root)
     # Avoid treating a drive, home, or shared system folder as a portable game.
@@ -164,7 +167,10 @@ def localize_plan(plan, game, language):
         steps = "Könyvtár → a játék ⋯ menüje → Eltávolítás" if game.source == "Epic" else "Játékok → a játék → Kezelés → Eltávolítás"
         instructions = f'A {game.source} kliensben keresd a(z) „{game.name}” játékot. Lépések: {steps}. Az eltávolítást a kiadó felületén fejezd be. Előtte mentsd a helyi játékállásokat.'
     elif plan.target == APPS:
-        instructions = f'A Gépház → Alkalmazások → Telepített alkalmazások oldalon keresd: „{game.name}”. A menüjében válaszd az Eltávolítást. Riot-játék előtt zárd be a Riot klienst is. Minecraftnál a Minecraft Launcher bejegyzését keresd; a világok és játékfájlok megmaradhatnak.'
+        instructions = f'A Gépház → Alkalmazások → Telepített alkalmazások oldalon keresd: „{game.name}”. A menüjében válaszd az Eltávolítást. '
+        if game.source == 'Riot': instructions += 'Riot-játék előtt zárd be a Riot klienst is. '
+        if game.source == 'Minecraft': instructions += 'Minecraftnál a Minecraft Launcher bejegyzését keresd; a világok és játékfájlok megmaradhatnak. '
+        instructions += 'A Windows vagy a kiadó megerősítést kérhet.'
     elif plan.kind == "folder":
         instructions = f'A(z) „{game.name}” játékhoz nem találtunk támogatott eltávolítót. Előbb ellenőrizd a Telepített alkalmazásokat vagy a kiadó kliensét. Hordozható játéknál zárd be a játékot, mentsd a játékállásokat, majd kézzel töröld kizárólag a játékmappát: {game.root}. A figyelő nem törli helyetted ezeket a fájlokat.'
     else:

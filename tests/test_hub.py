@@ -314,13 +314,15 @@ class HubNativeTests(unittest.TestCase):
             store = Store(base / "usage.sqlite3")
             store.save_settings(settings)
             store.add_usage({("2000-01-01", "fixture:prior"): 123})
-            discovery = Discovery(settings, [str(steam)], [str(epic)], base / "none.dat", ubisoft=False, riot=False)
+            discovery = Discovery(settings, [str(steam)], [str(epic)], base / "none.dat", platforms=False, ubisoft=False, riot=False)
             service = DiscoveryService(settings, discovery=discovery)
             hub = Hub(base / "data", locations=[])
             worker = HubWorker(base / "data", hub)
             root = tk.Tk()
             app = App(root, store, base / "data", background=True, service=service, hub=worker)
-            def await_path(path, timeout=14, exists=True):
+            # Windows Shell/Defender can delay a fresh synthetic EXE shortcut.
+            # Allow the bridge's existing 30-second timeout plus debounce time.
+            def await_path(path, timeout=40, exists=True):
                 deadline = time.monotonic() + timeout
                 while time.monotonic() < deadline:
                     root.update()

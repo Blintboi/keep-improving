@@ -28,7 +28,7 @@ def main():
         settings = Settings(games_root=str(base / "Games"))
         store.save_settings(settings)
         service = DiscoveryService(settings, discovery=Discovery(
-            settings, [], [], base / "none.dat", ubisoft=False, riot=False))
+            settings, [], [], base / "none.dat", platforms=False, ubisoft=False, riot=False))
         root = tk.Tk()
         app = App(root, store, base, service=service)
         errors, menus = [], []

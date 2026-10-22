@@ -206,7 +206,7 @@ class App(QMainWindow,MonitorActions):
             card=panel(); body=QVBoxLayout(card); body.setContentsMargins(22,22,22,22); body.setSpacing(15)
             head=QHBoxLayout(); icon=QLabel(); icon.setFixedSize(52,52)
             from PySide6.QtCore import QFileInfo
-            pix=normalize_icon(self.art.provider.icon(QFileInfo(client.target)).pixmap(48,48))
+            pix=normalize_icon(self.art.provider.icon(QFileInfo(client.icon or client.target)).pixmap(48,48))
             icon.setPixmap(pix.scaled(48,48,Qt.KeepAspectRatio,Qt.SmoothTransformation)); head.addWidget(icon)
             head.addWidget(label(client.name,'section'),1); body.addLayout(head)
             launch=button(self.t('Open'),lambda checked=False,c=client:self.open_client(c),'primary'); launch.setAccessibleName(self.t('Open')+' '+client.name); body.addWidget(launch)

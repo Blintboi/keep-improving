@@ -5,6 +5,7 @@ from pathlib import Path
 import sqlite3
 from .model import Game, Settings, norm, LAUNCHER_SOURCES
 from .secrets import PREFIX,protect,unprotect
+from .launcher_defs import PLATFORM_SOURCES
 
 
 class Store:
@@ -152,7 +153,8 @@ class Store:
                 for prior in old:
                     if (prior.id != game.id and norm(prior.root) == norm(game.root)
                             and (prior.id.startswith("pending:") or
-                                 (prior.source == "Kézi" and game.source in LAUNCHER_SOURCES))):
+                                 (prior.source in {"Kézi", "Games"} and game.source in LAUNCHER_SOURCES) or
+                                 (prior.source == game.source and game.source in PLATFORM_SOURCES))):
                         self._merge(prior.id, game.id)
                         aliases[prior.id] = game.id
             self.upsert(games)

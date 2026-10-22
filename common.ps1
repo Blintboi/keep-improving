@@ -86,6 +86,7 @@ function Build-GameTimeRTSSBridge([string]$SourceRoot) {
 }
 
 function Get-GameTimeFiles {
+    @('gametime\launcher_defs.py','gametime\platforms.py','gametime\battlenet.py')
     @('LICENSE','PRIVACY.md','docs\DEVELOPMENT.md','docs\images\library-en.png','docs\images\statistics-en.png','docs\images\bedtime-en.png')
     @('gametime\bedtime.py','gametime\bedtime_legacy.py','gametime\bedtime_legacy.ps1')
     @('SECURITY.md','requirements-runtime.lock')

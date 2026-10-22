@@ -31,7 +31,7 @@ class QtInterfaceTests(unittest.TestCase):
         self.exe=self.base/'fixture.exe'; self.exe.write_bytes(b'MZ fixture')
         self.store.set_rule(str(self.exe),self.games[0].id)
         class Service:
-            def __init__(me): me.results=Queue(); me.discovery=Discovery(self.settings,[],[],self.base/'none',ubisoft=False,riot=False)
+            def __init__(me): me.results=Queue(); me.discovery=Discovery(self.settings,[],[],self.base/'none',platforms=False, ubisoft=False,riot=False)
             def start(me): pass
             def close(me): pass
             def request(me,*args): pass

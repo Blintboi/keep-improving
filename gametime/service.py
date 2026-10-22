@@ -95,8 +95,10 @@ class DiscoveryService:
             if path is None or Path(path).suffix.lower() in (".lnk", ".url", "") or Path(path).is_dir():
                 self.request("shortcuts")
             return
-        if kind in ("launchers", "riot"):
-            suffixes = (".yaml", ".json", "") if kind == "riot" else (".acf", ".vdf", ".item", ".dat", "")
+        if kind in ("launchers", "riot", "publishers"):
+            suffixes = ((".yaml", ".json", "") if kind == "riot" else
+                        (".sqlite", ".sqlite-wal", ".sqlite-shm", ".db", ".config", ".xml", "") if kind == "publishers" else
+                        (".acf", ".vdf", ".item", ".dat", ""))
             if (path is None or Path(path).suffix.lower() in suffixes or Path(path).is_dir()
                     or (kind == "riot" and norm(Path(path).parent) == norm(self.discovery.riot.metadata_root))):
                 self.request("launchers")

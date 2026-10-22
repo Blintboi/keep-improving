@@ -2,6 +2,24 @@
 
 Use isolated temporary profiles and synthetic game installations. Never uninstall a real user game to test removal; mock the execution boundary.
 
+## 2.13.0 additional game clients — 2026-10-22
+
+Publisher fixtures cover EA app/Origin, Battle.net, GOG Galaxy/offline installs,
+Xbox, Rockstar Games Launcher and Amazon Games without installing those
+clients or executing their programs. The **22 publisher integration tests**
+cover registry views, custom locations, deduplication, move/uninstall behavior,
+read-only SQLite and bounded protobuf indexes, partial writes, protected Store
+containers, visible package application selection, launcher/helper exclusions,
+structured launch arguments, offline GOG play tasks, launch-only URI rebuilding
+and preservation of history, assignments, hidden state and exclusions.
+
+The current machine also provides an installed Xbox application and Solitaire
+package for a read-only native discovery check. Missing publisher clients do
+not create cards. Windows Shell's native shortcut test allows its existing
+30-second bridge timeout plus event debounce; fresh synthetic EXEs can take
+longer to resolve than a warm installation. Automated fixture tests precede
+the verified local upgrade; GitHub publication waits for the user's request.
+
 ## 2.12.1 interface corrections — 2026-10-22
 
 All **343 application tests passed in 179.397 seconds** on CPython 3.13.16 /

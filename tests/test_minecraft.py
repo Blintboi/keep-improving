@@ -67,5 +67,5 @@ class MinecraftTests(unittest.TestCase):
     def test_discovery_includes_minecraft_without_scanning_game_contents(self):
         from gametime.discovery import Discovery
         with patch("gametime.minecraft.scan", return_value=[self.game]):
-            discovery = Discovery(Settings(), [], [], self.base / "none.dat", ubisoft=False, riot=False, minecraft=True)
+            discovery = Discovery(Settings(), [], [], self.base / "none.dat", platforms=False, ubisoft=False, riot=False, minecraft=True)
             self.assertEqual(discovery.scan_launchers(), [self.game])

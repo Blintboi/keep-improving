@@ -62,6 +62,8 @@ def preserve_unreadable(games, previous, errors):
         if any(within(game.metadata, error) or (game.source == "Steam" and Path(error).name == "libraryfolders.vdf")
                or (game.source == "Ubisoft" and error.startswith("registry:Ubisoft:"))
                or (game.source == "Riot" and error.startswith("registry:Riot:"))
+               or error.startswith("registry:" + game.source + ":")
+               or (game.source in {"EA", "GOG", "Battle.net", "Rockstar"} and error.startswith("registry:Publishers:"))
                for error in errors):
             found[game.id] = game
     return list(found.values())
@@ -90,7 +92,7 @@ def epic_dirs():
 
 
 class Discovery:
-    def __init__(self, settings, steam=None, epic=None, launcher_dat=None, ubisoft=True, riot=True, minecraft=False):
+    def __init__(self, settings, steam=None, epic=None, launcher_dat=None, ubisoft=True, riot=True, minecraft=False, platforms=True):
         self.settings = settings
         self.roots = steam if steam is not None else list(dict.fromkeys(steam_roots() + settings.steam_roots))
         self.epic_dirs = epic if epic is not None else list(dict.fromkeys(epic_dirs() + settings.epic_manifest_dirs))
@@ -108,6 +110,8 @@ class Discovery:
         self.riot_hints = []
         self.install_roots = set()
         self.minecraft = minecraft
+        from .platforms import PlatformSources
+        self.platforms = PlatformSources() if platforms is True else platforms or None
 
     def _read_vdf(self, path):
         try:
@@ -211,6 +215,10 @@ class Discovery:
         if self.minecraft:
             from .minecraft import scan
             found.update((g.id, g) for g in scan())
+        if self.platforms:
+            known = {norm(game.root) for game in found.values()}
+            found.update((game.id, game) for game in self.platforms.scan() if norm(game.root) not in known)
+            self.errors.extend(self.platforms.errors)
         self.install_roots.update(game.root for game in found.values())
         return list(found.values())
 
@@ -258,6 +266,8 @@ class Discovery:
             wanted += [(root, False, "launchers") for root in runtime_roots()]
         if self.riot:
             wanted += self.riot.directory_specs()
+        if self.platforms:
+            wanted += self.platforms.directory_specs()
         if self.settings.hub_enabled:
             from .hub import shortcut_locations
             wanted += [(item["path"], bool(item["depth"]), "shortcuts") for item in shortcut_locations()]
@@ -272,6 +282,10 @@ class Discovery:
                 specs.setdefault((str(existing), actual_recursive, kind), []).append(target)
         for target in self.install_roots:
             existing = Path(target).parent
+            # Package registration notifications cover Store installations;
+            # their protected container cannot be opened as a directory watch.
+            if existing.name.lower() == 'windowsapps':
+                continue
             while not existing.is_dir() and existing.parent != existing:
                 existing = existing.parent
             if existing.is_dir():
@@ -280,4 +294,5 @@ class Discovery:
 
     def registry_watch_specs(self):
         return ((self.ubisoft.watch_specs() if self.ubisoft else set()) |
-                (self.riot.watch_specs() if self.riot else set()))
+                (self.riot.watch_specs() if self.riot else set()) |
+                (self.platforms.watch_specs() if self.platforms else set()))

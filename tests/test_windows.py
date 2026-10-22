@@ -40,7 +40,7 @@ class WindowsTests(unittest.TestCase):
         epic = self.base / "Manifests"
         epic.mkdir()
         settings = Settings(games_root=str(games))
-        discovery = Discovery(settings, [str(steamapps.parent)], [str(epic)], self.base / "LauncherInstalled.dat", ubisoft=False, riot=False)
+        discovery = Discovery(settings, [str(steamapps.parent)], [str(epic)], self.base / "LauncherInstalled.dat", platforms=False, ubisoft=False, riot=False)
         service = DiscoveryService(settings, discovery=discovery)
         self.addCleanup(service.close)
         service.start()
@@ -122,7 +122,7 @@ class WindowsTests(unittest.TestCase):
 
     def test_missing_games_folder_is_detected_when_created(self):
         settings = Settings(games_root=str(self.base / "Missing" / "Games"))
-        discovery = Discovery(settings, [], [], self.base / "none.dat", ubisoft=False, riot=False)
+        discovery = Discovery(settings, [], [], self.base / "none.dat", platforms=False, ubisoft=False, riot=False)
         service = DiscoveryService(settings, discovery=discovery)
         self.addCleanup(service.close)
         service.start()

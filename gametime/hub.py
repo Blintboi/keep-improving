@@ -19,6 +19,7 @@ import time
 from urllib.parse import quote, unquote, urlsplit
 import uuid
 from .model import blocked, helper, norm, within
+from .launcher_defs import PLATFORM_SOURCES, CLIENTS as LAUNCHER_CLIENTS, client_id
 
 log = logging.getLogger(__name__)
 MARKER = "GameTimeHub.v1"
@@ -97,6 +98,14 @@ def same_game_link(link, game, rules):
         if game.source == "Epic":
             return (parsed.scheme == "com.epicgames.launcher" and parsed.netloc == "apps"
                     and unquote(parsed.path).strip("/").split(":")[-1] == gid.removeprefix("epic:"))
+        if game.source == 'Amazon':
+            return parsed.scheme == 'amazon-games' and parsed.netloc == 'play' and parsed.path.strip('/') == gid.removeprefix('amazon:')
+        if game.source == 'EA':
+            from .platforms import ea_offer
+            from urllib.parse import parse_qs
+            offer = ea_offer(game.root)
+            return bool(offer and parsed.scheme == 'origin2' and parsed.netloc == 'game' and parsed.path == '/launch'
+                        and parse_qs(parsed.query).get('offerIds') == [offer])
         return False
     target = link.get("target", "")
     if not target or target.startswith("\\\\") or not Path(target).is_file():
@@ -227,7 +236,7 @@ class Hub:
     def _recipe(self, game, inventory, rules, root):
         candidates = [link for link in inventory if same_game_link(link, game, rules)]
         candidates += [link for link in inventory if (link.get("owned_game") == game.id or
-                       (link.get("owned_game", "").startswith("manual:") and game.source in {"Minecraft", "Steam", "Epic", "Ubisoft", "Riot"}))
+                       (link.get("owned_game", "").startswith("manual:") and game.source in {"Minecraft", "Steam", "Epic", "Ubisoft", "Riot", *PLATFORM_SOURCES}))
                        and norm(link.get("owned_root", "")) == norm(game.root)
                        and (url_value(link.get("contents")) or Path(link.get("target", "")).is_file())]
         # Existing, explicitly collected special launchers (e.g. Minecraft or a
@@ -241,6 +250,11 @@ class Hub:
         if candidates:
             link = candidates[0]
             return {"kind": "copy", "source": link["path"], "extension": Path(link["path"]).suffix.lower()}
+        if game.source in PLATFORM_SOURCES:
+            from .platforms import game_recipe
+            recipe = game_recipe(game, inventory)
+            if recipe:
+                return recipe
         if game.source == "Minecraft":
             from .minecraft import launcher
             target = launcher()
@@ -272,7 +286,7 @@ class Hub:
                         "working": str(Path(client).parent)}
         executables = [p for p, gid in rules.items() if gid == game.id and within(p, game.root)
                        and Path(p).is_file() and not blocked(p)]
-        if not executables and game.source == "Games":
+        if not executables and game.source in ("Games", *PLATFORM_SOURCES):
             executables = game_executables(game.root)
         if len(executables) == 1:
             target = executables[0]
@@ -350,12 +364,10 @@ class Hub:
                 names.add(norm(path))
                 recipes.append(dict(spec, path=str(path), gid=game.id, game_root=game.root,
                                     role=kind, fallback=bool(spec.get("folder"))))
-        clients = {"steam.exe": "Steam", "epicgameslauncher.exe": "Epic Games Launcher",
-                   "ubisoftconnect.exe": "Ubisoft Connect", "upc.exe": "Ubisoft Connect",
-                   "riotclientservices.exe": "Riot Client"}
         client_names = set()
         for link in inventory:
-            name = clients.get(ntpath.basename(link.get("target", "")).lower())
+            identity = client_id(link.get('target', ''))
+            name = LAUNCHER_CLIENTS[identity][0] if identity else None
             if not name or name in client_names or link.get("arguments") or not Path(link["target"]).is_file():
                 continue
             client_names.add(name)

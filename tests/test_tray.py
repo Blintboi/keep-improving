@@ -76,7 +76,7 @@ class TrayTests(unittest.TestCase):
             store = Store(base / "usage.sqlite3")
             settings = Settings(games_root=str(base / "Games"))
             store.save_settings(settings)
-            service = DiscoveryService(settings, discovery=Discovery(settings, [], [], base / "none.dat", ubisoft=False, riot=False))
+            service = DiscoveryService(settings, discovery=Discovery(settings, [], [], base / "none.dat", platforms=False, ubisoft=False, riot=False))
             root = tk.Tk()
             app = App(root, store, base, background=True, service=service)
             try:

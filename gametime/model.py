@@ -4,6 +4,7 @@ import math
 import ntpath
 import os
 import re
+from .launcher_defs import CLIENT_PROCESSES, PLATFORM_SOURCES, client_id
 
 
 def norm(path):
@@ -24,14 +25,15 @@ CLIENTS.update({"ubisoftconnect.exe", "ubisoftgamelauncher.exe", "ubisoftgamelau
 CLIENTS.update({"riotclientservices.exe", "riotclientux.exe", "riotclientuxrender.exe",
                 "riotclientcrashhandler.exe", "riotclientcrashhandler64.exe", "riotclientcrashhandler32.exe",
                 "vgc.exe", "vgtray.exe", "leagueclient.exe", "leagueclientux.exe", "leagueclientuxrender.exe"})
-LAUNCHER_SOURCES = ("Steam", "Epic", "Ubisoft", "Riot", "Minecraft")
+CLIENTS.update(CLIENT_PROCESSES)
+LAUNCHER_SOURCES = ("Steam", "Epic", "Ubisoft", "Riot", "Minecraft", *PLATFORM_SOURCES)
 HELPERS = re.compile(r"unins|uninstall|(^|[-_ ])setup|^install|launcher|updater|crash|"
                      r"helper|config|redist|vcredist|dxsetup|benchmark|anticheat|easyanticheat", re.I)
 
 
 def blocked(path):
     parts = norm(path).split("\\")
-    return (parts[-1] in BROWSERS | CLIENTS
+    return (parts[-1] in BROWSERS | CLIENTS or client_id(path) == 'rockstar'
             or any(part in {"riot client", "riot vanguard"} for part in parts[:-1]))
 
 

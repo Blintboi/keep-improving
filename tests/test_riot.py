@@ -52,7 +52,7 @@ class RiotTests(unittest.TestCase):
 
     def discovery(self):
         return Discovery(Settings(games_root=str(self.base / "Games")), [], [], self.base / "none.dat",
-                         ubisoft=False, riot=self.source)
+                         platforms=False, ubisoft=False, riot=self.source)
 
     def test_valorant_metadata_exact_live_root(self):
         root, file = self.metadata()
@@ -248,7 +248,7 @@ class RiotNativeTests(unittest.TestCase):
             base = Path(temp)
             source = RiotSource(base / "Metadata", base / "RiotClientInstalls.json", FakeRegistry())
             settings = Settings(games_root=str(base / "Games"))
-            discovery = Discovery(settings, [], [], base / "none.dat", ubisoft=False, riot=source)
+            discovery = Discovery(settings, [], [], base / "none.dat", platforms=False, ubisoft=False, riot=source)
             service = DiscoveryService(settings, discovery=discovery)
             service.start()
             try:
@@ -293,7 +293,7 @@ class RiotNativeTests(unittest.TestCase):
             source = RiotSource(base / "Metadata", base / "RiotClientInstalls.json", WindowsRiotRegistry())
             settings = Settings(games_root=str(base / "Games"))
             service = DiscoveryService(settings, discovery=Discovery(settings, [], [], base / "none.dat",
-                                                                     ubisoft=False, riot=source))
+                                                                     platforms=False, ubisoft=False, riot=source))
             service.start()
             try:
                 self.await_games(service, lambda games: not games)

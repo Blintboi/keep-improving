@@ -10,20 +10,15 @@ import threading
 from .discovery import steam_roots
 from .hub import PowerShellLinks,shortcut_locations
 from .model import Settings,norm
-
-CLIENTS={
-    'steam':('Steam',{'steam.exe'}),
-    'epic':('Epic Games Launcher',{'epicgameslauncher.exe'}),
-    'riot':('Riot Client',{'riotclientservices.exe'}),
-    'ubisoft':('Ubisoft Connect',{'ubisoftconnect.exe','upc.exe'}),
-    'minecraft':('Minecraft Launcher',{'minecraftlauncher.exe'}),
-}
+from .launcher_defs import CLIENTS,CLIENT_PATHS,client_id
 
 @dataclass(frozen=True)
 class Client:
     id:str
     name:str
     target:str
+    kind:str='executable'
+    icon:str=''
 
 def local_executable(value):
     if not isinstance(value,str) or value.startswith(('\\\\','//')) or '\x00' in value:
@@ -41,11 +36,11 @@ def find_clients(settings,inventory=(),candidates=None):
         for key in ('ProgramFiles','ProgramFiles(x86)','LOCALAPPDATA'):
             if not os.environ.get(key): continue
             base=Path(os.environ[key])
-            paths.extend(str(base/relative) for relative in (
-                'Epic Games/Launcher/Portal/Binaries/Win64/EpicGamesLauncher.exe',
-                'Epic Games/Launcher/Portal/Binaries/Win32/EpicGamesLauncher.exe',
-                'Ubisoft/Ubisoft Game Launcher/UbisoftConnect.exe',
-                'Minecraft Launcher/MinecraftLauncher.exe'))
+            paths.extend(str(base/relative) for relative in CLIENT_PATHS)
+        from .platforms import WindowsInstallRegistry,xbox_client
+        snapshot=WindowsInstallRegistry().read()
+        paths.extend(snapshot.get('clients',[]))
+        xbox=xbox_client(snapshot.get('packages',[]))
         from .ubisoft import WindowsUbisoftRegistry
         paths.extend(str(Path(root)/'UbisoftConnect.exe') for root in
                      WindowsUbisoftRegistry().read().get('launchers',[])+settings.ubisoft_roots)
@@ -62,14 +57,23 @@ def find_clients(settings,inventory=(),candidates=None):
         try:
             if not local_executable(path): continue
         except (OSError,ValueError): continue
-        basename=ntpath.basename(path).lower()
-        for key,(name,names) in CLIENTS.items():
-            if key not in found and basename in names: found[key]=Client(key,name,str(Path(path)))
+        key=client_id(path)
+        if key and key not in found: found[key]=Client(key,CLIENTS[key][0],str(Path(path)))
+    if candidates is None and xbox:
+        package=next(row for row in snapshot['packages'] if xbox.startswith(row['family']+'!'))
+        icon=Path(package['root'])/'XboxPcApp.exe'
+        found['xbox']=Client('xbox','Xbox',xbox,'app',str(icon) if icon.is_file() else '')
     return sorted(found.values(),key=lambda client:client.name.casefold())
 
 def start_client(client):
+    if client.kind=='app':
+        from .platforms import AUMID,WindowsInstallRegistry,xbox_client
+        if client.id!='xbox' or not AUMID.fullmatch(client.target) or client.target!=xbox_client(WindowsInstallRegistry().read().get('packages',[])):
+            raise ValueError('This launcher is no longer available. Refresh the launcher list.')
+        os.startfile('shell:AppsFolder\\'+client.target)
+        return
     definition=CLIENTS.get(client.id)
-    if (not definition or ntpath.basename(client.target).lower() not in definition[1]
+    if (client.kind!='executable' or not definition or client_id(client.target)!=client.id
             or not local_executable(client.target)):
         raise ValueError('This launcher is no longer available. Refresh the launcher list.')
     subprocess.Popen([client.target],cwd=str(Path(client.target).parent),shell=False)
