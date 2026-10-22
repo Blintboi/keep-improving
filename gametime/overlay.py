@@ -127,9 +127,14 @@ class PositionPicker(QWidget):
         self.setMinimumHeight(168)
         self.setMaximumHeight(210)
         self.setMinimumWidth(320)
-        self.setCursor(Qt.OpenHandCursor)
+        self.setCursor(Qt.ArrowCursor)
+        self.setMouseTracking(True)
         self.setFocusPolicy(Qt.StrongFocus)
         self.setAccessibleName("Countdown position")
+
+    def _bounds(self, monitor):
+        margin_x, margin_y = min(8, monitor.width()/4), min(8, monitor.height()/4)
+        return monitor.adjusted(margin_x, margin_y, -margin_x, -margin_y)
 
     def rectangles(self):
         geometry = self.screen.geometry()
@@ -137,9 +142,11 @@ class PositionPicker(QWidget):
         width = min(self.width()-8, (self.height()-8)*ratio)
         height = width/ratio
         monitor = QRectF((self.width()-width)/2, (self.height()-height)/2, width, height)
-        hud_width = min(88, width*.40)
-        hud = QRectF(monitor.x()+8+(width-hud_width-16)*self.x_ratio,
-                     monitor.y()+8+(height-38)*self.y_ratio, hud_width, 22)
+        bounds = self._bounds(monitor)
+        hud_width = min(88, bounds.width(), width*.40)
+        hud_height = min(22, bounds.height())
+        hud = QRectF(bounds.x()+(bounds.width()-hud_width)*self.x_ratio,
+                     bounds.y()+(bounds.height()-hud_height)*self.y_ratio, hud_width, hud_height)
         return monitor, hud
 
     def set_position(self, x, y):
@@ -160,12 +167,22 @@ class PositionPicker(QWidget):
         painter.drawLine(QPointF(monitor.left()+6, monitor.center().y()),
                          QPointF(monitor.right()-6, monitor.center().y()))
         painter.setPen(QColor("#ffffff"))
-        painter.setFont(QFont("Consolas", 10, QFont.Bold))
-        painter.drawText(hud, Qt.AlignCenter, "00:20:00" if hud.width()>=80 else "20:00")
+        font = QFont("Consolas", 10, QFont.Bold)
+        metrics = QFontMetrics(font, self)
+        text = "00:20:00" if metrics.horizontalAdvance("00:20:00") <= hud.width() else "20:00"
+        scale = min(1, hud.width()/max(1, metrics.horizontalAdvance(text)+2),
+                    hud.height()/max(1, metrics.height()))
+        font.setPointSizeF(max(1, font.pointSizeF()*scale))
+        painter.setFont(font)
+        painter.setClipRect(hud)
+        painter.drawText(hud, Qt.AlignCenter, text)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
-            _, hud = self.rectangles()
+            monitor, hud = self.rectangles()
+            if not monitor.contains(event.position()):
+                event.ignore()
+                return
             self.offset = event.position()-hud.topLeft() if hud.contains(event.position()) else QPointF(hud.width()/2, hud.height()/2)
             self.dragging = True
             self.setCursor(Qt.ClosedHandCursor)
@@ -174,16 +191,21 @@ class PositionPicker(QWidget):
 
     def _move(self, point):
         monitor, hud = self.rectangles()
-        self.set_position((point.x()-self.offset.x()-monitor.x()-8)/max(1, monitor.width()-hud.width()-16),
-                          (point.y()-self.offset.y()-monitor.y()-8)/max(1, monitor.height()-hud.height()-16))
+        bounds = self._bounds(monitor)
+        self.set_position((point.x()-self.offset.x()-bounds.x())/max(1, bounds.width()-hud.width()),
+                          (point.y()-self.offset.y()-bounds.y())/max(1, bounds.height()-hud.height()))
 
     def mouseMoveEvent(self, event):
         if self.dragging:
             self._move(event.position())
+        else:
+            monitor, _ = self.rectangles()
+            self.setCursor(Qt.OpenHandCursor if monitor.contains(event.position()) else Qt.ArrowCursor)
 
     def mouseReleaseEvent(self, event):
         self.dragging = False
-        self.setCursor(Qt.OpenHandCursor)
+        monitor, _ = self.rectangles()
+        self.setCursor(Qt.OpenHandCursor if monitor.contains(event.position()) else Qt.ArrowCursor)
 
     def keyPressEvent(self, event):
         changes = {Qt.Key_Left: (-.02, 0), Qt.Key_Right: (.02, 0),

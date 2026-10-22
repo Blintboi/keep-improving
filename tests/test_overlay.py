@@ -278,4 +278,37 @@ class OverlayInterfaceTests(unittest.TestCase):
         QTest.mouseRelease(picker,Qt.LeftButton,pos=monitor.bottomLeft().toPoint())
         self.assertEqual((picker.x_ratio,picker.y_ratio),(0,1)); self.assertFalse(picker.dragging)
 
+    def test_position_picker_does_not_start_dragging_outside_the_monitor(self):
+        from PySide6.QtCore import Qt,QPoint
+        from PySide6.QtTest import QTest,QSignalSpy
+        picker=self.app.overlay_picker; picker.resize(640,200); picker.set_position(.4,.6)
+        changed=QSignalSpy(picker.positionChanged)
+        monitor,_=picker.rectangles(); outside=QPoint(1,1)
+        self.assertFalse(monitor.contains(outside))
+        QTest.mousePress(picker,Qt.LeftButton,pos=outside)
+        self.assertFalse(picker.dragging)
+        QTest.mouseMove(picker,monitor.center().toPoint())
+        QTest.mouseRelease(picker,Qt.LeftButton,pos=monitor.center().toPoint())
+        self.assertEqual((picker.x_ratio,picker.y_ratio),(.4,.6)); self.assertEqual(changed.count(),0)
+
+    def test_position_picker_keeps_the_whole_timer_inside_all_monitor_shapes(self):
+        from PySide6.QtCore import QRect,QPointF
+        from unittest.mock import Mock
+        picker=self.app.overlay_picker; screen=Mock(); picker.screen=screen
+        for width,height in ((1920,1080),(1080,1920),(5120,1440),(720,2560)):
+            screen.geometry.return_value=QRect(-width,0,width,height)
+            for widget_width,widget_height in ((320,168),(1000,200)):
+                picker.resize(widget_width,widget_height)
+                for x,y in ((0,0),(1,0),(0,1),(1,1),(.5,.5)):
+                    with self.subTest(screen=(width,height),widget=(widget_width,widget_height),position=(x,y)):
+                        picker.set_position(x,y)
+                        monitor,hud=picker.rectangles()
+                        self.assertTrue(monitor.contains(hud))
+                        self.assertTrue(picker._bounds(monitor).adjusted(-.001,-.001,.001,.001).contains(hud))
+                        picker.offset=QPointF(hud.width()/2,hud.height()/2)
+                        picker._move(QPointF(-100,-100))
+                        self.assertTrue(picker.rectangles()[0].contains(picker.rectangles()[1]))
+                        picker._move(QPointF(widget_width+100,widget_height+100))
+                        self.assertTrue(picker.rectangles()[0].contains(picker.rectangles()[1]))
+
 if __name__=='__main__': unittest.main()

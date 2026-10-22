@@ -1,6 +1,20 @@
 """Small explicit English/Hungarian catalog. Stored IDs and paths never translate."""
 LANGUAGES = {"English": "en", "Magyar": "hu"}
 HU = {
+    'Assignment': 'Hozzárendelés',
+    'Use RTSS to show the countdown in supported fullscreen games. If it is unavailable, the app tries the desktop countdown.': 'Az RTSS a támogatott, teljes képernyős játékokban is megjelenítheti a visszaszámlálót. Ha nem érhető el, a program az asztali számlálóval próbálkozik.',
+    'Use the game’s menu in the library to enable or exclude its play-time tracking.': 'Egy teljes játék mérését a játéktárban, a játék menüjében kapcsolhatod be vagy zárhatod ki.',
+    'Sync enabled.': 'A szinkronizálás bekapcsolva.',
+    'Last sync: {time}': 'Utolsó szinkron: {time}',
+    'Syncing…': 'Szinkronizálás…',
+    'Wait {seconds}s': 'Várakozás: {seconds} mp',
+    'Wait {minutes} min': 'Várakozás: {minutes} perc',
+    'Exclude from tracking': 'Kizárás a mérésből',
+    'Track game': 'Játékidő mérése',
+    'Hide from library': 'Elrejtés a játéktárból',
+    'Show in library': 'Visszaállítás a játéktárba',
+    'Local time, every day. If minimization is enabled, it also applies to browsers and other apps until Resume at.': 'Helyi idő szerint, minden nap. Ha bekapcsolod a minimalizálást, az a böngészőkre és más alkalmazásokra is vonatkozik a reggeli feloldásig.',
+    'Exclusive fullscreen may require RTSS.': 'Kizárólagos teljes képernyőn RTSS-re lehet szükség.',
     'Enable statistics sync': 'Statisztikák szinkronizálása',
     'Sync runs at startup, around gameplay or manually.': 'Szinkronizálás induláskor, játékkezdéskor és játék után, vagy kézzel.',
     'Sync runs at startup, when gameplay starts and after it stops, or manually. Requests wait at least 10 minutes; nearby game changes are combined. Server limits also apply.': 'Induláskor, játékkezdéskor és játék után automatikusan, illetve kézzel frissít. A kérések között legalább 10 perc telik el; a közeli játékváltásokat összevonja. A szerver korlátai is érvényesek.',
@@ -155,7 +169,6 @@ HU = {
     'Library': 'Játéktár',
     'Your library': 'Játékaid',
     'Pick a game. Make time for a good session.': 'Válassz játékot, és figyelj az idődre.',
-    'Monitoring active': 'A figyelő aktív',
     'Play time is counted automatically.': 'A játékidőt automatikusan mérjük.',
     'Search your games…': 'Keresés a játékok között…',
     'Show hidden games': 'Rejtett játékok',

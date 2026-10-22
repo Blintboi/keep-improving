@@ -2,6 +2,30 @@
 
 Use isolated temporary profiles and synthetic game installations. Never uninstall a real user game to test removal; mock the execution boundary.
 
+## 2.12.1 interface corrections — 2026-10-22
+
+All **343 application tests passed in 179.397 seconds** on CPython 3.13.16 /
+OpenSSL 3.5.9. The settings regression sends actual Qt wheel events over numeric,
+time, monitor and opacity controls, both focused and unfocused: the page scrolls
+while values stay unchanged. Open combo popups, keyboard editing and slider
+dragging remain usable. Sync tests cover guarded connection saves, truthful
+waiting/busy labels and the timestamp of the last successful exchange. Menu
+tests exercise the explicit tracking actions on the selected game; statistics
+tests check the displayed start of the actual averaging period.
+
+Position-picker regressions reject drags started outside the drawn monitor and
+keep the full timer rectangle inside landscape, portrait, ultrawide and tall
+previews, including corner drags and keyboard movement. Hungarian and English
+screens were inspected at the minimum window size; the three README screenshots
+were regenerated with an isolated offline profile and demonstration usage.
+
+The bundled install/upgrade regression now also seeds and verifies a per-game
+tracking exclusion. Its existing checks cover history, hidden games, connection
+codes, cached statistics, language, overlay/bedtime preferences, startup entries
+and an unchanged runtime DLL held open during upgrade. Installer verification
+compares actual self-extractor output with the packaged inputs and checks every
+payload-manifest hash before running that isolated regression.
+
 ## 2.12.0 event-driven statistics sync — 2026-10-22
 
 All **338 application tests passed in 158.719 seconds** on CPython 3.13.16 /

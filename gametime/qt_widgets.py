@@ -7,7 +7,8 @@ from queue import Empty
 from .model import within, helper
 from PySide6.QtCore import Qt, QRectF, QPointF, Signal, QTimer, QFileInfo
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap, QLinearGradient, QRegion
-from PySide6.QtWidgets import QWidget, QFrame, QLabel, QPushButton, QGridLayout, QFileIconProvider, QToolTip
+from PySide6.QtWidgets import (QWidget, QFrame, QLabel, QPushButton, QGridLayout,
+    QFileIconProvider, QToolTip, QComboBox, QDoubleSpinBox, QTimeEdit, QSlider)
 
 BG, PANEL, TEXT, MUTED, ACCENT = '#101619', '#192126', '#edf4f2', '#93a3a7', '#7de5bf'
 STYLE = '''
@@ -89,6 +90,32 @@ def panel(name='Panel'):
 def duration(seconds):
     seconds=max(0,int(seconds))
     return f'{seconds//3600:02d}:{seconds%3600//60:02d}:{seconds%60:02d}'
+
+
+class _IgnoreWheel:
+    """Let the surrounding page scroll, even after the editor received focus."""
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs)
+        self.setFocusPolicy(Qt.StrongFocus)
+
+    def wheelEvent(self,event):
+        event.ignore()
+
+
+class NoWheelComboBox(_IgnoreWheel,QComboBox):
+    pass  # The open popup's item view retains its own scrolling.
+
+
+class NoWheelDoubleSpinBox(_IgnoreWheel,QDoubleSpinBox):
+    pass
+
+
+class NoWheelTimeEdit(_IgnoreWheel,QTimeEdit):
+    pass
+
+
+class NoWheelSlider(_IgnoreWheel,QSlider):
+    pass
 
 def glyph(name, color=ACCENT, size=20):
     pix=QPixmap(size,size); pix.fill(Qt.transparent)

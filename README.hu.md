@@ -1,10 +1,12 @@
-# Játékidőfigyelő — 2.12.0
+# Játékidőfigyelő — 2.12.1
 
-**[Letöltés Windows x64-re — 2.12.0](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256) · [English](README.md)
+**[Letöltés Windows x64-re — 2.12.1](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256) · [English](README.md)
 
 Windows 11-es Gaming Hub, amely méri az előtérben töltött játékidőt, mutatja a napi keretet, és emlékeztet a befejezésre. Beállítható lefekvési emlékeztetőt is tartalmaz.
 
 Elsősorban a saját mindennapi használatomra készítettem, és megosztom azokkal, akiknek szintén hasznos lehet. A helyi funkciók internet és fiók nélkül működnek. A saját számítógépeid statisztikáinak összekapcsolása választható.
+
+**Újdonság a 2.12.1-ben:** a beállítások mezői fölötti görgetés már nem módosítja az értékeket. Pontosabb szinkronállapot, egyértelmű játékmenük és súgószövegek váltják a félreérthető feliratokat. A visszaszámláló helyét beállító mező a kereten belül tartja az időfeliratot, és kívülről nem enged húzást indítani. Frissítéskor az előzmények, kapcsolati kódok, beállítások és játékonkénti kizárások megmaradnak.
 
 ![Játéktár és napi játékidőkeret](docs/images/library-en.png)
 *Angol felület valódi játékokkal és helyi játékborítókkal. A játékidők bemutatóadatok; a játékok képei a megfelelő jogtulajdonosokhoz tartoznak.*

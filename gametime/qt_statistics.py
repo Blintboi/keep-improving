@@ -3,9 +3,10 @@ from datetime import date,timedelta
 from collections import Counter
 import time
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QWidget,QScrollArea,QVBoxLayout,QHBoxLayout,QLineEdit,QListWidget,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,QComboBox
+from PySide6.QtWidgets import QWidget,QScrollArea,QVBoxLayout,QHBoxLayout,QLineEdit,QListWidget,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView
 from .statistics import date_range,summarize
 from .qt_widgets import label,button,panel,duration,DailyChart
+from .qt_widgets import NoWheelComboBox as QComboBox
 from .statistics_sync import computer_name
 
 class StatisticsPage(QWidget):
@@ -20,7 +21,7 @@ class StatisticsPage(QWidget):
         header.addWidget(button(t('Link computers'),app.statistics_sync_dialog))
         self.sync_now=button(t('Sync now'),app.request_statistics_sync); self.sync_now.setEnabled(app.settings.statistics_sync_enabled); header.addWidget(self.sync_now)
         self.sync_now.setToolTip(t('Sync runs at startup, when gameplay starts and after it stops, or manually. Requests wait at least 10 minutes; nearby game changes are combined. Server limits also apply.'))
-        header.addWidget(button(t('Refresh'),self.refresh)); layout.addLayout(header)
+        layout.addLayout(header)
         devices_row=QHBoxLayout(); devices_row.addWidget(label(t('Computers'),'muted'))
         self.devices=QComboBox(); self.devices.setMinimumWidth(250); self.devices.setMaximumWidth(320); devices_row.addWidget(self.devices)
         self.devices.currentIndexChanged.connect(self.choose_device)
@@ -89,8 +90,9 @@ class StatisticsPage(QWidget):
         self.report=summarize((row[:5] for row in self.computer_history),self.start.text(),self.end.text(),started_on=started,as_of=date.today().isoformat())
         self.total_label.setText(duration(self.report.total)); self.average_label.setText(duration(self.report.average))
         self.top_label.setText(self.report.games[0][1] if self.report.games else self.app.t('No recorded play time'))
-        explanation=self.app.t('Average uses {days} elapsed days in the selected period, starting at {date}.',days=self.report.average_days,date=started)
-        self.average_note.setText(self.app.t('Average: {days} days · since {date}',date=started,days=self.report.average_days))
+        average_started=max(started,self.start.text())
+        explanation=self.app.t('Average uses {days} elapsed days in the selected period, starting at {date}.',days=self.report.average_days,date=average_started)
+        self.average_note.setText(self.app.t('Average: {days} days · since {date}',date=average_started,days=self.report.average_days))
         self.average_label.setToolTip(explanation); self.average_note.setToolTip(explanation)
         if self.selected_day not in self.report.days: self.selected_day=None
         self.updating=True; self.days_list.clear()

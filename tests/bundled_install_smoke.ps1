@@ -31,6 +31,8 @@ try {
     $diag = Join-Path $taskRoot 'diagnose.json'
     $process = Start-Process -FilePath $exe -ArgumentList @('--diagnose','--data-dir',('"' + $data + '"'),'--report',('"' + $diag + '"')) -WindowStyle Hidden -Wait -PassThru
     $first = Get-Content -LiteralPath $diag -Raw -Encoding UTF8 | ConvertFrom-Json
+    $installedVersion = (Get-Content -LiteralPath (Join-Path $app 'bundle-install.json') -Raw -Encoding UTF8 | ConvertFrom-Json).Version
+    $report.runtime_version_matches_payload = $first.version -eq $installedVersion
     $report.runtime_and_profile_verified = $process.ExitCode -eq 0 -and $first.data -eq $data -and $first.games_root -eq $games -and $first.hub_enabled -and $first.language -eq 'en'
     $report.fresh_overlay_is_opt_in = -not $first.overlay_enabled -and $first.overlay_replace_warning -and $first.limit_popup_enabled
     $report.fresh_restriction_is_opt_in = -not $first.restriction_enabled -and $first.restriction_seconds -eq 7500
@@ -90,7 +92,7 @@ d.commit(); d.close()
     $report.start_menu_registered = Test-Path -LiteralPath $programLink
     'unrelated file' | Set-Content -LiteralPath (Join-Path $app 'user-note.txt')
     'save data' | Set-Content -LiteralPath (Join-Path $data 'keep.txt')
-    'import sqlite3,sys; from datetime import date; d=sqlite3.connect(sys.argv[1]); d.execute("INSERT INTO game_preferences VALUES (?,?)",("test:hidden",1)); d.execute("INSERT INTO usage VALUES (?,?,?)",(date.today().isoformat(),"test:hidden",123)); d.commit()' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    'import sqlite3,sys; from datetime import date; d=sqlite3.connect(sys.argv[1]); d.execute("INSERT INTO game_preferences VALUES (?,?)",("test:hidden",1)); d.execute("INSERT INTO overrides VALUES (?,?)",("test:hidden",0)); d.execute("INSERT INTO usage VALUES (?,?,?)",(date.today().isoformat(),"test:hidden",123)); d.commit()' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     if ($LASTEXITCODE -ne 0) { throw 'Fixture write failed.' }
     $obsoleteOwned = Join-Path $app 'obsolete-owned.bin'
     $obsoleteEdited = Join-Path $app 'obsolete-edited.txt'
@@ -155,6 +157,8 @@ d.close()
     $report.foreign_desktop_file_preserved = (Get-Content -LiteralPath $foreign) -eq 'preserve'
     $value = 'import sqlite3,sys; d=sqlite3.connect(sys.argv[1]); print(d.execute("SELECT hidden FROM game_preferences WHERE game_id=?",("test:hidden",)).fetchone()[0]); print(d.execute("SELECT seconds FROM usage WHERE game_id=?",("test:hidden",)).fetchone()[0])' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     $report.upgrade_preserves_hidden_and_history = $value[0] -eq '1' -and [double]$value[1] -eq 123
+    $excluded = 'import sqlite3,sys; d=sqlite3.connect(sys.argv[1]); print(d.execute("SELECT enabled FROM overrides WHERE game_id=?",("test:hidden",)).fetchone()==(0,))' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    $report.upgrade_preserves_per_game_exclusions = $LASTEXITCODE -eq 0 -and $excluded -eq 'True'
     $report.backup_created = @(Get-ChildItem -LiteralPath (Join-Path $data 'backups') -Filter 'before-*' -Directory).Count -gt 0
     $report.foreign_startup_preserved_on_upgrade = (Get-ItemProperty -LiteralPath $runKey).PSObject.Properties[$sentinelName].Value -eq $sentinelValue
     $validManifestText = Get-Content -LiteralPath (Join-Path $app 'bundle-install.json') -Raw -Encoding UTF8

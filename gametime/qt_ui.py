@@ -13,8 +13,8 @@ from sqlite3 import Error as SQLiteError
 from PySide6.QtCore import Qt,QTimer,QPoint,QEventLoop,QObject,QEvent,Signal,QTime
 from PySide6.QtGui import QIcon,QFont,QAction
 from PySide6.QtWidgets import (QApplication,QMainWindow,QWidget,QFrame,QLabel,QVBoxLayout,QHBoxLayout,
-    QGridLayout,QStackedWidget,QScrollArea,QLineEdit,QComboBox,QCheckBox,QDoubleSpinBox,QDialog,QToolButton,
-    QFileDialog,QInputDialog,QMenu,QAbstractSpinBox,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,QSizePolicy,QSlider,QTimeEdit)
+    QGridLayout,QStackedWidget,QScrollArea,QLineEdit,QCheckBox,QDialog,QToolButton,
+    QFileDialog,QInputDialog,QMenu,QAbstractSpinBox,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,QSizePolicy)
 from .controller import MonitorActions
 from .model import Catalog,Game,Settings,norm,blocked,helper
 from .service import DiscoveryService
@@ -23,6 +23,8 @@ from .hub import HubWorker
 from .i18n import tr,LANGUAGES
 from . import win32,__version__
 from .qt_widgets import STYLE,ACCENT,MUTED,label,button,panel,glyph,duration,BudgetRing,LocalArtwork,CardGrid,GameCard,normalize_icon
+from .qt_widgets import (NoWheelComboBox as QComboBox,NoWheelDoubleSpinBox as QDoubleSpinBox,
+    NoWheelTimeEdit as QTimeEdit,NoWheelSlider as QSlider)
 from .qt_statistics import StatisticsPage
 from .overlay import CountdownOverlay,PositionPicker,choose_screen,foreground_screen_name
 from .rtss import Backend as RTSSBackend, countdown as rtss_countdown, installation as rtss_installation
@@ -81,7 +83,7 @@ class App(QMainWindow,MonitorActions):
         self.statistics_data=StatisticsData(store); self.statistics_sync=CloudSyncWorker()
         self.account_auth=AuthWorker(); self.account_session=store.account_session()
         self._auth_busy=False; self._auth_callback=None
-        self._sync_busy=False; self._sync_status='Sync runs at startup, around gameplay or manually.'
+        self._sync_busy=False; self._sync_status='Sync enabled.'; self._sync_success_at=''
         self._sync_startup_pending=self.settings.statistics_sync_enabled
         self._sync_event_pending=False
         self.statistics_event_timer=QTimer(self); self.statistics_event_timer.setSingleShot(True)
@@ -140,8 +142,6 @@ class App(QMainWindow,MonitorActions):
             item=button(self.t(text),lambda checked=False,n=index:self.switch_page(n),'nav'); item.setCheckable(True); item.setIcon(glyph(icon)); item.setMinimumHeight(45)
             self.nav[index]=item; side.addWidget(item)
         side.addStretch()
-        active=label('●  '+self.t('Monitoring active')); active.setStyleSheet('color:#9ce7c5; font-size:11px; padding:6px 10px;'); side.addWidget(active)
-        side.addSpacing(12)
         self.language=QComboBox()
         self.language.setAccessibleName(self.t('Language / Nyelv')); self.language.setToolTip(self.t('Language / Nyelv'))
         for name,code in LANGUAGES.items(): self.language.addItem(name,code)
@@ -279,7 +279,7 @@ class App(QMainWindow,MonitorActions):
         if self.store.credentials_unavailable: return self.t('Enter your connection code again on this Windows account to reconnect.')
         if not self.settings.statistics_sync_enabled: return self.t('Statistics sync is off.')
         if self._sync_status=='Statistics synchronized.':
-            return self.t('Statistics synchronized · {count} computers',count=1+len(self.statistics_data.devices(self.settings.statistics_sync_group)))
+            return self.t('Last sync: {time}',time=self._sync_success_at)
         return self.t(self._sync_status)
 
     def update_statistics_sync_status(self):
@@ -296,8 +296,9 @@ class App(QMainWindow,MonitorActions):
         if page.sync_now.isEnabled()!=bool(allowed): page.sync_now.setEnabled(bool(allowed))
         # Reuse the existing GUI timer only while a visible countdown is useful.
         if not self.isVisible() or self.isMinimized() or self.pages.currentIndex()!=1: return
-        text=(self.t('Sync in {seconds}s',seconds=int(delay)+1) if 0<delay<=60 else
-              self.t('Sync in {minutes} min',minutes=int(delay/60)+1) if delay else self.t('Sync now'))
+        text=(self.t('Syncing…') if self._sync_busy else self.t('Sync now') if not self.settings.statistics_sync_enabled else
+              self.t('Wait {seconds}s',seconds=int(delay)+1) if 0<delay<=60 else
+              self.t('Wait {minutes} min',minutes=int(delay/60)+1) if delay else self.t('Sync now'))
         if page.sync_now.text()!=text: page.sync_now.setText(text)
 
     def request_statistics_sync(self):
@@ -353,6 +354,7 @@ class App(QMainWindow,MonitorActions):
             delay=self.statistics_sync.retry_delay(SERVICE_URL,self.settings.statistics_sync_group)
             if delay: self.statistics_data.defer_sync(delay)
             self._sync_status=warning or 'Statistics synchronized.'
+            if not warning: self._sync_success_at=datetime.now().strftime('%Y-%m-%d %H:%M')
             if self._sync_event_pending and not self.statistics_event_timer.isActive():
                 self.schedule_statistics_event()
             if changed and self.isVisible() and not self.isMinimized() and self.pages.currentIndex()==1: self.statistics.refresh()
@@ -461,7 +463,7 @@ class App(QMainWindow,MonitorActions):
         controls.addLayout(fields)
         self.bedtime_minimize=QCheckBox(self.t('Minimize the foreground window every 10 seconds after bedtime'))
         self.bedtime_minimize.setChecked(self.settings.bedtime_minimize); controls.addWidget(self.bedtime_minimize)
-        note=label(self.t('Local time, every day, including browsers and other apps. Minimization stops at Resume at. The Hub stays accessible; no Escape is sent.'),'muted')
+        note=label(self.t('Local time, every day. If minimization is enabled, it also applies to browsers and other apps until Resume at.'),'muted')
         note.setWordWrap(True); controls.addWidget(note)
         controls.addWidget(button(self.t('Test bedtime reminder'),self.test_bedtime_popup,'quiet'),0,Qt.AlignLeft)
         layout.addWidget(self.bedtime_controls); self.bedtime_controls.setEnabled(self.bedtime_enabled.isChecked()); self.bedtime_enabled.toggled.connect(self.bedtime_controls.setEnabled)
@@ -492,7 +494,7 @@ class App(QMainWindow,MonitorActions):
         self.overlay_opacity_label=label(str(self.overlay_opacity.value())+'%'); self.overlay_opacity.valueChanged.connect(lambda value:self.overlay_opacity_label.setText(str(value)+'%'))
         self.overlay_opacity.valueChanged.connect(lambda value:self.update_overlay()); opacity.addWidget(self.overlay_opacity_label); controls.addLayout(opacity)
         actions=QHBoxLayout(); actions.addWidget(button(self.t('Preview (10s)'),self.preview_overlay)); actions.addWidget(button(self.t('Reset position'),lambda:self.overlay_picker.set_position(1,0))); actions.addStretch(); controls.addLayout(actions)
-        note=label(self.t('Exclusive fullscreen may hide the countdown.'),'muted'); note.setToolTip(self.t('The countdown never takes focus or mouse input. Exclusive fullscreen may hide desktop overlays; windowed or borderless mode is more reliable.')); note.setWordWrap(True); controls.addWidget(note)
+        note=label(self.t('Exclusive fullscreen may require RTSS.'),'muted'); note.setToolTip(self.t('The countdown never takes focus or mouse input. Exclusive fullscreen may hide desktop overlays; windowed or borderless mode is more reliable.')); note.setWordWrap(True); controls.addWidget(note)
         controls.addWidget(button(self.t('In-game countdown (RTSS)…'),self.rtss_dialog,'quiet'),0,Qt.AlignLeft)
         self.rtss_status=label('','muted'); self.rtss_status.setWordWrap(True); self.rtss_status.hide(); controls.addWidget(self.rtss_status)
         layout.addWidget(self.overlay_controls)
@@ -526,7 +528,7 @@ class App(QMainWindow,MonitorActions):
         window=QDialog(self); window.setWindowTitle(self.t('In-game countdown (RTSS)')); window.resize(660,360)
         layout=QVBoxLayout(window)
         automatic=QCheckBox(self.t('Use RTSS automatically for all tracked games')); automatic.setChecked(self.settings.overlay_rtss_auto); layout.addWidget(automatic)
-        note=label(self.t('Game profiles are prepared automatically. No executable list is needed. If RTSS cannot display a game, the desktop countdown and warning popups remain available.')); note.setWordWrap(True); layout.addWidget(note)
+        note=label(self.t('Use RTSS to show the countdown in supported fullscreen games. If it is unavailable, the app tries the desktop countdown.')); note.setWordWrap(True); layout.addWidget(note)
         restart=label(self.t('If a game was already running, save it and restart it once after enabling RTSS.'),'muted'); restart.setWordWrap(True); layout.addWidget(restart)
         status=label('' if rtss_installation() else self.t('Install RTSS 7.3.7 or newer first.'),'muted'); status.setWordWrap(True); layout.addWidget(status)
         def save():
@@ -710,8 +712,10 @@ class App(QMainWindow,MonitorActions):
         game=self.selected()
         if not game: return
         menu=QMenu(self)
+        tracking='Exclude from tracking' if self.catalog.enabled(game) else 'Track game'
+        visibility='Show in library' if game.id in self.hidden_ids else 'Hide from library'
         for text,callback in [('Open game folder',self.open_game_folder),('Assign EXE',self.assign_exe),('EXE rules',self.rules_dialog),
-                              ('Exclude / track',self.toggle_game),('Hide / restore',self.toggle_hidden)]: menu.addAction(self.t(text),callback)
+                              (tracking,self.toggle_game),(visibility,self.toggle_hidden)]: menu.addAction(self.t(text),callback)
         menu.addSeparator(); menu.addAction(self.t('Uninstall game…'),self.uninstall_game)
         menu.exec(card.more.mapToGlobal(QPoint(0,card.more.height())))
 
@@ -747,8 +751,8 @@ class App(QMainWindow,MonitorActions):
     def rules_dialog(self):
         window=self._dialog(self.t('Executable exclusions and assignments'),920); window.resize(920,480)
         box=QVBoxLayout(window); box.setContentsMargins(24,24,24,24); box.setSpacing(16)
-        note=label(self.t('Use Exclude / track in the main list to change tracking for an entire game.'),'muted'); note.setWordWrap(True); box.addWidget(note)
-        table=QTableWidget(0,2); table.setHorizontalHeaderLabels([self.t('Application path'),self.t('Tracking')]); table.horizontalHeader().setSectionResizeMode(0,QHeaderView.Stretch)
+        note=label(self.t('Use the game’s menu in the library to enable or exclude its play-time tracking.'),'muted'); note.setWordWrap(True); box.addWidget(note)
+        table=QTableWidget(0,2); table.setHorizontalHeaderLabels([self.t('Application path'),self.t('Assignment')]); table.horizontalHeader().setSectionResizeMode(0,QHeaderView.Stretch)
         table.setColumnWidth(1,210); table.verticalHeader().hide(); table.setSelectionBehavior(QAbstractItemView.SelectRows); table.setEditTriggers(QAbstractItemView.NoEditTriggers); box.addWidget(table,1)
         def fill():
             rows=list(self.store.rules().items()); table.setRowCount(len(rows))

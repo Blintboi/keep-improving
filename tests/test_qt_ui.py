@@ -217,6 +217,91 @@ class QtInterfaceTests(unittest.TestCase):
         self.app.warning.setValue(3); self.app.save_settings()
         self.assertEqual(self.store.settings().limit_seconds,300); self.assertEqual(self.store.settings().language,'hu')
 
+    def test_wheel_scrolls_settings_without_changing_focused_or_unfocused_values(self):
+        from PySide6.QtCore import Qt,QPoint
+        from PySide6.QtTest import QTest
+        from PySide6.QtWidgets import QScrollArea,QDateTimeEdit
+        self.app.show(); self.app.switch_page(2)
+        self.app.restriction_enabled.setChecked(True); self.app.bedtime_enabled.setChecked(True)
+        self.app.overlay_enabled.setChecked(True); self.pump(.03)
+        scroll=self.app.pages.widget(2).findChild(QScrollArea); bar=scroll.verticalScrollBar()
+        controls=[self.app.limit,self.app.warning,self.app.restriction_minutes,*self.app.bedtime_times.values(),
+                  self.app.overlay_screen,self.app.overlay_opacity]
+        def value(widget):
+            if widget in self.app.bedtime_times.values(): return widget.time()
+            if widget is self.app.overlay_screen: return widget.currentIndex()
+            return widget.value()
+        for widget in controls:
+            for focused in (False,True):
+                with self.subTest(control=type(widget).__name__,focused=focused):
+                    scroll.ensureWidgetVisible(widget); self.pump(.02)
+                    (widget if focused else self.app.nav[2]).setFocus(); self.pump(.01)
+                    position=bar.value(); original=value(widget)
+                    point=widget.mapTo(self.app,widget.rect().center())
+                    QTest.wheelEvent(self.app.windowHandle(),point,QPoint(0,-120)); self.pump(.02)
+                    self.assertEqual(value(widget),original)
+                    self.assertGreater(bar.value(),position)
+                    scroll.ensureWidgetVisible(widget); self.pump(.01)
+                    point=widget.mapTo(self.app,widget.rect().center()); position=bar.value()
+                    QTest.wheelEvent(self.app.windowHandle(),point,QPoint(),pixelDelta=QPoint(0,-40),phase=Qt.ScrollUpdate)
+                    self.pump(.02); self.assertEqual(value(widget),original)
+        # The same form controls still accept deliberate keyboard input.
+        scroll.ensureWidgetVisible(self.app.limit); self.app.limit.setFocus()
+        original=self.app.limit.value(); QTest.keyClick(self.app.limit,Qt.Key_Up)
+        self.assertGreater(self.app.limit.value(),original)
+        edit=self.app.bedtime_times['bedtime_minute']; scroll.ensureWidgetVisible(edit)
+        edit.setFocus(); edit.setSelectedSection(QDateTimeEdit.Section.MinuteSection); original=edit.time()
+        QTest.keyClick(edit,Qt.Key_Up); self.assertNotEqual(edit.time(),original)
+        combo=self.app.overlay_screen; combo.addItem('Synthetic second monitor','fixture:2')
+        scroll.ensureWidgetVisible(combo); combo.setFocus(); combo.setCurrentIndex(0)
+        QTest.keyClick(combo,Qt.Key_Down); self.assertEqual(combo.currentIndex(),1)
+
+    def test_combo_popup_scroll_and_slider_drag_still_work(self):
+        from PySide6.QtCore import Qt,QPoint
+        from PySide6.QtTest import QTest
+        from PySide6.QtWidgets import QScrollArea,QStyle,QStyleOptionSlider
+        self.app.show(); self.app.switch_page(2); self.app.overlay_enabled.setChecked(True)
+        scroll=self.app.pages.widget(2).findChild(QScrollArea)
+        combo=self.app.overlay_screen
+        for i in range(50): combo.addItem('Synthetic monitor '+str(i),'fixture:'+str(i))
+        scroll.ensureWidgetVisible(combo); self.pump(.03)
+        combo.showPopup(); self.pump(.03)
+        view=combo.view(); popup=view.window(); bar=view.verticalScrollBar()
+        original=bar.value(); point=view.viewport().mapTo(popup,view.viewport().rect().center())
+        QTest.wheelEvent(popup.windowHandle(),point,QPoint(0,-120)); self.pump(.03)
+        self.assertGreater(bar.value(),original)
+        combo.hidePopup()
+        slider=self.app.overlay_opacity; scroll.ensureWidgetVisible(slider); self.pump(.03)
+        option=QStyleOptionSlider(); slider.initStyleOption(option)
+        handle=slider.style().subControlRect(QStyle.CC_Slider,option,QStyle.SC_SliderHandle,slider).center()
+        original=slider.value(); target=QPoint(slider.width()-12,handle.y())
+        QTest.mousePress(slider,Qt.LeftButton,pos=handle); QTest.mouseMove(slider,target,20)
+        QTest.mouseRelease(slider,Qt.LeftButton,pos=target)
+        self.assertGreater(slider.value(),original)
+
+    def test_guarded_connection_save_keeps_sync_enabled_and_reports_last_success(self):
+        from PySide6.QtWidgets import QPushButton
+        from gametime.qt_ui import SERVICE_URL
+        code='e'*32
+        self.app.settings=replace(self.app.settings,statistics_sync_enabled=True,statistics_sync_group=code)
+        self.app.statistics_data.defer_sync(600)
+        self.app.statistics_sync_dialog(); window=self.app._dialogs[-1]
+        with patch.object(self.app.statistics_sync,'request') as request:
+            next(b for b in window.findChildren(QPushButton) if b.text()==self.app.t('Save')).click()
+            request.assert_not_called()
+        self.assertTrue(self.app.settings.statistics_sync_enabled)
+        self.assertEqual(self.app.statistics_sync_status(),self.app.t('Sync enabled.'))
+        self.app.show(); self.app.switch_page(1); self.pump(.03)
+        self.assertIn(self.app.t('Wait {minutes} min',minutes=10),self.app.statistics.sync_now.text())
+        self.app._sync_busy=True; self.app.update_statistics_sync_controls()
+        self.assertEqual(self.app.statistics.sync_now.text(),self.app.t('Syncing…'))
+        self.app.statistics_sync.results.put(((SERVICE_URL,code,self.app.statistics_sync.generation),[],''))
+        with patch('gametime.qt_ui.datetime') as clock:
+            clock.now.return_value=datetime(2026,10,22,12,34)
+            self.app.poll_statistics_sync()
+        self.assertIn('2026-10-22 12:34',self.app.statistics_sync_status())
+        self.assertFalse(self.app.statistics.sync_now.isEnabled())
+
     def test_linked_statistics_filter_computers_without_changing_local_budget(self):
         from gametime.store import Store
         from gametime.model import Game
@@ -418,6 +503,10 @@ class QtInterfaceTests(unittest.TestCase):
         stats=self.app.statistics; self.assertEqual(stats.report.average_days,4); self.assertEqual(stats.report.average,450)
         self.assertEqual(stats.games_table.rowCount(),2); stats.choose_day(today.isoformat()); self.assertEqual(stats.games_table.rowCount(),1)
         stats.show_period(); self.assertEqual(stats.games_table.rowCount(),2)
+        recent=(today-timedelta(days=1)).isoformat()
+        stats.start.setText(recent); stats.end.setText(today.isoformat()); stats.refresh()
+        self.assertEqual(stats.report.average_days,2); self.assertEqual(stats.report.average,600)
+        self.assertIn(recent,stats.average_note.text()); self.assertIn(recent,stats.average_label.toolTip())
         stats.start.setText('invalid'); stats.refresh(); self.assertFalse(stats.error.isHidden())
 
     def test_native_tray_event_reopens_without_toggling_and_close_hides(self):
@@ -466,7 +555,12 @@ class QtInterfaceTests(unittest.TestCase):
             self.assertEqual(self.app.selected_id,game.id); launch.assert_not_called()
             menu=menus.return_value
             menu.exec.assert_called_once_with(card.more.mapToGlobal(QPoint(0,card.more.height())))
-            hide=next(call.args[1] for call in menu.addAction.call_args_list if call.args[0]==self.app.t('Hide / restore'))
+            exclude=next(call.args[1] for call in menu.addAction.call_args_list if call.args[0]==self.app.t('Exclude from tracking'))
+            exclude(); self.assertFalse(self.app.catalog.enabled(game)); self.assertTrue(self.app.catalog.enabled(self.games[0]))
+            menus.reset_mock(); self.app.game_menu(game.id)
+            track=next(call.args[1] for call in menu.addAction.call_args_list if call.args[0]==self.app.t('Track game'))
+            track(); self.assertTrue(self.app.catalog.enabled(game))
+            hide=next(call.args[1] for call in menu.addAction.call_args_list if call.args[0]==self.app.t('Hide from library'))
             hide(); self.assertIn(game.id,self.store.hidden_ids()); self.assertNotIn(self.games[0].id,self.store.hidden_ids())
 
     def test_artwork_is_the_launch_button_footer_only_selects_and_double_click_starts_once(self):

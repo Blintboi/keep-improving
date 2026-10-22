@@ -68,7 +68,8 @@ def statistics_dialog(app):
         app.store.pending_connection(clear=True)
         app.statistics_sync.cancel(); app._sync_busy=False; app._sync_startup_pending=False
         app._sync_event_pending=False; app.statistics_event_timer.stop()
-        app._sync_status='Statistics sync is off.'; app.statistics.scope='all'; app.statistics.refresh()
+        app._sync_status='Sync enabled.' if settings.statistics_sync_enabled else 'Statistics sync is off.'
+        app._sync_success_at=''; app.statistics.scope='all'; app.statistics.refresh()
         app.request_statistics_sync(); app.update_statistics_sync_status(); window.accept()
     def provision(settings,action='activate'):
         if app._auth_busy: return

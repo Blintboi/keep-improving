@@ -1,10 +1,12 @@
-# Game Time Monitor — 2.12.0
+# Game Time Monitor — 2.12.1
 
-**[Download for Windows x64 — 2.12.0](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256) · [Magyar](README.hu.md)
+**[Download for Windows x64 — 2.12.1](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256) · [Magyar](README.hu.md)
 
 A Windows 11 gaming hub that tracks foreground play time, shows your daily budget and reminds you when it is time to finish. It also includes a configurable bedtime reminder.
 
 I built this for my own daily use and am sharing it for anyone who finds it useful. The desktop features work offline, without an account. Linking statistics between your computers is optional.
+
+**New in 2.12.1:** scrolling over settings fields no longer changes their values. Clearer sync status, game-menu actions and help text replace ambiguous labels. The countdown position editor keeps the timer inside its frame and ignores dragging started outside it. Existing history, connection codes, settings and game exclusions are preserved on upgrade.
 
 ![Game library and daily play-time budget](docs/images/library-en.png)
 *English interface with real games and locally available artwork. Play-history values are demonstration data; game artwork belongs to its respective owners.*
