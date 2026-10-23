@@ -4,8 +4,7 @@
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta content="Unicode License Agreement - Data Files and Software (2016)" name="description"/>
-  <title>Unicode Character Database (UCD), version 36 | Qt Core | Qt 6.11.2</title>
-<link rel="canonical" href="https://doc.qt.io/qt-6/fr/qtcore-attribution-unicode-character-database.html" />
+  <title>Unicode Character Database (UCD), version 36 | Qt Core | Qt 6.12.0</title>
   <link rel="stylesheet" type="text/css" href="/style/online2.css" />
   <link rel="stylesheet" href="https://www.qt.io/hubfs/qt-design-system/qt-design-system-1.1.0.css" />
   <link rel="stylesheet" type="text/css" href="/style/font-awesome.min.css" />
@@ -119,11 +118,16 @@
             <div class="b-sidebar__sidebar__mobile-close"><div class="c-mobile-close"></div></div>
             <div class="b-sidebar__sidebar__mobile-toggle" data-mobile-title="Topics"></div>
                         <div class="b-sidebar__sidebar__content">
-                <div data-margin-bottom="md">
+                <div data-margin-bottom="sm">
                                         <select id="qds-vdropdown" class="c-form-select c-form-select--dark js-versioncontrol" style="visibility:hidden">
                                             </select>
                                     </div>
-                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
+                                <div id="qds-filter-container" data-margin-bottom="sm" style="display:none">
+                    <label for="qds-filter-sl">Filter topics</label>
+                    <select id="qds-filter-sl" class="c-form-select c-form-select--dark"></select>
+                    <div id="qds-filter-note" style="display:none">Topic not in active filter<button type="button" id="qds-filter-clear">Clear</button></div>
+                </div>
+                                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
                 <nav>
                     <div id="sidebar-toctree"></div>
                     <ul class="c-sidebar-navigation">
@@ -143,7 +147,7 @@
                         </form>
                     </div>                    <div class="b-topbar__breadcrump" translate="no">
                         <ul class="c-breadcrump">
-                            <li><a href="index.html">Qt 6.11</a></li>
+                            <li><a href="index.html">Qt 6.12</a></li>
                             <li><a href="qtcore-index.html">Qt Core</a></li>
                             <li><a>Unicode Character Database (UCD), version 36</a></li>
                         </ul>
@@ -163,9 +167,9 @@
 <p>Qt Core uses data obtained from UCD files for working with characters and strings.</p>
 <p>The sources can be found in qtbase/src/corelib/text/qunicodetables_p.h and qtbase/src/corelib/text/qunicodetables.cpp.</p>
 <p><a href="https://www.unicode.org/ucd/">Project Homepage</a>, upstream version: 36</p>
-<div class="pre"><pre class="cpp plain" translate="no">Copyright (C) 1991-2025 Unicode, Inc.</pre></div>
+<div class="pre"><pre class="cpp plain" translate="no"><code class="text">Copyright (C) 1991-2025 Unicode, Inc.</code></pre></div>
 <p><a href="https://spdx.org/licenses/Unicode-3.0.html">Unicode License Agreement - Data Files and Software (2016)</a>.</p>
-<div class="pre"><pre class="cpp plain" translate="no">UNICODE LICENSE V3
+<div class="pre"><pre class="cpp plain" translate="no"><code class="text">UNICODE LICENSE V3
 
 COPYRIGHT AND PERMISSION NOTICE
 
@@ -203,7 +207,7 @@ FILES OR SOFTWARE.
 Except as contained in this notice, the name of a copyright holder shall
 not be used in advertising or otherwise to promote the sale, use or other
 dealings in these Data Files or Software without prior written
-authorization of the copyright holder.</pre></div>
+authorization of the copyright holder.</code></pre></div>
 </div>
 <!-- @@@qtcore-attribution-unicode-character-database.html -->
 </div>

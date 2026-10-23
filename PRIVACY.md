@@ -4,7 +4,48 @@ Game Time Monitor is a personal project maintained by [Blintboi](https://github.
 
 ## Local use
 
-The app reads the foreground process identity and executable path, installed-game metadata and local shortcuts to identify a tracked game. It records daily play time by game, settings, exclusions and game availability in a local SQLite profile. It does not record keystrokes, browser history, screenshots or a continuous list of non-game activity. There is no general analytics or advertising telemetry.
+Automatic update checks are enabled by default and can be turned off in
+**Settings → Application updates**. At most once per day, the app requests a
+small public version file from this project's GitHub repository over HTTPS.
+GitHub receives the normal connection information, including your IP address
+and the fixed `GameTimeMonitor/updates-v1` user agent. The request does not send
+play history, game names/paths, computer names, account/connection credentials,
+device identifiers or the installed app version. The latest public release
+record, last-attempt time and a dismissed version may be cached locally.
+**Check for updates** makes the same request manually, with a short retry guard.
+Turning checks off stops future automatic requests; an in-progress request may
+finish. Tracking remains available offline.
+
+**Download update** opens the fixed official GitHub installer URL in your normal
+browser only after you click it. The browser handles the download and its normal
+security checks. The app does not download or install executables in the
+background. Installing an update is a separate action you choose. Requests for
+the installer and any browser security checks follow the browser/provider's
+normal data handling.
+
+The app reads the foreground process identity and executable path, installed-game metadata and local shortcuts to identify a tracked game. It records daily play time by game, settings, exclusions and game availability in a local SQLite profile. It does not record keystrokes, browser history or a continuous list of non-game activity. There is no general analytics or advertising telemetry.
+
+When a countdown position editor opens, or you choose to refresh its game image, the app can capture a still image of a recognized running game's client window to help position the countdown. This is not continuous screen recording. The image is held only in memory for the preview, is not saved to disk by the app, and is never included in statistics sync or uploaded to the service. Closing or hiding the editor clears the displayed image.
+
+Automatic anti-cheat compatibility checks inspect game identifiers, executable names and the presence of specific files/folders in game installations. These checks stay local and do not read game memory, account data, process command lines or driver contents. Without explicit per-game risk consent, detected protected games do not provide game-image previews or countdown overlays. No anti-cheat service or game security setting is disabled.
+
+For a detected protected game, you can separately accept the overlay risk notice.
+The app stores the notice version, UTC acceptance time and a hash binding the
+permission to that game's ID and installation location in the local profile.
+These records are not uploaded or included in statistics synchronization.
+Permission is saved immediately, can be revoked in Per-game countdowns and must
+be accepted again if the notice version or game/install location changes.
+Without consent, protected overlays/previews remain blocked. Automatic Escape
+remains disabled for protected games even after consent.
+
+Automatic minimization of detected protected games requires an independent,
+local risk acknowledgement. Its notice version, UTC acceptance time and
+game/install-location hash are stored separately under the same rules; overlay
+consent does not grant this permission. Neither kind of consent is synchronized.
+Protected-game reminders avoid foreground activation. Where the Windows
+notification state cannot support a visual reminder during fullscreen play,
+the app uses the selected sound without creating a popup; muted or unavailable
+sound leaves delivery pending until a visual reminder can be shown.
 
 The standard profile is in the Windows Documents folder under `GameTimeMonitor\data`. Local artwork is read from installed files and caches; artwork and executable paths are not uploaded by statistics sync. Upgrade backups stay beside the profile. Local history is not an encrypted database.
 

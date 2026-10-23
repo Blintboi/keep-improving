@@ -4,8 +4,7 @@
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta content="The Qt Core module is part of Qt's essential modules." name="description"/>
-  <title>Qt Core | Qt 6.11.2</title>
-<link rel="canonical" href="https://doc.qt.io/qt-6/qtcore-index.html" />
+  <title>Qt Core | Qt 6.12.0</title>
   <link rel="stylesheet" type="text/css" href="/style/online2.css" />
   <link rel="stylesheet" href="https://www.qt.io/hubfs/qt-design-system/qt-design-system-1.1.0.css" />
   <link rel="stylesheet" type="text/css" href="/style/font-awesome.min.css" />
@@ -120,11 +119,16 @@
             <div class="b-sidebar__sidebar__mobile-close"><div class="c-mobile-close"></div></div>
             <div class="b-sidebar__sidebar__mobile-toggle" data-mobile-title="Topics"></div>
                         <div class="b-sidebar__sidebar__content">
-                <div data-margin-bottom="md">
+                <div data-margin-bottom="sm">
                                         <select id="qds-vdropdown" class="c-form-select c-form-select--dark js-versioncontrol" style="visibility:hidden">
                                             </select>
                                     </div>
-                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
+                                <div id="qds-filter-container" data-margin-bottom="sm" style="display:none">
+                    <label for="qds-filter-sl">Filter topics</label>
+                    <select id="qds-filter-sl" class="c-form-select c-form-select--dark"></select>
+                    <div id="qds-filter-note" style="display:none">Topic not in active filter<button type="button" id="qds-filter-clear">Clear</button></div>
+                </div>
+                                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
                 <nav>
                     <div id="sidebar-toctree"></div>
                     <ul class="c-sidebar-navigation">
@@ -144,7 +148,7 @@
                         </form>
                     </div>                    <div class="b-topbar__breadcrump" translate="no">
                         <ul class="c-breadcrump">
-                            <li><a href="index.html">Qt 6.11</a></li>
+                            <li><a href="index.html">Qt 6.12</a></li>
                             <li><a>Qt Core</a></li>
                         </ul>
                     </div>
@@ -179,8 +183,8 @@
 <p>Using a Qt module's C++ API requires linking against the module library, either directly or through other dependencies. Several build tools have dedicated support for this, including <a href="https://cmake.org/cmake/help/latest/">CMake</a> and <a href="qmake-manual.html">qmake</a>.</p>
 <h3 id="building-with-cmake">Building with CMake<a class="plink" href="#building-with-cmake" title="Direct link to this headline"></a></h3>
 <p>Use the <code translate="no">find_package()</code> command to locate the needed module component in the <code translate="no">Qt6</code> package:</p>
-<div class="pre"><pre class="cpp prettyprint" translate="no">find_package(Qt6 REQUIRED COMPONENTS Core)
-target_link_libraries(mytarget PRIVATE Qt6<span class="operator">::</span>Core)</pre></div>
+<div class="pre"><pre class="cpp prettyprint" translate="no"><code class="cpp">find_package(Qt6 REQUIRED COMPONENTS Core)
+target_link_libraries(mytarget PRIVATE Qt6<span class="operator">::</span>Core)</code></pre></div>
 <p>For more details, see the <a href="cmake-manual.html">Build with CMake</a> overview.</p>
 <h3 id="building-with-qmake">Building with qmake<a class="plink" href="#building-with-qmake" title="Direct link to this headline"></a></h3>
 <p>If you use <a href="qmake-manual.html">qmake</a> to build your projects, Qt Core is linked by default.</p>
@@ -233,7 +237,7 @@ target_link_libraries(mytarget PRIVATE Qt6<span class="operator">::</span>Core)<
 <h2 id="licenses-and-attributions">Licenses and Attributions<a class="plink" href="#licenses-and-attributions" title="Direct link to this headline"></a></h2>
 <p>Qt Core is available under commercial licenses from <a href="https://www.qt.io/about-us/">The Qt Company</a>. In addition, it is available under free software licenses: The <a href="https://www.gnu.org/licenses/lgpl-3.0.html">GNU Lesser General Public License, version 3</a>, or the <a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html">GNU General Public License, version 2</a>. See <a href="licensing.html">Qt Licensing</a> for further details.</p>
 <p>Executables on Windows potentially link against <a href="qtentrypoint.html">The QtEntryPoint Library</a>. This library is available under commercial licenses and also under the <a href="https://spdx.org/licenses/BSD-3-Clause.html">BSD 3-clause "New" or "Revised" License</a>.</p>
-<p>Furthermore, Qt Core in Qt 6.11.2 may contain third party modules under the following permissive licenses:</p>
+<p>Furthermore, Qt Core in Qt 6.12.0 may contain third party modules under the following permissive licenses:</p>
 <div class="table"><table class="annotated">
 <tr class="odd topAlign"><td class="tblName" translate="no"><p><a href="qtcore-attribution-tika-mimetypes.html">Apache Tika MimeType Definitions, version c29724782854bb5a319f4a1940d0828a58ace3f9</a></p></td><td class="tblDescr"><p>Apache License 2.0</p></td></tr>
 <tr class="even topAlign"><td class="tblName" translate="no"><p><a href="qtcore-attribution-blake2.html">BLAKE2 (reference implementation), version ed1974ea83433eba7b2d95c5dcd9ac33cb847913</a></p></td><td class="tblDescr"><p>Creative Commons Zero v1.0 Universal or Apache License 2.0</p></td></tr>
@@ -242,8 +246,8 @@ target_link_libraries(mytarget PRIVATE Qt6<span class="operator">::</span>Core)<
 <tr class="odd topAlign"><td class="tblName" translate="no"><p><a href="qtcore-attribution-doubleconversion.html">Efficient Binary-Decimal and Decimal-Binary Conversion Routines for IEEE Doubles, version 3.4.0</a></p></td><td class="tblDescr"><p>BSD 3-clause "New" or "Revised" License</p></td></tr>
 <tr class="even topAlign"><td class="tblName" translate="no"><p><a href="qtcore-attribution-md4.html">MD4</a></p></td><td class="tblDescr"><p>Public Domain</p></td></tr>
 <tr class="odd topAlign"><td class="tblName" translate="no"><p><a href="qtcore-attribution-md5.html">MD5</a></p></td><td class="tblDescr"><p>Public Domain</p></td></tr>
-<tr class="even topAlign"><td class="tblName" translate="no"><p><a href="qtcore-attribution-pcre2-sljit.html">PCRE2 - Stack-less Just-In-Time Compiler, version 10.47</a></p></td><td class="tblDescr"><p>BSD 2-clause "Simplified" License</p></td></tr>
-<tr class="odd topAlign"><td class="tblName" translate="no"><p><a href="qtcore-attribution-pcre2.html">PCRE2, version 10.47</a></p></td><td class="tblDescr"><p>BSD 3-clause "New" or "Revised" License with PCRE2 binary-like Packages Exception</p></td></tr>
+<tr class="even topAlign"><td class="tblName" translate="no"><p><a href="qtcore-attribution-pcre2-sljit.html">PCRE2 - Stack-less Just-In-Time Compiler, version 10.48</a></p></td><td class="tblDescr"><p>BSD 2-clause "Simplified" License</p></td></tr>
+<tr class="odd topAlign"><td class="tblName" translate="no"><p><a href="qtcore-attribution-pcre2.html">PCRE2, version 10.48</a></p></td><td class="tblDescr"><p>BSD 3-clause "New" or "Revised" License with PCRE2 binary-like Packages Exception</p></td></tr>
 <tr class="even topAlign"><td class="tblName" translate="no"><p><a href="qtcore-attribution-qeventdispatcher-cf.html">QEventDispatcher on macOS</a></p></td><td class="tblDescr"><p>BSD 3-clause "New" or "Revised" License</p></td></tr>
 <tr class="odd topAlign"><td class="tblName" translate="no"><p><a href="qtcore-attribution-sha1.html">Secure Hash Algorithm SHA-1</a></p></td><td class="tblDescr"><p>Public Domain</p></td></tr>
 <tr class="even topAlign"><td class="tblName" translate="no"><p><a href="qtcore-attribution-sha3-keccak.html">Secure Hash Algorithm SHA-3 - Keccak, version 3.2</a></p></td><td class="tblDescr"><p>Creative Commons Zero v1.0 Universal</p></td></tr>

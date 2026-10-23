@@ -12,3 +12,11 @@ sync_backend/supabase/.temp/
 *.spec
 gametime/rtss_bridge.exe
 gametime/rtss_bridge.exe.sha256
+# Local provider/operator credentials must never enter source or installers.
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+id_rsa
+id_ed25519

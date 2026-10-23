@@ -33,10 +33,20 @@ try {
     $first = Get-Content -LiteralPath $diag -Raw -Encoding UTF8 | ConvertFrom-Json
     $installedVersion = (Get-Content -LiteralPath (Join-Path $app 'bundle-install.json') -Raw -Encoding UTF8 | ConvertFrom-Json).Version
     $report.runtime_version_matches_payload = $first.version -eq $installedVersion
+    $report.runtime_file_version_matches_payload = (Get-Item -LiteralPath $exe).VersionInfo.ProductVersion -eq $installedVersion
+    $report.fresh_update_checks_enabled = $first.check_updates -eq $true
     $report.runtime_and_profile_verified = $process.ExitCode -eq 0 -and $first.data -eq $data -and $first.games_root -eq $games -and $first.hub_enabled -and $first.language -eq 'en'
     $report.fresh_overlay_is_opt_in = -not $first.overlay_enabled -and $first.overlay_replace_warning -and $first.limit_popup_enabled
+    $report.fresh_rtss_is_opt_in = $first.overlay_rtss_auto -eq $false
+    $report.fresh_overlay_risk_consent_is_empty = $first.overlay_risk_consent_count -eq 0
+    $report.fresh_minimize_risk_consent_is_empty = $first.minimize_risk_consent_count -eq 0
+    $report.fresh_countdown_size_is_compatible = $first.overlay_font_size -eq 25
+    $report.fresh_personalization_defaults_are_compatible = $first.overlay_color_normal -eq '#ffffff' -and $first.overlay_color_warning -eq '#ff5c65' -and $first.custom_message_count -eq 0
+    $report.fresh_sound_schedule_and_game_defaults_are_compatible = $first.notification_sound -eq 'default' -and -not $first.weekend_enabled -and $first.game_countdown_count -eq 0
+    $report.fresh_weekly_schedule_defaults_are_compatible = $first.scheduled_day_count -eq 0
     $report.fresh_restriction_is_opt_in = -not $first.restriction_enabled -and $first.restriction_seconds -eq 7500
     $report.fresh_bedtime_is_opt_in = -not $first.bedtime_enabled -and -not $first.bedtime_minimize -and $first.bedtime_warning_minute -eq 1435 -and $first.bedtime_minute -eq 0 -and $first.bedtime_resume_minute -eq 360
+    $report.fresh_bedtime_budget_is_opt_in = $first.bedtime_caps_budget -eq $false
     $report.bedtime_handover_script_bundled = Test-Path -LiteralPath (Join-Path $app '_internal\gametime\bedtime_legacy.ps1')
     $hubIcon = Join-Path $data 'assets\gaming-hub.ico'
     $report.hub_icon_installed = (Test-Path -LiteralPath $hubIcon) -and (Get-FileHash -LiteralPath $hubIcon).Hash -eq (Get-FileHash -LiteralPath (Join-Path $app '_internal\gametime\app.ico')).Hash
@@ -46,6 +56,9 @@ try {
     $report.desktop_hub_opens_integrated_app = $hubLink.TargetPath -eq $exe -and $hubLink.Arguments -eq ('--hub --data-dir "' + $data + '"') -and $hubLink.IconLocation -eq ($hubIcon + ',0')
     $report.single_shared_desktop_icon = @(Get-ChildItem -LiteralPath $desktop -Filter '*.lnk').Count -eq 1
     # Diagnostics alone never imports Qt. Exercise the actual frozen GUI too.
+    # Automated profiles never contact the public update service.
+    'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); c["check_updates"]=False; d.execute("UPDATE settings SET value=? WHERE key=?",(json.dumps(c),"config")); d.commit()' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    if ($LASTEXITCODE -ne 0) { throw 'Could not isolate updater network access.' }
     $gui = Start-Process -FilePath $exe -ArgumentList @('--background','--data-dir',('"' + $data + '"')) -WindowStyle Hidden -PassThru
     try {
         Start-Sleep -Seconds 2
@@ -69,17 +82,22 @@ try {
     }
     $process = Start-Process -FilePath $exe -ArgumentList @('--configure','--language','hu','--data-dir',('"' + $data + '"')) -WindowStyle Hidden -Wait -PassThru
     if ($process.ExitCode -ne 0) { throw 'Language selection failed.' }
-    'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); c.update(bedtime_enabled=True,bedtime_minimize=True,bedtime_minute=30,restriction_enabled=True,restriction_seconds=7500,overlay_enabled=True,overlay_replace_warning=True,limit_popup_enabled=False,overlay_opacity=0.55,overlay_x=0.2,overlay_y=0.8,overlay_screen="missing-fixture-monitor",overlay_rtss_auto=False,overlay_rtss_paths=[r"C:\Fixture\game.exe"]); d.execute("UPDATE settings SET value=? WHERE key=?",(json.dumps(c),"config")); d.commit()' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); c.update(bedtime_enabled=True,bedtime_minimize=True,bedtime_minute=30,restriction_enabled=True,restriction_seconds=7500,overlay_enabled=True,overlay_replace_warning=True,limit_popup_enabled=False,overlay_opacity=0.55,overlay_font_size=48,overlay_color_normal="#12ab34",overlay_color_warning="#bc56ef",notification_messages={"warning":"Fixture: {remaining} min left","bedtime":"Sleep well"},overlay_x=0.2,overlay_y=0.8,overlay_screen="missing-fixture-monitor",overlay_rtss_auto=False,overlay_rtss_paths=[r"C:\Fixture\game.exe"]); d.execute("UPDATE settings SET value=? WHERE key=?",(json.dumps(c),"config")); d.commit()' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     if ($LASTEXITCODE -ne 0) { throw 'Overlay fixture settings failed.' }
     @'
 import json,sqlite3,sys
+from gametime.statistics_sync import local_group
 d=sqlite3.connect(sys.argv[1]); code='1'*32; day='2026-01-01'
 c=json.loads(d.execute("SELECT value FROM settings WHERE key='config'").fetchone()[0])
-c.update(statistics_sync_group=code,statistics_sync_enabled=False)
+c.update(bedtime_caps_budget=True,notification_sound='silent',notification_sound_path=r'C:\Fixture\saved.wav',weekend_enabled=True,weekend_schedule={'limit_seconds':10800,'warning_seconds':9000,'bedtime_minute':60,'bedtime_resume_minute':480},game_overlays={'test:hidden':{'overlay_enabled':False,'overlay_font_size':36,'overlay_x':0.1,'overlay_y':0.9,'overlay_color_normal':'#aabbcc','overlay_color_warning':'#dd5566'}})
+c.update(daily_schedules={'1':{'limit_seconds':13200,'warning_seconds':12000,'bedtime_minute':90}})
+c.update(statistics_sync_group=code,statistics_sync_enabled=False,statistics_device_name='Fixture Desktop')
 d.execute("UPDATE settings SET value=? WHERE key='config'",(json.dumps(c),))
 d.execute('INSERT INTO statistics_devices VALUES (?,?,?,?,?)',(code,'a'*32,'Other fixture PC',99,day))
 d.execute('INSERT INTO statistics_remote VALUES (?,?,?,?,?,?,?)',(code,'a'*32,day,'steam:42','Example','Steam',120))
 d.execute('INSERT INTO settings VALUES (?,?)',('statistics_snapshot:'+code,json.dumps({'revision':99,'digest':'fixture'})))
+d.execute('INSERT INTO settings VALUES (?,?)',('launcher_clients',json.dumps({'version':1,'clients':[]})))
+d.execute('INSERT INTO settings VALUES (?,?)',('statistics_device_alias:'+local_group(code)+':'+'a'*32,'Fixture Laptop'))
 d.commit(); d.close()
 '@ | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     if ($LASTEXITCODE -ne 0) { throw 'Legacy credential fixture failed.' }
@@ -145,9 +163,18 @@ d.close()
     $report.obsolete_owned_file_removed = -not (Test-Path -LiteralPath $obsoleteOwned)
     $report.modified_obsolete_file_preserved = (Get-Content -LiteralPath $obsoleteEdited) -eq 'user modified document'
     $report.language_preserved_on_upgrade = (Get-Content -LiteralPath $diag -Raw -Encoding UTF8 | ConvertFrom-Json).language -eq 'hu'
-    $overlayConfig = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); print(c["restriction_enabled"] and c["restriction_seconds"]==7500 and c["overlay_enabled"] and c["overlay_replace_warning"] and not c["limit_popup_enabled"] and c["overlay_opacity"]==0.55 and c["overlay_x"]==0.2 and c["overlay_y"]==0.8 and c["overlay_screen"]=="missing-fixture-monitor")' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    $overlayConfig = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); print(c["restriction_enabled"] and c["restriction_seconds"]==7500 and c["overlay_enabled"] and c["overlay_replace_warning"] and not c["limit_popup_enabled"] and c["overlay_opacity"]==0.55 and c["overlay_font_size"]==48 and c["overlay_x"]==0.2 and c["overlay_y"]==0.8 and c["overlay_screen"]=="missing-fixture-monitor")' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     $report.overlay_and_restriction_preferences_preserved_on_upgrade = $overlayConfig -eq 'True'
+    $personalConfig = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); print(c["overlay_color_normal"]=="#12ab34" and c["overlay_color_warning"]=="#bc56ef" and c["notification_messages"]=={"warning":"Fixture: {remaining} min left","bedtime":"Sleep well"})' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    $report.personal_messages_and_countdown_colors_preserved_on_upgrade = $personalConfig -eq 'True'
+    $customConfig = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); print(c["notification_sound"]=="silent" and c["notification_sound_path"]==r"C:\Fixture\saved.wav" and c["weekend_enabled"] and c["weekend_schedule"]=={"limit_seconds":10800,"warning_seconds":9000,"bedtime_minute":60,"bedtime_resume_minute":480} and c["game_overlays"]=={"test:hidden":{"overlay_enabled":False,"overlay_font_size":36,"overlay_x":0.1,"overlay_y":0.9,"overlay_color_normal":"#aabbcc","overlay_color_warning":"#dd5566"}})' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    $report.sound_weekend_and_game_preferences_preserved_on_upgrade = $customConfig -eq 'True'
+    $dailyConfig = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); print(c["daily_schedules"]=={"1":{"limit_seconds":13200,"warning_seconds":12000,"bedtime_minute":90}})' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    $report.weekly_day_preferences_preserved_on_upgrade = $dailyConfig -eq 'True'
+
     $report.bedtime_preferences_preserved_on_upgrade = (Get-Content -LiteralPath $diag -Raw -Encoding UTF8 | ConvertFrom-Json).bedtime_minute -eq 30 -and (Get-Content -LiteralPath $diag -Raw -Encoding UTF8 | ConvertFrom-Json).bedtime_minimize
+    $report.bedtime_budget_preference_preserved_on_upgrade = (Get-Content -LiteralPath $diag -Raw -Encoding UTF8 | ConvertFrom-Json).bedtime_caps_budget -eq $true
+    $report.update_check_preference_preserved_on_upgrade = (Get-Content -LiteralPath $diag -Raw -Encoding UTF8 | ConvertFrom-Json).check_updates -eq $false
     $rtssConfig = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); print(c["overlay_rtss_auto"] is False and c["overlay_rtss_paths"]==[r"C:\Fixture\game.exe"])' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     $report.rtss_selection_preserved_on_upgrade = $rtssConfig -eq 'True'
     $trackingStartAfter = 'import sqlite3,sys; d=sqlite3.connect(sys.argv[1]); print(d.execute("SELECT value FROM settings WHERE key=?",("tracking_started_on",)).fetchone()[0])' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
@@ -159,6 +186,12 @@ d.close()
     $report.upgrade_preserves_hidden_and_history = $value[0] -eq '1' -and [double]$value[1] -eq 123
     $excluded = 'import sqlite3,sys; d=sqlite3.connect(sys.argv[1]); print(d.execute("SELECT enabled FROM overrides WHERE game_id=?",("test:hidden",)).fetchone()==(0,))' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     $report.upgrade_preserves_per_game_exclusions = $LASTEXITCODE -eq 0 -and $excluded -eq 'True'
+    $clients = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); print(json.loads(d.execute("SELECT value FROM settings WHERE key=?",("launcher_clients",)).fetchone()[0])=={"version":1,"clients":[]})' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    $report.upgrade_preserves_remembered_launchers = $LASTEXITCODE -eq 0 -and $clients -eq 'True'
+    $computerName = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); print(json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0])["statistics_device_name"]=="Fixture Desktop")' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    $report.upgrade_preserves_computer_name = $LASTEXITCODE -eq 0 -and $computerName -eq 'True'
+    $deviceAlias = 'import sqlite3,sys; from gametime.statistics_sync import local_group; d=sqlite3.connect(sys.argv[1]); print(d.execute("SELECT value FROM settings WHERE key=?",("statistics_device_alias:"+local_group("1"*32)+":"+"a"*32,)).fetchone()==("Fixture Laptop",))' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    $report.upgrade_preserves_linked_computer_name = $LASTEXITCODE -eq 0 -and $deviceAlias -eq 'True'
     $report.backup_created = @(Get-ChildItem -LiteralPath (Join-Path $data 'backups') -Filter 'before-*' -Directory).Count -gt 0
     $report.foreign_startup_preserved_on_upgrade = (Get-ItemProperty -LiteralPath $runKey).PSObject.Properties[$sentinelName].Value -eq $sentinelValue
     $validManifestText = Get-Content -LiteralPath (Join-Path $app 'bundle-install.json') -Raw -Encoding UTF8

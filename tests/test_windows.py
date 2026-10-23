@@ -66,6 +66,29 @@ class WindowsTests(unittest.TestCase):
         self.assertTrue(third.acquired)
         third.close()
 
+    def test_native_process_lookup_recognizes_own_full_path_and_missing_executable(self):
+        executable,_=self.native.process_image(os.getpid())
+        self.assertIs(self.native.process_running(executable),True)
+        self.assertIs(self.native.process_running(str(self.base/'NonexistentUniqueFixture.exe')),False)
+
+    def test_process_lookup_closes_snapshot_and_ignores_another_session(self):
+        from unittest.mock import patch
+        native=self.native
+        def entry(handle,pointer): pointer._obj.pid=123; pointer._obj.executable='RTSS.exe'; return True
+        def session(pid,pointer): pointer._obj.value=2 if pid==123 else 1; return True
+        with patch.object(native.k,'CreateToolhelp32Snapshot',return_value=44),patch.object(native.k,'Process32FirstW',side_effect=entry),patch.object(native.k,'Process32NextW',return_value=False),patch.object(native.k,'ProcessIdToSessionId',side_effect=session),patch.object(native.C,'get_last_error',return_value=18),patch.object(native.k,'CloseHandle') as close,patch.object(native,'process_image') as inspect:
+            self.assertIs(native.process_running('C:/fixture/RTSS.exe'),False)
+            inspect.assert_not_called(); close.assert_called_once_with(44)
+
+    def test_process_lookup_defers_on_denied_image_and_does_not_match_other_installation(self):
+        from unittest.mock import patch
+        native=self.native
+        def entry(handle,pointer): pointer._obj.pid=123; pointer._obj.executable='RTSS.exe'; return True
+        def session(pid,pointer): pointer._obj.value=1; return True
+        for image,expected in ((('', ''),None),(('C:/other/RTSS.exe','123:1'),False)):
+            with self.subTest(image=image),patch.object(native.k,'CreateToolhelp32Snapshot',return_value=44),patch.object(native.k,'Process32FirstW',side_effect=entry),patch.object(native.k,'Process32NextW',return_value=False),patch.object(native.k,'ProcessIdToSessionId',side_effect=session),patch.object(native.C,'get_last_error',return_value=18),patch.object(native.k,'CloseHandle') as close,patch.object(native,'process_image',return_value=image):
+                self.assertIs(native.process_running('C:/fixture/RTSS.exe'),expected); close.assert_called_once_with(44)
+
     def test_native_directory_watch_reports_create_rename_remove(self):
         changes = Queue()
         watcher = self.native.DirectoryWatcher(self.base, True, changes.put)

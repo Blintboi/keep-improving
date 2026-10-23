@@ -4,8 +4,7 @@
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta content="Freetype Project License or GNU General Public License v2.0 only" name="description"/>
-  <title>Freetype 2, version 2.14.3 | Qt GUI | Qt 6.11.2</title>
-<link rel="canonical" href="https://doc.qt.io/qt-6/fr/qtgui-attribution-freetype.html" />
+  <title>Freetype 2, version 2.14.3 | Qt GUI | Qt 6.12.0</title>
   <link rel="stylesheet" type="text/css" href="/style/online2.css" />
   <link rel="stylesheet" href="https://www.qt.io/hubfs/qt-design-system/qt-design-system-1.1.0.css" />
   <link rel="stylesheet" type="text/css" href="/style/font-awesome.min.css" />
@@ -119,11 +118,16 @@
             <div class="b-sidebar__sidebar__mobile-close"><div class="c-mobile-close"></div></div>
             <div class="b-sidebar__sidebar__mobile-toggle" data-mobile-title="Topics"></div>
                         <div class="b-sidebar__sidebar__content">
-                <div data-margin-bottom="md">
+                <div data-margin-bottom="sm">
                                         <select id="qds-vdropdown" class="c-form-select c-form-select--dark js-versioncontrol" style="visibility:hidden">
                                             </select>
                                     </div>
-                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
+                                <div id="qds-filter-container" data-margin-bottom="sm" style="display:none">
+                    <label for="qds-filter-sl">Filter topics</label>
+                    <select id="qds-filter-sl" class="c-form-select c-form-select--dark"></select>
+                    <div id="qds-filter-note" style="display:none">Topic not in active filter<button type="button" id="qds-filter-clear">Clear</button></div>
+                </div>
+                                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
                 <nav>
                     <div id="sidebar-toctree"></div>
                     <ul class="c-sidebar-navigation">
@@ -143,7 +147,7 @@
                         </form>
                     </div>                    <div class="b-topbar__breadcrump" translate="no">
                         <ul class="c-breadcrump">
-                            <li><a href="index.html">Qt 6.11</a></li>
+                            <li><a href="index.html">Qt 6.12</a></li>
                             <li><a href="qtgui-index.html">Qt GUI</a></li>
                             <li><a>Freetype 2, version 2.14.3</a></li>
                         </ul>
@@ -163,7 +167,7 @@
 <p>Optionally used in Qt GUI and platform plugins. Configure with -no-freetype, or -system-freetype to avoid.</p>
 <p>The sources can be found in qtbase/src/3rdparty/freetype.</p>
 <p><a href="http://www.freetype.org">Project Homepage</a>, upstream version: <a href="https://download.savannah.gnu.org/releases/freetype/freetype-2.14.3.tar.gz">2.14.3</a></p>
-<div class="pre"><pre class="cpp plain" translate="no">Copyright (c) 2007-2014 Adobe Systems Incorporated
+<div class="pre"><pre class="cpp plain" translate="no"><code class="text">Copyright (c) 2007-2014 Adobe Systems Incorporated
 Copyright (c) 2004-2026 Albert Chin-A-Young
 Copyright (c) 2018-2026 Armin Hasitzka, David Turner, Robert Wilhelm, and Werner Lemberg
 Copyright (c) 2000 Computing Research Labs, New Mexico State University
@@ -192,9 +196,9 @@ Copyright (c) 2015-2026 Werner Lemberg
 Copyright (c) 2004-2026 suzuki toshiya, Masatake YAMATO, Red Hat K.K., David Turner, Robert Wilhelm, and Werner Lemberg
 Copyright (c) 2019 nyorain
 Copyright (c) 2022-2026 David Turner, Robert Wilhelm, Werner Lemberg, George Williams, and Dominik Röttsches
-Copyright (C) 2009, 2023  Red Hat, Inc.</pre></div>
+Copyright (C) 2009, 2023  Red Hat, Inc.</code></pre></div>
 <p>Freetype Project License or GNU General Public License v2.0 only.</p>
-<div class="pre"><pre class="cpp plain" translate="no">FREETYPE LICENSES
+<div class="pre"><pre class="cpp plain" translate="no"><code class="text">FREETYPE LICENSES
 -----------------
 
 The FreeType  2 font  engine is  copyrighted work  and cannot  be used
@@ -749,7 +753,7 @@ consider it more useful to permit linking proprietary applications with the
 library.  If this is what you want to do, use the GNU Library General
 Public License instead of this License.
 
---- end of GPLv2.TXT ---</pre></div>
+--- end of GPLv2.TXT ---</code></pre></div>
 </div>
 <!-- @@@qtgui-attribution-freetype.html -->
 </div>

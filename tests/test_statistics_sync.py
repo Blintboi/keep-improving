@@ -77,6 +77,41 @@ class StatisticsSyncTests(unittest.TestCase):
         self.assertEqual(self.data[0].history_by_computer(DAY,DAY,GROUP,snapshot['device'])[0][6],'Renamed laptop')
         self.assertEqual(self.stores[0].totals(DAY),{'steam:42':60})
 
+    def test_local_device_aliases_survive_sync_and_reopen_without_changing_exports(self):
+        self.stores[0].add_usage({(DAY,'steam:42'):60}); self.stores[1].add_usage({(DAY,'steam:42'):120})
+        source=self.snapshot(1); identity=source['device']; self.data[0].ingest(source,GROUP)
+        self.data[0].ingest(self.snapshot(1,OTHER),OTHER)
+        exported=self.snapshot(0); settings=self.stores[0].settings(); revisions=self.data[0].revisions(GROUP)
+        self.assertTrue(self.data[0].set_device_alias(GROUP,identity,'  Játszós laptop <fent>  '))
+        self.assertFalse(self.data[0].set_device_alias(GROUP,identity,'Játszós laptop <fent>'))
+        self.assertEqual(self.data[0].device_aliases(GROUP),{identity:'Játszós laptop <fent>'})
+        self.assertEqual(self.data[0].device_aliases(OTHER),{})
+        self.assertEqual(self.snapshot(0),exported); self.assertEqual(self.data[0].revisions(GROUP),revisions)
+        self.assertEqual(self.stores[0].settings(),settings)
+        self.assertEqual(self.data[0].devices(GROUP)[0][1],'Computer 1')
+        self.assertEqual(self.stores[0].totals(DAY),{'steam:42':60})
+        source=self.data[1].snapshot(GROUP,'New source name'); self.data[0].ingest(source,GROUP)
+        self.assertEqual(self.data[0].devices(GROUP)[0][1],'New source name')
+        self.assertEqual(self.data[0].device_aliases(GROUP),{identity:'Játszós laptop <fent>'})
+        self.data[0].set_device_alias(OTHER,identity,'Other connection name')
+        reader=Store(self.stores[0].path)
+        try:
+            reopened=StatisticsData(reader)
+            self.assertEqual(reopened.device_aliases(GROUP),{identity:'Játszós laptop <fent>'})
+            self.assertEqual(reopened.device_aliases(OTHER),{identity:'Other connection name'})
+            self.assertNotIn('Játszós laptop',json.dumps(reopened.snapshot(GROUP,'Desktop'),ensure_ascii=False))
+        finally: reader.close()
+
+    def test_device_aliases_reject_unknown_computers_and_invalid_names(self):
+        source=self.snapshot(1); self.data[0].ingest(source,GROUP); identity=source['device']
+        for group,device,name in ((GROUP,identity,''),(GROUP,identity,'   '),(GROUP,identity,'x'*81),
+                                  (GROUP,'local','Alias'),(GROUP,'all','Alias'),(OTHER,identity,'Alias'),
+                                  (GROUP,uuid.uuid4().hex,'Alias'),('../invalid',identity,'Alias')):
+            with self.subTest(group=group,device=device,name=name),self.assertRaises(ValueError):
+                self.data[0].set_device_alias(group,device,name)
+        self.assertEqual(self.data[0].device_aliases(GROUP),{})
+        self.assertEqual(self.data[0].device_aliases(''),{})
+
     def test_full_snapshots_replace_old_data_and_reject_out_of_order_versions(self):
         self.stores[1].add_usage({(DAY, 'steam:42'): 40}); old = self.snapshot(1)
         self.assertTrue(self.data[0].ingest(old, GROUP))

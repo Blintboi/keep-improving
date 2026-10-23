@@ -309,4 +309,6 @@ if __name__ == "__main__":
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--ui-only", action="store_true")
     args = parser.parse_args()
-    raise SystemExit(run(args.report, args.ui_only))
+    from unittest.mock import patch
+    with patch('gametime.win32.s.Shell_NotifyIconW',return_value=True):
+        raise SystemExit(run(args.report, args.ui_only))

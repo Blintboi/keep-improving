@@ -33,6 +33,7 @@ class NotificationTests(unittest.TestCase):
         service = DiscoveryService(settings, discovery=Discovery(
             settings, [], [], base / "none.dat", platforms=False, ubisoft=False, riot=False))
         self.root = tk.Tk()
+        isolated=patch('gametime.win32.s.Shell_NotifyIconW',return_value=True); isolated.start(); self.addCleanup(isolated.stop)
         self.app = App(self.root, self.store, base, service=service)
         self.addCleanup(self.close_app)
         sound = patch("gametime.ui.winsound.PlaySound")

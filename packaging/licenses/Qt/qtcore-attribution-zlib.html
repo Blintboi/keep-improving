@@ -4,8 +4,7 @@
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta content="zlib License" name="description"/>
-  <title>Data Compression Library (zlib), version 1.3.2 | Qt Core | Qt 6.11.2</title>
-<link rel="canonical" href="https://doc.qt.io/qt-6/fr/qtcore-attribution-zlib.html" />
+  <title>Data Compression Library (zlib), version 1.3.2 | Qt Core | Qt 6.12.0</title>
   <link rel="stylesheet" type="text/css" href="/style/online2.css" />
   <link rel="stylesheet" href="https://www.qt.io/hubfs/qt-design-system/qt-design-system-1.1.0.css" />
   <link rel="stylesheet" type="text/css" href="/style/font-awesome.min.css" />
@@ -119,11 +118,16 @@
             <div class="b-sidebar__sidebar__mobile-close"><div class="c-mobile-close"></div></div>
             <div class="b-sidebar__sidebar__mobile-toggle" data-mobile-title="Topics"></div>
                         <div class="b-sidebar__sidebar__content">
-                <div data-margin-bottom="md">
+                <div data-margin-bottom="sm">
                                         <select id="qds-vdropdown" class="c-form-select c-form-select--dark js-versioncontrol" style="visibility:hidden">
                                             </select>
                                     </div>
-                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
+                                <div id="qds-filter-container" data-margin-bottom="sm" style="display:none">
+                    <label for="qds-filter-sl">Filter topics</label>
+                    <select id="qds-filter-sl" class="c-form-select c-form-select--dark"></select>
+                    <div id="qds-filter-note" style="display:none">Topic not in active filter<button type="button" id="qds-filter-clear">Clear</button></div>
+                </div>
+                                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
                 <nav>
                     <div id="sidebar-toctree"></div>
                     <ul class="c-sidebar-navigation">
@@ -143,7 +147,7 @@
                         </form>
                     </div>                    <div class="b-topbar__breadcrump" translate="no">
                         <ul class="c-breadcrump">
-                            <li><a href="index.html">Qt 6.11</a></li>
+                            <li><a href="index.html">Qt 6.12</a></li>
                             <li><a href="qtcore-index.html">Qt Core</a></li>
                             <li><a>Data Compression Library (zlib), version 1.3.2</a></li>
                         </ul>
@@ -163,9 +167,9 @@
 <p>Optionally used in Qt Core and development tools. Configure with -system-zlib to avoid.</p>
 <p>The sources can be found in qtbase/src/3rdparty/zlib.</p>
 <p><a href="https://zlib.net/">Project Homepage</a>, upstream version: <a href="https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.gz">1.3.2</a></p>
-<div class="pre"><pre class="cpp plain" translate="no">(C) 1995-2026 Jean-loup Gailly and Mark Adler</pre></div>
+<div class="pre"><pre class="cpp plain" translate="no"><code class="text">(C) 1995-2026 Jean-loup Gailly and Mark Adler</code></pre></div>
 <p><a href="https://spdx.org/licenses/Zlib.html">zlib License</a>.</p>
-<div class="pre"><pre class="cpp plain" translate="no">This software is provided 'as-is', without any express or implied
+<div class="pre"><pre class="cpp plain" translate="no"><code class="text">This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
   arising from the use of this software.
 
@@ -191,7 +195,7 @@ Gailly and Mark Adler; it does not include third-party code.
 
 If you redistribute modified sources, we would appreciate that you include in
 the file ChangeLog history information documenting your changes.  Please read
-the FAQ for more information on the distribution of modified source versions.</pre></div>
+the FAQ for more information on the distribution of modified source versions.</code></pre></div>
 </div>
 <!-- @@@qtcore-attribution-zlib.html -->
 </div>

@@ -1,5 +1,24 @@
 # Security and public operation
 
+## Public update notices
+
+Update checks read a fixed HTTPS GitHub manifest with an 8 KiB response bound,
+socket/read deadlines, a strict stable-version/schema parser and no redirects.
+Only newer versions are offered. Check cadence and public metadata are cached
+locally; failed automatic requests stay in the log. The manifest may contain
+only the fixed official installer URL, byte size and SHA-256. These hashes
+describe release integrity; they are not an independent publisher signature.
+The app never runs a remotely supplied command or automatically downloads or
+installs executable code. The download button opens the official URL in the
+user's browser, preserving the browser/Windows download checks. A compromised
+repository/distribution account remains a distribution risk; HTTPS and a hash
+hosted by the same account are not independent proof of authenticity.
+
+The build emits matching Windows version resources and `downloads/latest.json`
+from the completed installer. Version resources do not make an unsigned file
+trusted. No Windows security setting, antivirus exclusion or trusted-root
+certificate is changed. See [Windows trust and signing](docs/WINDOWS-TRUST.hu.md).
+
 ## Current launch status
 
 **2.12.0 supports verified GitHub account admission and code-based computer
@@ -66,7 +85,38 @@ distribution was authorized on 2026-10-21. The original source is MIT-licensed;
 third-party components retain their own licenses. Cloud admission and resource
 limits remain in place for the shared Free service.
 
+## Desktop runtime update in 2.21.2
+
+The Windows bundle uses Qt/PySide6/Shiboken 6.12.0, replacing 6.11.2.
+This includes the upstream fixes for
+[CVE-2026-95620](https://www.qt.io/blog/security-advisory-cve-2026-95620)
+and the later-version fix identified for
+[CVE-2026-101201](https://www.qt.io/blog/security-advisory-cve-2026-101201).
+The application uses Python's HTTP and JSON libraries rather than the affected
+Qt APIs directly; no reachable exploit path was demonstrated in the preceding
+review. Both Python bindings are pinned together, Windows wheel hashes are
+locked, and matching Qt component notices accompany the replaceable libraries.
+
+The countdown editor can capture a still image of a recognized game's client
+window when opened or explicitly refreshed. It keeps the image only in memory
+for positioning; it does not save or synchronize it. This behavior is described
+in [Privacy](PRIVACY.md).
+
 ## What is protected
+
+- Local builds scan current source and the final installer with pinned,
+  checksum-verified Gitleaks 8.30.1. The payload audit expands the cabinet, ZIPs
+  and PyInstaller PYZ modules, including compiled string constants and UTF-16
+  resources. It rejects private profile/database/environment files and provider
+  credentials; build-time injection cannot bypass this by avoiding Git. Audit
+  reports include locations and rule IDs, never credential values. Reviewed
+  upstream Qt parser/format/locale/palette data and one deliberately invalid Auth fixture
+  have exact content-hash exceptions; changes invalidate those exceptions.
+- The secret-check workflow scans complete Git history and current source on
+  pushes and pull requests. It takes effect when that workflow is published;
+  local verification does not enable it on GitHub. Local `.env` files and
+  private signing containers are ignored by Git. Ignoring a path is a preventive
+  convenience, not an access control or a substitute for scanning artifacts.
 
 - A random 128-bit connection code derives independent authorization and
   AES-256-GCM encryption keys. HTTPS carries encrypted statistics; the server

@@ -4,8 +4,7 @@
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta content="MIT License" name="description"/>
-  <title>MD4C, version 0.5.3 | Qt GUI | Qt 6.11.2</title>
-<link rel="canonical" href="https://doc.qt.io/qt-6/fr/qtgui-attribution-md4c.html" />
+  <title>MD4C, version 0.5.3 | Qt GUI | Qt 6.12.0</title>
   <link rel="stylesheet" type="text/css" href="/style/online2.css" />
   <link rel="stylesheet" href="https://www.qt.io/hubfs/qt-design-system/qt-design-system-1.1.0.css" />
   <link rel="stylesheet" type="text/css" href="/style/font-awesome.min.css" />
@@ -119,11 +118,16 @@
             <div class="b-sidebar__sidebar__mobile-close"><div class="c-mobile-close"></div></div>
             <div class="b-sidebar__sidebar__mobile-toggle" data-mobile-title="Topics"></div>
                         <div class="b-sidebar__sidebar__content">
-                <div data-margin-bottom="md">
+                <div data-margin-bottom="sm">
                                         <select id="qds-vdropdown" class="c-form-select c-form-select--dark js-versioncontrol" style="visibility:hidden">
                                             </select>
                                     </div>
-                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
+                                <div id="qds-filter-container" data-margin-bottom="sm" style="display:none">
+                    <label for="qds-filter-sl">Filter topics</label>
+                    <select id="qds-filter-sl" class="c-form-select c-form-select--dark"></select>
+                    <div id="qds-filter-note" style="display:none">Topic not in active filter<button type="button" id="qds-filter-clear">Clear</button></div>
+                </div>
+                                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
                 <nav>
                     <div id="sidebar-toctree"></div>
                     <ul class="c-sidebar-navigation">
@@ -143,7 +147,7 @@
                         </form>
                     </div>                    <div class="b-topbar__breadcrump" translate="no">
                         <ul class="c-breadcrump">
-                            <li><a href="index.html">Qt 6.11</a></li>
+                            <li><a href="index.html">Qt 6.12</a></li>
                             <li><a href="qtgui-index.html">Qt GUI</a></li>
                             <li><a>MD4C, version 0.5.3</a></li>
                         </ul>
@@ -163,9 +167,9 @@
 <p>Optionally used in <a href="qtextdocument.html" translate="no">QTextDocument</a> if configured with textmarkdownreader.</p>
 <p>The sources can be found in qtbase/src/3rdparty/md4c.</p>
 <p><a href="https://github.com/mity/md4c">Project Homepage</a>, upstream version: <a href="https://github.com/mity/md4c/releases/tag/release-0.5.3">0.5.3</a></p>
-<div class="pre"><pre class="cpp plain" translate="no">Copyright © 2016-2024 Martin Mitáš</pre></div>
+<div class="pre"><pre class="cpp plain" translate="no"><code class="text">Copyright © 2016-2024 Martin Mitáš</code></pre></div>
 <p><a href="https://spdx.org/licenses/MIT.html">MIT License</a>.</p>
-<div class="pre"><pre class="cpp plain" translate="no"># The MIT License (MIT)
+<div class="pre"><pre class="cpp plain" translate="no"><code class="text"># The MIT License (MIT)
 
 Copyright © 2016-2024 Martin Mitáš
 
@@ -185,7 +189,7 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
 THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
-IN THE SOFTWARE.</pre></div>
+IN THE SOFTWARE.</code></pre></div>
 </div>
 <!-- @@@qtgui-attribution-md4c.html -->
 </div>

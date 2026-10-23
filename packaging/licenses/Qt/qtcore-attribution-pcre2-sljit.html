@@ -4,8 +4,7 @@
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta content='BSD 2-clause "Simplified" License' name="description"/>
-  <title>PCRE2 - Stack-less Just-In-Time Compiler, version 10.47 | Qt Core | Qt 6.11.2</title>
-<link rel="canonical" href="https://doc.qt.io/qt-6/fr/qtcore-attribution-pcre2-sljit.html" />
+  <title>PCRE2 - Stack-less Just-In-Time Compiler, version 10.48 | Qt Core | Qt 6.12.0</title>
   <link rel="stylesheet" type="text/css" href="/style/online2.css" />
   <link rel="stylesheet" href="https://www.qt.io/hubfs/qt-design-system/qt-design-system-1.1.0.css" />
   <link rel="stylesheet" type="text/css" href="/style/font-awesome.min.css" />
@@ -119,11 +118,16 @@
             <div class="b-sidebar__sidebar__mobile-close"><div class="c-mobile-close"></div></div>
             <div class="b-sidebar__sidebar__mobile-toggle" data-mobile-title="Topics"></div>
                         <div class="b-sidebar__sidebar__content">
-                <div data-margin-bottom="md">
+                <div data-margin-bottom="sm">
                                         <select id="qds-vdropdown" class="c-form-select c-form-select--dark js-versioncontrol" style="visibility:hidden">
                                             </select>
                                     </div>
-                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
+                                <div id="qds-filter-container" data-margin-bottom="sm" style="display:none">
+                    <label for="qds-filter-sl">Filter topics</label>
+                    <select id="qds-filter-sl" class="c-form-select c-form-select--dark"></select>
+                    <div id="qds-filter-note" style="display:none">Topic not in active filter<button type="button" id="qds-filter-clear">Clear</button></div>
+                </div>
+                                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
                 <nav>
                     <div id="sidebar-toctree"></div>
                     <ul class="c-sidebar-navigation">
@@ -143,9 +147,9 @@
                         </form>
                     </div>                    <div class="b-topbar__breadcrump" translate="no">
                         <ul class="c-breadcrump">
-                            <li><a href="index.html">Qt 6.11</a></li>
+                            <li><a href="index.html">Qt 6.12</a></li>
                             <li><a href="qtcore-index.html">Qt Core</a></li>
-                            <li><a>PCRE2 - Stack-less Just-In-Time Compiler, version 10.47</a></li>
+                            <li><a>PCRE2 - Stack-less Just-In-Time Compiler, version 10.48</a></li>
                         </ul>
                     </div>
                 </div>
@@ -156,16 +160,16 @@
                     
 
 <div class="context">
-<h1 class="title">PCRE2 - Stack-less Just-In-Time Compiler, version 10.47</h1>
+<h1 class="title">PCRE2 - Stack-less Just-In-Time Compiler, version 10.48</h1>
 <!-- $$$qtcore-attribution-pcre2-sljit.html-description -->
 <div class="descr" id="details">
 <span id="pcre2-sljit"></span><p>The PCRE library is a set of functions that implement regular expression pattern matching using the same syntax and semantics as Perl 5.</p>
 <p>Used in Qt Core (<a href="qregularexpression.html" translate="no">QRegularExpression</a>).</p>
 <p>The sources can be found in qtbase/src/3rdparty/pcre2/deps/sljit.</p>
-<p><a href="http://www.pcre.org/">Project Homepage</a>, upstream version: <a href="https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.47/pcre2-10.47.tar.bz2">10.47</a></p>
-<div class="pre"><pre class="cpp plain" translate="no">Copyright Zoltan Herczeg</pre></div>
+<p><a href="http://www.pcre.org/">Project Homepage</a>, upstream version: <a href="https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.48/pcre2-10.48.tar.bz2">10.48</a></p>
+<div class="pre"><pre class="cpp plain" translate="no"><code class="text">Copyright Zoltan Herczeg</code></pre></div>
 <p><a href="https://spdx.org/licenses/BSD-2-Clause.html">BSD 2-clause "Simplified" License</a>.</p>
-<div class="pre"><pre class="cpp plain" translate="no">/*
+<div class="pre"><pre class="cpp plain" translate="no"><code class="text">/*
  *    Stack-less Just-In-Time compiler
  *
  *    Copyright Zoltan Herczeg (hzmester@freemail.hu). All rights reserved.
@@ -189,7 +193,7 @@
  * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
  * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
  * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */</pre></div>
+ */</code></pre></div>
 </div>
 <!-- @@@qtcore-attribution-pcre2-sljit.html -->
 </div>

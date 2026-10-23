@@ -3,9 +3,8 @@
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta content="A module which provides a set of C++ technologies for building user interfaces" name="description"/>
-  <title>Qt Widgets | Qt 6.11.2</title>
-<link rel="canonical" href="https://doc.qt.io/qt-6/qtwidgets-index.html" />
+  <meta content="A module which provides a set of C++ technologies for building user interfaces." name="description"/>
+  <title>Qt Widgets | Qt 6.12.0</title>
   <link rel="stylesheet" type="text/css" href="/style/online2.css" />
   <link rel="stylesheet" href="https://www.qt.io/hubfs/qt-design-system/qt-design-system-1.1.0.css" />
   <link rel="stylesheet" type="text/css" href="/style/font-awesome.min.css" />
@@ -120,11 +119,16 @@
             <div class="b-sidebar__sidebar__mobile-close"><div class="c-mobile-close"></div></div>
             <div class="b-sidebar__sidebar__mobile-toggle" data-mobile-title="Topics"></div>
                         <div class="b-sidebar__sidebar__content">
-                <div data-margin-bottom="md">
+                <div data-margin-bottom="sm">
                                         <select id="qds-vdropdown" class="c-form-select c-form-select--dark js-versioncontrol" style="visibility:hidden">
                                             </select>
                                     </div>
-                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
+                                <div id="qds-filter-container" data-margin-bottom="sm" style="display:none">
+                    <label for="qds-filter-sl">Filter topics</label>
+                    <select id="qds-filter-sl" class="c-form-select c-form-select--dark"></select>
+                    <div id="qds-filter-note" style="display:none">Topic not in active filter<button type="button" id="qds-filter-clear">Clear</button></div>
+                </div>
+                                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
                 <nav>
                     <div id="sidebar-toctree"></div>
                     <ul class="c-sidebar-navigation">
@@ -144,7 +148,7 @@
                         </form>
                     </div>                    <div class="b-topbar__breadcrump" translate="no">
                         <ul class="c-breadcrump">
-                            <li><a href="index.html">Qt 6.11</a></li>
+                            <li><a href="index.html">Qt 6.12</a></li>
                             <li><a>Qt Widgets</a></li>
                         </ul>
                     </div>
@@ -175,7 +179,7 @@
 <div class="table"><table class="generic">
 <tr class="odd" valign="top"><td><p class="centerAlign"><img alt="Windows style tab widgets" src="images/windowsvista-tabwidget.png"/></p></td><td><p class="centerAlign"><img alt="Fusion desktop style tab widgets" src="images/fusion-tabwidget.png"/></p></td><td><p class="centerAlign"><img alt="macOS style tab widgets" src="images/macos-tabwidget.png"/></p></td></tr>
 </table></div>
-<p><a href="stylesheet.html">Qt Style Sheets</a> are a powerful mechanism that lets you customize the appearance of widgets, in addition to what is already possible by subclassing <a href="qstyle.html" translate="no">QStyle</a>.</p>
+<p><a href="stylesheet.html">Qt Style Sheets</a> customize the appearance of widgets with CSS-like rules. <a href="qtwidgets-styling-approaches.html">Styling Approaches for Qt Widgets</a> explains when to use a style, <a href="qtlabsstylekit-index.html">StyleKit</a>, or a style sheet.</p>
 <h2 id="layouts">Layouts<a class="plink" href="#layouts" title="Direct link to this headline"></a></h2>
 <p><a href="layout.html">Layouts</a> are an elegant and flexible way to automatically arrange child widgets within their container. Each widget reports its size requirements to the layout through the <a href="qwidget.html#sizeHint-prop" translate="no">sizeHint</a> and <a href="qwidget.html#sizePolicy-prop" translate="no">sizePolicy</a> properties, and the layout distributes the available space accordingly.</p>
 <div class="table"><table class="generic">
@@ -190,18 +194,30 @@
 <p>Using a Qt module's C++ API requires linking against the module library, either directly or through other dependencies. Several build tools have dedicated support for this, including <a href="https://cmake.org/cmake/help/latest/">CMake</a> and <a href="qmake-manual.html">qmake</a>.</p>
 <h3 id="building-with-cmake">Building with CMake<a class="plink" href="#building-with-cmake" title="Direct link to this headline"></a></h3>
 <p>Use the <code translate="no">find_package()</code> command to locate the needed module component in the <code translate="no">Qt6</code> package:</p>
-<div class="pre"><pre class="cpp prettyprint" translate="no">find_package(Qt6 REQUIRED COMPONENTS Widgets)
-target_link_libraries(mytarget PRIVATE Qt6<span class="operator">::</span>Widgets)</pre></div>
+<div class="pre"><pre class="cpp prettyprint" translate="no"><code class="cpp">find_package(Qt6 REQUIRED COMPONENTS Widgets)
+target_link_libraries(mytarget PRIVATE Qt6<span class="operator">::</span>Widgets)</code></pre></div>
 <p>For more details, see the <a href="cmake-manual.html">Build with CMake</a> overview.</p>
 <h3 id="building-with-qmake">Building with qmake<a class="plink" href="#building-with-qmake" title="Direct link to this headline"></a></h3>
 <p>To configure the module for building with qmake, add the module as a value of the <code translate="no">QT</code> variable in the project's .pro file:</p>
-<div class="pre"><pre class="cpp prettyprint" translate="no">QT <span class="operator">+</span><span class="operator">=</span> widgets</pre></div>
+<div class="pre"><pre class="cpp prettyprint" translate="no"><code class="cpp">QT <span class="operator">+</span><span class="operator">=</span> widgets</code></pre></div>
+<h2 id="security-considerations">Security Considerations<a class="plink" href="#security-considerations" title="Direct link to this headline"></a></h2>
+<p>Several Qt Widgets classes deserialize or parse data that an application can supply from any source, and Qt cannot verify its provenance. Give particular consideration to the following:</p>
+<ul>
+<li><a href="qheaderview.html#security-considerations" translate="no">QHeaderView::restoreState()</a> deserializes a versioned binary state blob.</li>
+<li><a href="qfiledialog.html#security-considerations" translate="no">QFileDialog::restoreState()</a> likewise deserializes a binary state blob, which embeds a <a href="qheaderview.html" translate="no">QHeaderView</a> state blob.</li>
+<li><a href="qmainwindow.html#security-considerations" translate="no">QMainWindow::restoreState()</a> deserializes a binary state blob describing a recursively nested toolbar and dock widget layout.</li>
+<li><a href="qsplitter.html#security-considerations" translate="no">QSplitter::restoreState()</a> deserializes a binary state blob describing splitter sizes and orientation.</li>
+<li><a href="stylesheet.html#security-considerations">Qt Style Sheets</a> can reference and load arbitrary local files through the <code translate="no">url()</code> function.</li>
+</ul>
+<p>Only pass such APIs data that your application previously produced and persisted itself (typically via <a href="qsettings.html" translate="no">QSettings</a>), or that is otherwise fully under your application's control.</p>
 <h2 id="articles-and-guides">Articles and Guides<a class="plink" href="#articles-and-guides" title="Direct link to this headline"></a></h2>
 <ul>
 <li><a href="widgets-tutorial.html">Widgets Tutorial</a></li>
 <li><a href="widgets-getting-started.html">Getting Started Programming with Qt Widgets</a></li>
 <li><a href="https://doc.qt.io/qtcreator/creator-writing-program.html">Qt Creator: Tutorial: Qt Widgets application</a></li>
+<li><a href="https://doc.qt.io/vscodeext/vscodeext-tutorials-qt-widgets.html">Qt Extension for Visual Studio Code: Tutorial: Qt Widgets application</a></li>
 <li><a href="modelview.html">Model/View Tutorial</a></li>
+<li><a href="qtwidgets-styling-approaches.html">Styling Approaches for Qt Widgets</a></li>
 </ul>
 <h2 id="examples">Examples<a class="plink" href="#examples" title="Direct link to this headline"></a></h2>
 <ul>
@@ -253,6 +269,7 @@ target_link_libraries(mytarget PRIVATE Qt6<span class="operator">::</span>Widget
 <li class="level1"><p><a href="#using-the-module">Using the Module</a></p></li>
 <li class="level2"><p><a href="#building-with-cmake">Building with CMake</a></p></li>
 <li class="level2"><p><a href="#building-with-qmake">Building with qmake</a></p></li>
+<li class="level1"><p><a href="#security-considerations">Security Considerations</a></p></li>
 <li class="level1"><p><a href="#articles-and-guides">Articles and Guides</a></p></li>
 <li class="level1"><p><a href="#examples">Examples</a></p></li>
 <li class="level1"><p><a href="#api-reference">API Reference</a></p></li>

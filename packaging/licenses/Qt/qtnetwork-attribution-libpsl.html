@@ -4,8 +4,7 @@
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta content='BSD 3-clause "New" or "Revised" License' name="description"/>
-  <title>libpsl - C library to handle the Public Suffix List, version 664f3dc85259ec65e30248a61fa1c45b7b0e4c3f | Qt Network | Qt 6.11.2</title>
-<link rel="canonical" href="https://doc.qt.io/qt-6/fr/qtnetwork-attribution-libpsl.html" />
+  <title>libpsl - C library to handle the Public Suffix List, version 664f3dc85259ec65e30248a61fa1c45b7b0e4c3f | Qt Network | Qt 6.12.0</title>
   <link rel="stylesheet" type="text/css" href="/style/online2.css" />
   <link rel="stylesheet" href="https://www.qt.io/hubfs/qt-design-system/qt-design-system-1.1.0.css" />
   <link rel="stylesheet" type="text/css" href="/style/font-awesome.min.css" />
@@ -119,11 +118,16 @@
             <div class="b-sidebar__sidebar__mobile-close"><div class="c-mobile-close"></div></div>
             <div class="b-sidebar__sidebar__mobile-toggle" data-mobile-title="Topics"></div>
                         <div class="b-sidebar__sidebar__content">
-                <div data-margin-bottom="md">
+                <div data-margin-bottom="sm">
                                         <select id="qds-vdropdown" class="c-form-select c-form-select--dark js-versioncontrol" style="visibility:hidden">
                                             </select>
                                     </div>
-                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
+                                <div id="qds-filter-container" data-margin-bottom="sm" style="display:none">
+                    <label for="qds-filter-sl">Filter topics</label>
+                    <select id="qds-filter-sl" class="c-form-select c-form-select--dark"></select>
+                    <div id="qds-filter-note" style="display:none">Topic not in active filter<button type="button" id="qds-filter-clear">Clear</button></div>
+                </div>
+                                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
                 <nav>
                     <div id="sidebar-toctree"></div>
                     <ul class="c-sidebar-navigation">
@@ -143,7 +147,7 @@
                         </form>
                     </div>                    <div class="b-topbar__breadcrump" translate="no">
                         <ul class="c-breadcrump">
-                            <li><a href="index.html">Qt 6.11</a></li>
+                            <li><a href="index.html">Qt 6.12</a></li>
                             <li><a href="qtnetwork-index.html">Qt Network</a></li>
                             <li><a>libpsl - C library to handle the Public Suffix List, version 664f3dc85259ec65e30248a61fa1c45b7b0e4c3f</a></li>
                         </ul>
@@ -163,9 +167,9 @@
 <p>Used to compress the embedded copy of publicsuffix list and to lookup entries in it.</p>
 <p>The sources can be found in qtbase/src/3rdparty/libpsl/src/lookup_string_in_fixed_set.c and qtbase/src/3rdparty/libpsl/src/psl-make-dafsa.</p>
 <p><a href="https://github.com/rockdaboot/libpsl">Project Homepage</a>, upstream version: 664f3dc85259ec65e30248a61fa1c45b7b0e4c3f</p>
-<div class="pre"><pre class="cpp plain" translate="no">Copyright 2014-2016 The Chromium Authors. All rights reserved.</pre></div>
+<div class="pre"><pre class="cpp plain" translate="no"><code class="text">Copyright 2014-2016 The Chromium Authors. All rights reserved.</code></pre></div>
 <p><a href="https://spdx.org/licenses/BSD-3-Clause.html">BSD 3-clause "New" or "Revised" License</a>.</p>
-<div class="pre"><pre class="cpp plain" translate="no">* The following License is for the source code files
+<div class="pre"><pre class="cpp plain" translate="no"><code class="text">* The following License is for the source code files
   psl-make-dafsa and lookup_string_in_fixed_set.c.
 
 // Copyright 2015 The Chromium Authors. All rights reserved.
@@ -194,7 +198,7 @@
 // DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 // THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</pre></div>
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</code></pre></div>
 </div>
 <!-- @@@qtnetwork-attribution-libpsl.html -->
 </div>

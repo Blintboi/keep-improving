@@ -103,6 +103,18 @@ class Store:
             self.db.execute('PRAGMA wal_checkpoint(TRUNCATE)')
             self._secret_migrated=False
 
+    def client_cache(self):
+        from .clients import decode_client_cache
+        row=self.db.execute("SELECT value FROM settings WHERE key='launcher_clients'").fetchone()
+        if not row: return None
+        try: return decode_client_cache(json.loads(row[0]))
+        except (ValueError,TypeError,KeyError): return None
+
+    def save_client_cache(self,clients):
+        value=json.dumps({'version':1,'clients':[asdict(client) for client in clients]},ensure_ascii=False)
+        with self.db:
+            self.db.execute("INSERT OR REPLACE INTO settings VALUES ('launcher_clients',?)",(value,))
+
     def account_session(self):
         from .statistics_auth import validate_session
         row=self.db.execute("SELECT value FROM settings WHERE key='statistics_auth_session'").fetchone()
@@ -161,6 +173,12 @@ class Store:
         return aliases
 
     def _merge(self, old_id, new_id):
+        row=self.db.execute("SELECT value FROM settings WHERE key='config'").fetchone()
+        if row:
+            config=json.loads(row[0]); overlays=config.get('game_overlays',{})
+            if old_id in overlays:
+                value=overlays.pop(old_id); overlays.setdefault(new_id,value)
+                self.db.execute("UPDATE settings SET value=? WHERE key='config'",(json.dumps(config,ensure_ascii=False),))
         preferred = self.launch_executable(old_id)
         if preferred and not self.launch_executable(new_id):
             self.db.execute("INSERT INTO settings VALUES (?,?)", ('launch_exe:' + new_id, preferred))

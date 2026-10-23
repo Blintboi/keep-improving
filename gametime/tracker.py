@@ -4,6 +4,9 @@ from datetime import datetime, time, timedelta
 import math
 from .model import blocked
 from .i18n import tr
+from .notification_text import notification_text
+from .schedule import day_settings
+from .budget import remaining_budget
 
 
 @dataclass(frozen=True)
@@ -115,6 +118,9 @@ class Tracker:
         self.catalog.apply(games, scope)
         for old_id in aliases:
             self.catalog.games.pop(old_id, None)
+            if old_id in self.catalog.settings.game_overlays:
+                value=self.catalog.settings.game_overlays.pop(old_id)
+                self.catalog.settings.game_overlays.setdefault(aliases[old_id],value)
         self.catalog.overrides = self.store.overrides()
         self.catalog.rules = self.store.rules()
         self.cache.clear()
@@ -124,7 +130,7 @@ class Tracker:
     def evaluate(self, now):
         day = now.date().isoformat()
         total = sum(self.totals(day).values())
-        settings = self.catalog.settings
+        settings = day_settings(self.catalog.settings,day)
         delivered = self.store.alert_keys(day) | {key for d, key in self.queued if d == day}
         warning = f"warning:{settings.warning_seconds:g}"
         limit = f"limit:{settings.limit_seconds:g}"
@@ -132,16 +138,14 @@ class Tracker:
         if total >= settings.limit_seconds:
             if limit not in delivered:
                 keys = (limit, warning, session) if self.identity else (limit, warning)
-                minutes = settings.limit_seconds / 60
-                text = (tr("Your daily 2-hour game time limit has been reached. Time to finish playing.", settings.language) if minutes == 120 else
-                        tr("Your daily {minutes:g}-minute game time limit has been reached. Time to finish playing.", settings.language, minutes=minutes))
+                text=notification_text(settings,'limit',day=day)
                 self._queue(Alert(day, keys, "limit", text, tr("OK, I’ll stop", settings.language)))
             elif self.identity and session not in delivered:
                 self._queue(Alert(day, (session,), "session",
-                                  tr("Your daily game time limit has already been reached. Time to finish playing.", settings.language), tr("OK, I’ll stop", settings.language)))
+                                  notification_text(settings,'session',day=day), tr("OK, I’ll stop", settings.language)))
         elif total >= settings.warning_seconds and warning not in delivered:
-            remaining = math.ceil((settings.limit_seconds - total) / 60)
-            self._queue(Alert(day, (warning,), "warning", tr("You have {remaining} minutes of game time left today.", settings.language, remaining=remaining), tr("OK", settings.language)))
+            remaining = math.ceil(remaining_budget(self.catalog.settings,now,total).remaining / 60)
+            self._queue(Alert(day, (warning,), "warning", notification_text(settings,'warning',remaining,day=day), tr("OK", settings.language)))
 
     def _queue(self, alert):
         self.alerts.append(alert)

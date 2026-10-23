@@ -1,6 +1,512 @@
 # Testing
 
+## 2.26.2 rapid foreground and preview transitions — 2026-10-23
+
+Temporary-profile Qt sequences count actual Show/Hide events through repeated
+Alt–Tab, game A/B switches, preview on/off, preview cancellation, late receipts
+and rapid compositor-guard callbacks. Same-renderer preview changes retain the
+same HWND and never clear/restart RTSS. Worker barriers reproduce A/B/A and
+hide/resume with identical states, old healthy replies/errors and resumption
+during removal. A negative control running the new cases against the preserved
+2.26.1 frozen modules reproduces six failures without harness errors.
+The private native mapping self-test verifies unchanged probes preserve the
+entire visible OSD slot while a separate heartbeat requests fresh receipts.
+These tests neither run real games nor modify the user's RTSS process.
+
+## 2.26.1 countdown renderer handoff — 2026-10-23
+
+Isolated Qt and worker tests cover hiding the desktop before publication,
+pending/stale RTSS receipts, cancellation during IPC, delayed/failed removal,
+preview and mode changes, and stable desktop fallback without repeated RTSS
+publication. Pending handoffs cannot suppress warning popups. The native bridge
+self-test uses a private named mapping and verifies frame-consumed removal,
+helper restart recovery and duplicate owned-slot cleanup while preserving
+foreign slots and the primary OSD. No real game or user RTSS process is used by
+these tests. Local delivery also verifies the frozen source, installer payload,
+temporary-profile install/upgrade/uninstall and preservation of the real profile.
+
+## 2.26.0 public update notices and Windows version properties — 2026-10-23
+
+The **200-test targeted regression run** passed in **249.061 seconds**, covering
+Qt, tracking, schedules, bedtime caps, resource use, quiet background recovery,
+custom messages and protected-game notification behavior. The final **31-test
+updater/resource run** passed in **14.486 seconds**, including all **23 updater
+cases**. Synthetic release responses cover numeric version ordering, no
+downgrades, fixed URLs, schema/hash/size checks, response bounds, deadlines,
+redirect rejection, missing manifests, unavailable services, lazy workers,
+closed-result discard, restart-persistent cadence, manual retry limits,
+preference/draft preservation, dismissal, browser failure and tray navigation.
+Update results are asserted not to download, execute, focus or show a popup.
+Temporary-profile Hub/settings captures were inspected. Direct App fixtures
+disable external checks; the production entry point explicitly enables them.
+
+A copied IExpress installer remained byte-identical after extraction following
+the addition of Windows version resources. The bundled suite checks runtime
+file properties, fresh automatic-check defaults and preservation of an opt-out
+through upgrade. It disables checks before automated GUI startup to keep tests
+off the public endpoint. A separate read-only live check confirmed that the
+first public manifest has not yet been published; it is generated locally and
+must accompany the next explicitly authorized GitHub publication.
+
+## 2.25.0 optional bedtime budget cap — 2026-10-23
+
+The **236-test targeted regression run** passed in **179.521 seconds**, covering
+tracking, weekly plans, custom messages, bedtime boundaries, desktop/RTSS HUDs,
+resource use, the full Qt interface and protected-game notification safeguards.
+The final **25 bedtime-budget tests** passed in **3.973 seconds**. Fixtures cover
+23:00 → midnight with an unused two-hour quota, quota-first expiry, paused play,
+midnight/resume boundaries, after-midnight and overlapping per-day plans,
+native local UTC-offset changes, opt-out/old profiles, strict validation, saved
+and failed edits, custom remaining tokens, palette selection and identical HUD,
+Hub and tray values. Hidden opted-in windows do not query/rebuild the catalog.
+Measured history keeps its calendar-day split; exclusions and local sync
+isolation remain intact. Hungarian Hub and settings captures were inspected
+using a temporary profile. The bundled installation suite additionally checks
+that fresh installations opt out and that upgrades preserve an explicit opt-in.
+
+## 2.24.2 quiet background recovery — 2026-10-23
+
+The **129-test targeted regression run** passed in **59.951 seconds**, covering
+discovery, tracking, installation availability, Windows directory watchers,
+Hub updates, translation and hidden-window resource scheduling. Deterministic
+failure fixtures cover partial metadata, failed scans, dead/denied directory
+and registry watchers, shortcut failures, bounded backoff, overlapping issues,
+recovery, and successful background work preserving user-action feedback.
+Persistent notices require repeated failures spanning at least 60 seconds;
+tests advance a fake clock rather than waiting or modifying real installations.
+Paths and exception details are asserted to remain absent from the Qt status.
+The final **72-test source run** passed in **51.678 seconds**, including the full
+Qt interface and resource suites and the added full-scan recovery case for a
+previously failing individual group. All 16 background-status regression cases
+pass with temporary profiles and no real game/account operations.
+
 Use isolated temporary profiles and synthetic game installations. Never uninstall a real user game to test removal; mock the execution boundary.
+
+## 2.24.1 installed-game selectors — 2026-10-23
+
+All **129 targeted regression tests** passed in **61.325 seconds**, covering
+availability, discovery/tracking, stored preferences, customization, previews,
+consent/protected games and resource scheduling. The final **58-test core and
+availability run** passed in **3.399 seconds** after adding explicit removed-game
+selection and retired-rule replay protection.
+
+Fixtures reproduce a removed manual game's retained catalog entry with saves
+and history. It is absent from countdown settings; its history, EXE rule and
+saved palette/size remain intact. Open editors update after manual EXE deletion,
+reinstallation and launcher discovery while the Hub is hidden. Drafts survive
+removal/reinstallation; an empty inventory hides edit/save/preview controls.
+Opening a removed game's settings cannot silently select another game. No real
+game is uninstalled, and no new polling loop or directory scan is introduced.
+
+## 2.24.0 competitive-game notifications and consent — 2026-10-23
+
+All **229 targeted regression tests** passed in **288.343 seconds**, covering
+competitive-game notifications, both consent namespaces, hard anti-cheat gates,
+Qt/Tk notification delivery, restrictions/bedtime, customization, image previews,
+RTSS, the Qt UI and weekly schedules. The focused safety run also passed all
+**76 tests** in **45.582 seconds**.
+The editor tests check that mode, color, monitor, position, size, image, preview,
+reset and save controls are hidden before consent and after revocation, and
+reappear after acceptance. Switching games or language preserves permission
+visibility and unsaved drafts; viewing a blocked game leaves its stored
+preferences intact. Hungarian snapshots of blocked, accepted and revoked states
+were rendered using an isolated test profile and visually reviewed.
+
+All **31 native smoke checks** passed using a synthetic Form and temporary
+profile. The protected fixture keeps its native foreground focus beside a real
+nonactivating popup; the fullscreen branch requests sound without creating a
+window. The same fixture cannot be forcibly minimized until the independent
+minimization consent is set. Capture, preview activation/revocation, click-through
+and casual-game minimization checks remain passing. No real protected game,
+online account or actual game-input injection is used.
+
+Failure checks retain queued alerts after popup/audio errors, throttle audio
+retries, defer muted fullscreen reminders, prevent duplicate windows and preserve
+normal casual-game behavior. Protected Escape stays blocked after either kind
+of consent. Uncheckable known-game installations and anti-cheat helpers remain
+blocked, including lower-level/native entry points. Hungarian minimization
+consent was visually reviewed with an unchecked checkbox and disabled enable
+button. Fresh installer diagnostics require both consent namespaces to be empty.
+
+## 2.23.0 explicit overlay risk consent — 2026-10-23
+
+All **110 targeted regression tests** passed in **80.660 seconds**, covering
+consent storage/UI, anti-cheat defaults, both image editors, overlay routing,
+customization and RTSS. A final **36-test consent/RTSS run** passed in **8.597
+seconds** after adding queued-preparation revocation protection and the final
+notice copy. It includes revocation of opaque executable names and shutdown
+draining, so stale queued configuration cannot silently re-enable a revoked hook.
+
+Consent is denied by default. Tests verify an unchecked acknowledgement and
+disabled enable button, rejection on Enter/cancel, explicit checkbox plus button,
+database failure, current notice version, game/root binding, restart persistence,
+local-only storage, and independence from unsaved countdown drafts. The runtime
+tests cover desktop/image permission, stale window revocation, continued Escape
+blocking, exact RTSS paths and same-name protected games including exclusions.
+
+All **25 native overlay smoke checks** passed against a synthetic Form and
+temporary profile. Its protected classification first blocks capture/preview;
+explicit test-profile consent allows a native game-window snapshot; revoking
+permission blocks the same window descriptor again. No real protected game or
+online account is used. Visual review of the Hungarian confirmation checks
+readable notice text and visible, initially disabled acceptance controls.
+
+The installer suite checks that fresh risk-consent records are empty. The real
+local upgrade preserves all profile tables and does not grant any consent for
+the user. Publisher protections are not disabled or bypassed, and the notice
+is not presented as a legal or anti-cheat compatibility guarantee.
+
+## 2.22.0 automatic anti-cheat protection — 2026-10-23
+
+The full suite executed **469 tests** in **444.770 seconds**. Three customization
+fixtures still assumed the previous default-on RTSS setting. They now explicitly
+enable RTSS for those scenarios. The final **99-test targeted run passed** in
+**61.232 seconds**, covering those failures, the complete new safety suite,
+countdown customization, both image editors, native guards and RTSS routing.
+
+The safety tests cover renamed protected games, installation markers, unreadable
+and network roots, bounded/cached inspection, anti-cheat helper exclusions,
+both globally/per-game enabled countdowns, capture/activation/Escape rejection,
+continued tracking/popups, cached-profile and basename bypasses, prior RTSS
+profile revocation and revocation failure. Fixtures preserve global/FPS settings
+and verify that denied RTSS actions never launch a server or bridge.
+
+All **23 native overlay smoke checks** passed. An ordinary synthetic Form still
+supports the allowed screenshot/preview flow. Reclassifying only that Form as a
+protected catalog entry blocks capture and preview activation/presentation.
+No real protected game or online account is used to test injection or input.
+
+The installer suite additionally checks that fresh profiles default RTSS off.
+Saved RTSS choices, history, exclusions and synchronization credentials remain
+subject to the existing isolated-profile upgrade checks. The local delivery also
+backs up actual RTSS profiles before the updated app revokes known protected
+hooking/OSD profiles. See [the review](docs/ANTICHEAT.hu.md) for official sources
+and the limits of automated recognition; these checks are not publisher approval.
+
+## 2.21.3 game-image monitor identity — 2026-10-23
+
+All **44 game-preview and overlay regression tests** passed. They cover actual
+painted pixels in both global and per-game position editors, explicit refresh,
+capture caching across language changes, identity/focus guards and bounded capture
+workers. Native HMONITOR mapping is tested with identical friendly monitor names,
+a negative display origin, mixed DPI and a disconnected display.
+
+All **21 native overlay smoke checks** passed with a synthetic game and temporary
+profile. The suite now checks rendered game pixels, not just a populated capture
+field, and verifies that a native capture device resolves to the correct QScreen.
+
+A read-only check against the user's already running Minecraft Java window
+reproduced the mismatch: Qt reported `24G1WG4`, while Windows reported
+`\\.\DISPLAY1`. Offscreen editors using the real capture then displayed game pixels
+at all 49 sampled positions in both editor modes. The check did not modify the
+real profile, activate/minimize the game or save its image. This validates that
+running window's capture and editor rendering, not all renderers/fullscreen modes.
+
+Installer verification uses the existing isolated-profile install/upgrade suite,
+payload hashes and source/installer secret scans before updating the local app.
+The real upgrade backs up and compares profile tables and reopens Gaming Hub.
+
+## 2.21.2 Qt security update — 2026-10-23
+
+All **450 regression tests** passed in **415.839 seconds** with Qt/PySide6/
+Shiboken **6.12.0**, Python 3.13.16 and OpenSSL 3.5.9. The locked Windows wheel
+hashes match official PyPI metadata, `pip check` succeeds, and a fresh advisory
+query returned no entries for the twelve pinned runtime/build package versions.
+The Qt upstream advisories were checked separately from the Python package index.
+
+Visual inspection caught Qt 6.12 collapsing styled `NoButtons` editors to one
+pixel despite their values remaining correct. The application now retains the
+normal editor layout and hides only the step button controls. A regression test
+checks text geometry and actual rendered glyphs for number/time fields at two
+window widths, alongside existing editing, wheel and translation checks.
+
+All **19 native overlay smoke checks** passed with a synthetic game and temporary
+profile: game-window capture, placement background, color, passive focus/input
+behavior, explicit game activation, cancellation on return, and minimized-game
+restoration. The first background run correctly reported Windows denying focus;
+the harness now establishes its own foreground Hub before simulating a Preview
+click. The synthetic game's activation grants foreground permission to the test
+parent. No input is injected into other applications.
+
+The privacy notice now documents capture on opening the countdown editor or
+refreshing its game image, memory-only preview use and no image saving/upload.
+Qt component notices and source links match 6.12.0. Release verification compares
+the packaged application code with the current source, its Qt files with the
+pinned wheel installation, and the bundled privacy notice with the repository.
+The installer smoke suite uses a separate profile before upgrading the real
+installation; the latter upgrade backs up and compares all profile tables.
+
+## 2.21.1 notification icon stability — 2026-10-23
+
+All **449 regression tests** passed in **405.166 seconds**. After including
+the executable location in the icon identity, all **37 focused tray, RTSS,
+resource and process-inspection checks** passed in **8.220 seconds**.
+
+New tray cases verify stable per-profile GUIDs across window recreation and
+path casing, distinct profiles and moved binaries, 120 changing tooltips without icon replacement,
+no duplicate writes for unchanged text, Explorer recovery with the same GUID,
+and no resurrection after close. Native HWND callbacks, legacy clicks, menu
+cancellation and the Tcl subprocess message-loop regression remain exercised;
+UI fixtures mock only the Shell notification boundary to avoid moving the
+user's real notification icons during repeated app creation/cleanup.
+
+RTSS cases verify that an available SDK skips enumeration/startup, a running or
+uninspectable process blocks duplicate startup while the mapping is absent,
+a confirmed process exit permits a new start, and checks/failures are throttled.
+Native process lookup verifies the current image, missing images, session
+isolation, another installation, denied inspection and snapshot-handle cleanup.
+The development PC's existing RTSS was also inspected read-only: its process
+was recognized, and a simulated absent mapping did not invoke startup.
+
+## 2.21.0 game-backed countdown preview — 2026-10-23
+
+All **436 regression tests** passed in **421.507 seconds**. After the final
+restore/activation guard, **69 focused tests** passed in **48.272 seconds**, and
+the **12 preview cases** passed again in **5.030 seconds** after isolating their
+renderer boundary. All **19 native smoke checks** passed, including restoration
+from minimization and cancellation after the fixture yields foreground.
+
+The new regression cases cover independent per-game color inheritance,
+validation and durable saves, draft switching/cancel/reset/translation, outgoing
+statistics isolation, RTSS preview text, expiry returning to real usage and saved
+colors, single activation and Alt+Tab cancellation, identity/HWND reuse guards,
+stale snapshots, no recapture during language changes/hidden ticks, and a blocked
+capture worker with bounded shutdown and no replacement thread.
+
+The native smoke uses an isolated profile and a separate synthetic Windows Form.
+It checks client-only capture and monitor-relative placement, in-game preview
+activation and colors, HUD input transparency, unchanged passive foreground,
+return-to-Hub cancellation, restoration from minimization, and unchanged profile,
+history and alert keys. The fixture grants only its test parent foreground
+permission; no real game is launched or minimized and no input is injected.
+Hungarian/English editor captures were inspected at normal and compact sizes.
+GPU/protected/fullscreen screenshot support and actual RTSS injection still depend
+on the particular game; mocked RTSS routing is covered by integration tests.
+
+The isolated bundled upgrade fixture preserves nested per-game colors alongside
+all existing schedule, sound, history, exclusion and credential settings. Local
+installation is upgraded only after the matching installer passes verification.
+
+## 2.20.0 weekly day selection and settings groups — 2026-10-23
+
+All **427 regression tests** passed in **373.157 seconds**. After the final
+shared-message grouping and explicit copy-button wording, **85 focused weekly,
+customization, personal-message and Qt tests** passed in **46.066 seconds**.
+The eleven weekly cases cover all seven weekdays, invalid plans, legacy weekend
+fallback and conversion, independent/group edits, mixed numeric/checkbox/time
+values, typing an already displayed value, explicit unification, empty selection,
+translation without losing drafts, failed writes and localized day errors.
+Daily warning keys, history/exclusions and overnight Sunday/Monday overlap are
+verified, with no schedule settings included in outgoing statistics snapshots.
+
+The editor updates drafts on interaction and writes only through the existing
+Save action. Group edits preserve every untouched field and day; unrelated saves
+do not materialize or replace schedules. Legacy weekend values are expanded into
+the seven effective plans before their switch is retired on an edited save.
+Existing tracker, restriction, desktop/RTSS and bedtime paths share the weekday
+resolver and retain their existing timers and foreground-accounting rules.
+
+Hungarian/English previews were inspected at 1000×700 and 1160×960 window sizes,
+including identical/mixed/weekend selections, section day captions, separate
+message settings and horizontal rules for countdown position, colors and preview.
+The bundled fixture checks the empty daily-plan default and preserves a Tuesday
+override alongside legacy weekend, sound, game, history and credential settings.
+Real-profile comparison permits only the new empty daily-plan key, retaining all
+previous values and tables; the installer is verified before the local upgrade.
+
+## 2.19.0 sounds, weekend schedules and per-game countdowns — 2026-10-23
+
+The full **415-test** regression run passed in **301.124 seconds**. After the
+final overnight-overlap and layout refinements, **197 focused tests** passed in
+**105.335 seconds**, including all **16 customization cases**. Coverage includes
+weekday/weekend resolution without mutating the normal plan, Friday/Saturday
+and Sunday/Monday bedtime boundaries, overlapping next-day reminders, retained
+minimization grace across midnight, warning/limit keys, conserved daily time,
+current budget agreement between the library, restrictions, desktop and RTSS,
+legacy defaults, persistence and discovery ID migration.
+
+Sound tests mock Windows playback and check silent popups, asynchronous aliases,
+custom WAV flags and fallback on missing files. UI tests check unsaved drafts,
+language changes, cancellation, failed writes, two-game edits, restoration of
+global defaults, independent visibility, precise position/size previews and RTSS
+preparation restricted to games with an enabled countdown. Personal settings and
+sound paths stay outside statistics snapshots. These changes add no timers or
+background playback process. RTSS routing remains mocked; no new real-game
+fullscreen compatibility claim is made.
+
+Hungarian/English sound panels, weekend dialogs, game countdown editors, reminder
+popups and countdown controls were rendered with isolated profiles and inspected.
+The bundled fixture verifies compatible fresh defaults and preservation of sound,
+saved WAV path, weekend plan and game overrides alongside existing profile data.
+Real-profile upgrade checks allow only default values for the new keys and compare
+all existing settings and tables against a stopped-profile database backup.
+
+## 2.18.1 editable defaults and reminder layout — 2026-10-23
+
+All **168 focused personal-reminder, bedtime, core, RTSS, Qt interface and
+overlay tests** passed in **48.498 seconds**. Editable defaults retain live time
+tokens in both languages, including non-integer daily limits. Untouched defaults
+and restored defaults remain automatic after Save; editing one message stores
+only that message. Language changes translate untouched defaults while retaining
+personal drafts and their selections. Existing long-message scrolling, save
+failure, cancellation, timing, history and alert-delivery checks remain green.
+
+Isolated Hungarian/English captures of all four reminder kinds, the message
+editor and 25/48 pt countdown controls were rendered and inspected. Popups use
+an icon header and a bordered message panel without the redundant caption;
+the preview state selector shares the preview button row below opacity.
+The installer fixture continues to use temporary profiles before upgrading
+the real installation with a database backup and per-table preservation checks.
+
+## 2.18.0 personal messages and countdown colors — 2026-10-23
+
+The full **398-test** regression run passed in **242.247 seconds**. After the
+final remaining-minute token corrections, **89 focused core, bedtime, personal
+reminder and RTSS tests** passed in 6.250 seconds. Earlier focused overlay and
+Qt runs also passed all 30 and 47 cases. Nine new cases cover legacy defaults,
+invalid/oversized input, store reopen, unknown/literal braces and HTML-like text,
+actual warning/limit/session thresholds and keys, zero remaining time after the
+limit, current local game minutes in bedtime text, drafts, cancellation, failed
+writes, defaults, translation, long multiline messages and acknowledgement access.
+
+UI previews preserve budgets and alert ledgers and never send Escape or minimize
+a window. Draft text stays literal across language changes; message Save retains
+other unsaved controls. Pixel checks verify actual desktop colors in both states;
+RTSS assertions verify matching ARGB/FNT output. Palette cancellation/reset/save,
+unchanged swatch icons on translation, history/exclusion preservation and absence
+of personalization in outgoing statistics snapshots are covered. Hungarian/English
+message editors, personalized warning/bedtime popups and countdown controls were
+rendered with isolated profiles and inspected. RTSS routing/profile tests remain
+mocked, so this adds no real-game fullscreen evidence.
+
+The installer fixture checks the original white/red colors and empty messages
+on a fresh profile, then preserves custom normal/warning colors and two custom
+messages through upgrade alongside existing size, position, history and secrets.
+Real-profile comparison permits only the new default keys; all existing settings
+and every other table remain subject to the previous preservation/hash checks.
+
+## 2.17.1 static countdown help — 2026-10-23
+
+All **30 overlay** and **47 Qt interface tests** passed. This presentation-only
+change removes hover help from the position miniature and coordinate fields;
+one wrapped, permanently visible label explains dragging, the display origin,
+1 px/Shift-10 px movement and preview/save behavior. Isolated Hungarian/English
+renders were inspected at 25/48 pt. The preview fixture also checks that the
+miniature and fields have empty tooltips after each language change and that
+the translated static explanation remains visible. Existing drag, exact position,
+size, persistence, focus and wheel-scrolling regressions remain green.
+
+## 2.17.0 precise countdown and text size — 2026-10-23
+
+All **389 automated tests** passed in **200.511 seconds**, including 30 overlay,
+14 RTSS and 47 Qt interface cases. Pixel editors match the actual desktop HUD
+position, dragging updates the fields, arrow keys move 1 px and Shift + arrow
+moves 10 px. Tests cover negative-origin and portrait monitors, changed display
+sizes, clamping, untouched-axis precision, size-dependent bounds and literal
+keyboard entry. Interior pixel positions and edge anchors survive resizing.
+The new 8–72 pt setting rejects invalid values, defaults to the old 25 pt size
+for legacy profiles, survives store reopen and leaves budgets/history intact.
+
+Preview updates position/size without taking focus, crediting play time,
+acknowledging alerts or publishing to RTSS. Unsaved edits survive translation;
+wheel scrolling leaves coordinates and text size unchanged. Hungarian/English
+controls at 25/48 pt and standalone text at 8/25/72 pt were rendered with isolated
+profiles and inspected. The miniature uses the same font metrics and placement
+as the desktop HUD; font metrics stay cached until size or DPI changes.
+
+RTSS tests verify matching FNT height, scaled interior placement, unchanged edge
+anchors, legacy four-field positions and profile-write caching. RTSS routing and
+profile I/O use mocks; these changes do not add a real-game fullscreen trial.
+The bundled upgrade fixture saves a non-default 48 pt size and verifies it after
+upgrade, alongside existing coordinates and profile preferences. Real-profile
+comparison allows only the new default 25 pt key, preserving every existing
+setting value, credential, history/exclusion row and connection preference.
+
+## 2.16.0 stable language changes and cached UI — 2026-10-23
+
+All **382 automated tests** passed in **228.763 seconds**, including 47 Qt
+interface cases and 19 artwork/client cases. New regressions check repeated
+language changes without rebuilding the central widget, querying the catalog,
+reading shell icons or requesting artwork. Existing pixmap identities, focused
+cards, pending artwork tokens, flag icons, filters, date ranges, error states,
+unsaved limits/paths/overlay controls and open rename-dialog input survive.
+A simulated language-save failure restores both the selection and saved language.
+Filtering back to a game uses its cached pixmap before the event loop runs;
+source-name searches stay valid across languages. Unchanged launcher results
+reuse cards/icons; a moved client updates only its own card and launch target.
+
+Statistics refreshes retain date/legend/table items and selected rows while
+updating actual time changes. Language changes format cached percentages and
+computer/source labels without querying history, even with an invalid date edit.
+Isolated Hungarian/English library, statistics, settings and rename-dialog
+renders were inspected. Translated combo boxes resize for longer text; user
+names and paths remain literal. These fixtures never launch real games.
+
+The local delivery workflow verifies extracted installer hashes, runs the
+bundled install/upgrade/uninstall checks with a temporary profile, then backs
+up the real profile and compares every table and installed-file hash before
+reopening the updated application.
+
+## 2.15.1 rename any computer — 2026-10-23
+
+All **42 Qt interface tests**, **13 statistics sync tests** and **13 history and
+translation tests** passed. The rename dialog lists every known computer and
+preselects the current filter. Linked-computer names are local preferences keyed
+by hashed connection label and device ID. Tests retain them after incoming name
+changes and database reopen, isolate different connections, preserve duplicate
+computer identities and colors, and reject unknown targets, failed writes and
+saves after the connection changes. Aliases never enter outgoing snapshots or
+change remote revision counters, source metadata, local settings or budgets.
+
+The isolated installer upgrade fixture verifies both the own computer name and
+a linked computer's local alias. Hungarian/English previews cover the new selector.
+
+## 2.15.0 computer renaming — 2026-10-23
+
+All **41 Qt interface tests**, **11 statistics sync tests** and **13 history and
+translation tests** passed. New isolated UI tests cover offline renaming,
+whitespace/cancel handling, the 80-character limit, accented/HTML-like names,
+failed writes, persistence after database reopen, unchanged settings/device
+identity/history/local budgets, retained filters/selection/colors, and name
+updates in the chart, dropdown and table. Enabled sync queues the name through
+the existing guarded event without signing in or bypassing the ten-minute wait.
+
+Hungarian/English page and rename-dialog previews use an offline fixture.
+The installer upgrade fixture also checks that a saved computer name survives.
+The language selector's local flag SVGs are rendered in both
+languages and included by the existing icons-directory packaging rule; the
+final Qt run includes their language-switching state-preservation check.
+
+## 2.14.1 tooltip typography — 2026-10-23
+
+Game and computer rows in daily chart tooltips use regular weight, including
+the segment under the pointer. The date and daily total retain their heading.
+The existing statistics Qt tests and an isolated rendered tooltip check verify
+that colors, durations, shares and day selection remain intact.
+
+## 2.14.0 color-coded statistics — 2026-10-23
+
+All **371 application tests passed in 197.821 seconds** on CPython 3.13.16 /
+OpenSSL 3.5.9, including the remembered-launcher changes. After the final legend
+layout adjustment, the 39 Qt interface tests and the visual previews were rerun.
+
+Isolated Qt regressions aggregate the same game across computers without
+double counting, switch stacked bars between games and computers without a
+database read, and verify matching legend/table colors through filtering and
+language changes. Actual mouse clicks select a day's breakdown. Tooltip checks
+cover daily shares, escaped game/computer names, empty dates and a dense 366-day
+period with fractional recorded time. Period totals and local daily budgets
+remain unchanged. Hungarian and English previews use synthetic offline history;
+the minimum window size is also inspected.
+
+## 2.13.1 remembered launcher clients — 2026-10-23
+
+Launcher regressions cover persistence across database reopen, an empty saved
+list, malformed cache fallback, lazy first-page loading, repeated navigation,
+language changes and absence of timed rescans. Manual refresh replaces and saves
+the list; failed refresh preserves the last successful result. Cached paths are
+validated without filesystem or registry discovery and revalidated when opened.
+The isolated bundled upgrade check also preserves the remembered launcher list.
 
 ## 2.13.0 additional game clients — 2026-10-22
 
@@ -389,3 +895,22 @@ Final packaging validation passed all 30 bundled checks, including the visible n
 ## 2.0.1 icon scaling
 
 All 15 Qt integration cases passed in 5.560 seconds. The added case reproduces a native Windows shell pixmap with DPR 256/96 and verifies that the icon still occupies the intended 80 logical pixels. Shell-image DPR is normalized before scaling, preserving proportions and preventing tiny icons on scaled Windows displays. The 2.0.0 packaging/startup and 30-case installer validation above remain applicable; this patch changes icon sizing only.
+# Secret exposure regression checks
+
+`packaging/build.ps1` now audits current source and the final Windows installer
+before reporting a successful package. It downloads the pinned Gitleaks ZIP
+once into the ignored build directory, verifies its SHA-256 before extraction,
+and re-extracts the executable from those verified bytes on every use.
+`-FreezeOnly` audits the frozen directory too. Archive or scanner errors fail
+the build; the audit never runs an installer or bundled application.
+
+```powershell
+& build/venv-security/Scripts/python.exe -B -m unittest discover -s tests -p test_payload_security.py -v
+```
+
+The regression fixtures cover a secret introduced as a compiled constant in a
+compressed PyInstaller PYZ module, binary/UTF-16 credentials, administrative JWTs,
+nested `.env` and SQLite profiles, archive traversal, invalid frozen archives,
+public publishable keys, and redacted findings. Use a build environment with
+PyInstaller installed. Audits are detection evidence, not a proof that no future
+secret or vulnerability can exist.

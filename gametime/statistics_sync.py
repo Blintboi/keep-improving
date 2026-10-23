@@ -200,6 +200,29 @@ class StatisticsData:
     def devices(self, group):
         return list(self.store.db.execute('SELECT device_id,name,started FROM statistics_devices WHERE group_id=? ORDER BY name,device_id', (local_group(group),)))
 
+    def device_aliases(self, group):
+        """Local display preferences, scoped to the connection, never exported."""
+        if not isinstance(group,str) or not GROUP.fullmatch(group): return {}
+        prefix='statistics_device_alias:'+local_group(group)+':'
+        rows=self.store.db.execute('SELECT key,value FROM settings WHERE key LIKE ?', (prefix+'%',))
+        return {key[len(prefix):]:value for key,value in rows
+                if ID.fullmatch(key[len(prefix):]) and isinstance(value,str) and 1<=len(value)<=80}
+
+    def set_device_alias(self, group, identity, name):
+        if (not isinstance(group,str) or not GROUP.fullmatch(group)
+                or not isinstance(identity,str) or not ID.fullmatch(identity)
+                or not isinstance(name,str) or not 1<=len(name.strip())<=80):
+            raise ValueError('Enter a computer name.')
+        key='statistics_device_alias:'+local_group(group)+':'+identity
+        with self.store.db:
+            known=self.store.db.execute('SELECT 1 FROM statistics_devices WHERE group_id=? AND device_id=?', (local_group(group),identity)).fetchone()
+            if not known: raise ValueError('Unknown computer.')
+            current=self.store.db.execute('SELECT value FROM settings WHERE key=?', (key,)).fetchone()
+            name=name.strip()
+            if current and current[0]==name: return False
+            self.store.db.execute('INSERT OR REPLACE INTO settings VALUES (?,?)', (key,name))
+        return True
+
     def revisions(self, group):
         return {identity: str(revision) for identity, revision in self.store.db.execute(
             'SELECT device_id,revision FROM statistics_devices WHERE group_id=?', (local_group(group),))}

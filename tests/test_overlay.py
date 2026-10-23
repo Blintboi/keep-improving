@@ -20,6 +20,7 @@ class OverlaySettingsTests(unittest.TestCase):
             config={'games_root':str(Path(tmp)/'Games'),'warning_seconds':6000,'limit_seconds':7200}
             with store.db: store.db.execute("INSERT OR REPLACE INTO settings VALUES ('config',?)",(json.dumps(config),))
             settings=store.settings(); settings.validate()
+            self.assertEqual(settings.overlay_font_size,25)
             self.assertFalse(settings.overlay_enabled); self.assertTrue(settings.limit_popup_enabled)
             self.assertTrue(popup_required(settings,'warning')); self.assertTrue(popup_required(settings,'limit'))
             store.close()
@@ -38,6 +39,11 @@ class OverlaySettingsTests(unittest.TestCase):
                        {'overlay_x':-1},{'overlay_y':2},{'overlay_x':True},{'overlay_enabled':'yes'},
                        {'overlay_screen':None}):
             with self.subTest(fields=fields),self.assertRaises(ValueError): replace(Settings(),**fields).validate()
+
+    def test_text_size_rejects_invalid_or_unbounded_values(self):
+        for size in (7,73,25.5,True,None,float('nan'),float('inf'),'25'):
+            with self.subTest(size=size),self.assertRaises(ValueError): replace(Settings(),overlay_font_size=size).validate()
+        for size in (8,25,72): replace(Settings(),overlay_font_size=size).validate()
 
 @unittest.skipUnless(os.name=='nt','Windows required')
 class OverlayInterfaceTests(unittest.TestCase):
@@ -71,6 +77,7 @@ class OverlayInterfaceTests(unittest.TestCase):
         self.sound=patch('gametime.qt_ui.winsound.PlaySound'); self.sound_mock=self.sound.start()
         self.rtss_installation=patch('gametime.rtss.installation',return_value=None); self.rtss_installation.start()
         self.desktop=patch('gametime.qt_ui.win32.desktop_overlay_available',return_value=True); self.desktop.start()
+        isolated=patch('gametime.win32.s.Shell_NotifyIconW',return_value=True); isolated.start(); self.addCleanup(isolated.stop)
         self.app=App(self.store,self.base,background=True,service=Service(),hub=Hub())
         self.app.tick_timer.stop(); self.app.overlay_timer.stop(); self.pump(.02)
 
@@ -208,18 +215,80 @@ class OverlayInterfaceTests(unittest.TestCase):
         picker.screen=screen; picker.set_position(.5,1)
         monitor,hud=picker.rectangles()
         self.assertAlmostEqual(monitor.width()/monitor.height(),1920/1080)
-        self.assertAlmostEqual(hud.bottom(),monitor.bottom()-8)
+        self.assertAlmostEqual(hud.bottom(),monitor.bottom()-16*monitor.height()/1080)
+        scale=monitor.width()/1920
+        self.assertAlmostEqual(hud.width(),picker.hud_size().width()*scale)
 
     def test_position_picker_keyboard_and_missing_monitor_fallback(self):
         from PySide6.QtCore import Qt
         from PySide6.QtTest import QTest
         from gametime.overlay import choose_screen
-        self.app.overlay_picker.set_position(.5,.5); QTest.keyClick(self.app.overlay_picker,Qt.Key_Left)
-        self.assertAlmostEqual(self.app.overlay_picker.x_ratio,.48)
+        picker=self.app.overlay_picker; picker.set_position(.5,.5); before=picker.pixel_position()
+        QTest.keyClick(picker,Qt.Key_Left)
+        self.assertEqual(picker.pixel_position(),(before[0]-1,before[1]))
+        QTest.keyClick(picker,Qt.Key_Down,Qt.ShiftModifier)
+        self.assertEqual(picker.pixel_position(),(before[0]-1,before[1]+10))
         self.assertEqual(choose_screen('missing-monitor'),self.qt.primaryScreen())
         self.app.overlay_screen.addItem('missing','missing-monitor'); self.app.overlay_screen.setCurrentIndex(self.app.overlay_screen.count()-1)
         self.app.refresh_overlay_screens(); self.assertEqual(self.app.overlay_screen.currentData(),'missing-monitor')
         self.assertEqual(self.app.overlay_picker.screen,self.qt.primaryScreen())
+
+    def test_precise_coordinates_size_preview_and_persistence_share_the_same_geometry(self):
+        from PySide6.QtCore import QPoint
+        from gametime.overlay import countdown_size
+        picker=self.app.overlay_picker; x,y=self.app.overlay_coordinates
+        self.app.preview_overlay(); overlay=self.app.overlay; area=picker.screen.geometry()
+        original=overlay.size()
+        x.setValue(137); y.setValue(219)
+        self.assertEqual(overlay.pos(),QPoint(area.x()+137,area.y()+219))
+        self.assertEqual(picker.pixel_position(),(137,219))
+        self.assertEqual(self.store.settings().overlay_font_size,25)
+        self.app.overlay_font_size.setValue(48)
+        self.assertEqual(picker.pixel_position(),(137,219))
+        self.assertGreater(overlay.width(),original.width()); self.assertGreater(overlay.height(),original.height())
+        self.assertEqual(overlay.size(),countdown_size(48,overlay))
+        self.assertEqual(overlay.pos(),QPoint(area.x()+int(x.value()),area.y()+int(y.value())))
+        self.assertEqual(overlay.size(),picker.hud_size())
+        for a,b in ((0,0),(1,1),(.3456,.6789)):
+            picker.set_position(a,b)
+            self.assertEqual((int(x.value()),int(y.value())),picker.pixel_position())
+            self.assertTrue(area.contains(overlay.geometry()))
+        x.setValue(137); y.setValue(219); self.app.save_settings()
+        saved=self.store.settings(); self.assertEqual(saved.overlay_font_size,48)
+        self.assertEqual((saved.overlay_x,saved.overlay_y),(picker.x_ratio,picker.y_ratio))
+        self.assertEqual(saved.limit_seconds,7200); self.assertEqual(self.store.totals(date.today()),{})
+        self.assertEqual(self.store.alert_keys(date.today().isoformat()),set())
+        reader=Store(self.base/'usage.sqlite3'); self.assertEqual(reader.settings(),saved); reader.close()
+
+    def test_typed_pixels_and_size_survive_translation_and_preview_has_no_focus(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+        from gametime import win32
+        self.app.show(); self.app.switch_page(2)
+        x,y=self.app.overlay_coordinates; x.setFocus(); x.selectAll()
+        QTest.keyClicks(x,'314'); QTest.keyClick(x,Qt.Key_Return)
+        self.assertEqual(self.app.overlay_picker.pixel_position()[0],314)
+        self.app.overlay_font_size.setValue(36); self.app.set_language('en')
+        self.assertEqual(self.app.overlay_font_size.value(),36); self.assertEqual(x.value(),self.app.overlay_picker.pixel_position()[0])
+        self.assertEqual(x.accessibleName(),'Horizontal (px)'); self.assertEqual(self.app.overlay_font_size.accessibleName(),'Text size')
+        before=win32.u.GetForegroundWindow(); self.app.preview_overlay()
+        self.assertEqual(win32.u.GetForegroundWindow(),before); self.assertEqual(self.store.settings().overlay_font_size,25)
+        self.app.set_language('hu'); self.assertEqual(self.app.overlay_font_size.value(),36)
+
+    def test_pixel_fields_follow_monitor_resolution_and_font_limits_without_ratio_drift(self):
+        from PySide6.QtCore import QRect
+        from unittest.mock import Mock
+        picker=self.app.overlay_picker; screen=Mock(); picker.screen=screen
+        for width,height in ((1920,1080),(1080,1920),(1280,720)):
+            screen.geometry.return_value=QRect(-width,-height,width,height)
+            for size in (8,25,72):
+                self.app.overlay_font_size.setValue(size); picker.set_position(.25,.75); self.app.update_overlay_coordinates()
+                before=(picker.x_ratio,picker.y_ratio); self.app.update_overlay_coordinates()
+                self.assertEqual((picker.x_ratio,picker.y_ratio),before)
+                for edit,limits,value in zip(self.app.overlay_coordinates,picker.pixel_limits(),picker.pixel_position()):
+                    self.assertEqual((edit.minimum(),edit.maximum()),limits); self.assertEqual(edit.value(),value)
+                picker.set_pixel_position(-100,100000)
+                self.assertEqual(picker.pixel_position(),(picker.pixel_limits()[0][0],picker.pixel_limits()[1][1]))
 
     def test_interpolated_display_does_not_write_extra_game_time(self):
         from gametime.tracker import Sample
@@ -264,9 +333,22 @@ class OverlayInterfaceTests(unittest.TestCase):
         with patch.object(self.app.rtss,'present',return_value=False) as present:
             self.display(6000); present.assert_called_once(); self.assertTrue(self.app.overlay.isVisible()); self.assertFalse(self.app.overlay_failed)
         with patch.object(self.app.rtss,'present',return_value=True),patch('gametime.qt_ui.win32.sample',return_value=self.sample()),patch('gametime.qt_ui.win32.desktop_overlay_available',return_value=False):
+            self.app.update_overlay(); self.assertFalse(self.app.overlay.isVisible())
+            self.app._overlay_desktop_until=0  # The compositor guard interval has elapsed.
             self.app.update_overlay(); self.assertTrue(self.app.overlay_warning_visible())
         with patch.object(self.app.rtss,'hide') as hide,patch('gametime.qt_ui.win32.sample',return_value=self.sample(path='')):
             self.app.update_overlay(); hide.assert_called_once(); self.assertEqual(self.app._overlay_backend,'none')
+
+    def test_rtss_receives_saved_font_size_and_preview_stays_on_the_desktop(self):
+        self.app.settings=self.app.catalog.settings=replace(self.app.settings,overlay_rtss_auto=True,overlay_font_size=48)
+        self.app._rtss_checked=time.monotonic(); self.app._rtss_available=True
+        with patch.object(self.app.rtss,'present',return_value=True) as present:
+            self.display(6000)
+            args=present.call_args.args
+            self.assertIn('<FNT=Consolas,-64,700,1>',args[2]); self.assertEqual(args[3][4],48)
+            self.assertEqual(self.app._overlay_backend,'rtss')
+            self.app.overlay_font_size.setValue(36); self.assertEqual(present.call_args.args[3][4],48)
+            present.reset_mock(); self.app.preview_overlay(); present.assert_not_called(); self.assertEqual(self.app.overlay.font_size,36)
 
     def test_position_picker_drag_moves_and_clamps_the_saved_coordinates(self):
         from PySide6.QtCore import Qt,QPoint

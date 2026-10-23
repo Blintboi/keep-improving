@@ -4,8 +4,7 @@
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta content="MIT License" name="description"/>
-  <title>XCB-XInput | Qt GUI | Qt 6.11.2</title>
-<link rel="canonical" href="https://doc.qt.io/qt-6/fr/qtgui-attribution-xcb-xinput.html" />
+  <title>XCB-XInput | Qt GUI | Qt 6.12.0</title>
   <link rel="stylesheet" type="text/css" href="/style/online2.css" />
   <link rel="stylesheet" href="https://www.qt.io/hubfs/qt-design-system/qt-design-system-1.1.0.css" />
   <link rel="stylesheet" type="text/css" href="/style/font-awesome.min.css" />
@@ -119,11 +118,16 @@
             <div class="b-sidebar__sidebar__mobile-close"><div class="c-mobile-close"></div></div>
             <div class="b-sidebar__sidebar__mobile-toggle" data-mobile-title="Topics"></div>
                         <div class="b-sidebar__sidebar__content">
-                <div data-margin-bottom="md">
+                <div data-margin-bottom="sm">
                                         <select id="qds-vdropdown" class="c-form-select c-form-select--dark js-versioncontrol" style="visibility:hidden">
                                             </select>
                                     </div>
-                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
+                                <div id="qds-filter-container" data-margin-bottom="sm" style="display:none">
+                    <label for="qds-filter-sl">Filter topics</label>
+                    <select id="qds-filter-sl" class="c-form-select c-form-select--dark"></select>
+                    <div id="qds-filter-note" style="display:none">Topic not in active filter<button type="button" id="qds-filter-clear">Clear</button></div>
+                </div>
+                                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
                 <nav>
                     <div id="sidebar-toctree"></div>
                     <ul class="c-sidebar-navigation">
@@ -143,7 +147,7 @@
                         </form>
                     </div>                    <div class="b-topbar__breadcrump" translate="no">
                         <ul class="c-breadcrump">
-                            <li><a href="index.html">Qt 6.11</a></li>
+                            <li><a href="index.html">Qt 6.12</a></li>
                             <li><a href="qtgui-index.html">Qt GUI</a></li>
                             <li><a>XCB-XInput</a></li>
                         </ul>
@@ -163,11 +167,11 @@
 <p>Used in XCB platform plugin if xcb-xinput was not present on the system during Qt configuration or -bundled-xcb-xinput switch was used. To force using xcb-xinput from the system, pass -no-bundled-xcb-xinput.</p>
 <p>The sources can be found in qtbase/src/3rdparty/xcb.</p>
 <p><a href="https://xcb.freedesktop.org/">Project Homepage</a></p>
-<div class="pre"><pre class="cpp plain" translate="no">Copyright (C) 2001-2006 Bart Massey, Jamey Sharp, and Josh Triplett.
+<div class="pre"><pre class="cpp plain" translate="no"><code class="text">Copyright (C) 2001-2006 Bart Massey, Jamey Sharp, and Josh Triplett.
 Copyright (C) 2006 Peter Hutterer
-Copyright (C) 2013 Daniel Martin</pre></div>
+Copyright (C) 2013 Daniel Martin</code></pre></div>
 <p><a href="https://spdx.org/licenses/MIT.html">MIT License</a>.</p>
-<div class="pre"><pre class="cpp plain" translate="no">Permission is hereby granted, free of charge, to any person
+<div class="pre"><pre class="cpp plain" translate="no"><code class="text">Permission is hereby granted, free of charge, to any person
 obtaining a copy of this software and associated documentation
 files (the "Software"), to deal in the Software without
 restriction, including without limitation the rights to use, copy,
@@ -189,7 +193,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 Except as contained in this notice, the names of the authors or
 their institutions shall not be used in advertising or otherwise to
 promote the sale, use or other dealings in this Software without
-prior written authorization from the authors.</pre></div>
+prior written authorization from the authors.</code></pre></div>
 </div>
 <!-- @@@qtgui-attribution-xcb-xinput.html -->
 </div>

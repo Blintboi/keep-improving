@@ -13,6 +13,7 @@ class TrayTests(unittest.TestCase):
     def setUp(self):
         from gametime import win32
         self.native = win32
+        self.shell=patch.object(win32.s,'Shell_NotifyIconW',return_value=True); self.notify=self.shell.start(); self.addCleanup(self.shell.stop)
 
     def test_version4_events_only_open_or_request_menu_and_ignore_hover(self):
         opened, menus = [], []
@@ -48,6 +49,47 @@ class TrayTests(unittest.TestCase):
         tray._message(tray.window, 0x8001, 1, 0x205)
         tray.dispatch_pending()
         self.assertEqual((len(opened), len(menus)), (1, 1))
+
+    def test_profile_guid_survives_restarts_and_distinguishes_other_profiles(self):
+        with tempfile.TemporaryDirectory() as folder:
+            def identity(value):
+                tray=self.native.Tray(lambda:None,lambda:None,lambda:None,identity=value)
+                try:
+                    self.assertTrue(tray.data.uFlags & 0x20)
+                    return bytes(tray.data.guidItem),tray.window
+                finally: tray.close()
+            first,_=identity(folder); second,_=identity(folder.upper()); other,_=identity(str(Path(folder)/'other'))
+            self.assertEqual(first,second); self.assertNotEqual(first,other); self.assertNotEqual(first,b'\0'*16)
+            with patch('gametime.win32.sys.executable','C:/isolated/another-copy/GameTimeMonitor.exe'):
+                moved,_=identity(folder)
+            self.assertNotEqual(first,moved)
+
+    def test_tooltip_updates_never_replace_readd_or_delete_the_icon(self):
+        tray=self.native.Tray(lambda:None,lambda:None,lambda:None,identity='C:/isolated/tray')
+        self.addCleanup(tray.close); guid=bytes(tray.data.guidItem); calls=[]
+        def notification(operation,pointer):
+            data=pointer._obj; calls.append((operation,data.uFlags,bytes(data.guidItem),data.szTip)); return True
+        with patch.object(self.native.s,'Shell_NotifyIconW',side_effect=notification):
+            for second in range(120): tray.update('Playing '+str(second)); tray.update('Playing '+str(second))
+        self.assertEqual(len(calls),120)
+        self.assertTrue(all(operation==1 and flags==0xA4 and identifier==guid for operation,flags,identifier,_ in calls))
+
+    def test_explorer_recovery_reuses_existing_icon_and_same_guid(self):
+        tray=self.native.Tray(lambda:None,lambda:None,lambda:None,identity='C:/isolated/recovery')
+        self.addCleanup(tray.close); guid=bytes(tray.data.guidItem); tray.update('Most recent budget')
+        with patch.object(self.native.s,'Shell_NotifyIconW',return_value=True) as notify:
+            tray._message(tray.window,tray.taskbar_created,0,0)
+            self.assertEqual([call.args[0] for call in notify.call_args_list],[1,4])
+        with patch.object(self.native.s,'Shell_NotifyIconW',side_effect=[False,True,True]) as notify:
+            tray._message(tray.window,tray.taskbar_created,0,0)
+            self.assertEqual([call.args[0] for call in notify.call_args_list],[1,0,4])
+        self.assertEqual(bytes(tray.data.guidItem),guid); self.assertEqual(tray.data.szTip,'Most recent budget')
+        self.assertTrue(tray.available)
+
+    def test_closed_tray_never_reappears_from_late_updates_or_shell_messages(self):
+        tray=self.native.Tray(lambda:None,lambda:None,lambda:None); tray.close(); self.notify.reset_mock()
+        tray.update('Late tick'); tray._message(tray.window,tray.taskbar_created,0,0); tray.close()
+        self.notify.assert_not_called()
 
     def test_native_context_menu_cancels_without_running_any_command(self):
         tray = self.native.Tray(lambda: None, lambda: None, lambda: None)

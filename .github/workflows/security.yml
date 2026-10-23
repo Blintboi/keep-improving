@@ -1,0 +1,29 @@
+name: Secret exposure checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  secrets:
+    runs-on: windows-2025
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.13.16'
+          architecture: x64
+      - name: Scan complete history and current source
+        shell: powershell
+        run: |
+          . packaging/secret_scanner.ps1
+          $scanner = Get-GameTimeSecretScanner (Join-Path $env:RUNNER_TEMP 'gtm-secret-scanner')
+          & $scanner git . --log-opts='--all --full-history' --redact=100 --ignore-gitleaks-allow --no-banner --no-color
+          if ($LASTEXITCODE -ne 0) { throw 'Git history secret scan failed.' }
+          python -B packaging/audit_payload.py --source . --gitleaks $scanner --report build/source-secrets-audit.json
+          if ($LASTEXITCODE -ne 0) { throw 'Current source secret scan failed.' }

@@ -1,5 +1,5 @@
 """Local daily bedtime schedule. No additional resident process or timer."""
-from datetime import timedelta
+from .schedule import bedtime_occurrence
 
 
 def clock_text(minute):
@@ -8,13 +8,8 @@ def clock_text(minute):
 
 def phase(settings, wall):
     """Return phase and the reminder's date, including windows across midnight."""
-    minute = wall.hour*60+wall.minute
-    elapsed = (minute-settings.bedtime_warning_minute) % 1440
-    warning = (settings.bedtime_minute-settings.bedtime_warning_minute) % 1440
-    end = warning+(settings.bedtime_resume_minute-settings.bedtime_minute) % 1440
-    day = wall.date()-timedelta(days=minute < settings.bedtime_warning_minute)
-    return ('off' if not settings.bedtime_enabled or elapsed >= end else
-            'warning' if elapsed < warning else 'bedtime'), day.isoformat()
+    state,day,plan=bedtime_occurrence(settings,wall)
+    return state,day
 
 
 class Bedtime:
@@ -27,7 +22,7 @@ class Bedtime:
         self.warning_suppressed = False
 
     def update(self, settings, current, popup_available=True):
-        state, day = phase(settings, current.wall)
+        state,day,settings=bedtime_occurrence(settings,current.wall)
         schedule = (settings.bedtime_enabled, settings.bedtime_warning_minute,
                     settings.bedtime_minute, settings.bedtime_resume_minute, settings.bedtime_minimize)
         ledger = (day, schedule)
@@ -53,6 +48,7 @@ class Bedtime:
                    and current.wall.hour*60+current.wall.minute == settings.bedtime_warning_minute
                    and not self.warning_suppressed and key not in self.keys)
         active = state == 'bedtime' and settings.bedtime_minimize
+        self.active=active
         minimize = False
         if not active or not current.interactive:
             self.next_minimize = None

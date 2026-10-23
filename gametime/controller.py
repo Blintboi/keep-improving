@@ -2,17 +2,50 @@
 from dataclasses import replace
 from datetime import datetime
 import logging
+import math
 import os
+import time
 from pathlib import Path
 from queue import Empty
 from .model import norm, LAUNCHER_SOURCES, popup_required
 from .tracker import Alert
+from .notification_text import notification_text
+from .schedule import day_settings,game_settings
 from . import win32
+from .game_safety import policy as safety
+from .background import DISCOVERY_PROBLEM, HUB_PROBLEM
+from .budget import remaining_budget
 
 log=logging.getLogger(__name__)
 
 class MonitorActions:
     RESTRICTION_GRACE_SECONDS = 10
+
+    def notification_mode(self):
+        """Keep protected fullscreen games free of focus/render transitions."""
+        try:
+            current=win32.sample()
+            if not current.interactive: return 'defer'
+            if safety.reason(current.path,self.catalog.resolve(current.path)):
+                return 'passive' if win32.desktop_overlay_available() else 'audio'
+            return 'normal'
+        except Exception:
+            log.exception('Notification context unavailable; visual notification deferred')
+            return 'defer'
+
+    def audio_notification(self,alert):
+        from .sound import play_notification
+        if self.settings.notification_sound=='silent': return False
+        now=time.monotonic(); prior=getattr(self,'_audio_retry',None)
+        if prior and prior[0]==alert and now-prior[1]<30: return False
+        self._audio_retry=(alert,now)
+        return play_notification(self.settings)
+
+    def minimization_allowed(self,path,identity=None):
+        game=self.catalog.resolve(path)
+        if not safety.reason(path,game): return True
+        consent=getattr(self,'minimize_consents',None)
+        return bool(consent and consent.allows(game) and not consent.reason(path,game))
 
     def render_tick(self):
         self.render()
@@ -27,7 +60,22 @@ class MonitorActions:
         while not self.hub.results.empty():
             result = self.hub.results.get_nowait()
             if result.get("error"):
-                self.set_status("Gaming Hub: " + result["error"])
+                log.warning("Gaming Hub background update failed: %s", result["error"])
+                self.background_problem("hub", HUB_PROBLEM, bool(result.get("persistent")))
+            else:
+                self.background_problem("hub", HUB_PROBLEM, False)
+
+    def background_problem(self, source, message, failed):
+        problems = getattr(self, "_background_problems", {})
+        self._background_problems = problems
+        if failed:
+            if source not in problems:
+                problems[source] = message
+                self.set_status(message)
+        elif source in problems:
+            del problems[source]
+            if self.status_key == message:
+                self.set_status(next(iter(problems.values()), ""))
 
     def poll_tray(self):
         self.tray_timer = None
@@ -108,7 +156,12 @@ class MonitorActions:
         items = [(1, "Open Game Time Monitor"), (2, "Open Gaming Hub"),
                                        (3, "Settings"), (4, "Refresh games and hub"),
                                        None, (5, "Exit monitor")]
+        updates=getattr(self,'updates',None)
+        if updates:
+            items.insert(3,(6,self.t('Update {version} available',version=updates.available.version) if updates.available else 'Check for updates'))
         choice = self.tray.popup_menu([(item[0], self.t(item[1])) if item else None for item in items])
+        if choice==6 and updates:
+            updates.open(); return
         action = {1: self.show, 2: self.open_games, 3: self.settings_dialog,
                   4: self.refresh_sources, 5: self.close}.get(choice)
         if action:
@@ -118,6 +171,10 @@ class MonitorActions:
     def refresh_sources(self):
         self.devices_changed()
         self.hub_fingerprint = None
+
+    def catalog_changed(self):
+        refresh=getattr(self,'refresh_game_dialogs',None)
+        if refresh: refresh()
 
 
     def refresh_manual_availability(self):
@@ -135,6 +192,7 @@ class MonitorActions:
             self.tracker.flush()
             self.store.upsert(changed)
             self.last_rows = None
+            self.catalog_changed()
         self.service.watch_manual(games, self.catalog.rules)
 
 
@@ -173,25 +231,27 @@ class MonitorActions:
         self.tracker.flush()
         self.catalog.rules = self.store.rules()
         self.refresh_manual_availability()
+        self.catalog_changed()
         self.tracker.unclassified.clear()
         self.tracker.previous = None
 
 
     def test_popup(self):
         self.popup(Alert(datetime.now().date().isoformat(), (), "limit",
-                         self.t("Test: Your daily game time limit has been reached. Time to finish playing."), self.t("OK, I’ll stop")))
+                         notification_text(self.settings,'limit',test=True), self.t("OK, I’ll stop")))
 
 
     def consume_silent_alert(self, alert):
         # A color warning replaces a popup only with a healthy renderer for this
         # foreground game. A topmost desktop HWND can be hidden by fullscreen.
-        required = popup_required(self.settings, alert.kind)
+        settings=game_settings(self.settings,self.tracker.active.id) if self.tracker.active else self.settings
+        required = popup_required(settings, alert.kind)
         if alert.kind == "warning" and not required:
             try:
                 required = not self.overlay_warning_visible()
             except (AttributeError, OSError, RuntimeError):
                 required = True
-        if self.restriction_reached(alert.day):
+        if self.restriction_reached(alert.day) and not getattr(self,'_restriction_reminder_only',False):
             required = False  # The persistent restriction notice replaces queued reminders.
         if required:
             return False
@@ -212,7 +272,8 @@ class MonitorActions:
             self.escape_attempts.add(alert)
             try:
                 current = win32.sample()
-                if self.catalog.resolve(current.path) and current.interactive and current.identity == self.tracker.identity:
+                game=self.catalog.resolve(current.path)
+                if game and not safety.reason(current.path,game) and current.interactive and current.identity == self.tracker.identity:
                     escaped = win32.escape_game(current.path, current.identity)
             except Exception:
                 log.exception("Escape before notification failed")
@@ -253,8 +314,8 @@ class MonitorActions:
                 self.refresh_manual_availability()
             elif kind == "shortcuts":
                 self.hub_fingerprint = None
-            elif kind == "status":
-                self.set_status(result[1])
+            elif kind == "discovery_problem":
+                self.background_problem("discovery", DISCOVERY_PROBLEM, result[1])
             elif kind == "launchers":
                 from .discovery import preserve_unreadable
                 _, games, libraries, hints, errors, ubisoft_roots, riot_hints = result
@@ -265,15 +326,19 @@ class MonitorActions:
                 self.tracker.reconcile(games, lambda g: g.source in LAUNCHER_SOURCES)
                 self.refresh_manual_availability()
                 self.last_rows = None
+                self.catalog_changed()
+                if self.status_key == "Discovering games…":
+                    self.set_status("")
             elif kind == "games":
                 _, games, group = result
                 self.tracker.reconcile(games, lambda g, p=group: g.source == "Games" and (not p or norm(g.root) == norm(p)))
                 self.last_rows = None
+                self.catalog_changed()
 
 
     def restriction_reached(self, day=None):
-        return (self.settings.restriction_enabled and
-                sum(self.tracker.totals(day or datetime.now().date()).values()) >= self.settings.restriction_seconds)
+        day=day or datetime.now().date(); settings=day_settings(self.settings,day)
+        return settings.restriction_enabled and sum(self.tracker.totals(day).values())>=settings.restriction_seconds
 
     def launch_restricted(self, game):
         return self.catalog.enabled(game) and self.restriction_reached()
@@ -281,9 +346,10 @@ class MonitorActions:
     def restriction_notice(self):
         self.open_games()
         self.set_status("Today's {minutes:g}-minute play restriction is active. Change it in Settings.",
-                        minutes=self.settings.restriction_seconds/60)
+                        minutes=day_settings(self.settings).restriction_seconds/60)
 
     def enforce_gameplay(self, current):
+        self._restriction_reminder_only=False
         if not self.restriction_reached(current.wall.date()) or not current.interactive:
             self._restriction_grace = None
             return False
@@ -291,6 +357,10 @@ class MonitorActions:
         if not game or not current.identity or current.identity != self.tracker.identity:
             self._restriction_grace = None
             return False
+        if not self.minimization_allowed(current.path,current.identity):
+            self._restriction_grace=None
+            self._restriction_reminder_only=True
+            return False  # Keep ordinary reminders; do not interrupt this match.
         if getattr(self, "restriction_timer", None) is not None:
             return True
         key = (current.wall.date().isoformat(), current.identity)
@@ -313,7 +383,7 @@ class MonitorActions:
         if key not in self._restriction_escaped:
             self._restriction_escaped.add(key)
             try:
-                win32.escape_game(current.path, current.identity)
+                if not safety.reason(current.path,game): win32.escape_game(current.path, current.identity)
             except Exception:
                 log.exception("Escape before play restriction failed; minimization will still be attempted")
         # Give the guarded Escape time to reach the game before changing focus.
@@ -331,7 +401,10 @@ class MonitorActions:
             if (not current.interactive or current.identity != identity or norm(current.path) != norm(path)
                     or not self.catalog.resolve(current.path)):
                 return
-            if win32.minimize_game(path, identity):
+            if not self.minimization_allowed(path,identity): return
+            consented=bool(safety.reason(path,self.catalog.resolve(path)))
+            minimized=win32.minimize_game(path,identity,consented=True) if consented else win32.minimize_game(path,identity)
+            if minimized:
                 log.info("Play restriction: requested minimization of tracked game %s", self.catalog.resolve(path).id)
                 self.restriction_notice()
             else:
@@ -340,35 +413,41 @@ class MonitorActions:
             log.exception("Play restriction could not minimize the game")
             self.set_status("Could not minimize the game. Close it manually or change Play restriction in Settings.")
 
+    def bedtime_message(self,day,wall=None):
+        settings=day_settings(self.settings,day)
+        remaining=None
+        if '{remaining}' in settings.notification_messages.get('bedtime',''):
+            now=wall or datetime.now().astimezone()
+            total=sum(self.tracker.totals(now.date().isoformat()).values())
+            remaining=math.ceil(remaining_budget(self.settings,now,total).remaining/60)
+        return notification_text(settings,'bedtime',remaining,day=day)
+
     def bedtime_tick(self, current):
-        from .bedtime import Bedtime, clock_text
+        from .bedtime import Bedtime
         if not hasattr(self, 'bedtime'):
             self.bedtime = Bedtime(self.store)
         state, marker, minimize = self.bedtime.update(self.settings, current)
         if marker:
             if self.popup_window: self.dismiss_popup()
             alert = Alert(str(current.wall.date()), (), 'bedtime',
-                          self.t('It is {time}. Finish what you are doing and get ready for bed at {bedtime}.',
-                                 time=clock_text(self.settings.bedtime_warning_minute), bedtime=clock_text(self.settings.bedtime_minute)),
+                          self.bedtime_message(marker[0],current.wall),
                           self.t('OK, I’ll finish'))
             # Bedtime is independent of game budgets, exclusions and Escape.
             if self.popup(alert): self.bedtime.delivered(marker)
-        active = state == 'bedtime' and self.settings.bedtime_minimize
+        active = self.bedtime.active
         update = getattr(self, 'update_bedtime_banner', None)
         if update: update(active)
         if minimize:
             try:
-                win32.minimize_foreground()
+                win32.minimize_foreground(allow=self.minimization_allowed)
             except Exception:
                 log.exception('Bedtime could not minimize the foreground window')
                 self.set_status('Could not minimize the window. Change Bedtime reminder in Settings.')
         return active
 
     def test_bedtime_popup(self):
-        from .bedtime import clock_text
         self.popup(Alert(str(datetime.now().date()), (), 'bedtime',
-                   self.t('It is {time}. Finish what you are doing and get ready for bed at {bedtime}.',
-                          time=clock_text(self.settings.bedtime_warning_minute), bedtime=clock_text(self.settings.bedtime_minute)),
+                   self.bedtime_message(datetime.now().date().isoformat()),
                    self.t('OK, I’ll finish')))
 
     def tick(self):

@@ -303,7 +303,7 @@ class HubNativeTests(unittest.TestCase):
         from gametime.service import DiscoveryService
         from gametime.store import Store
         from gametime.ui import App
-        with tempfile.TemporaryDirectory() as temp, patch("gametime.hub.shortcut_locations", return_value=[]):
+        with tempfile.TemporaryDirectory() as temp, patch("gametime.hub.shortcut_locations", return_value=[]), patch('gametime.win32.s.Shell_NotifyIconW',return_value=True):
             base = Path(temp)
             games = base / "Gaming Hub"
             steam = base / "Steam"

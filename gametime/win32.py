@@ -8,7 +8,9 @@ import os
 from pathlib import Path
 from queue import Empty, SimpleQueue
 import struct
+import sys
 import threading
+import uuid
 from .tracker import Sample
 
 log = logging.getLogger(__name__)
@@ -48,6 +50,9 @@ api(u, "GetShellWindow", [], W.HWND)
 api(u, "GetDesktopWindow", [], W.HWND)
 api(u, "GetClassNameW", [W.HWND, W.LPWSTR, C.c_int], C.c_int)
 api(u, "ShowWindowAsync", [W.HWND, C.c_int], W.BOOL)
+_long_suffix='LongPtrW' if C.sizeof(C.c_void_p)==8 else 'LongW'
+get_window_long=api(u,'GetWindow'+_long_suffix,[W.HWND,C.c_int],C.c_ssize_t)
+set_window_long=api(u,'SetWindow'+_long_suffix,[W.HWND,C.c_int,C.c_ssize_t],C.c_ssize_t)
 api(u, "GetAsyncKeyState", [C.c_int], W.SHORT)
 api(s, "SHQueryUserNotificationState", [C.POINTER(C.c_int)], C.c_long)
 
@@ -89,7 +94,8 @@ api(u, "SendInput", [W.UINT, C.POINTER(INPUT), C.c_int], W.UINT)
 
 def escape_game(expected_path, expected_identity):
     """One Escape press, only while the sampled game still owns the foreground."""
-    if not expected_identity or not interactive_desktop():
+    from .game_safety import policy as safety
+    if safety.reason(expected_path) or not expected_identity or not interactive_desktop():
         return False
     hwnd = u.GetForegroundWindow()
     pid = W.DWORD()
@@ -111,13 +117,14 @@ def escape_game(expected_path, expected_identity):
     return sent == 2
 
 
-def minimize_game(expected_path, expected_identity):
+def minimize_game(expected_path, expected_identity,*,consented=False):
     """Minimize only the exact game that still owns the interactive foreground.
 
     No process termination/suspension or global key/mouse blocking is used.
     This is deliberately asynchronous: a hung game must not hang the monitor.
     """
-    if not expected_identity or not interactive_desktop():
+    from .game_safety import policy as safety
+    if safety.overlay_reason(expected_path,consented=consented) or not expected_identity or not interactive_desktop():
         return False
     hwnd = u.GetForegroundWindow()
     pid = W.DWORD()
@@ -130,7 +137,7 @@ def minimize_game(expected_path, expected_identity):
     return bool(u.ShowWindowAsync(hwnd, 6))  # SW_MINIMIZE
 
 
-def minimize_foreground():
+def minimize_foreground(*,allow=None):
     """Bedtime: minimize the current application, with no injected keys."""
     if not interactive_desktop(): return False
     hwnd = u.GetForegroundWindow()
@@ -142,15 +149,28 @@ def minimize_foreground():
     if name.value in ('Shell_TrayWnd', 'Shell_SecondaryTrayWnd', 'Progman', 'WorkerW'): return False
     path, identity = process_image(pid.value)
     if not path or not identity or u.GetForegroundWindow() != hwnd: return False
+    if allow is not None:
+        if not allow(path,identity): return False
+        return minimize_game(path,identity,consented=True)
     return minimize_game(path, identity)
 
 
-def present_notification(hwnd):
+def nonactivating_window(hwnd):
+    C.set_last_error(0)
+    prior=get_window_long(hwnd,-20)
+    if not prior and C.get_last_error(): raise C.WinError(C.get_last_error())
+    C.set_last_error(0)
+    previous=set_window_long(hwnd,-20,prior|0x08000000)  # WS_EX_NOACTIVATE
+    if not previous and C.get_last_error(): raise C.WinError(C.get_last_error())
+
+
+def present_notification(hwnd,*,activate=True):
     # Show in the topmost group even when Windows refuses foreground focus.
     # NOMOVE | NOSIZE | NOACTIVATE | SHOWWINDOW | NOOWNERZORDER
+    if not activate: nonactivating_window(hwnd)
     if not u.SetWindowPos(hwnd, W.HWND(-1), 0, 0, 0, 0, 0x253):
         raise C.WinError(C.get_last_error())
-    return bool(u.SetForegroundWindow(hwnd))
+    return bool(u.SetForegroundWindow(hwnd)) if activate else False
 
 
 def awake_seconds():
@@ -187,6 +207,41 @@ def process_image(pid):
         return text.value, f"{pid}:{created}"
     finally:
         k.CloseHandle(handle)
+
+
+class PROCESSENTRY32(C.Structure):
+    _fields_ = [('size',W.DWORD),('usage',W.DWORD),('pid',W.DWORD),('heap',C.c_size_t),
+                ('module',W.DWORD),('threads',W.DWORD),('parent',W.DWORD),
+                ('priority',W.LONG),('flags',W.DWORD),('executable',W.WCHAR*260)]
+
+
+api(k,'CreateToolhelp32Snapshot',[W.DWORD,W.DWORD],W.HANDLE)
+api(k,'Process32FirstW',[W.HANDLE,C.POINTER(PROCESSENTRY32)],W.BOOL)
+api(k,'Process32NextW',[W.HANDLE,C.POINTER(PROCESSENTRY32)],W.BOOL)
+api(k,'ProcessIdToSessionId',[W.DWORD,C.POINTER(W.DWORD)],W.BOOL)
+
+
+def process_running(executable):
+    """Exact executable in this session; None means inspection was unavailable."""
+    expected=os.path.normcase(os.path.abspath(executable)); name=Path(executable).name.casefold()
+    session=W.DWORD()
+    if not k.ProcessIdToSessionId(os.getpid(),C.byref(session)): return None
+    snapshot=k.CreateToolhelp32Snapshot(2,0)  # TH32CS_SNAPPROCESS
+    if not snapshot or snapshot==C.c_void_p(-1).value: return None
+    try:
+        entry=PROCESSENTRY32(); entry.size=C.sizeof(entry)
+        more=k.Process32FirstW(snapshot,C.byref(entry))
+        while more:
+            if entry.executable.casefold()==name:
+                other=W.DWORD()
+                if not k.ProcessIdToSessionId(entry.pid,C.byref(other)): return None
+                if other.value==session.value:
+                    path,_=process_image(entry.pid)
+                    if not path: return None
+                    if os.path.normcase(os.path.abspath(path))==expected: return True
+            more=k.Process32NextW(snapshot,C.byref(entry))
+        return False if C.get_last_error()==18 else None  # ERROR_NO_MORE_FILES
+    finally: k.CloseHandle(snapshot)
 
 
 def sample():
@@ -407,8 +462,8 @@ api(s, "Shell_NotifyIconW", [W.DWORD, C.POINTER(NOTIFYICONDATA)], W.BOOL)
 
 
 class Tray:
-    """Queue Win32 notifications; dispatch UI callbacks from a Tk timer only."""
-    def __init__(self, on_open, on_menu, on_devices):
+    """One profile-stable shell icon; UI callbacks stay on the UI timer."""
+    def __init__(self, on_open, on_menu, on_devices, identity=None):
         self.on_open, self.on_menu, self.on_devices = on_open, on_menu, on_devices
         self.events = SimpleQueue()
         self.closed = False
@@ -429,18 +484,24 @@ class Tray:
                                         None, None, self.module, None)
         if not self.window:
             raise C.WinError(C.get_last_error())
+        # Windows binds an icon GUID to its executable location. A moved or
+        # side-by-side copy needs another GUID; ordinary upgrades keep both.
+        location=os.path.normcase(os.path.abspath(sys.executable))
+        identifier=uuid.uuid5(uuid.NAMESPACE_URL,'GameTimeMonitor:tray:'+location+'|'+os.path.normcase(os.path.abspath(identity))) if identity is not None else uuid.uuid4()
         self.data = NOTIFYICONDATA(cbSize=C.sizeof(NOTIFYICONDATA), hWnd=self.window, uID=1,
-                                   uFlags=7 | 0x80, uCallbackMessage=0x8001, hIcon=self.icon)
+                                   uFlags=7 | 0x80 | 0x20, uCallbackMessage=0x8001, hIcon=self.icon,
+                                   guidItem=GUID.from_buffer_copy(identifier.bytes_le))
         self.data.szTip = "Game Time Monitor – click to open"
         self._add()
 
-    def _add(self):
-        self.available = bool(s.Shell_NotifyIconW(0, C.byref(self.data)))
+    def _add(self,restore=False):
+        self.available = bool(restore and s.Shell_NotifyIconW(1,C.byref(self.data)))
+        if not self.available: self.available=bool(s.Shell_NotifyIconW(0,C.byref(self.data)))
         self._last_tip = self.data.szTip if self.available else None
         if not self.available:
             log.warning("Tray icon unavailable; main window remains accessible.")
         self.data.uVersion = 4
-        self.version4 = bool(s.Shell_NotifyIconW(4, C.byref(self.data)))
+        self.version4 = bool(self.available and s.Shell_NotifyIconW(4, C.byref(self.data)))
 
     def popup_menu(self, items):
         """Native context menu; only an explicit returned command can quit."""
@@ -486,8 +547,8 @@ class Tray:
                                           if self.version4 else None)
                     self.events.put("menu")
                 return 0
-            if msg == self.taskbar_created and hasattr(self, "data"):
-                self._add()
+            if msg == self.taskbar_created and hasattr(self, "data") and not self.closed:
+                self._add(restore=True)
             if msg == 0x219:
                 self.events.put("devices")
         except Exception:
@@ -506,9 +567,16 @@ class Tray:
             {"open": self.on_open, "menu": self.on_menu, "devices": self.on_devices}[event]()
 
     def update(self, text):
+        if self.closed: return
         text = text[:127]
         self.data.szTip = text
-        if self._last_tip != text and s.Shell_NotifyIconW(1, C.byref(self.data)):
+        if self._last_tip==text: return
+        # Only the tooltip changes. Re-sending NIF_ICON on every accounting tick
+        # unnecessarily asks Explorer to replace/repaint the notification icon.
+        tip=NOTIFYICONDATA(cbSize=C.sizeof(NOTIFYICONDATA),hWnd=self.window,uID=self.data.uID,
+                           uFlags=0x20|0x04|0x80,guidItem=self.data.guidItem)
+        tip.szTip=text
+        if s.Shell_NotifyIconW(1, C.byref(tip)):
             self._last_tip = text
 
     def close(self):

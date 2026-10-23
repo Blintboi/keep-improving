@@ -116,12 +116,24 @@ def main():
             from gametime import __version__
             from gametime.win32 import sample
             current = sample()
+            from gametime.overlay_consent import Consents,MinimizeConsents
             report({"version": __version__, "python": sys.version, "data": str(args.data_dir),
                               "interactive": current.interactive, "foreground_readable": bool(current.path),
                               "installed_games": len(store.games(True)),
                               "games_root": store.settings().games_root, "hub_enabled": store.settings().hub_enabled,
                               "language": store.settings().language,
                               "overlay_enabled": store.settings().overlay_enabled,
+                              "overlay_rtss_auto": store.settings().overlay_rtss_auto,
+                              "overlay_risk_consent_count": len(Consents(store).accepted),
+                              "minimize_risk_consent_count": len(MinimizeConsents(store).accepted),
+                              "overlay_font_size": store.settings().overlay_font_size,
+                              "overlay_color_normal": store.settings().overlay_color_normal,
+                              "overlay_color_warning": store.settings().overlay_color_warning,
+                              "custom_message_count": sum(bool(value.strip()) for value in store.settings().notification_messages.values()),
+                              "notification_sound": store.settings().notification_sound,
+                              "weekend_enabled": store.settings().weekend_enabled,
+                              "scheduled_day_count": len(store.settings().daily_schedules),
+                              "game_countdown_count": len(store.settings().game_overlays),
                               "overlay_replace_warning": store.settings().overlay_replace_warning,
                               "limit_popup_enabled": store.settings().limit_popup_enabled,
                               "restriction_enabled": store.settings().restriction_enabled,
@@ -131,6 +143,8 @@ def main():
                               "bedtime_minute": store.settings().bedtime_minute,
                               "bedtime_resume_minute": store.settings().bedtime_resume_minute,
                               "bedtime_minimize": store.settings().bedtime_minimize,
+                              "bedtime_caps_budget": store.settings().bedtime_caps_budget,
+                              "check_updates": store.settings().check_updates,
                               "tracking_started_on": store.tracking_started_on(),
                               "today_seconds": sum(store.totals(datetime.now().date()).values())})
         if args.configure or args.scan_once or args.diagnose or args.sync_hub:

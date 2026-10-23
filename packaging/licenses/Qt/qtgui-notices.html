@@ -3,8 +3,7 @@
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Qt GUI | Qt 6.11.2</title>
-<link rel="canonical" href="https://doc.qt.io/qt-6/qtgui-index.html" />
+  <title>Qt GUI | Qt 6.12.0</title>
   <link rel="stylesheet" type="text/css" href="/style/online2.css" />
   <link rel="stylesheet" href="https://www.qt.io/hubfs/qt-design-system/qt-design-system-1.1.0.css" />
   <link rel="stylesheet" type="text/css" href="/style/font-awesome.min.css" />
@@ -119,11 +118,16 @@
             <div class="b-sidebar__sidebar__mobile-close"><div class="c-mobile-close"></div></div>
             <div class="b-sidebar__sidebar__mobile-toggle" data-mobile-title="Topics"></div>
                         <div class="b-sidebar__sidebar__content">
-                <div data-margin-bottom="md">
+                <div data-margin-bottom="sm">
                                         <select id="qds-vdropdown" class="c-form-select c-form-select--dark js-versioncontrol" style="visibility:hidden">
                                             </select>
                                     </div>
-                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
+                                <div id="qds-filter-container" data-margin-bottom="sm" style="display:none">
+                    <label for="qds-filter-sl">Filter topics</label>
+                    <select id="qds-filter-sl" class="c-form-select c-form-select--dark"></select>
+                    <div id="qds-filter-note" style="display:none">Topic not in active filter<button type="button" id="qds-filter-clear">Clear</button></div>
+                </div>
+                                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
                 <nav>
                     <div id="sidebar-toctree"></div>
                     <ul class="c-sidebar-navigation">
@@ -143,7 +147,7 @@
                         </form>
                     </div>                    <div class="b-topbar__breadcrump" translate="no">
                         <ul class="c-breadcrump">
-                            <li><a href="index.html">Qt 6.11</a></li>
+                            <li><a href="index.html">Qt 6.12</a></li>
                             <li><a>Qt GUI</a></li>
                         </ul>
                     </div>
@@ -165,12 +169,12 @@
 <p>Using a Qt module's C++ API requires linking against the module library, either directly or through other dependencies. Several build tools have dedicated support for this, including <a href="https://cmake.org/cmake/help/latest/">CMake</a> and <a href="qmake-manual.html">qmake</a>.</p>
 <h3 id="building-with-cmake">Building with CMake<a class="plink" href="#building-with-cmake" title="Direct link to this headline"></a></h3>
 <p>Use the <code translate="no">find_package()</code> command to locate the needed module component in the <code translate="no">Qt6</code> package:</p>
-<div class="pre"><pre class="cpp prettyprint" translate="no">find_package(Qt6 REQUIRED COMPONENTS Gui)
-target_link_libraries(mytarget PRIVATE Qt6<span class="operator">::</span>Gui)</pre></div>
+<div class="pre"><pre class="cpp prettyprint" translate="no"><code class="cpp">find_package(Qt6 REQUIRED COMPONENTS Gui)
+target_link_libraries(mytarget PRIVATE Qt6<span class="operator">::</span>Gui)</code></pre></div>
 <p>For more details, see the <a href="cmake-manual.html">Build with CMake</a> overview.</p>
 <h3 id="building-with-qmake">Building with qmake<a class="plink" href="#building-with-qmake" title="Direct link to this headline"></a></h3>
 <p>If you use <a href="qmake-manual.html">qmake</a> to build your projects, Qt GUI is included by default. To disable Qt GUI, add the following line to your <code translate="no">.pro</code> file:</p>
-<div class="pre"><pre class="cpp prettyprint" translate="no">QT -= gui</pre></div>
+<div class="pre"><pre class="cpp prettyprint" translate="no"><code class="cpp">QT -= gui</code></pre></div>
 <h2 id="articles-and-guides">Articles and Guides<a class="plink" href="#articles-and-guides" title="Direct link to this headline"></a></h2>
 <ul>
 <li><a href="qtgui-overview.html">Qt GUI Overview</a><ul>
@@ -196,19 +200,19 @@ target_link_libraries(mytarget PRIVATE Qt6<span class="operator">::</span>Gui)</
 <p><a href="gui-changes-qt6.html">Changes to Qt GUI</a> lists important changes in the module API and functionality that were done for the Qt 6 series of Qt.</p>
 <h2 id="licenses-and-attributions">Licenses and Attributions<a class="plink" href="#licenses-and-attributions" title="Direct link to this headline"></a></h2>
 <p>Qt GUI is available under commercial licenses from <a href="https://www.qt.io/about-us/">The Qt Company</a>. In addition, it is available under free software licenses: The <a href="https://www.gnu.org/licenses/lgpl-3.0.html">GNU Lesser General Public License, version 3</a>, or the <a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html">GNU General Public License, version 2</a>. See <a href="licensing.html">Qt Licensing</a> for further details.</p>
-<p>Furthermore, Qt GUI in Qt 6.11.2 may contain third-party modules under following permissive licenses:</p>
+<p>Furthermore, Qt GUI in Qt 6.12.0 may contain third-party modules under following permissive licenses:</p>
 <div class="table"><table class="annotated">
 <tr class="odd topAlign"><td class="tblName" translate="no"><p><a href="qtgui-attribution-aglfn.html">Adobe Glyph List For New Fonts, version 1.7</a></p></td><td class="tblDescr"><p>BSD 3-Clause "New" or "Revised" License</p></td></tr>
 <tr class="even topAlign"><td class="tblName" translate="no"><p><a href="qtgui-attribution-grayraster.html">Anti-aliasing rasterizer from FreeType 2</a></p></td><td class="tblDescr"><p>Freetype Project License or GNU General Public License v2.0 only</p></td></tr>
 <tr class="odd topAlign"><td class="tblName" translate="no"><p><a href="qtgui-attribution-cocoa-platform-plugin.html">Cocoa Platform Plugin</a></p></td><td class="tblDescr"><p>BSD 3-clause "New" or "Revised" License</p></td></tr>
-<tr class="even topAlign"><td class="tblName" translate="no"><p><a href="qtgui-attribution-d3d12memoryallocator.html">D3D12 Memory Allocator, version f128d39b7a95b4235bd228d231646278dc6c24b2</a></p></td><td class="tblDescr"><p>MIT License</p></td></tr>
+<tr class="even topAlign"><td class="tblName" translate="no"><p><a href="qtgui-attribution-d3d12memoryallocator.html">D3D12 Memory Allocator, version v3.1.0</a></p></td><td class="tblDescr"><p>MIT License</p></td></tr>
 <tr class="odd topAlign"><td class="tblName" translate="no"><p><a href="qtgui-attribution-dejayvu.html">DejaVu Fonts, version 2.37</a></p></td><td class="tblDescr"><p>Bitstream Vera Font License</p></td></tr>
 <tr class="even topAlign"><td class="tblName" translate="no"><p><a href="qtgui-attribution-emoji-segmenter.html">Emoji Segmenter, version 0.4.0</a></p></td><td class="tblDescr"><p>Apache License 2.0</p></td></tr>
 <tr class="odd topAlign"><td class="tblName" translate="no"><p><a href="qtgui-attribution-freetype-bdf.html">Freetype 2 - Bitmap Distribution Format (BDF) support</a></p></td><td class="tblDescr"><p>MIT License</p></td></tr>
 <tr class="even topAlign"><td class="tblName" translate="no"><p><a href="qtgui-attribution-freetype-pcf.html">Freetype 2 - Portable Compiled Format (PCF) support</a></p></td><td class="tblDescr"><p>MIT License and MIT Open Group variant</p></td></tr>
 <tr class="odd topAlign"><td class="tblName" translate="no"><p><a href="qtgui-attribution-freetype-zlib.html">Freetype 2 - zlib</a></p></td><td class="tblDescr"><p>zlib License</p></td></tr>
 <tr class="even topAlign"><td class="tblName" translate="no"><p><a href="qtgui-attribution-freetype.html">Freetype 2, version 2.14.3</a></p></td><td class="tblDescr"><p>Freetype Project License or GNU General Public License v2.0 only</p></td></tr>
-<tr class="odd topAlign"><td class="tblName" translate="no"><p><a href="qtgui-attribution-harfbuzz-ng.html">HarfBuzz-NG, version 14.3.0</a></p></td><td class="tblDescr"><p>MIT License</p></td></tr>
+<tr class="odd topAlign"><td class="tblName" translate="no"><p><a href="qtgui-attribution-harfbuzz-ng.html">HarfBuzz-NG, version 14.5.0</a></p></td><td class="tblDescr"><p>MIT License</p></td></tr>
 <tr class="even topAlign"><td class="tblName" translate="no"><p><a href="qtgui-attribution-libjpeg.html">LibJPEG-turbo, version 3.2.0</a></p></td><td class="tblDescr"><p>Independent JPEG Group License and BSD 3-Clause "New" or "Revised" License</p></td></tr>
 <tr class="odd topAlign"><td class="tblName" translate="no"><p><a href="qtgui-attribution-libpng.html">LibPNG, version 1.6.58</a></p></td><td class="tblDescr"><p>libpng License and PNG Reference Library version 2</p></td></tr>
 <tr class="even topAlign"><td class="tblName" translate="no"><p><a href="qtgui-attribution-md4c.html">MD4C, version 0.5.3</a></p></td><td class="tblDescr"><p>MIT License</p></td></tr>
@@ -219,7 +223,7 @@ target_link_libraries(mytarget PRIVATE Qt6<span class="operator">::</span>Gui)</
 <tr class="odd topAlign"><td class="tblName" translate="no"><p><a href="qtgui-attribution-pixman.html">Pixman, version 0.17.12</a></p></td><td class="tblDescr"><p>MIT License</p></td></tr>
 <tr class="even topAlign"><td class="tblName" translate="no"><p><a href="qtgui-attribution-smooth-scaling-algorithm.html">Smooth Scaling Algorithm</a></p></td><td class="tblDescr"><p>BSD 2-clause "Simplified" License and Imlib2 License</p></td></tr>
 <tr class="odd topAlign"><td class="tblName" translate="no"><p><a href="qtgui-attribution-vulkan-xml-spec.html">Vulkan API Registry, version 1.4.308</a></p></td><td class="tblDescr"><p>Apache License 2.0 or MIT License</p></td></tr>
-<tr class="even topAlign"><td class="tblName" translate="no"><p><a href="qtgui-attribution-vulkanmemoryallocator.html">Vulkan Memory Allocator, version 3.2.1</a></p></td><td class="tblDescr"><p>MIT License</p></td></tr>
+<tr class="even topAlign"><td class="tblName" translate="no"><p><a href="qtgui-attribution-vulkanmemoryallocator.html">Vulkan Memory Allocator, version 3.3.0</a></p></td><td class="tblDescr"><p>MIT License</p></td></tr>
 <tr class="odd topAlign"><td class="tblName" translate="no"><p><a href="qtgui-attribution-webgradients.html">WebGradients</a></p></td><td class="tblDescr"><p>MIT License</p></td></tr>
 <tr class="even topAlign"><td class="tblName" translate="no"><p><a href="qtgui-attribution-wintab.html">Wintab API</a></p></td><td class="tblDescr"><p>LCS-Telegraphics License</p></td></tr>
 <tr class="odd topAlign"><td class="tblName" translate="no"><p><a href="qtgui-attribution-xserverhelper.html">X Server helper</a></p></td><td class="tblDescr"><p>X11 License and Historical Permission Notice and Disclaimer</p></td></tr>

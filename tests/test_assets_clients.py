@@ -1,5 +1,6 @@
 """Local artwork and launcher UI regressions; no real client/game execution."""
-from dataclasses import replace
+from dataclasses import asdict,replace
+import json
 from pathlib import Path
 from queue import Queue
 import os
@@ -11,6 +12,7 @@ from unittest.mock import Mock,patch
 import zipfile
 from gametime.clients import Client,ClientWorker,find_clients,start_client
 from gametime.model import Game,Settings
+from gametime.store import Store
 from gametime.artwork import Asset,candidates,decode
 import test_overlay as fixtures
 
@@ -40,6 +42,31 @@ class ClientTests(unittest.TestCase):
             worker=ClientWorker(self.base,bridge); worker.request(Settings())
             clients,warning=worker.results.get(timeout=5); worker.close()
         self.assertEqual(clients,[]); self.assertTrue(warning); self.assertNotEqual(threads[0],threading.get_ident()); self.assertFalse(worker.thread.is_alive())
+    def test_client_cache_survives_restart_without_disk_or_registry_discovery(self):
+        path=self.exe('Steam/steam.exe'); db=self.base/'usage.sqlite3'
+        clients=[Client('steam','Steam',path),Client('xbox','Xbox','Microsoft.GamingApp_8wekyb3d8bbwe!Microsoft.Xbox.App','app')]
+        store=Store(db); self.assertIsNone(store.client_cache()); store.save_client_cache(clients); store.close()
+        Path(path).unlink()  # A remembered path is checked when opened, not by another scan.
+        store=Store(db)
+        try:
+            with patch('gametime.clients.find_clients',side_effect=AssertionError('Unexpected discovery')),patch('pathlib.Path.is_file',side_effect=AssertionError('Unexpected disk check')):
+                self.assertEqual(store.client_cache(),clients)
+            store.save_client_cache([])
+        finally: store.close()
+        store=Store(db)
+        try: self.assertEqual(store.client_cache(),[])
+        finally: store.close()
+    def test_invalid_cache_is_discarded(self):
+        store=Store(self.base/'usage.sqlite3'); self.addCleanup(store.close)
+        valid=asdict(Client('steam','Steam',str(self.base/'steam.exe')))
+        bad_rows=[None,{},[valid,valid],[dict(valid,id='unknown')],[dict(valid,target=r'\\server\steam.exe')],
+                  [dict(valid,target='steam.exe')],[dict(valid,target=str(self.base/'game.exe'))],
+                  [dict(valid,kind='app')],[dict(valid,icon='https://example.invalid/icon.exe')],[dict(valid,name=[])]]
+        values=['broken',json.dumps({'version':2,'clients':[]})]+[json.dumps({'version':1,'clients':rows}) for rows in bad_rows]
+        for value in values:
+            with self.subTest(value=value):
+                with store.db: store.db.execute("INSERT OR REPLACE INTO settings VALUES ('launcher_clients',?)",(value,))
+                self.assertIsNone(store.client_cache())
 
 @unittest.skipUnless(os.name=='nt','Windows Qt interface required')
 class AssetClientInterfaceTests(unittest.TestCase):
@@ -57,6 +84,42 @@ class AssetClientInterfaceTests(unittest.TestCase):
         while self.app.art.pending and time.monotonic()<deadline:
             self.app.poll_assets(); self.pump(.02)
         self.assertFalse(self.app.art.pending)
+    def test_cached_clients_load_only_on_first_visit_without_a_worker(self):
+        client=Client('steam','Steam',str(self.base/'steam.exe')); self.store.save_client_cache([client])
+        with patch.object(self.store,'client_cache',wraps=self.store.client_cache) as load,patch('gametime.clients.ClientWorker') as worker:
+            self.app.poll_assets(); load.assert_not_called()
+            self.app.switch_page(3); self.assertEqual(self.app.clients,[client]); load.assert_called_once()
+            self.app.switch_page(0); self.app.switch_page(3); self.app.set_language('en')
+            with patch('gametime.qt_ui.time.monotonic',return_value=time.monotonic()+120): self.app.poll_assets()
+            worker.assert_not_called(); self.assertEqual(load.call_count,1)
+            self.assertIn('steam',self.app.client_buttons)
+    def test_unchanged_clients_and_language_keep_cards_and_shell_icons(self):
+        clients=[Client('steam','Steam',str(self.base/'steam.exe')),Client('riot','Riot Client',str(self.base/'RiotClientServices.exe'))]
+        self.app.clients=clients; self.app.render_clients(); cards=dict(self.app.client_cards); buttons=dict(self.app.client_buttons)
+        with patch.object(self.app.art.provider,'icon',wraps=self.app.art.provider.icon) as icons:
+            self.app.render_clients(); self.app.set_language('en'); self.app.render_clients()
+            icons.assert_not_called(); self.assertEqual(self.app.client_cards,cards); self.assertEqual(self.app.client_buttons,buttons)
+            self.assertEqual(buttons['steam'].text(),'Open'); self.assertEqual(buttons['riot'].accessibleName(),'Open Riot Client')
+            changed=replace(clients[1],target=str(self.base/'moved/RiotClientServices.exe'))
+            self.app.clients=[clients[0],changed]; self.app.render_clients(); self.assertEqual(icons.call_count,1)
+            self.assertIs(self.app.client_buttons['steam'],buttons['steam'])
+        with patch('gametime.clients.start_client') as start:
+            self.app.client_buttons['riot'].click(); start.assert_called_once_with(changed)
+    def test_initial_search_is_remembered_and_only_explicit_refresh_searches_again(self):
+        worker=Mock(); worker.results=Queue()
+        with patch('gametime.clients.ClientWorker',return_value=worker):
+            self.app.switch_page(3); worker.request.assert_called_once()
+            self.app.switch_page(0); self.app.switch_page(3); self.assertEqual(worker.request.call_count,1)
+            worker.results.put(([],'')); self.app.poll_assets(); self.assertEqual(self.store.client_cache(),[])
+            self.app.switch_page(0); self.app.switch_page(3)
+            with patch('gametime.qt_ui.time.monotonic',return_value=time.monotonic()+120): self.app.poll_assets()
+            self.assertEqual(worker.request.call_count,1)
+            self.app.clients_refresh.click(); self.assertEqual(worker.request.call_count,2)
+            client=Client('steam','Steam',str(self.base/'steam.exe')); worker.results.put(([client],'')); self.app.poll_assets()
+            self.assertEqual(self.store.client_cache(),[client])
+            self.app.refresh_clients(); worker.results.put((None,'Could not refresh launchers. Try again.')); self.app.poll_assets()
+            self.assertEqual(self.app.clients,[client]); self.assertEqual(self.store.client_cache(),[client])
+            self.assertTrue(self.app.clients_status.text())
     def test_launcher_page_is_separate_translated_and_available_while_restricted(self):
         class Worker:
             def __init__(me): me.results=Queue(); me.requests=[]

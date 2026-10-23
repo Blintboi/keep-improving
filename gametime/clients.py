@@ -20,11 +20,32 @@ class Client:
     kind:str='executable'
     icon:str=''
 
+def decode_client_cache(value):
+    """Read remembered launchers without searching the disk or registry."""
+    if not isinstance(value,dict) or value.get('version')!=1: raise ValueError('Invalid launcher cache')
+    rows=value.get('clients')
+    if not isinstance(rows,list) or len(rows)>len(CLIENTS): raise ValueError('Invalid launcher cache')
+    clients=[]; seen=set()
+    for row in rows:
+        client=Client(**row)
+        if (not all(isinstance(field,str) for field in asdict(client).values())
+                or client.id not in CLIENTS or client.id in seen): raise ValueError('Invalid launcher cache')
+        if client.kind=='app':
+            from .platforms import AUMID
+            valid=client.id=='xbox' and AUMID.fullmatch(client.target)
+        else:
+            valid=(client.kind=='executable' and executable_path(client.target)
+                   and ntpath.basename(client.target).lower() in CLIENTS[client.id][1])
+        if not valid or (client.icon and not executable_path(client.icon)): raise ValueError('Invalid launcher cache')
+        clients.append(Client(client.id,CLIENTS[client.id][0],client.target,client.kind,client.icon)); seen.add(client.id)
+    return sorted(clients,key=lambda client:client.name.casefold())
+
+def executable_path(value):
+    return (isinstance(value,str) and not value.startswith(('\\\\','//')) and '\x00' not in value
+            and Path(value).is_absolute() and Path(value).suffix.lower()=='.exe')
+
 def local_executable(value):
-    if not isinstance(value,str) or value.startswith(('\\\\','//')) or '\x00' in value:
-        return False
-    path=Path(value)
-    return path.is_absolute() and path.suffix.lower()=='.exe' and path.is_file()
+    return executable_path(value) and Path(value).is_file()
 
 def find_clients(settings,inventory=(),candidates=None):
     paths=[]

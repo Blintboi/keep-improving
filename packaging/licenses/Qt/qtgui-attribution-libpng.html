@@ -4,8 +4,7 @@
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta content="libpng License and PNG Reference Library version 2" name="description"/>
-  <title>LibPNG, version 1.6.58 | Qt GUI | Qt 6.11.2</title>
-<link rel="canonical" href="https://doc.qt.io/qt-6/fr/qtgui-attribution-libpng.html" />
+  <title>LibPNG, version 1.6.58 | Qt GUI | Qt 6.12.0</title>
   <link rel="stylesheet" type="text/css" href="/style/online2.css" />
   <link rel="stylesheet" href="https://www.qt.io/hubfs/qt-design-system/qt-design-system-1.1.0.css" />
   <link rel="stylesheet" type="text/css" href="/style/font-awesome.min.css" />
@@ -119,11 +118,16 @@
             <div class="b-sidebar__sidebar__mobile-close"><div class="c-mobile-close"></div></div>
             <div class="b-sidebar__sidebar__mobile-toggle" data-mobile-title="Topics"></div>
                         <div class="b-sidebar__sidebar__content">
-                <div data-margin-bottom="md">
+                <div data-margin-bottom="sm">
                                         <select id="qds-vdropdown" class="c-form-select c-form-select--dark js-versioncontrol" style="visibility:hidden">
                                             </select>
                                     </div>
-                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
+                                <div id="qds-filter-container" data-margin-bottom="sm" style="display:none">
+                    <label for="qds-filter-sl">Filter topics</label>
+                    <select id="qds-filter-sl" class="c-form-select c-form-select--dark"></select>
+                    <div id="qds-filter-note" style="display:none">Topic not in active filter<button type="button" id="qds-filter-clear">Clear</button></div>
+                </div>
+                                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
                 <nav>
                     <div id="sidebar-toctree"></div>
                     <ul class="c-sidebar-navigation">
@@ -143,7 +147,7 @@
                         </form>
                     </div>                    <div class="b-topbar__breadcrump" translate="no">
                         <ul class="c-breadcrump">
-                            <li><a href="index.html">Qt 6.11</a></li>
+                            <li><a href="index.html">Qt 6.12</a></li>
                             <li><a href="qtgui-index.html">Qt GUI</a></li>
                             <li><a>LibPNG, version 1.6.58</a></li>
                         </ul>
@@ -163,7 +167,7 @@
 <p>Used in the qpng image plugin. Configure with -system-libpng or -no-libpng to avoid.</p>
 <p>The sources can be found in qtbase/src/3rdparty/libpng.</p>
 <p><a href="http://www.libpng.org/pub/png/libpng.html">Project Homepage</a>, upstream version: <a href="https://download.sourceforge.net/libpng/libpng-1.6.58.tar.xz">1.6.58</a></p>
-<div class="pre"><pre class="cpp plain" translate="no">Copyright (c) 1995-2026 The PNG Reference Library Authors
+<div class="pre"><pre class="cpp plain" translate="no"><code class="text">Copyright (c) 1995-2026 The PNG Reference Library Authors
 Copyright (c) 2000-2026 Cosmin Truta
 Copyright (c) 1998-2018 Glenn Randers-Pehrson
 Copyright (c) 1996-1997 Andreas Dilger
@@ -184,9 +188,9 @@ Copyright (c) 1996-1997 Greg Roelofs
 Copyright (c) 1996-1997 Tom Tanner
 Copyright (c) 1995-1996 Dave Martindale
 Copyright (c) 1995-1996 Paul Schmidt
-Copyright (c) 1995-1996 Tim Wegner</pre></div>
+Copyright (c) 1995-1996 Tim Wegner</code></pre></div>
 <p>libpng License and PNG Reference Library version 2.</p>
-<div class="pre"><pre class="cpp plain" translate="no">COPYRIGHT NOTICE, DISCLAIMER, and LICENSE
+<div class="pre"><pre class="cpp plain" translate="no"><code class="text">COPYRIGHT NOTICE, DISCLAIMER, and LICENSE
 =========================================
 
 PNG Reference Library License version 2
@@ -319,7 +323,7 @@ The Contributing Authors and Group 42, Inc. specifically permit,
 without fee, and encourage the use of this source code as a component
 to supporting the PNG file format in commercial products.  If you use
 this source code in a product, acknowledgment is not required but would
-be appreciated.</pre></div>
+be appreciated.</code></pre></div>
 </div>
 <!-- @@@qtgui-attribution-libpng.html -->
 </div>

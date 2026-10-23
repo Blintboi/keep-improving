@@ -4,8 +4,7 @@
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta content="Public Domain" name="description"/>
-  <title>MD5 | Qt Core | Qt 6.11.2</title>
-<link rel="canonical" href="https://doc.qt.io/qt-6/fr/qtcore-attribution-md5.html" />
+  <title>MD5 | Qt Core | Qt 6.12.0</title>
   <link rel="stylesheet" type="text/css" href="/style/online2.css" />
   <link rel="stylesheet" href="https://www.qt.io/hubfs/qt-design-system/qt-design-system-1.1.0.css" />
   <link rel="stylesheet" type="text/css" href="/style/font-awesome.min.css" />
@@ -119,11 +118,16 @@
             <div class="b-sidebar__sidebar__mobile-close"><div class="c-mobile-close"></div></div>
             <div class="b-sidebar__sidebar__mobile-toggle" data-mobile-title="Topics"></div>
                         <div class="b-sidebar__sidebar__content">
-                <div data-margin-bottom="md">
+                <div data-margin-bottom="sm">
                                         <select id="qds-vdropdown" class="c-form-select c-form-select--dark js-versioncontrol" style="visibility:hidden">
                                             </select>
                                     </div>
-                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
+                                <div id="qds-filter-container" data-margin-bottom="sm" style="display:none">
+                    <label for="qds-filter-sl">Filter topics</label>
+                    <select id="qds-filter-sl" class="c-form-select c-form-select--dark"></select>
+                    <div id="qds-filter-note" style="display:none">Topic not in active filter<button type="button" id="qds-filter-clear">Clear</button></div>
+                </div>
+                                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
                 <nav>
                     <div id="sidebar-toctree"></div>
                     <ul class="c-sidebar-navigation">
@@ -143,7 +147,7 @@
                         </form>
                     </div>                    <div class="b-topbar__breadcrump" translate="no">
                         <ul class="c-breadcrump">
-                            <li><a href="index.html">Qt 6.11</a></li>
+                            <li><a href="index.html">Qt 6.12</a></li>
                             <li><a href="qtcore-index.html">Qt Core</a></li>
                             <li><a>MD5</a></li>
                         </ul>
@@ -162,9 +166,9 @@
 <span id="md5"></span><p>MD5 message-digest algorithm.</p>
 <p>Used in Qt Core (<a href="qcryptographichash.html" translate="no">QCryptographicHash</a>).</p>
 <p>The sources can be found in qtbase/src/3rdparty/md5.</p>
-<div class="pre"><pre class="cpp plain" translate="no">Written by Colin Plumb in 1993, no copyright is claimed. Ian Jackson &lt;ian@chiark.greenend.org.uk&gt;.</pre></div>
+<div class="pre"><pre class="cpp plain" translate="no"><code class="text">Written by Colin Plumb in 1993, no copyright is claimed. Ian Jackson &lt;ian@chiark.greenend.org.uk&gt;.</code></pre></div>
 <p><a href="https://spdx.org/licenses/CC0-1.0.html">Public Domain</a>.</p>
-<div class="pre"><pre class="cpp plain" translate="no">Creative Commons Legal Code
+<div class="pre"><pre class="cpp plain" translate="no"><code class="text">Creative Commons Legal Code
 
 CC0 1.0 Universal
 
@@ -284,7 +288,7 @@ express Statement of Purpose.
     Work.
  d. Affirmer understands and acknowledges that Creative Commons is not a
     party to this document and has no duty or obligation with respect to
-    this CC0 or use of the Work.</pre></div>
+    this CC0 or use of the Work.</code></pre></div>
 </div>
 <!-- @@@qtcore-attribution-md5.html -->
 </div>

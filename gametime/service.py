@@ -6,6 +6,7 @@ import threading
 import time
 from .discovery import Discovery
 from .model import norm, within
+from .background import BackgroundFailures
 
 log = logging.getLogger(__name__)
 
@@ -40,7 +41,9 @@ class DiscoveryService:
         self.watchers = {}
         self.registry_watchers = {}
         self.running = True
-        self.retry_count = 0
+        self.problems = BackgroundFailures()
+        self._problem_visible = False
+        self._watch_retry = False
         self.known_game_roots = set()
         self.reconfigure = None
         self.manual_specs = {}
@@ -119,6 +122,16 @@ class DiscoveryService:
             self.request("games", str(group))
 
     def _watches(self):
+        try:
+            errors = self._configure_watches()
+        except Exception as exc:
+            log.exception("Could not update installation watchers")
+            errors = [str(exc)]
+        self._watch_retry = bool(errors)
+        self._problem("watchers", errors)
+
+    def _configure_watches(self):
+        errors = []
         desired = self.discovery.watch_specs()
         for directory, targets in self.manual_specs.items():
             existing = Path(directory)
@@ -132,18 +145,26 @@ class DiscoveryService:
         for key in list(self.watchers):
             watcher, target = self.watchers[key]
             if key not in desired or watcher.error or not watcher.thread.is_alive() or desired[key] != target:
+                if key in desired and (watcher.error or not watcher.thread.is_alive()):
+                    errors.append(f"{key[0]}: {watcher.error or 'watcher stopped'}")
                 watcher.close()
                 del self.watchers[key]
         for key, target in desired.items():
             if key not in self.watchers:
                 directory, recursive, kind = key
-                watcher = self.factory(directory, recursive,
-                                       lambda path, k=kind, t=target: self._event(k, t, path))
-                self.watchers[key] = watcher, target
+                try:
+                    watcher = self.factory(directory, recursive,
+                                           lambda path, k=kind, t=target: self._event(k, t, path))
+                    self.watchers[key] = watcher, target
+                except Exception as exc:
+                    log.exception("Could not start installation watcher: %s", directory)
+                    errors.append(str(exc))
         registry_specs = self.discovery.registry_watch_specs()
         for spec in list(self.registry_watchers):
             watcher = self.registry_watchers[spec]
             if spec not in registry_specs or watcher.error or not watcher.thread.is_alive():
+                if spec in registry_specs and (watcher.error or not watcher.thread.is_alive()):
+                    errors.append(f"{spec}: {watcher.error or 'watcher stopped'}")
                 watcher.close()
                 del self.registry_watchers[spec]
         for spec in registry_specs:
@@ -151,10 +172,44 @@ class DiscoveryService:
                 if self.registry_factory is None:
                     from .win32 import RegistryWatcher
                     self.registry_factory = RegistryWatcher
-                self.registry_watchers[spec] = self.registry_factory(*spec, lambda: self.request("launchers"))
-        errors = [f"{key[0]}: {w.error}" for key, (w, _) in self.watchers.items() if w.error]
+                try:
+                    self.registry_watchers[spec] = self.registry_factory(*spec, lambda: self.request("launchers"))
+                except Exception as exc:
+                    log.exception("Could not start installation registry watcher: %s", spec)
+                    errors.append(str(exc))
+        errors.extend(f"{key[0]}: {w.error or 'watcher stopped'}" for key, (w, _) in self.watchers.items()
+                      if w.error or not w.thread.is_alive())
+        errors.extend(f"{spec}: {w.error or 'watcher stopped'}" for spec, w in self.registry_watchers.items()
+                      if w.error or not w.thread.is_alive())
+        return errors
+
+    def _problem(self, key, errors):
+        recovering = key in self.problems.failures and not errors
+        attempt = self.problems.update(key, bool(errors))
         if errors:
-            self.results.put(("status", "File watcher error: " + "; ".join(errors)))
+            log.warning("Background discovery issue (%s), attempt %d: %s", key, attempt, errors)
+        elif recovering:
+            log.info("Background discovery recovered: %s", key)
+            if isinstance(key, tuple):
+                with self.condition:
+                    self.debounce.jobs.pop(key, None)
+        visible = bool(self.problems.reported)
+        if visible != self._problem_visible:
+            self._problem_visible = visible
+            self.results.put(("discovery_problem", visible))
+        return attempt
+
+    def _retry(self, kind, group, attempt):
+        first = self.problems.failures[(kind, group)][0]
+        remaining = first + self.problems.PERSISTENT_SECONDS - time.monotonic()
+        if attempt <= self.problems.MAX_RETRIES or remaining > 0:
+            with self.condition:
+                now = time.monotonic()
+                due = now + (self.problems.retry_delay(attempt) if attempt <= self.problems.MAX_RETRIES else remaining)
+                existing = self.debounce.jobs.get((kind, group))
+                if existing is None or due < existing[1]:
+                    self.debounce.jobs[(kind, group)] = now, due
+                self.condition.notify()
 
     def _scan(self, kind, group=""):
         try:
@@ -172,17 +227,9 @@ class DiscoveryService:
                                   list(self.discovery.errors), list(self.discovery.ubisoft_game_roots),
                                   list(self.discovery.riot_hints)))
                 self._watches()
-                if self.discovery.errors:
-                    self.results.put(("status", "Installation metadata is temporarily unavailable; retrying."))
-                    # Retry only after a failing read, with a bounded rate.
-                    self.retry_count += 1
-                    if self.retry_count <= 6:
-                        with self.condition:
-                            now = time.monotonic()
-                            self.debounce.jobs[("launchers", "")] = (now, now + min(2 ** self.retry_count, 30))
-                else:
-                    self.retry_count = 0
-                    self.results.put(("status", "Game discovery is up to date."))
+                attempt = self._problem((kind, group), self.discovery.errors)
+                if attempt:
+                    self._retry(kind, group, attempt)
             elif kind == "games":
                 games = self.discovery.scan_games(group or None)
                 if not group:
@@ -192,13 +239,23 @@ class DiscoveryService:
                 self.known_game_roots.update(norm(g.root) for g in games)
                 self.results.put(("games", games, group))
                 self._watches()
+            if kind != "launchers":
+                self._problem((kind, group), None)
+                if kind == "games" and not group:
+                    for key in list(self.problems.failures):
+                        if isinstance(key, tuple) and key[0] == "games":
+                            self._problem(key, None)
         except Exception as exc:
             log.exception("Game discovery failed")
-            self.results.put(("status", "Game discovery failed: " + str(exc)))
+            attempt = self._problem((kind, group), [str(exc)])
+            self._retry(kind, group, attempt)
 
     def _run(self):
         try:
-            self.discovery.libraries_from_metadata()
+            try:
+                self.discovery.libraries_from_metadata()
+            except Exception:
+                log.exception("Initial installation metadata read failed; retrying in discovery")
             self._watches()  # Subscribe before the initial scan, closing startup races.
             self._scan("launchers")
             self._scan("games")
@@ -213,6 +270,8 @@ class DiscoveryService:
                         self.reconfigure = None
                         self.debounce.jobs.clear()
                         self.known_game_roots.clear()
+                        self.problems = BackgroundFailures()
+                        self._problem("watchers", None)
                         self.debounce.add(("launchers", ""), time.monotonic() - 2)
                         self.debounce.add(("games", ""), time.monotonic() - 2)
                     due = self.debounce.ready(time.monotonic())
@@ -225,7 +284,7 @@ class DiscoveryService:
                 if time.monotonic() - last_repair > 30:
                     broken = [key for key, (w, _) in self.watchers.items() if w.error or not w.thread.is_alive()]
                     registry_broken = any(w.error or not w.thread.is_alive() for w in self.registry_watchers.values())
-                    if broken or registry_broken:
+                    if broken or registry_broken or self._watch_retry:
                         self._watches()
                         for _, _, kind in broken:
                             self.request(kind)

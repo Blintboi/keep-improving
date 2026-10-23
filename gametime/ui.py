@@ -18,6 +18,7 @@ from .tracker import Tracker, Alert
 from . import win32
 from .i18n import tr, LANGUAGES
 from .controller import MonitorActions
+from .budget import remaining_budget
 
 log = logging.getLogger(__name__)
 BG, PANEL, FG, MUTED, BLUE = "#15171b", "#23262d", "#f1f2f5", "#aeb5c2", "#86b9ff"
@@ -83,6 +84,8 @@ class App(MonitorActions):
         self.root, self.store, self.data_dir = root, store, Path(data_dir)
         self.settings = store.settings()
         self.catalog = Catalog(self.settings, store.games(True), store.overrides(), store.rules())
+        from .overlay_consent import MinimizeConsents
+        self.minimize_consents=MinimizeConsents(store)
         self.tracker = Tracker(store, self.catalog)
         from .hub import HubWorker
         self.hub = hub or HubWorker(data_dir)
@@ -117,7 +120,7 @@ class App(MonitorActions):
             root.iconbitmap(default=str(Path(__file__).with_name("app.ico")))
         except tk.TclError:
             log.warning("Application icon is unavailable")
-        self.tray = win32.Tray(self.show, self.tray_menu, self.devices_changed)
+        self.tray = win32.Tray(self.show, self.tray_menu, self.devices_changed, identity=self.data_dir)
         if background and self.tray.available:
             root.withdraw()
         self.refresh_manual_availability()
@@ -286,8 +289,9 @@ class App(MonitorActions):
 
 
 
-    def _dialog(self, title, size="550x250", transient=True):
+    def _dialog(self, title, size="550x250", transient=True,passive=False):
         window = tk.Toplevel(self.root)
+        if passive: window.withdraw()
         window.configure(bg=BG)
         window.title(self.t(title))
         window.geometry(size)
@@ -491,9 +495,13 @@ class App(MonitorActions):
     def popup(self, alert):
         if self.popup_window:
             return False
+        mode=self.notification_mode()
+        if mode=='defer': return False
+        if mode=='audio': return self.audio_notification(alert)
+        passive=mode=='passive'
         # A transient of an iconic main window is withdrawn by Tk/Windows.
         # Alerts must remain independent even if the main window is hidden later.
-        window = self._dialog("Game time alert", "590x260", transient=False)
+        window = self._dialog("Game time alert", "590x260", transient=False,passive=passive)
         self.popup_window, self.popup_day = window, alert.day
         window.attributes("-topmost", True)
         title = "Time to stop playing" if alert.kind in ("limit", "session") else "Game time reminder"
@@ -511,12 +519,13 @@ class App(MonitorActions):
         x = (window.winfo_screenwidth() - 590) // 2
         y = (window.winfo_screenheight() - 260) // 2
         window.geometry(f"+{max(0, x)}+{max(0, y)}")
-        window.deiconify()
-        window.lift()
         hwnd = dark_title(window)
         try:
-            foreground = win32.present_notification(hwnd)
-            window.focus_force()
+            if passive: win32.nonactivating_window(hwnd)
+            window.deiconify()
+            if not passive: window.lift()
+            foreground=win32.present_notification(hwnd,activate=False) if passive else win32.present_notification(hwnd)
+            if not passive: window.focus_force()
             window.update_idletasks()
             if not window.winfo_viewable() or not win32.u.IsWindowVisible(hwnd):
                 raise RuntimeError("Notification window did not become visible")
@@ -538,12 +547,14 @@ class App(MonitorActions):
 
     def render(self):
         self.sync_hub()
-        day = datetime.now().date().isoformat()
+        now = datetime.now().astimezone()
+        day = now.date().isoformat()
         totals = self.tracker.totals(day)
         total = sum(totals.values())
+        budget = remaining_budget(self.settings, now, total)
         self.total_text.set(duration(total))
         self.remaining_text.set(self.t("Time remaining: {remaining}  ·  Daily limit: {minutes:g} min",
-                                       remaining=duration(self.settings.limit_seconds-total), minutes=self.settings.limit_seconds/60))
+                                       remaining=duration(budget.remaining), minutes=self.settings.limit_seconds/60))
         self.active_text.set(self.t("Active game: {name}", name=self.tracker.active.name if self.tracker.active else self.t("none")))
         self.progress.configure(maximum=self.settings.limit_seconds, value=min(total, self.settings.limit_seconds))
         games = dict((g.id, g) for g in self.store.games())
@@ -589,7 +600,7 @@ class App(MonitorActions):
             self.last_rows = rows
         self.update_launch_button()
         self.tray.update(self.t("Game Time Monitor\nToday: {total} · remaining: {remaining}\nLeft click: open · right click: menu",
-                                total=duration(total), remaining=duration(self.settings.limit_seconds-total)))
+                                total=duration(total), remaining=duration(budget.remaining)))
         if self.notebook.select() == str(self.statistics) and time.monotonic()-self.statistics.last_refresh >= 10:
             self.statistics.refresh()
 

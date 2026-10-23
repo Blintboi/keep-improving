@@ -1,5 +1,172 @@
 # Architecture
 
+`updates.py` reads a fixed public HTTPS release manifest (8 KiB, no redirects,
+bounded version/schema/hash/size fields). A lazy single-request daemon returns
+data through a queue; it never reads the profile or installs code. `qt_updates`
+owns the GUI-thread cache and one single-shot daily deadline, polling only the
+existing assets queue. `check_updates` defaults true and can be disabled without
+disabling manual checks. Attempts persist across restarts; manual checks have
+a short guard. The Hub notice and tray text/menu never activate a window or use
+game notification delivery. Download is an explicit browser navigation to the
+fixed README installer URL, retaining browser/Windows download checks. Main GUI
+entry explicitly enables network checks; directly constructed test App fixtures
+have no external updater unless a worker is injected.
+
+The build adds truthful Windows file-version resources, audits the finished
+installer, then derives `downloads/latest.json` from those exact bytes. The
+manifest is a release output and is published with the source, canonical
+installer, checksum and README changes. Its SHA-256 is integrity metadata,
+not a substitute for a separately trusted publisher signature.
+
+`budget.py` computes remaining time from the unused calendar-day quota and an
+optional bedtime deadline. `bedtime_caps_budget` defaults false and is a local
+per-day schedule field, editable with the existing grouped-day controls. The
+owning reminder day retains its bedtime and resume window across midnight;
+the nearest enabled bedtime supplies the cap only when that night opts in.
+Absolute timestamps handle overnight UTC-offset changes, including native
+samples with a fixed current local offset. The Hub, tray and desktop/RTSS HUD
+share the calculation; bedtime warning phase can select the warning palette.
+Synthetic normal/warning previews retain their sample states. Measured usage,
+quota alert keys, restriction grants and calendar-day statistics are unchanged.
+Existing warning-message remaining tokens use the capped value. The option
+adds no timer, background scan, database table or synchronization field.
+
+`background.py` tracks independent discovery/watcher and Hub shortcut failures.
+Only repeated failures spanning at least 60 seconds become user-visible; paths,
+exceptions and retry diagnostics stay in the log. Discovery queues issue-state
+transitions, and the shared controller uses localized, actionable notices.
+Recovery removes its own notice, retains other unresolved background problems,
+and never replaces a newer user-action message. Healthy source refreshes are
+silent. Failed scans and shortcut jobs retry with bounded exponential backoff;
+successful scans cancel pending retries. Watcher construction and repair failures
+keep the existing 30-second repair path alive, including registry watchers, with
+no added healthy-state polling or catalog reads.
+
+`overlay_consent.py` stores explicit local risk acknowledgements separately from
+countdown drafts, keyed by a hash of game ID and normalized install location.
+Only current-version, explicitly accepted records with a UTC timestamp authorize
+protected overlays/previews. The modal confirmation has an unchecked checkbox
+and disabled enable button; cancellation/Enter does not save permission.
+Revocation clears active previews, cached image authorization and pending RTSS
+preparation. Capture threads use an immutable consent snapshot, never SQLite.
+The RTSS backend authorizes exact discovered paths and blocks known basename
+collisions unless every protected game involved has consent; exclusions do not
+hide such collisions. Revocation disables the per-EXE hook and drains that work
+during shutdown. No consent is synchronized, and it never authorizes automatic
+Escape or anti-cheat helper processes. Invalid/unreadable installation checks
+remain blocked.
+
+The per-game editor hides countdown mode, colors, position, size, image controls,
+preview and save/reset actions while permission is denied. Only game selection,
+the reason, the consent action when applicable, and cancel remain available.
+Granting/revoking consent updates visibility in place without rebuilding controls
+or losing another game's drafts. Merely viewing a blocked game does not rewrite
+its saved countdown preferences.
+
+Countdown game selectors include only installed catalog entries. Manual
+availability and launcher/Games discovery notify open editors when inventory
+changes, without a polling timer or rebuilding unchanged selectors. Removing a
+selected game clears its active preview and selects a remaining game; drafts and
+saved preferences for the removed ID are retained for reinstalls. Empty lists
+hide edit/preview/save actions. Exact EXE rules for retired records remain stored
+but cannot resolve or replay new tracking intervals while the game is absent.
+
+`MinimizeConsents` uses an independent, versioned local key namespace. Protected
+game restrictions stay reminder-only without that permission; both delayed
+restriction callbacks and the bedtime foreground callback recheck it. Native
+minimization repeats the hard path/helper gate. Consent never enables Escape.
+
+Notification routing samples the actual foreground at delivery time. Ordinary
+games keep the existing Escape/focus behavior. Protected or uncheckable games use
+nonactivating Qt/Tk windows (including WS_EX_NOACTIVATE) when the Windows
+notification state allows it; otherwise only asynchronous sound is attempted.
+Muted/failed audio leaves the alert queued, with failed sound retries throttled
+to 30 seconds. A locked or unavailable desktop defers delivery. Sound-only
+success commits the normal alert ledger once. Rendering failures retain pending
+delivery and dispose the failed window; repeated requests do not duplicate a
+visible popup. No fullscreen/window-mode or graphics-device setting is changed.
+
+`game_safety.py` is the shared local anti-cheat compatibility gate for desktop
+and RTSS countdowns, game-image capture, preview activation and automatic Escape.
+Known IDs/names and bounded shallow installation-marker probes deny protected
+games; unavailable/incomplete/network-root inspection fails closed. Results are
+cached for up to 60 seconds, without recursive asset scanning or game-memory
+inspection. Runtime gates override enabled global/per-game drafts unless current per-game risk consent explicitly authorizes the overlay/preview. Warning
+popups remain available, and anti-cheat helpers are rejected before EXE rules.
+New profiles default RTSS to off; saved choices remain subject to the gate.
+The RTSS worker revokes known protected per-EXE hooking/OSD profiles before
+preparing allowed games, preserves unrelated/global/performance settings, and
+does not start RTSS for revocation. Backend configuration/presentation repeat
+the gate, including cached configurations and basename profile collisions.
+Failed revocation blocks further RTSS activation. See
+[the anti-cheat review](docs/ANTICHEAT.hu.md) for sources and scope limitations.
+
+The notification area icon uses a GUID derived from the normalized profile and
+executable paths, so restarts and in-place upgrades retain its identity while
+moved/side-by-side copies do not reuse a GUID bound to another binary location.
+Accounting updates use
+NIM_MODIFY with only tooltip flags; icon data and callbacks are not replaced.
+TaskbarCreated recovery first modifies a surviving icon, adding only if absent.
+The RTSS worker checks both its SDK mapping and an exact-path process in the
+current Windows session before starting it; missing/inaccessible mapping or
+process inspection cannot trigger a duplicate launch. Process checks run only
+when needed and at most once per ten seconds. UI regression fixtures mock the
+Shell notification boundary while retaining native HWND/message/menu behavior.
+
+
+`game_preview.py` enumerates recognized, enabled game windows only on explicit
+preview or visible editor/refresh events. HWND, PID, creation identity and path
+are rechecked before capture/activation and while a live preview is displayed.
+Preview activation is a single user-triggered request; switching away cancels it.
+A short restore delay and bounded grace for the original settings window handle
+asynchronous activation without repeating a focus request.
+Desktop and RTSS rendering have an exclusive handoff. The desktop HWND hides
+before an RTSS write can start. A missing health receipt leaves both the desktop
+and warning-suppression state off until rendering is confirmed or the owned OSD
+is withdrawn. The bridge clears owned slots under the SDK lock, then waits for
+the target game's shared-memory frame receipt before permitting the desktop.
+Busy locks, communication failures and helper restarts do not imply removal.
+Foreground identity changes, hide and consent revocation advance a local worker
+generation. Captured states require both matching values and generation before
+publication/results, so rapid A/B/A and hide/resume cannot revive an earlier
+receipt or latch an earlier error. A monotonic 200 ms compositor deadline also
+guards repeated UI callbacks after desktop withdrawal, using the existing timer.
+Native health probes preserve unchanged OSD text and ownership; an acknowledged
+frame advances a heartbeat counter without clearing the slot. A pending frame
+is not repeatedly advanced while the game is slow or paused.
+
+Unhealthy RTSS falls back for the current foreground session; it does not keep
+publishing over the desktop. Idle confirmed withdrawals sleep on the condition.
+
+It follows the existing desktop/RTSS path with draft colors and never credits
+usage or acknowledges warning keys. Real foreground accounting remains active.
+The position editor uses a dim game-client-only PrintWindow snapshot, correctly
+placed within its monitor; other desktop windows are never screen-grabbed.
+A single daemon worker keeps synchronous foreign rendering off the GUI thread.
+A 2.5-second UI timeout never starts a replacement while that worker is blocked.
+Captures are bounded in size and remain in memory; no continuous screenshot
+polling runs. `qt_game_preview.py` clears hidden views and rejects stale results.
+Per-game palettes remain absent from synchronization snapshots.
+
+Local personalization is stored in the existing configuration JSON without a
+schema change. `schedule.py` resolves per-weekday budgets and restrictions
+by local recording date. Legacy Saturday/Sunday settings remain a fallback.
+`qt_schedule.py` keeps seven independent day drafts; group edits patch only
+changed fields, while an explicit copy action unifies a selected group. Saving
+a schedule edit preserves all effective day plans before retiring the legacy
+weekend switch. Unedited schedules are never materialized by unrelated saves.
+Bedtime windows retain their reminder day's plan
+through their own resume time, including overlapping next-day reminders; daily
+foreground accounting still splits at midnight. `sound.py` uses asynchronous
+Windows aliases or a user-selected WAV, with silent mode and a default-sound
+fallback; it adds no playback process or polling. `qt_personalization.py` edits
+per-game countdown drafts without overwriting other unsaved
+controls. Game IDs map only countdown visibility, monitor, position, size and normal/warning colors;
+tracking/exclusions and warning fallback remain independent. Discovery merges
+migrate these preferences with existing history. Desktop and RTSS use the same
+resolved settings, and RTSS preparation skips games with a disabled countdown.
+These preferences and sound paths are absent from outgoing statistics snapshots.
+
 Additional publisher support lives in `launcher_defs.py`, `platforms.py` and
 `battlenet.py`. Client identities are shared by the launcher page, Hub shortcut
 collection and foreground exclusions. EA, GOG, Battle.net and Rockstar use
@@ -61,7 +228,7 @@ The one-second tracker continues while the Hub is hidden/minimized, including al
 | `hub.py`, `hub_links.ps1` | Shortcut planning/COM, root ownership, locking, hashes and safe retirement of unchanged owned links. |
 | `launch.py` | Read-only launch preparation on a lazy worker, canonical game-launch URIs, preserved shortcut arguments and explicit EXE choices; execution follows Play on the GUI thread. |
 | `qt_ui.py`, `qt_widgets.py` | Default Qt library/settings, responsive painted cards, local artwork, independent alerts/removal dialogs and lifecycle. |
-| `clients.py` | Background installed-client discovery and explicit, revalidated executable-only client opening, independent of game budgets. |
+| `clients.py` | Background installed-client discovery, validated persistent launcher cache and explicit revalidated client opening, independent of game budgets. The page loads cached clients on its first visit; discovery runs only without a valid cache or on explicit refresh, with no periodic rescan. |
 | `artwork.py` | Bounded local asset lookup and thumbnail decoding on a worker; no widget/pixmap, game execution or archive extraction. |
 | `controller.py` | Shared UI-neutral tracking/discovery/tray/launch actions; all callbacks use the GUI scheduler. |
 | `overlay.py` | Unparented, translucent, non-activating countdown and the Hub's draggable position editor. |
@@ -115,7 +282,7 @@ Optional play restriction uses the existing tracker total and an independent per
 
 Optional RTSS: `rtss.py` owns a single background worker and a pipe-connected `rtss_bridge.exe` child. The helper is built from `rtss_bridge.cs` using the Windows .NET Framework 4 compiler; no compiler or SDK is downloaded. It opens only an existing RTSSSharedMemoryV2 mapping, validates signature/version/array bounds/alignment/overlap, and uses CLR Interlocked on the SDK busy field. Slot zero, foreign slots, unknown fields and foreign locks are preserved. Own text/ownership are cleared on hide, lock, disable, normal exit and parent-pipe EOF. The helper never opens or terminates a game process. No SQLite access occurs in either worker. A stalled helper receipt expires, so it cannot suppress an early warning.
 
-Automatic RTSS defaults on within the independently opt-in countdown. It uses any tracked foreground executable regardless of launcher/source; legacy selected-path lists remain readable but do not gate automatic routing. One bounded background queue prepares profiles from exact rules and already discovered artwork EXEs, revalidating tracking policy and avoiding additional directory scans. Other profiles are prepared while idle; an active game's profile takes priority. Unchanged profiles are neither rewritten nor reloaded. Per-game OSD/detection settings are merged; global settings, framerate limits and display-mode settings are preserved. RTSS profiles use basenames, so the additional exact-path/identity publishing gate is essential. The existing SDK mapping is checked before starting RTSS, with a ten-second start throttle and no additional Windows startup registration. RTSS runs with the monitor's existing privileges through the child-only [RunAsInvoker compatibility fix](https://learn.microsoft.com/en-us/windows/deployment/planning/compatibility-fixes-for-windows-8-windows-7-and-windows-vista); system/UAC policy and executable manifests are not changed. Desktop preview never publishes to RTSS. Unavailable or stale RTSS receipts fall back to the desktop countdown. Early-popup replacement still requires a fresh matching renderer receipt or a desktop overlay outside the Windows fullscreen/busy state. Disabling automatic RTSS/overlay cancels queued preparation; no game or foreign RTSS process is stopped.
+Automatic RTSS defaults off for new profiles. When enabled, it uses tracked foreground executables allowed by the anti-cheat compatibility gate; legacy selected-path lists remain readable but do not gate automatic routing. One bounded background queue prepares profiles from exact rules and already discovered artwork EXEs, revalidating tracking policy and avoiding additional directory scans. Other profiles are prepared while idle; an active game's profile takes priority. Unchanged profiles are neither rewritten nor reloaded. Per-game OSD/detection settings are merged; global settings, framerate limits and display-mode settings are preserved. RTSS profiles use basenames, so the additional exact-path/identity publishing gate is essential. The existing SDK mapping is checked before starting RTSS, with a ten-second start throttle and no additional Windows startup registration. RTSS runs with the monitor's existing privileges through the child-only [RunAsInvoker compatibility fix](https://learn.microsoft.com/en-us/windows/deployment/planning/compatibility-fixes-for-windows-8-windows-7-and-windows-vista); system/UAC policy and executable manifests are not changed. Desktop preview never publishes to RTSS. Unavailable or stale RTSS receipts fall back to the desktop countdown. Early-popup replacement still requires a fresh matching renderer receipt or a desktop overlay outside the Windows fullscreen/busy state. Disabling automatic RTSS/overlay cancels queued preparation; no game or foreign RTSS process is stopped.
 
 RTSS placement uses its native per-game PositionX/PositionY properties with signed edge anchors and CoordinateSpace=1 (whole framebuffer). Absolute hypertext P/L layers were removed after the Stardew trial showed displaced text. The worker changes native profile placement only when the normalized position or render resolution changes, preserves that placement during profile preparation, and reloads it through the documented SDK API. OSD coordinates are shared by RTSS clients within that game.
 
@@ -142,3 +309,50 @@ five-minute cron job removes old state, leaving active flows/sessions intact.
 These provider-schema integrations require post-upgrade compatibility checks.
 Upstream Edge/Auth invocations and network floods remain provider concerns;
 see SECURITY.md for exact limits, estimates and the remaining availability risk.
+
+### 2.16 in-place UI translation
+
+`qt_translation.py` retains translation keys only for application-owned text.
+Ordinary names, paths and edited input remain plain strings. Language changes
+block control signals while updating existing widgets and combo items, retain
+scroll positions and use the cached statistics report; they do not rebuild the
+window, enumerate the catalog or request artwork. Combo sizing follows translated
+text. Failed language saves restore the previous selection. Launcher cards reuse
+unchanged client records and shell icons; returning library cards immediately
+use cached pixmaps. Statistics refreshes keep date, legend and table items when
+their identities are unchanged and retain table selections by game/computer.
+
+### 2.17 precise countdown position and text size
+
+Pixel editors use Qt display coordinates, including Windows scaling.
+Stored overlay coordinates remain normalized for resolution/monitor changes;
+the UI maps pixel fields and 1 px/Shift-10 px keyboard movement through the same
+placement and font metrics as the desktop overlay. The miniature projects the
+actual HUD rectangle into the selected display. Geometry synchronization blocks
+signals and never quantizes untouched axes. Size changes preserve interior pixel
+positions and edge anchors, clamping to the new bounds. Font metrics are cached
+until size/DPI changes. The validated 8–72 pt size defaults to the previous 25 pt
+for old profiles and is included in the existing unsaved preview/settings flow.
+RTSS receives the matching FNT height and scales its interior position bounds;
+its worker retains four-field position compatibility, resolution feedback,
+cached profile writes and signed edge anchors. Preview never publishes to RTSS.
+
+### 2.18 local personal messages and countdown palette
+
+Settings validate four optional, 1000-character plain-text messages and two
+RGB colors. `notification_text.py` preserves the default translations and
+substitutes only exact named tokens in custom text, once; unknown braces and
+markup stay literal. Tracker thresholds/keys and bedtime schedule/ledger rules
+are unchanged. Bedtime reads the existing local time total only if its custom
+text actually uses the game-minutes token. The separate message editor keeps
+drafts until Save; preview goes straight to the popup with no ledger keys,
+Escape or minimization. Longer popups keep their acknowledgement button outside
+a scrollable text area. User text never participates in UI translation.
+
+Desktop paint state includes the selected RGB color; RTSS validates and encodes
+the same palette in its existing ARGB/FNT payload. The GUI miniature and a
+normal/warning preview switch share those colors without changing live warning
+thresholds. Swatch icons update only on explicit palette changes; language
+changes reuse them. Empty messages and white/red defaults retain old behavior.
+Personalization is stored only in the existing local settings; snapshots do
+not include message text or colors. Diagnostics expose only a message count.

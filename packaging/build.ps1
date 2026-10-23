@@ -14,7 +14,14 @@ Build-GameTimeRTSSBridge $repo
 $OutputDir = [IO.Path]::GetFullPath($OutputDir)
 $BuildDir = [IO.Path]::GetFullPath($BuildDir)
 New-Item -ItemType Directory -Path $OutputDir,$BuildDir -Force | Out-Null
+. (Join-Path $PSScriptRoot 'secret_scanner.ps1')
+$secretScanner = Get-GameTimeSecretScanner (Join-Path $BuildDir 'secret-scanner')
+& $PythonPath -B (Join-Path $PSScriptRoot 'audit_payload.py') --source $repo --gitleaks $secretScanner --report (Join-Path $BuildDir 'source-secrets-audit.json')
+if ($LASTEXITCODE -ne 0) { throw 'Source secret audit failed. Do not distribute this build.' }
 $version = (& $PythonPath -B -c "import sys; sys.path.insert(0,sys.argv[1]); from gametime import __version__; print(__version__)" $repo).Trim()
+$versionFile=Join-Path $BuildDir 'version-info.txt'
+& $PythonPath -B (Join-Path $PSScriptRoot 'version_info.py') --version $version --output $versionFile
+if ($LASTEXITCODE -ne 0) { throw 'Windows version resource generation failed.' }
 if (-not $SkipFreeze) {
     # Build tools must not resolve Qt dependencies from unrelated programs on PATH.
     $pythonQuery = 'import sys,json; print(json.dumps({"executable":sys.executable,"base":sys.base_prefix}))'
@@ -24,31 +31,35 @@ if (-not $SkipFreeze) {
     try {
         $env:PATH = @((Split-Path -Parent $PythonPath), $pythonInfo.base, (Join-Path $pythonInfo.base 'DLLs'),
                       (Join-Path $env:WINDIR 'System32'), $env:WINDIR, (Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0')) -join ';'
-        & $PythonPath -B -m PyInstaller --noconfirm --clean --onedir --windowed --name GameTimeMonitor --icon (Join-Path $repo 'gametime\app.ico') --add-data ((Join-Path $repo 'gametime\app.ico') + ':gametime') --add-data ((Join-Path $repo 'gametime\rtss_bridge.exe') + ':gametime') --add-data ((Join-Path $repo 'gametime\hub_links.ps1') + ':gametime') --add-data ((Join-Path $repo 'gametime\bedtime_legacy.ps1') + ':gametime') --add-data ((Join-Path $repo 'gametime\icons') + ':gametime/icons') --distpath (Join-Path $BuildDir 'frozen') --workpath (Join-Path $BuildDir 'pyinstaller') --specpath $BuildDir (Join-Path $repo 'main.py')
+        & $PythonPath -B -m PyInstaller --noconfirm --clean --onedir --windowed --name GameTimeMonitor --version-file $versionFile --icon (Join-Path $repo 'gametime\app.ico') --add-data ((Join-Path $repo 'gametime\app.ico') + ':gametime') --add-data ((Join-Path $repo 'gametime\rtss_bridge.exe') + ':gametime') --add-data ((Join-Path $repo 'gametime\hub_links.ps1') + ':gametime') --add-data ((Join-Path $repo 'gametime\bedtime_legacy.ps1') + ':gametime') --add-data ((Join-Path $repo 'gametime\icons') + ':gametime/icons') --distpath (Join-Path $BuildDir 'frozen') --workpath (Join-Path $BuildDir 'pyinstaller') --specpath $BuildDir (Join-Path $repo 'main.py')
         if ($LASTEXITCODE -ne 0) { throw 'PyInstaller build failed.' }
     } finally { $env:PATH = $savedBuildPath }
 
 }
 $bundle = Join-Path $BuildDir 'frozen\GameTimeMonitor'
 if (Test-Path -LiteralPath (Join-Path $bundle '_internal\icuuc.dll')) { throw 'Unexpected app-local ICU: Qt on Windows 11 must use the Windows ICU runtime.' }
-if ($FreezeOnly) { Write-Output $bundle; return }
+if ($FreezeOnly) {
+    & $PythonPath -B (Join-Path $PSScriptRoot 'audit_payload.py') --bundle $bundle --gitleaks $secretScanner --report (Join-Path $BuildDir 'bundle-secrets-audit.json')
+    if ($LASTEXITCODE -ne 0) { throw 'Frozen payload secret audit failed. Do not distribute this build.' }
+    Write-Output $bundle; return
+}
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'uninstall-bundled.ps1') -Destination $bundle
 foreach ($name in @('README.md','README.hu.md','TESTING.md','ARCHITECTURE.md','THIRD-PARTY-NOTICES.md','SECURITY.md','LICENSE','PRIVACY.md')) {
     Copy-Item -LiteralPath (Join-Path $repo $name) -Destination $bundle
 }
-foreach ($name in @('docs\DEVELOPMENT.md','docs\images\library-en.png','docs\images\statistics-en.png','docs\images\bedtime-en.png')) {
+foreach ($name in @('docs\DEVELOPMENT.md','docs\ANTICHEAT.hu.md','docs\WINDOWS-TRUST.hu.md','docs\images\library-en.png','docs\images\statistics-en.png','docs\images\bedtime-en.png')) {
     $target = Join-Path $bundle $name
     New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $repo $name) -Destination $target
 }
 $licenseDir = Join-Path $bundle 'licenses'
 New-Item -ItemType Directory -Path $licenseDir -Force | Out-Null
-$pythonBase = (& $PythonPath -c 'import sys; print(sys.base_prefix)').Trim()
+$pythonBase = (& $PythonPath -c 'import sys,json; print(json.dumps(sys.base_prefix))') | ConvertFrom-Json
 Copy-Item -LiteralPath (Join-Path $pythonBase 'LICENSE.txt') -Destination (Join-Path $licenseDir 'Python-LICENSE.txt')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'licenses\Qt') -Destination $licenseDir -Recurse -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'licenses\Crypto') -Destination $licenseDir -Recurse -Force
-$licenseQuery = 'import importlib.metadata as m; print(m.distribution("pyinstaller").locate_file("pyinstaller-6.22.0.dist-info/licenses/COPYING.txt"))'
-$pyinstallerLicense = ($licenseQuery | & $PythonPath -).Trim()
+$licenseQuery = 'import importlib.metadata as m,json; print(json.dumps(str(m.distribution("pyinstaller").locate_file("pyinstaller-6.22.0.dist-info/licenses/COPYING.txt"))))'
+$pyinstallerLicense = ($licenseQuery | & $PythonPath -) | ConvertFrom-Json
 if (-not (Test-Path -LiteralPath $pyinstallerLicense)) { throw 'PyInstaller license was not found.' }
 Copy-Item -LiteralPath $pyinstallerLicense -Destination (Join-Path $licenseDir 'PyInstaller-COPYING.txt')
 $cryptoLicenseQuery = 'import importlib.metadata as m,json; print(json.dumps([{"package":n,"source":str(m.distribution(n).locate_file(f)),"name":f.name} for n in ("cryptography","cffi","pycparser") for f in m.distribution(n).files if ".dist-info/licenses/" in str(f)]))'
@@ -135,6 +146,12 @@ try {
 $iconScript = 'import sys; from PyInstaller.utils.win32.icon import CopyIcons_FromIco; CopyIcons_FromIco(sys.argv[1], [sys.argv[2]])'
 $iconScript | & $PythonPath - $setup (Join-Path $repo 'gametime\app.ico')
 if ($LASTEXITCODE -ne 0) { throw 'Installer icon update failed.' }
+& $PythonPath -B (Join-Path $PSScriptRoot 'version_info.py') --version $version --installer $setup
+if ($LASTEXITCODE -ne 0) { throw 'Installer version resource update failed.' }
+& $PythonPath -B (Join-Path $PSScriptRoot 'audit_payload.py') --installer $setup --gitleaks $secretScanner --report (Join-Path $BuildDir 'installer-secrets-audit.json')
+if ($LASTEXITCODE -ne 0) { throw 'Installer secret audit failed. Do not distribute this installer.' }
 $hash = (Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLowerInvariant()
 ($hash + '  ' + [IO.Path]::GetFileName($setup)) | Set-Content -LiteralPath ($setup + '.sha256') -Encoding ASCII
+& $PythonPath -B (Join-Path $PSScriptRoot 'release_manifest.py') --installer $setup --version $version --output (Join-Path $repo 'downloads\latest.json')
+if ($LASTEXITCODE -ne 0) { throw 'Public release manifest generation failed.' }
 Write-Output $setup

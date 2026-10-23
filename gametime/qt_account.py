@@ -2,12 +2,13 @@
 from dataclasses import replace
 from sqlite3 import Error as SQLiteError
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QVBoxLayout,QHBoxLayout,QCheckBox,QLineEdit,QApplication,QMessageBox
+from PySide6.QtWidgets import QVBoxLayout,QHBoxLayout,QApplication,QMessageBox
 from shiboken6 import isValid
 from .qt_widgets import label,button
 from .statistics_sync import group_code,display_code,computer_name
 from .statistics_cloud import CLOUD_CODE,new_code
 from .statistics_auth import MESSAGES
+from .qt_translation import QCheckBox,QLineEdit
 
 
 def statistics_dialog(app):

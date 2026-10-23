@@ -27,6 +27,7 @@ class QtInterfaceTests(unittest.TestCase):
         self.settings=Settings(games_root=str(self.base/'Games'),language='hu')
         self.store.save_settings(self.settings)
         self.games=[Game('qt:'+str(i),name,src,str(self.base/name)) for i,(name,src) in enumerate([('Fixture Alpha','Games'),('Fixture Beta','Steam'),('Fixture Gamma','Epic')])]
+        for game in self.games: Path(game.root).mkdir()
         self.store.upsert(self.games)
         self.exe=self.base/'fixture.exe'; self.exe.write_bytes(b'MZ fixture')
         self.store.set_rule(str(self.exe),self.games[0].id)
@@ -42,6 +43,11 @@ class QtInterfaceTests(unittest.TestCase):
             def request(me,*args): pass
             def close(me): pass
         self.sound=patch('gametime.qt_ui.winsound.PlaySound'); self.sound.start()
+        # Exercise native message windows without adding/removing hundreds of
+        # real notification icons or starting the user's optional RTSS server.
+        for target in ('gametime.win32.s.Shell_NotifyIconW','gametime.rtss.installation','gametime.qt_ui.rtss_installation'):
+            isolated=patch(target,return_value=True if target.endswith('Shell_NotifyIconW') else None)
+            isolated.start(); self.addCleanup(isolated.stop)
         self.app=App(self.store,self.base,background=True,service=Service(),hub=Hub())
         self.app.tick_timer.stop(); self.pump(.03)
 
@@ -201,7 +207,7 @@ class QtInterfaceTests(unittest.TestCase):
         self.assertNotIn(self.games[1].id,self.app.cards); self.assertIs(self.app.cards[game.id],card)
         self.app.sort.setCurrentIndex(1); self.assertIs(self.app.cards[game.id],card)
 
-    def test_language_rebuild_preserves_filters_selection_and_statistics_dates(self):
+    def test_language_change_preserves_filters_selection_and_statistics_dates(self):
         self.app.search.setText('Beta'); self.app.select_game(self.games[1].id); self.app.switch_page(1)
         self.app.statistics.preset(7); self.app.statistics.choose_day(date.today().isoformat())
         original=(self.app.statistics.start.text(),self.app.statistics.end.text(),self.app.statistics.selected_day)
@@ -210,6 +216,98 @@ class QtInterfaceTests(unittest.TestCase):
         self.assertEqual(self.app.pages.currentIndex(),1); self.assertEqual(self.store.settings().language,'en')
         self.assertEqual((self.app.statistics.start.text(),self.app.statistics.end.text(),self.app.statistics.selected_day),original)
         self.app.set_language('hu'); self.pump(); self.assertEqual(self.app.nav[0].text(),'Játéktár')
+
+    def test_language_changes_keep_live_cards_images_focus_and_pending_art(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtGui import QPixmap,QColor,QImage
+        from unittest.mock import Mock
+        self.app.assets_timer.stop(); self.app.show(); self.pump(.04); self.app._art_queue=[]
+        if self.app.art.worker: self.app.art.worker.close()
+        worker=Mock(); worker.results=Queue(); self.app.art.worker=worker
+        card=self.app.cards[self.games[0].id]; key=self.app.art.key(card.game)
+        pix=QPixmap(80,80); pix.fill(QColor('#148050')); card.art=(pix,None); self.app.art.cache[key]=card.art
+        self.app.art.pending={key:123}; self.app.select_game(card.game.id); card.setFocus()
+        surface=self.app.centralWidget(); pages=self.app.pages; cards=dict(self.app.cards)
+        flags=[self.app.language.itemIcon(i).cacheKey() for i in range(2)]
+        with patch.object(self.app,'_build') as build,patch.object(self.app,'render') as render,patch.object(self.app.art,'artwork') as artwork,patch.object(self.app.art.provider,'icon') as icon,patch.object(self.store,'games') as catalog:
+            for language in ('en','hu','en'):
+                self.app.set_language(language)
+                self.assertIs(self.app.centralWidget(),surface); self.assertIs(self.app.pages,pages)
+                self.assertEqual(self.app.cards,cards); self.assertEqual(card.art[0].cacheKey(),pix.cacheKey())
+                self.assertIs(self.qt.focusWidget(),card); self.assertEqual(self.app.art.pending,{key:123})
+            for operation in (build,render,artwork,icon,catalog): operation.assert_not_called()
+        self.assertEqual(flags,[self.app.language.itemIcon(i).cacheKey() for i in range(2)])
+        self.assertIn('Play',card.play.accessibleName()); self.assertIn('Today',card.toolTip())
+        self.assertIn('Daily budget',self.app.ring.toolTip())
+        image=QImage(80,80,QImage.Format_ARGB32); image.fill(QColor('#f08020'))
+        worker.results.put((123,key,image,None,[],'fixture','')); self.app.poll_assets()
+        self.assertIs(self.app.cards[card.game.id],card); self.assertFalse(self.app.art.pending)
+        self.assertEqual(card.art[0].toImage().pixelColor(0,0).name(),'#f08020')
+
+    def test_language_change_keeps_unsaved_settings_scroll_and_dialog_input(self):
+        from PySide6.QtWidgets import QScrollArea,QToolButton,QLineEdit,QPushButton
+        self.app.assets_timer.stop(); self.app.show(); self.app.switch_page(2)
+        self.app.limit.setValue(155); self.app.warning.setValue(12)
+        self.app.games_path.setText('Settings'); self.app.paths['steam'].setText('Beállítások')
+        self.app.overlay_enabled.setChecked(True); self.app.overlay_opacity.setValue(44)
+        self.app.overlay_picker.set_position(.25,.75)
+        advanced=next(w for w in self.app.settings_page.findChildren(QToolButton) if w.isCheckable())
+        advanced.setChecked(True); self.pump(.03)
+        scroll=self.app.settings_page.findChild(QScrollArea); bar=scroll.verticalScrollBar(); bar.setValue(bar.maximum()//2); position=bar.value()
+        self.app.set_language('en'); self.pump(.02)
+        self.assertEqual(bar.value(),position); self.assertTrue(advanced.isChecked()); self.assertEqual(advanced.text(),'Advanced')
+        self.assertEqual(self.app.limit.value(),155); self.assertEqual(self.app.warning.value(),12)
+        self.assertEqual(self.app.games_path.text(),'Settings'); self.assertEqual(self.app.paths['steam'].text(),'Beállítások')
+        self.assertEqual(self.app.overlay_opacity.value(),44); self.assertAlmostEqual(self.app.overlay_picker.x_ratio,.25)
+        self.assertEqual(self.store.settings().limit_seconds,7200)  # Only language was saved.
+        self.app.statistics.refresh(); self.app.statistics.rename_computer.click(); window=self.app._dialogs[-1]
+        name=window.findChild(QLineEdit); name.setText('Beállítások'); name.setSelection(1,4)
+        self.app.set_language('hu')
+        self.assertEqual(name.text(),'Beállítások'); self.assertEqual(name.selectedText(),'eáll')
+        self.assertEqual(window.windowTitle(),self.app.t('Rename computer'))
+        self.assertTrue(any(w.text()==self.app.t('Save') for w in window.findChildren(QPushButton)))
+        window.reject()
+
+    def test_failed_language_save_restores_selection_and_existing_interface(self):
+        from sqlite3 import OperationalError
+        before=self.app.settings; surface=self.app.centralWidget(); cards=dict(self.app.cards)
+        with patch.object(self.store,'save_settings',side_effect=OperationalError('fixture')):
+            self.app.language.setCurrentIndex(self.app.language.findData('en'))
+        self.assertEqual(self.app.settings,before); self.assertEqual(self.store.settings().language,'hu')
+        self.assertEqual(self.app.language.currentData(),'hu'); self.assertIs(self.app.centralWidget(),surface)
+        self.assertEqual(self.app.cards,cards); self.assertIn('Nem sikerült',self.app.status_label.text())
+
+    def test_filtering_back_to_cached_games_uses_images_immediately(self):
+        from PySide6.QtGui import QPixmap,QColor
+        self.app.assets_timer.stop(); self.app._art_queue=[]
+        card=self.app.cards[self.games[0].id]; image=QPixmap(80,80); image.fill(QColor('#148050'))
+        self.app.art.cache[self.app.art.key(card.game)]=(image,None)
+        self.app.search.setText('Beta')
+        with patch.object(self.app.art,'artwork') as load:
+            self.app.search.clear()
+            self.assertEqual(self.app.cards[card.game.id].art[0].cacheKey(),image.cacheKey())
+            self.assertNotIn(card.game.id,self.app._art_queue); load.assert_not_called()
+        self.app.search.setText('Játékmappa'); self.assertIn(card.game.id,self.app.cards)
+        self.app.set_language('en'); self.app.render(); self.assertIn(card.game.id,self.app.cards)
+
+    def test_statistics_refresh_preserves_items_selection_and_translates_cached_data(self):
+        today=date.today().isoformat(); stats=self.app.statistics
+        self.store.add_usage({(today,self.games[0].id):100,(today,self.games[1].id):200}); self.app.tracker.cache.clear()
+        self.app.switch_page(1); stats.preset(7)
+        day=stats.days_list.item(0); legend=stats.legend.item(0); cells=[stats.games_table.item(0,col) for col in range(5)]
+        stats.games_table.selectRow(0); stats.refresh(); stats.refresh()
+        self.assertIs(stats.days_list.item(0),day); self.assertIs(stats.legend.item(0),legend)
+        self.assertEqual([stats.games_table.item(0,col) for col in range(5)],cells)
+        self.assertEqual([index.row() for index in stats.games_table.selectionModel().selectedRows()],[0])
+        self.store.add_usage({(today,self.games[1].id):50}); self.app.tracker.cache.clear(); stats.refresh()
+        self.assertIs(stats.games_table.item(0,3),cells[3]); self.assertEqual(cells[3].text(),'00:04:10')
+        self.assertIn('00:05:50',day.text()); self.assertIn('71,4%',stats.top_detail.text())
+        stats.start.setText('invalid'); stats.refresh(); error=stats.error
+        with patch.object(self.app.statistics_data,'history_by_computer') as history,patch.object(self.store,'games') as catalog:
+            self.app.set_language('en'); history.assert_not_called(); catalog.assert_not_called()
+        self.assertEqual(stats.start.text(),'invalid'); self.assertIs(stats.error,error); self.assertTrue(error.text())
+        self.assertIn('71.4%',stats.top_detail.text()); self.assertEqual(stats.games_table.horizontalHeaderItem(1).text(),'Computer')
+        self.assertIs(stats.legend.item(0),legend); self.assertIn('this computer',stats.games_table.item(0,1).text())
 
     def test_settings_validation_and_saved_language(self):
         self.app.limit.setValue(5); self.app.warning.setValue(10); self.app.save_settings()
@@ -226,7 +324,7 @@ class QtInterfaceTests(unittest.TestCase):
         self.app.overlay_enabled.setChecked(True); self.pump(.03)
         scroll=self.app.pages.widget(2).findChild(QScrollArea); bar=scroll.verticalScrollBar()
         controls=[self.app.limit,self.app.warning,self.app.restriction_minutes,*self.app.bedtime_times.values(),
-                  self.app.overlay_screen,self.app.overlay_opacity]
+                  self.app.overlay_screen,*self.app.overlay_coordinates,self.app.overlay_font_size,self.app.overlay_opacity]
         def value(widget):
             if widget in self.app.bedtime_times.values(): return widget.time()
             if widget is self.app.overlay_screen: return widget.currentIndex()
@@ -238,12 +336,14 @@ class QtInterfaceTests(unittest.TestCase):
                     (widget if focused else self.app.nav[2]).setFocus(); self.pump(.01)
                     position=bar.value(); original=value(widget)
                     point=widget.mapTo(self.app,widget.rect().center())
-                    QTest.wheelEvent(self.app.windowHandle(),point,QPoint(0,-120)); self.pump(.02)
+                    direction=-1 if bar.value()<bar.maximum()-80 else 1
+                    QTest.wheelEvent(self.app.windowHandle(),point,QPoint(0,120*direction)); self.pump(.02)
                     self.assertEqual(value(widget),original)
-                    self.assertGreater(bar.value(),position)
+                    self.assertGreater(abs(bar.value()-position),0)
                     scroll.ensureWidgetVisible(widget); self.pump(.01)
                     point=widget.mapTo(self.app,widget.rect().center()); position=bar.value()
-                    QTest.wheelEvent(self.app.windowHandle(),point,QPoint(),pixelDelta=QPoint(0,-40),phase=Qt.ScrollUpdate)
+                    direction=-1 if bar.value()<bar.maximum()-80 else 1
+                    QTest.wheelEvent(self.app.windowHandle(),point,QPoint(),pixelDelta=QPoint(0,40*direction),phase=Qt.ScrollUpdate)
                     self.pump(.02); self.assertEqual(value(widget),original)
         # The same form controls still accept deliberate keyboard input.
         scroll.ensureWidgetVisible(self.app.limit); self.app.limit.setFocus()
@@ -302,6 +402,125 @@ class QtInterfaceTests(unittest.TestCase):
         self.assertIn('2026-10-22 12:34',self.app.statistics_sync_status())
         self.assertFalse(self.app.statistics.sync_now.isEnabled())
 
+    def test_statistics_rename_computer_offline_preserves_view_identity_and_settings(self):
+        from PySide6.QtWidgets import QLineEdit,QPushButton,QLabel
+        from gametime.store import Store
+        day=date.today().isoformat(); group='a'*32
+        self.app.settings=self.app.catalog.settings=replace(self.app.settings,statistics_sync_group=group,statistics_device_name='Old PC')
+        self.store.save_settings(self.app.settings)
+        self.store.add_usage({(day,self.games[0].id):120})
+        before=self.app.settings; snapshot=self.app.statistics_data.snapshot(group,'Old PC')
+        self.app.switch_page(1); stats=self.app.statistics
+        stats.devices.setCurrentIndex(stats.devices.findData('local'))
+        stats.chart_mode.setCurrentIndex(stats.chart_mode.findData('computer')); stats.choose_day(day)
+        color=stats.chart.series['local'][1]
+        def open_dialog():
+            stats.rename_computer.click(); window=self.app._dialogs[-1]
+            name=window.findChild(QLineEdit)
+            save=next(b for b in window.findChildren(QPushButton) if b.text()==self.app.t('Save'))
+            return window,name,save
+        window,name,save=open_dialog(); self.assertEqual(name.text(),'Old PC'); self.assertEqual(name.maxLength(),80)
+        name.setText('   '); save.click()
+        self.assertIn(self.app.t('Enter a computer name.'),[w.text() for w in window.findChildren(QLabel)])
+        self.assertEqual(self.store.settings(),before)
+        next(b for b in window.findChildren(QPushButton) if b.text()==self.app.t('Cancel')).click()
+        self.assertEqual(self.app.settings,before)
+        window,name,save=open_dialog(); name.setText('  Játszós PC <otthon>  ')
+        with patch.object(self.app,'request_account') as account,patch.object(self.app.statistics_sync,'request') as sync:
+            save.click(); account.assert_not_called(); sync.assert_not_called()
+        expected=replace(before,statistics_device_name='Játszós PC <otthon>')
+        self.assertEqual(self.app.settings,expected); self.assertEqual(self.app.catalog.settings,expected)
+        reader=Store(self.store.path)
+        try: self.assertEqual(reader.settings(),expected)
+        finally: reader.close()
+        self.assertEqual((stats.scope,stats.selected_day,stats.chart_mode.currentData()),('local',day,'computer'))
+        self.assertEqual(stats.chart.series['local'],('Játszós PC <otthon> (ez a gép)',color))
+        self.assertEqual(stats.devices.currentText(),'Játszós PC <otthon> (ez a gép)')
+        self.assertEqual(stats.games_table.item(0,1).text(),'Játszós PC <otthon> (ez a gép)')
+        stats.chart.resize(700,220); stats.chart.grab()
+        self.assertIn('Játszós PC &lt;otthon&gt;',stats.chart.tooltip_at(stats.chart.segment_regions[0][0].center()))
+        renamed=self.app.statistics_data.snapshot(group,expected.statistics_device_name)
+        self.assertEqual(renamed['device'],snapshot['device']); self.assertEqual(renamed['rows'],snapshot['rows'])
+        self.assertGreater(renamed['revision'],snapshot['revision'])
+        self.assertEqual(self.store.totals(day),{self.games[0].id:120})
+        self.assertFalse(self.app.statistics_event_timer.isActive())
+        self.app.set_language('en'); self.assertEqual(self.app.statistics.rename_computer.text(),'Rename computer')
+
+    def test_statistics_rename_computer_queues_sync_without_bypassing_cooldown(self):
+        from PySide6.QtWidgets import QLineEdit,QPushButton,QLabel
+        from sqlite3 import OperationalError
+        group='b'*32
+        self.app.settings=self.app.catalog.settings=replace(self.app.settings,statistics_sync_group=group,statistics_sync_enabled=True)
+        self.store.save_settings(self.app.settings); self.app.statistics_data.defer_sync(600)
+        self.app.switch_page(1); stats=self.app.statistics; before=self.app.settings
+        stats.rename_computer.click(); window=self.app._dialogs[-1]; name=window.findChild(QLineEdit); name.setText('Laptop')
+        save=next(b for b in window.findChildren(QPushButton) if b.text()==self.app.t('Save'))
+        with patch.object(self.store,'save_settings',side_effect=OperationalError('fixture')):
+            save.click()
+        self.assertEqual(self.app.settings,before); self.assertEqual(self.store.settings(),before)
+        self.assertIn(self.app.t('Could not save computer name. Try again.'),[w.text() for w in window.findChildren(QLabel)])
+        with patch.object(self.app,'request_account') as account,patch.object(self.app.statistics_sync,'request') as sync:
+            save.click(); account.assert_not_called(); sync.assert_not_called()
+        self.assertEqual(self.app.settings.statistics_device_name,'Laptop')
+        self.assertTrue(self.app.settings.statistics_sync_enabled); self.assertEqual(self.app.settings.statistics_sync_group,group)
+        self.assertTrue(self.app._sync_event_pending); self.assertTrue(self.app.statistics_event_timer.isActive())
+        self.assertGreater(self.app.statistics_event_timer.remainingTime(),590000)
+        self.assertGreater(self.app.statistics_data.sync_delay(),590)
+
+    def test_statistics_can_rename_any_linked_computer_without_changing_its_snapshot(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QLineEdit,QPushButton,QComboBox,QLabel
+        from gametime.store import Store
+        from gametime.statistics_sync import StatisticsData
+        from sqlite3 import OperationalError
+        day=date.today().isoformat(); group='c'*32
+        self.app.settings=self.app.catalog.settings=replace(self.app.settings,statistics_sync_group=group)
+        self.store.save_settings(self.app.settings); before=self.app.settings
+        self.store.add_usage({(day,self.games[0].id):120}); snapshots=[]
+        for i,seconds in enumerate((300,90)):
+            remote=Store(self.base/('rename-other'+str(i)+'.sqlite3'))
+            try:
+                remote.upsert([self.games[0]]); remote.add_usage({(day,self.games[0].id):seconds})
+                snapshot=StatisticsData(remote).snapshot(group,'Laptop'); snapshots.append(snapshot)
+                self.app.statistics_data.ingest(snapshot,group)
+            finally: remote.close()
+        self.app.switch_page(1); stats=self.app.statistics
+        stats.chart_mode.setCurrentIndex(stats.chart_mode.findData('computer')); stats.choose_day(day)
+        identity=snapshots[0]['device']; colors={key:row[1] for key,row in stats.chart.series.items()}
+        stats.rename_computer.click(); window=self.app._dialogs[-1]
+        selector=window.findChild(QComboBox); self.assertEqual(selector.count(),3)
+        selector.setCurrentIndex(selector.findData(identity)); name=window.findChild(QLineEdit)
+        self.assertEqual(name.text(),'Laptop'); name.setText('Játszós laptop <fent>')
+        save=next(b for b in window.findChildren(QPushButton) if b.text()==self.app.t('Save'))
+        with patch.object(self.app,'request_account') as account,patch.object(self.app,'schedule_statistics_event') as sync:
+            save.click(); account.assert_not_called(); sync.assert_not_called()
+        self.assertEqual((stats.scope,stats.selected_day),('all',day))
+        self.assertEqual(stats.computer_names[identity],'Játszós laptop <fent>')
+        self.assertEqual({key:row[1] for key,row in stats.chart.series.items()},colors)
+        self.assertEqual(stats.chart.series[identity][0],'Játszós laptop <fent>')
+        target=next(i for i in range(stats.games_table.rowCount()) if stats.games_table.item(i,1).data(Qt.UserRole)==identity)
+        self.assertEqual(stats.games_table.item(target,1).text(),'Játszós laptop <fent>')
+        self.assertEqual(self.app.settings,before); self.assertEqual(self.store.totals(day),{self.games[0].id:120})
+        self.assertEqual(stats.report.total,510)
+        newer=dict(snapshots[0],name='A new source name',revision=snapshots[0]['revision']+1)
+        self.app.statistics_data.ingest(newer,group); stats.refresh()
+        self.assertEqual(stats.computer_names[identity],'Játszós laptop <fent>')
+        stats.devices.setCurrentIndex(stats.devices.findData(identity)); stats.rename_computer.click()
+        window=self.app._dialogs[-1]; selector=window.findChild(QComboBox)
+        self.assertEqual(selector.currentData(),identity)
+        name=window.findChild(QLineEdit); name.setText('Failed name')
+        save=next(b for b in window.findChildren(QPushButton) if b.text()==self.app.t('Save'))
+        with patch.object(self.app.statistics_data,'set_device_alias',side_effect=OperationalError('fixture')):
+            save.click()
+        self.assertIn(self.app.t('Could not save computer name. Try again.'),[w.text() for w in window.findChildren(QLabel)])
+        self.assertEqual(stats.computer_names[identity],'Játszós laptop <fent>')
+        self.app.settings=self.app.catalog.settings=replace(before,statistics_sync_group='d'*32)
+        save.click(); self.assertEqual(self.app.statistics_data.device_aliases(group),{identity:'Játszós laptop <fent>'})
+        window.reject(); self.app.settings=self.app.catalog.settings=before
+        self.app.set_language('en'); stats=self.app.statistics
+        self.assertEqual(stats.scope,identity); self.assertEqual(stats.devices.currentText(),'Játszós laptop <fent>')
+        self.assertEqual(stats.chart.series[identity][1],colors[identity])
+
     def test_linked_statistics_filter_computers_without_changing_local_budget(self):
         from gametime.store import Store
         from gametime.model import Game
@@ -350,6 +569,78 @@ class QtInterfaceTests(unittest.TestCase):
         self.app.set_language('en'); stats=self.app.statistics; self.assertEqual(stats.games_table.horizontalHeaderItem(1).text(),'Computer')
         stats.devices.setCurrentIndex(stats.devices.findData('local')); self.assertEqual(rows()['local'][0],'Main PC (this computer)')
         self.assertEqual(self.store.totals(day),{self.games[0].id:120})
+
+    def test_statistics_colored_stacks_preserve_totals_filters_and_language(self):
+        from PySide6.QtCore import Qt,QPointF
+        from PySide6.QtTest import QTest
+        from gametime.statistics_sync import StatisticsData
+        from gametime.store import Store
+        day=date.today().isoformat(); yesterday=(date.today()-timedelta(days=1)).isoformat(); group='a'*32
+        self.store.add_usage({(day,self.games[0].id):120,(day,self.games[1].id):180,(yesterday,self.games[0].id):60})
+        remote=Store(self.base/'colored-remote.sqlite3')
+        try:
+            remote.upsert([self.games[0]]); remote.add_usage({(day,self.games[0].id):300})
+            snapshot=StatisticsData(remote).snapshot(group,'Laptop <guest>')
+        finally: remote.close()
+        self.app.settings=self.app.catalog.settings=replace(self.app.settings,statistics_sync_group=group)
+        self.app.switch_page(1); stats=self.app.statistics
+        self.app.statistics_data.ingest(snapshot,group); stats.refresh()
+        self.assertEqual(stats.report.total,660)
+        self.assertEqual(sorted(stats.chart.segments[day].values()),[180,420])
+        game_colors=dict(stats.chart.series)
+        self.assertEqual(len({color for name,color in game_colors.values()}),2)
+        self.assertIn('72,7%',stats.top_detail.text())
+        stats.chart.resize(700,220); stats.chart.grab()
+        self.assertEqual(len(stats.chart.segment_regions),3)
+        area=next(area for area,d,key in stats.chart.segment_regions if d==day)
+        self.assertIn('70,0%',stats.chart.tooltip_at(area.center()))
+        QTest.mouseClick(stats.chart,Qt.LeftButton,pos=area.center().toPoint())
+        self.assertEqual(stats.selected_day,day)
+        self.assertEqual(stats.games_table.rowCount(),3)
+        stats.chart_mode.setCurrentIndex(stats.chart_mode.findData('computer'))
+        self.assertEqual(stats.selected_day,day)
+        self.assertEqual(stats.chart.segments[day],{'local':300,snapshot['device']:300})
+        self.assertEqual(stats.chart.days[day],600)
+        device_colors=dict(stats.chart.series)
+        self.assertNotEqual(device_colors['local'][1],device_colors[snapshot['device']][1])
+        stats.chart.grab()
+        self.assertIn('Laptop &lt;guest&gt;',stats.chart.tooltip_at(area.center()))
+        self.assertEqual(stats.chart.tooltip_at(QPointF(-1,-1)),'')
+        for row in range(stats.games_table.rowCount()):
+            item=stats.games_table.item(row,1)
+            self.assertFalse(item.icon().isNull())
+            self.assertEqual(item.foreground().color().name(),device_colors[item.data(Qt.UserRole)][1])
+        with patch.object(self.app.statistics_data,'history_by_computer',side_effect=AssertionError('Grouping must reuse cached data')):
+            stats.chart_mode.setCurrentIndex(stats.chart_mode.findData('game'))
+            stats.choose_day(yesterday); stats.show_period()
+        self.assertEqual(stats.chart.series,game_colors)
+        stats.devices.setCurrentIndex(stats.devices.findData('local'))
+        self.assertEqual(stats.report.total,360); self.assertEqual(stats.chart.series,game_colors)
+        stats.chart_mode.setCurrentIndex(stats.chart_mode.findData('computer'))
+        self.assertEqual(stats.chart.series['local'],device_colors['local'])
+        self.app.set_language('en'); stats=self.app.statistics
+        self.assertEqual(stats.chart_mode.currentData(),'computer')
+        self.assertEqual(stats.colors.color('local','computer'),device_colors['local'][1])
+        self.assertEqual(self.store.totals(day),{self.games[0].id:120,self.games[1].id:180})
+
+    def test_statistics_empty_days_and_dense_period_remain_clickable(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+        self.app.switch_page(1); stats=self.app.statistics
+        self.assertEqual(stats.report.total,0); self.assertEqual(stats.legend.count(),0)
+        stats.chart.resize(700,220); stats.chart.grab()
+        self.assertFalse(stats.chart.segment_regions)
+        rect,day,seconds=stats.chart.regions[-1]
+        QTest.mouseClick(stats.chart,Qt.LeftButton,pos=rect.center().toPoint())
+        self.assertEqual(stats.selected_day,day); self.assertEqual(stats.games_table.rowCount(),0)
+        today=date.today(); day=today.isoformat()
+        self.store.add_usage({(day,self.games[0].id):.1})
+        stats.start.setText((today-timedelta(days=365)).isoformat()); stats.end.setText(day); stats.refresh()
+        stats.chart.grab()
+        self.assertEqual(len(stats.chart.regions),366); self.assertEqual(len(stats.chart.segment_regions),1)
+        rect=stats.chart.segment_regions[0][0]
+        self.assertGreater(rect.width(),0); self.assertGreater(rect.height(),0)
+        self.assertIn('100,0%',stats.chart.tooltip_at(rect.center()))
 
     def test_sync_dialog_connects_and_disconnects_without_sharing_settings(self):
         from PySide6.QtWidgets import QLineEdit,QPushButton,QCheckBox
@@ -676,5 +967,23 @@ class QtInterfaceTests(unittest.TestCase):
         self.assertLessEqual(self.app.width(),1000); self.assertLessEqual(self.app.height(),700)
         self.assertGreaterEqual(self.app.grid.columns,2)
         for page in (1,2,0): self.app.switch_page(page); self.pump(); self.assertLessEqual(self.app.width(),1000)
+
+    def test_buttonless_numbers_and_times_have_visible_text_after_resize(self):
+        from PySide6.QtWidgets import QAbstractSpinBox
+        self.app.show(); self.app.switch_page(2)
+        editors=[edit for edit in self.app.schedule_editor._fields.values() if isinstance(edit,QAbstractSpinBox)]
+        self.assertGreaterEqual(len(editors),5)
+        for width in (1000,1380):
+            self.app.resize(width,900); self.pump(.03)
+            for edit in editors:
+                with self.subTest(width=width,field=edit.accessibleName()):
+                    line=edit.lineEdit()
+                    self.assertGreater(line.width(),line.fontMetrics().horizontalAdvance(edit.text())+4)
+                    self.assertGreaterEqual(line.height(),line.fontMetrics().height())
+                    image=edit.grab().toImage()
+                    text_pixels=sum(min(color.red(),color.green(),color.blue())>140
+                                    for y in range(image.height()) for x in range(min(120,image.width()))
+                                    for color in (image.pixelColor(x,y),))
+                    self.assertGreater(text_pixels,8)
 
 if __name__=='__main__': unittest.main()

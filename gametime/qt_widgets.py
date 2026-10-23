@@ -2,13 +2,15 @@
 import configparser
 import hashlib
 import json
+from html import escape
+from math import ceil
 from pathlib import Path
 from queue import Empty
 from .model import within, helper
 from PySide6.QtCore import Qt, QRectF, QPointF, Signal, QTimer, QFileInfo
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap, QLinearGradient, QRegion
-from PySide6.QtWidgets import (QWidget, QFrame, QLabel, QPushButton, QGridLayout,
-    QFileIconProvider, QToolTip, QComboBox, QDoubleSpinBox, QTimeEdit, QSlider)
+from PySide6.QtWidgets import QWidget,QFrame,QGridLayout,QFileIconProvider,QToolTip,QAbstractSpinBox
+from .qt_translation import QLabel,QPushButton,QComboBox,QDoubleSpinBox,QTimeEdit,QSlider
 
 BG, PANEL, TEXT, MUTED, ACCENT = '#101619', '#192126', '#edf4f2', '#93a3a7', '#7de5bf'
 STYLE = '''
@@ -37,9 +39,14 @@ QPushButton[role="nav"]:checked { background: #1d352d; color: #a0f0d1; }
 QPushButton[role="quiet"] { background: transparent; border: none; color: #a1b4b5; }
 QPushButton[role="quiet"]:hover { background: #1f2d31; color: #edf4f2; }
 QPushButton[role="preset"]:checked { background: #24483b; color: #a1f0d2; border-color: #396451; }
-QLineEdit, QComboBox, QDoubleSpinBox, QTimeEdit { background: #182126; border: 1px solid #2e3b42; border-radius: 10px; padding: 10px 12px; selection-background-color: #315e4e; }
-QLineEdit:focus, QComboBox:focus, QDoubleSpinBox:focus, QTimeEdit:focus { border-color: #7de5bf; }
+QPushButton[role="day"] { border-radius:22px; padding:0; color:#b9c9c9; font-weight:600; }
+QPushButton[role="day"]:checked { background:#7de5bf; color:#10291f; border-color:#7de5bf; }
+QPushButton[role="day"]:focus { border:2px solid #d1ffee; }
+QFrame#SectionRule { background:#33434a; border:none; }
+QLineEdit, QPlainTextEdit, QComboBox, QDoubleSpinBox, QTimeEdit { background: #182126; border: 1px solid #2e3b42; border-radius: 10px; padding: 10px 12px; selection-background-color: #315e4e; }
+QLineEdit:focus, QPlainTextEdit:focus, QComboBox:focus, QDoubleSpinBox:focus, QTimeEdit:focus { border-color: #7de5bf; }
 QLineEdit { color: #e5eeec; }
+QAbstractSpinBox[hideStepButtons="true"]::up-button, QAbstractSpinBox[hideStepButtons="true"]::down-button { width:0; height:0; border:none; }
 QComboBox { padding-right: 28px; }
 QComboBox::drop-down { border: none; width: 24px; }
 QComboBox QAbstractItemView { background: #1c282d; border: 1px solid #3c504e; selection-background-color: #315343; padding: 5px; outline: none; }
@@ -87,6 +94,11 @@ def panel(name='Panel'):
     widget=QFrame(); widget.setObjectName(name)
     return widget
 
+
+def separator():
+    widget=QFrame(); widget.setObjectName('SectionRule'); widget.setFixedHeight(1)
+    return widget
+
 def duration(seconds):
     seconds=max(0,int(seconds))
     return f'{seconds//3600:02d}:{seconds%3600//60:02d}:{seconds%60:02d}'
@@ -106,11 +118,20 @@ class NoWheelComboBox(_IgnoreWheel,QComboBox):
     pass  # The open popup's item view retains its own scrolling.
 
 
-class NoWheelDoubleSpinBox(_IgnoreWheel,QDoubleSpinBox):
+class _SpinButtons:
+    def setButtonSymbols(self,symbols):
+        # Qt 6.12's styled NoButtons layout collapses the text editor to one
+        # pixel. Keep its normal layout and hide just the step button controls.
+        hidden=symbols==QAbstractSpinBox.NoButtons
+        self.setProperty('hideStepButtons',hidden)
+        super().setButtonSymbols(QAbstractSpinBox.UpDownArrows if hidden else symbols)
+
+
+class NoWheelDoubleSpinBox(_SpinButtons,_IgnoreWheel,QDoubleSpinBox):
     pass
 
 
-class NoWheelTimeEdit(_IgnoreWheel,QTimeEdit):
+class NoWheelTimeEdit(_SpinButtons,_IgnoreWheel,QTimeEdit):
     pass
 
 
@@ -135,6 +156,9 @@ def glyph(name, color=ACCENT, size=20):
     elif name=='hide': p.drawRoundedRect(QRectF(4,4,16,16),3,3); p.drawLine(8,15,16,15)
     elif name=='bell':
         p.drawArc(QRectF(6,4,12,14),0,180*16); p.drawLine(6,11,5,18); p.drawLine(18,11,19,18); p.drawLine(5,18,19,18); p.drawArc(QRectF(9,17,6,5),180*16,180*16)
+    elif name=='moon':
+        path=QPainterPath(); path.moveTo(17,3); path.cubicTo(7,-1,0,10,6,17)
+        path.cubicTo(11,24,22,19,21,12); path.cubicTo(15,17,9,8,17,3); p.drawPath(path)
     elif name=='dots':
         p.setBrush(QColor(color)); p.setPen(Qt.NoPen)
         for x in (5,12,19): p.drawEllipse(QRectF(x-1.5,10.5,3,3))
@@ -367,30 +391,65 @@ class CardGrid(QWidget):
 
 class DailyChart(QWidget):
     day_clicked=Signal(str)
-    def __init__(self):
-        super().__init__(); self.days={}; self.selected=None; self.regions=[]; self.setMinimumHeight(175); self.setMouseTracking(True)
-    def set_days(self,days,selected=None): self.days=days; self.selected=selected; self.update()
+    def __init__(self,t=lambda text,**values:text.format(**values),format_share=lambda value,total:f'{value/total:.1%}' if total else '0%'):
+        super().__init__(); self.t=t; self.days={}; self.selected=None; self.regions=[]; self.segment_regions=[]
+        self.format_share=format_share
+        self.segments={}; self.series={}; self.setMinimumHeight(220); self.setMouseTracking(True)
+        self.setAccessibleName(t('Daily play time'))
+    def set_days(self,days,selected=None,segments=None,series=None):
+        self.days=days; self.selected=selected; self.segments=segments or {}; self.series=series or {}; self.update()
     def paintEvent(self,event):
-        p=QPainter(self); p.setRenderHint(QPainter.Antialiasing); self.regions=[]
+        p=QPainter(self); p.setRenderHint(QPainter.Antialiasing); self.regions=[]; self.segment_regions=[]
         if not self.days: return
-        maximum=max(1,max(self.days.values())); left,right,top,bottom=64,self.width()-12,18,self.height()-27
-        p.setFont(QFont('Segoe UI',8)); p.setPen(QColor('#73898b'))
-        p.drawText(QRectF(0,top-9,60,20),Qt.AlignLeft,duration(maximum) if maximum>1 else '00:00:00')
-        p.drawText(QRectF(0,bottom-10,60,20),Qt.AlignLeft,'00:00:00')
-        p.setPen(QPen(QColor('#2b3a40'),1,Qt.DotLine)); p.drawLine(left,top,right,top); p.drawLine(left,bottom,right,bottom)
+        peak=max(self.days.values()); maximum=max(900,ceil(peak/900)*900)
+        left,right,top,bottom=68,max(69,self.width()-12),24,self.height()-30
+        p.setFont(QFont('Segoe UI',8))
+        for fraction in (0,.5,1):
+            y=bottom-(bottom-top)*fraction
+            p.setPen(QColor(MUTED)); p.drawText(QRectF(0,y-10,62,20),Qt.AlignLeft|Qt.AlignVCenter,duration(maximum*fraction))
+            p.setPen(QPen(QColor('#304047'),1,Qt.DotLine)); p.drawLine(QPointF(left,y),QPointF(right,y))
         step=(right-left)/len(self.days); every=max(1,(len(self.days)+6)//7)
         for i,(day,seconds) in enumerate(self.days.items()):
             x=left+i*step; height=max(3,(bottom-top)*seconds/maximum); gap=min(6,step/5)
             bar=QRectF(x+gap,bottom-height,max(.5,step-gap*2),height)
-            p.setPen(Qt.NoPen); p.setBrush(QColor(ACCENT if day==self.selected else '#68b4ab' if seconds else '#304249'))
-            p.drawRoundedRect(bar,min(4,bar.width()/3),min(4,bar.width()/3))
+            path=QPainterPath(); path.addRoundedRect(bar,min(4,bar.width()/3),min(4,bar.width()/3))
+            p.save(); p.setClipPath(path); p.setPen(Qt.NoPen)
+            p.fillRect(bar,QColor('#68b4ab' if seconds else '#304249'))
+            y=bottom
+            for key,value in self.segments.get(day,{}).items():
+                if value<=0 or seconds<=0: continue
+                name,color=self.series[key]
+                segment_height=height*value/seconds
+                rect=QRectF(bar.left(),y-segment_height,bar.width(),segment_height)
+                p.fillRect(rect,QColor(color))
+                if segment_height>=5:
+                    p.setPen(QPen(QColor(PANEL),1)); p.drawLine(rect.topLeft(),rect.topRight())
+                self.segment_regions.append((rect,day,key)); y-=segment_height
+            p.restore()
+            if day==self.selected:
+                p.setBrush(Qt.NoBrush); p.setPen(QPen(QColor(TEXT),2)); p.drawPath(path)
             self.regions.append((QRectF(x,top,step,bottom-top),day,seconds))
+            if seconds and bar.width()>=48:
+                p.setPen(QColor(TEXT)); p.drawText(QRectF(x,bar.top()-21,step,18),Qt.AlignCenter,duration(seconds))
             if i%every==0 or i==len(self.days)-1:
-                p.setPen(QColor(MUTED)); p.drawText(QRectF(x-10,bottom+7,step+20,20),Qt.AlignCenter,day[5:])
+                p.setPen(QColor(TEXT if day==self.selected else MUTED)); p.drawText(QRectF(x-10,bottom+7,step+20,20),Qt.AlignCenter,day[5:])
+        if not peak:
+            p.fillRect(QRectF(left,top,right-left,bottom-top-4),QColor(PANEL))
+            p.setPen(QColor(MUTED)); p.drawText(QRectF(left,top,right-left,bottom-top),Qt.AlignCenter,self.t('No recorded play time'))
     def mousePressEvent(self,event):
+        if event.button()!=Qt.LeftButton: return
         for rect,day,seconds in self.regions:
             if rect.contains(event.position()): self.day_clicked.emit(day); break
-    def mouseMoveEvent(self,event):
+    def tooltip_at(self,position):
         for rect,day,seconds in self.regions:
-            if rect.contains(event.position()): self.setToolTip(day+'  ·  '+duration(seconds)); return
-        self.setToolTip('')
+            if not rect.contains(position): continue
+            lines=['<b>'+escape(day)+' · '+duration(seconds)+'</b>']
+            for key,value in self.segments.get(day,{}).items():
+                if value<=0: continue
+                name,color=self.series[key]; share=self.format_share(value,seconds)
+                text=escape(name)+' · '+duration(value)+' · '+share
+                lines.append('<span style="color:'+color+'">●</span> '+text)
+            return '<br>'.join(lines)
+        return ''
+    def mouseMoveEvent(self,event):
+        self.setToolTip(self.tooltip_at(event.position()))

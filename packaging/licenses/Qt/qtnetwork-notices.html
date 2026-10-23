@@ -3,9 +3,8 @@
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta content="Provides networking capabilities" name="description"/>
-  <title>Qt Network | Qt 6.11.2</title>
-<link rel="canonical" href="https://doc.qt.io/qt-6/qtnetwork-index.html" />
+  <meta content="Provides networking capabilities." name="description"/>
+  <title>Qt Network | Qt 6.12.0</title>
   <link rel="stylesheet" type="text/css" href="/style/online2.css" />
   <link rel="stylesheet" href="https://www.qt.io/hubfs/qt-design-system/qt-design-system-1.1.0.css" />
   <link rel="stylesheet" type="text/css" href="/style/font-awesome.min.css" />
@@ -120,11 +119,16 @@
             <div class="b-sidebar__sidebar__mobile-close"><div class="c-mobile-close"></div></div>
             <div class="b-sidebar__sidebar__mobile-toggle" data-mobile-title="Topics"></div>
                         <div class="b-sidebar__sidebar__content">
-                <div data-margin-bottom="md">
+                <div data-margin-bottom="sm">
                                         <select id="qds-vdropdown" class="c-form-select c-form-select--dark js-versioncontrol" style="visibility:hidden">
                                             </select>
                                     </div>
-                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
+                                <div id="qds-filter-container" data-margin-bottom="sm" style="display:none">
+                    <label for="qds-filter-sl">Filter topics</label>
+                    <select id="qds-filter-sl" class="c-form-select c-form-select--dark"></select>
+                    <div id="qds-filter-note" style="display:none">Topic not in active filter<button type="button" id="qds-filter-clear">Clear</button></div>
+                </div>
+                                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
                 <nav>
                     <div id="sidebar-toctree"></div>
                     <ul class="c-sidebar-navigation">
@@ -144,7 +148,7 @@
                         </form>
                     </div>                    <div class="b-topbar__breadcrump" translate="no">
                         <ul class="c-breadcrump">
-                            <li><a href="index.html">Qt 6.11</a></li>
+                            <li><a href="index.html">Qt 6.12</a></li>
                             <li><a>Qt Network</a></li>
                         </ul>
                     </div>
@@ -165,12 +169,12 @@
 <p>Using a Qt module's C++ API requires linking against the module library, either directly or through other dependencies. Several build tools have dedicated support for this, including <a href="https://cmake.org/cmake/help/latest/">CMake</a> and <a href="qmake-manual.html">qmake</a>.</p>
 <h3 id="building-with-cmake">Building with CMake<a class="plink" href="#building-with-cmake" title="Direct link to this headline"></a></h3>
 <p>Use the <code translate="no">find_package()</code> command to locate the needed module component in the <code translate="no">Qt6</code> package:</p>
-<div class="pre"><pre class="cpp prettyprint" translate="no">find_package(Qt6 REQUIRED COMPONENTS Network)
-target_link_libraries(mytarget PRIVATE Qt6<span class="operator">::</span>Network)</pre></div>
+<div class="pre"><pre class="cpp prettyprint" translate="no"><code class="cpp">find_package(Qt6 REQUIRED COMPONENTS Network)
+target_link_libraries(mytarget PRIVATE Qt6<span class="operator">::</span>Network)</code></pre></div>
 <p>For more details, see the <a href="cmake-manual.html">Build with CMake</a> overview.</p>
 <h3 id="building-with-qmake">Building with qmake<a class="plink" href="#building-with-qmake" title="Direct link to this headline"></a></h3>
 <p>To configure the module for building with qmake, add the module as a value of the <code translate="no">QT</code> variable in the project's .pro file:</p>
-<div class="pre"><pre class="cpp prettyprint" translate="no">QT <span class="operator">+</span><span class="operator">=</span> network</pre></div>
+<div class="pre"><pre class="cpp prettyprint" translate="no"><code class="cpp">QT <span class="operator">+</span><span class="operator">=</span> network</code></pre></div>
 <h2 id="articles-and-guides">Articles and Guides<a class="plink" href="#articles-and-guides" title="Direct link to this headline"></a></h2>
 <p>These articles contain information about Qt Network setup and about applications with networking capabilities.</p>
 <ul>
@@ -186,13 +190,13 @@ target_link_libraries(mytarget PRIVATE Qt6<span class="operator">::</span>Networ
 <p><a href="network-changes-qt6.html">Changes to Qt Network</a> lists important changes in the module API and functionality that were done for the Qt 6 series of Qt.</p>
 <h2 id="licenses-and-attributions">Licenses and Attributions<a class="plink" href="#licenses-and-attributions" title="Direct link to this headline"></a></h2>
 <p>Qt Network is available under commercial licenses from <a href="https://www.qt.io/about-us/">The Qt Company</a>. In addition, it is available under the <a href="https://www.gnu.org/licenses/lgpl-3.0.html">GNU Lesser General Public License, version 3</a>, or the <a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html">GNU General Public License, version 2</a>. See <a href="licensing.html">Qt Licensing</a> for further details.</p>
-<p>Furthermore, Qt Network in Qt 6.11.2 may contain third-party modules under the following permissive licenses:</p>
+<p>Furthermore, Qt Network in Qt 6.12.0 may contain third-party modules under the following permissive licenses:</p>
 <div class="table"><table class="annotated">
 <tr class="odd topAlign"><td class="tblName" translate="no"><p><a href="qtnetwork-attribution-psl-data.html">The Public Suffix List, version 2026-05-14_08-35-31_UTC</a></p></td><td class="tblDescr"><p>Mozilla Public License 2.0</p></td></tr>
 <tr class="even topAlign"><td class="tblName" translate="no"><p><a href="qtnetwork-attribution-libpsl.html">libpsl - C library to handle the Public Suffix List, version 664f3dc85259ec65e30248a61fa1c45b7b0e4c3f</a></p></td><td class="tblDescr"><p>BSD 3-clause "New" or "Revised" License</p></td></tr>
 </table></div>
 <p>Qt Network can make use of the <a href="https://www.openssl.org/">OpenSSL Toolkit</a> as a back end. The library is then linked against OpenSSL in a way that requires compliance with the <a href="https://www.openssl.org/source/license.html">OpenSSL License</a>. To allow linking OpenSSL with Qt Network under the GPL, following exceptions to the GPL do apply:</p>
-<div class="pre"><pre class="cpp plain" translate="no">In addition, as a special exception, the copyright holders listed above give
+<div class="pre"><pre class="cpp plain" translate="no"><code class="text">In addition, as a special exception, the copyright holders listed above give
 permission to link the code of its release of Qt with the OpenSSL project's
 "OpenSSL" library (or modified versions of the "OpenSSL" library that use the
 same license as the original version), and distribute the linked executables.
@@ -201,7 +205,7 @@ You must comply with the GNU General Public License version 2 in all
 respects for all of the code used other than the "OpenSSL" code.  If you
 modify this file, you may extend this exception to your version of the file,
 but you are not obligated to do so.  If you do not wish to do so, delete
-this exception statement from your version of this file.</pre></div>
+this exception statement from your version of this file.</code></pre></div>
 <p>Also note shipping OpenSSL might cause <a href="ssl.html#import-and-export-restrictions">Import and Export Restrictions</a> to apply.</p>
 </div>
 <!-- @@@qtnetwork-index.html -->

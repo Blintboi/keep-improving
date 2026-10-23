@@ -4,8 +4,7 @@
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta content="Creative Commons Zero v1.0 Universal" name="description"/>
-  <title>Secure Hash Algorithm SHA-3 - Keccak, version 3.2 | Qt Core | Qt 6.11.2</title>
-<link rel="canonical" href="https://doc.qt.io/qt-6/fr/qtcore-attribution-sha3-keccak.html" />
+  <title>Secure Hash Algorithm SHA-3 - Keccak, version 3.2 | Qt Core | Qt 6.12.0</title>
   <link rel="stylesheet" type="text/css" href="/style/online2.css" />
   <link rel="stylesheet" href="https://www.qt.io/hubfs/qt-design-system/qt-design-system-1.1.0.css" />
   <link rel="stylesheet" type="text/css" href="/style/font-awesome.min.css" />
@@ -119,11 +118,16 @@
             <div class="b-sidebar__sidebar__mobile-close"><div class="c-mobile-close"></div></div>
             <div class="b-sidebar__sidebar__mobile-toggle" data-mobile-title="Topics"></div>
                         <div class="b-sidebar__sidebar__content">
-                <div data-margin-bottom="md">
+                <div data-margin-bottom="sm">
                                         <select id="qds-vdropdown" class="c-form-select c-form-select--dark js-versioncontrol" style="visibility:hidden">
                                             </select>
                                     </div>
-                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
+                                <div id="qds-filter-container" data-margin-bottom="sm" style="display:none">
+                    <label for="qds-filter-sl">Filter topics</label>
+                    <select id="qds-filter-sl" class="c-form-select c-form-select--dark"></select>
+                    <div id="qds-filter-note" style="display:none">Topic not in active filter<button type="button" id="qds-filter-clear">Clear</button></div>
+                </div>
+                                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
                 <nav>
                     <div id="sidebar-toctree"></div>
                     <ul class="c-sidebar-navigation">
@@ -143,7 +147,7 @@
                         </form>
                     </div>                    <div class="b-topbar__breadcrump" translate="no">
                         <ul class="c-breadcrump">
-                            <li><a href="index.html">Qt 6.11</a></li>
+                            <li><a href="index.html">Qt 6.12</a></li>
                             <li><a href="qtcore-index.html">Qt Core</a></li>
                             <li><a>Secure Hash Algorithm SHA-3 - Keccak, version 3.2</a></li>
                         </ul>
@@ -163,11 +167,11 @@
 <p>Used in Qt Core (<a href="qcryptographichash.html" translate="no">QCryptographicHash</a>).</p>
 <p>The sources can be found in qtbase/src/3rdparty/sha3/KeccakF-1600-32-rvk.macros, qtbase/src/3rdparty/sha3/KeccakF-1600-32.macros, qtbase/src/3rdparty/sha3/KeccakF-1600-64.macros, qtbase/src/3rdparty/sha3/KeccakF-1600-interface.h, qtbase/src/3rdparty/sha3/KeccakF-1600-opt32.c, qtbase/src/3rdparty/sha3/KeccakF-1600-opt64.c, qtbase/src/3rdparty/sha3/KeccakF-1600-unrolling.macros, qtbase/src/3rdparty/sha3/KeccakNISTInterface.c, qtbase/src/3rdparty/sha3/KeccakNISTInterface.h, qtbase/src/3rdparty/sha3/KeccakSponge.c, and qtbase/src/3rdparty/sha3/KeccakSponge.h.</p>
 <p>upstream version: 3.2</p>
-<div class="pre"><pre class="cpp plain" translate="no">Guido Bertoni, Joan Daemen, Michaël Peeters and Gilles Van Assche.
+<div class="pre"><pre class="cpp plain" translate="no"><code class="text">Guido Bertoni, Joan Daemen, Michaël Peeters and Gilles Van Assche.
 To the extent possible under law, the implementers have waived all copyright
-and related or neighboring rights to the source code in this file.</pre></div>
+and related or neighboring rights to the source code in this file.</code></pre></div>
 <p><a href="https://spdx.org/licenses/CC0-1.0.html">Creative Commons Zero v1.0 Universal</a>.</p>
-<div class="pre"><pre class="cpp plain" translate="no">CREATIVE COMMONS CORPORATION IS NOT A LAW FIRM AND DOES NOT PROVIDE LEGAL SERVICES. DISTRIBUTION OF
+<div class="pre"><pre class="cpp plain" translate="no"><code class="text">CREATIVE COMMONS CORPORATION IS NOT A LAW FIRM AND DOES NOT PROVIDE LEGAL SERVICES. DISTRIBUTION OF
 THIS DOCUMENT DOES NOT CREATE AN ATTORNEY-CLIENT RELATIONSHIP. CREATIVE COMMONS PROVIDES THIS
 INFORMATION ON AN "AS-IS" BASIS. CREATIVE COMMONS MAKES NO WARRANTIES REGARDING THE USE OF THIS
 DOCUMENT OR THE INFORMATION OR WORKS PROVIDED HEREUNDER, AND DISCLAIMS LIABILITY FOR DAMAGES
@@ -265,7 +269,7 @@ c. Affirmer disclaims responsibility for clearing rights of other persons that m
    permissions or other rights required for any use of the Work.
 
 d. Affirmer understands and acknowledges that Creative Commons is not a party to this document and
-   has no duty or obligation with respect to this CC0 or use of the Work.</pre></div>
+   has no duty or obligation with respect to this CC0 or use of the Work.</code></pre></div>
 </div>
 <!-- @@@qtcore-attribution-sha3_keccak.html -->
 </div>

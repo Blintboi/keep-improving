@@ -4,8 +4,7 @@
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta content="Mozilla Public License 2.0" name="description"/>
-  <title>The Public Suffix List, version 2026-05-14_08-35-31_UTC | Qt Network | Qt 6.11.2</title>
-<link rel="canonical" href="https://doc.qt.io/qt-6/fr/qtnetwork-attribution-psl-data.html" />
+  <title>The Public Suffix List, version 2026-05-14_08-35-31_UTC | Qt Network | Qt 6.12.0</title>
   <link rel="stylesheet" type="text/css" href="/style/online2.css" />
   <link rel="stylesheet" href="https://www.qt.io/hubfs/qt-design-system/qt-design-system-1.1.0.css" />
   <link rel="stylesheet" type="text/css" href="/style/font-awesome.min.css" />
@@ -119,11 +118,16 @@
             <div class="b-sidebar__sidebar__mobile-close"><div class="c-mobile-close"></div></div>
             <div class="b-sidebar__sidebar__mobile-toggle" data-mobile-title="Topics"></div>
                         <div class="b-sidebar__sidebar__content">
-                <div data-margin-bottom="md">
+                <div data-margin-bottom="sm">
                                         <select id="qds-vdropdown" class="c-form-select c-form-select--dark js-versioncontrol" style="visibility:hidden">
                                             </select>
                                     </div>
-                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
+                                <div id="qds-filter-container" data-margin-bottom="sm" style="display:none">
+                    <label for="qds-filter-sl">Filter topics</label>
+                    <select id="qds-filter-sl" class="c-form-select c-form-select--dark"></select>
+                    <div id="qds-filter-note" style="display:none">Topic not in active filter<button type="button" id="qds-filter-clear">Clear</button></div>
+                </div>
+                                <div id="qds-ec-toggle" title="Expand/collapse all"></div>
                 <nav>
                     <div id="sidebar-toctree"></div>
                     <ul class="c-sidebar-navigation">
@@ -143,7 +147,7 @@
                         </form>
                     </div>                    <div class="b-topbar__breadcrump" translate="no">
                         <ul class="c-breadcrump">
-                            <li><a href="index.html">Qt 6.11</a></li>
+                            <li><a href="index.html">Qt 6.12</a></li>
                             <li><a href="qtnetwork-index.html">Qt Network</a></li>
                             <li><a>The Public Suffix List, version 2026-05-14_08-35-31_UTC</a></li>
                         </ul>
@@ -166,10 +170,10 @@
 <p>Used in Qt Network to avoid setting "supercookies" in the cookie jar supported by Qt (by the <a href="qnetworkcookiejar.html" translate="no">QNetworkCookieJar</a> class).</p>
 <p>The sources can be found in qtbase/src/3rdparty/libpsl/psl_data.cpp.</p>
 <p><a href="http://publicsuffix.org/">Project Homepage</a>, upstream version: <a href="https://publicsuffix.org/list/public_suffix_list.dat">2026-05-14_08-35-31_UTC</a></p>
-<div class="pre"><pre class="cpp plain" translate="no">The list was originally provided by Jo Hermans &lt;jo.hermans@gmail.com&gt;.
-It is now maintained on github (https://github.com/publicsuffix/list).</pre></div>
+<div class="pre"><pre class="cpp plain" translate="no"><code class="text">The list was originally provided by Jo Hermans &lt;jo.hermans@gmail.com&gt;.
+It is now maintained on github (https://github.com/publicsuffix/list).</code></pre></div>
 <p><a href="https://spdx.org/licenses/MPL-2.0.html">Mozilla Public License 2.0</a>.</p>
-<div class="pre"><pre class="cpp plain" translate="no">Mozilla Public License Version 2.0
+<div class="pre"><pre class="cpp plain" translate="no"><code class="text">Mozilla Public License Version 2.0
 ==================================
 
 1. Definitions
@@ -541,7 +545,7 @@ Exhibit B - "Incompatible With Secondary Licenses" Notice
 ---------------------------------------------------------
 
   This Source Code Form is "Incompatible With Secondary Licenses", as
-  defined by the Mozilla Public License, v. 2.0.</pre></div>
+  defined by the Mozilla Public License, v. 2.0.</code></pre></div>
 </div>
 <!-- @@@qtnetwork-attribution-psl-data.html -->
 </div>

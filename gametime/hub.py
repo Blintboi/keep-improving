@@ -450,6 +450,8 @@ class HubWorker:
         self.pending = None
         self.first_request = None
         self.failures = 0
+        from .background import BackgroundFailures
+        self.problems = BackgroundFailures()
         self.closed = False
         self.thread = threading.Thread(target=self._run, daemon=True, name="gaming-hub")
         self.thread.start()
@@ -477,19 +479,22 @@ class HubWorker:
             try:
                 result = self.hub.sync(*job)
                 self.failures = 0
+                self.problems.update("shortcuts", False)
                 if result.get("enabled"):
                     log.info("Gaming Hub updated: %d games, %d shortcuts, %d changes",
                              result["games"], result["links"], result["changed"])
                 self.results.put(result)
             except Exception as exc:
                 log.exception("Gaming Hub update failed")
-                self.results.put({"error": str(exc)})
+                self.failures = self.problems.update("shortcuts", True)
+                self.results.put({"error": str(exc), "persistent": bool(self.problems.reported)})
                 with self.condition:
-                    self.failures += 1
-                    if not self.closed and self.pending is None and self.failures <= 2:
+                    now = time.monotonic()
+                    remaining = self.problems.failures["shortcuts"][0] + self.problems.PERSISTENT_SECONDS - now
+                    if not self.closed and self.pending is None and (self.failures <= self.problems.MAX_RETRIES or remaining > 0):
                         self.pending = job
-                        self.first_request = time.monotonic()
-                        self.due = self.first_request + 2 ** self.failures
+                        self.first_request = now
+                        self.due = now + (self.problems.retry_delay(self.failures) if self.failures <= self.problems.MAX_RETRIES else remaining)
 
     def close(self):
         with self.condition:

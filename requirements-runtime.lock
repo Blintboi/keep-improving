@@ -1,10 +1,10 @@
 # SHA-256 locked PyPI wheels for Windows x64 / CPython 3.13.
 --only-binary=:all:
 --require-hashes
-# pyside6_essentials-6.11.2-cp310-abi3-win_amd64.whl
-PySide6-Essentials==6.11.2 --hash=sha256:c8a29def77032773a30879f7f24415b5395ad08592d147c170824ef4c735dfc1
-# shiboken6-6.11.2-cp310-abi3-win_amd64.whl
-shiboken6==6.11.2 --hash=sha256:6ab0eba1c904455df621f9a6df3ca2bb896bab8670572d2bc4e37804ae91f19a
+# pyside6_essentials-6.12.0-cp310-abi3-win_amd64.whl
+PySide6-Essentials==6.12.0 --hash=sha256:c9a95102aa23c1f86516a30d5a9be37552d324eee7e567eb7508973f1218cb42
+# shiboken6-6.12.0-cp310-abi3-win_amd64.whl
+shiboken6==6.12.0 --hash=sha256:a1906cb8116869178c64b6bab52623bbc8b4ceed7b30bfc3c9aa0f6e67f6438e
 # cryptography-50.0.2-cp311-abi3-win_amd64.whl
 cryptography==50.0.2 --hash=sha256:7afa5a6602a9f29af1f3a2965f831bae7c9d5d597b7cbb716d41ab3b7d89879c
 # cffi-2.1.1-cp313-cp313-win_amd64.whl

@@ -62,12 +62,12 @@ class ResourceInterfaceTests(unittest.TestCase):
             self.app.poll_assets(); sync.assert_called_once()
         self.assertEqual(self.app.assets_timer.interval(),1000)
 
-    def test_hidden_launcher_page_does_not_rescan_and_rescans_on_return(self):
-        self.app.pages.setCurrentIndex(3); self.app._clients_refreshed=0
+    def test_launcher_page_does_not_rescan_when_hidden_or_restored(self):
+        self.app.pages.setCurrentIndex(3)
         self.app.client_worker=type('Worker',(),{'results':Queue(),'close':lambda me:None})()
         with patch.object(self.app,'refresh_clients') as refresh:
             self.app.poll_assets(); refresh.assert_not_called()
-            self.app.show(); self.app.poll_assets(); refresh.assert_called_once()
+            self.app.show(); self.app.poll_assets(); refresh.assert_not_called()
 
     def test_overlay_has_no_fast_idle_polling_but_keeps_live_guard(self):
         from gametime.tracker import Sample
