@@ -52,10 +52,11 @@ QT_STORAGE_LABELS = {
     'aa7cf051bda037585c4c6f4d1f633a9a6e70d1d6515d2fc8d19c2f6903ef0166',
     'f0109346296b24f2a5e86628964aa12a9c0fbb6054e20c3be1ba685fe5384169',
 }
-# Same deliberately invalid Auth fixture recorded in .gitleaksignore. Pin the
-# entire file contents and finding location; any changed/new finding still fails.
+# Same deliberately invalid Auth fixture recorded in .gitleaksignore. Pin both
+# exact LF/CRLF checkouts and the finding location; any other change still fails.
 REVIEWED_FIXTURES = {
     '3eea154832df71df67295b5927ce5e5128f817e42dd79368d5177a8cf5d619d0': ('generic-api-key', 20),
+    '0844c17749a13cf763c8b3af38bea62686d56fd9608f286dcdf47cb62c8eb69d': ('generic-api-key', 20),
 }
 # Exact official Qt 6.12 DLL bytes, checked against the installed wheel RECORD.
 # Core: translated timezone names ending in "...sk-tyd..." / "...sk-tijd...".

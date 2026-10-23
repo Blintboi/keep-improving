@@ -2,157 +2,90 @@
 
 **[Download for Windows x64 — 2.26.2](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256) · [Magyar](README.hu.md)
 
-A Windows 11 gaming hub that measures foreground game time, shows your remaining daily budget and reminds you when to finish. It includes a weekly schedule, bedtime reminders, customizable countdowns and optional encrypted statistics between your own computers.
+Game Time Monitor brings your installed games, daily play time and personal reminders into one Windows application. Plan your gaming time, follow your remaining allowance and review your habits across your own computers.
 
-This is a free, open-source personal project. Tracking and the desktop features work without an account or internet connection. **Automatic public update checks are on by default and can be disabled; cloud synchronization is off by default.**
+Free and open source, with an English and Hungarian interface. Local tracking works offline without an account; computer linking is optional.
 
-## What is included
+## Features
 
-- **Game library:** discover installed games, launch them, search/filter cards, hide games and assign or exclude executables. Artwork comes from local files and caches.
-- **Time tracking:** one local daily budget shared by tracked games. Background games, browsers, launchers, sleep and locked sessions do not consume it. Menus or pauses can count while the game remains in the foreground.
-- **Weekly schedule:** select any of seven day buttons, individually or in groups, and configure budgets, warnings, restrictions and bedtime.
-- **Countdown:** desktop or optional RTSS display, precise position, monitor, opacity, size, normal/warning colors and per-game overrides.
-- **Reminders:** editable default messages, time placeholders, sound choices, a local WAV file or silence, with previews before saving.
-- **Statistics:** color-coded daily bars by game or computer, legends, hover/click details, date ranges and summaries. Linked computers can be renamed.
-- **English and Hungarian:** language changes update text while retaining loaded artwork, selections and unsaved settings.
-
-**In 2.26.2:** countdown handoffs were tightened for rapid Alt–Tab, game switches and preview on/off. Late RTSS receipts cannot restore an earlier visit, and health checks retain visible text instead of repeatedly clearing it. Temporary discovery/watcher errors retry quietly in the log; persistent failures show a plain-language notice.
+- **Game library:** discover and launch installed games, search your collection and choose which games to track.
+- **Daily budgets and weekly schedules:** set time limits, warnings and bedtime reminders for individual days or groups of days.
+- **Customizable countdown:** see your remaining time while playing, with adjustable position, size, opacity and colors, including per-game styles.
+- **Personal reminders:** write your own messages with remaining-time information, choose a sound or use a local WAV file.
+- **Play-time statistics:** explore color-coded charts by game or computer, daily details and summaries for a selected period.
+- **Optional computer linking:** combine statistics from your own PCs through encrypted synchronization and give each computer a recognizable name.
 
 ![Game library and daily budget](docs/images/library-en.png)
-*Illustration of the English interface. Screenshots may show an earlier layout and demonstration history; game artwork belongs to its respective owners.*
+*English interface. Screenshots may show an earlier layout and sample history. Game artwork belongs to its respective owners.*
 
-## Requirements and supported sources
+## Requirements and game support
 
-**Windows 11 x64** is the supported platform. The installer includes Python, Qt/PySide6 6.12.0 and the required runtime libraries; normal installation and use do not require administrator rights. There are no supported macOS, Linux or Windows ARM64 builds.
+**Windows 11 x64.** The installer includes the required runtime; Python does not need to be installed separately. Normal installation and use do not require administrator rights.
 
-| Source | Recognition and launch support |
-| --- | --- |
-| Steam | Local installation records, including multiple libraries. |
-| Epic Games Launcher | Installed-game manifests. |
-| Ubisoft Connect | Installed games and publisher-client launch integration. |
-| Riot Client | Installed games and client launch integration; Riot Client and Vanguard are excluded from game time. |
-| EA app / Origin | Local installation registrations; publisher launch links or an assigned game EXE. |
-| Battle.net | Installation registrations and the local Agent index; recognized product launch links. |
-| GOG Galaxy / offline GOG | Registered games, Galaxy launch integration and local primary play tasks without Galaxy. |
-| Xbox / Microsoft Store | Installed GDK/Xbox Live game packages; registered Windows application identities. |
-| Rockstar Games Launcher | Installed-game registrations and publisher-client launch. |
-| Amazon Games | Local installation database and publisher launch links. |
-| Minecraft: Java Edition | Official Java game data and its dedicated runtime. |
-| Standalone and other games | The configured Games folder and manual executable assignments. |
+Supported game sources include **Steam, Epic Games Launcher, Ubisoft Connect, Riot Client, EA app / Origin, Battle.net, GOG Galaxy and offline GOG games, Xbox / Microsoft Store, Rockstar Games Launcher, Amazon Games and Minecraft: Java Edition**.
 
-**The Games folder remains available.** It is an additional discovery location for standalone games; you do not need to move Steam or other recognized libraries into it. Manual EXE assignment helps with unrecognized games, but cannot make an inaccessible executable or unsupported installation inspectable. Store packages without recognizable game metadata, elevated games and protected installations can have limitations. Client detection does not install launchers or games.
+For standalone or unrecognized games, use the configured **Games folder** or assign a game executable manually. Existing launcher libraries can stay in their original locations. Recognition and launch support depend on the installation; some protected or Store packages may be unavailable.
 
-The **Launchers** page keeps discovered clients between restarts. Use **Refresh** after installing, moving or removing a client. Hiding a library card and excluding a game from time tracking are separate actions.
+## Getting started
 
-## Install, update and close
+1. Download and run **GameTimeMonitor-Setup.exe** using the link above.
+2. Open **Gaming Hub** from the desktop shortcut or tray icon and review your library.
+3. Set your schedule and reminders under **Settings**, then select **Save**.
 
-1. Download **GameTimeMonitor-Setup.exe** from the link at the top and run it.
-2. Open **Gaming Hub** from its desktop shortcut or tray icon. On subsequent Windows sign-ins, the monitor starts in the tray.
-3. Open **Settings**, configure your preferences and select **Save**. The default app directory is `%LOCALAPPDATA%\Programs\GameTimeMonitor`; the profile is separate under the Windows Documents folder, `GameTimeMonitor\data`.
+The monitor starts in the tray when you sign in to Windows. Closing the Hub with **X** keeps tracking and reminders active; **Exit monitor** in the tray menu stops the application.
 
-An upgrade backs up the existing profile and preserves history, settings, synchronization credentials, hidden games and tracking exclusions. The window's **X** hides the Hub; tracking and reminders continue. Use **Exit monitor** in the tray menu to stop it.
+Updates preserve your history, settings and tracking exclusions. Automatic update notifications are enabled by default and can be disabled in Settings. **Download update** opens the installer in your browser; you choose when to download and install it.
 
-### Update notifications
+The application is currently **unsigned**, so Windows may show an unknown-publisher warning or restrict execution. See the [Windows trust and signing guide (Hungarian)](docs/WINDOWS-TRUST.hu.md).
 
-Under **Settings → Application updates**, you can disable automatic checks, use **Check for updates** and see the installed version. Automatic checks request a small public GitHub version file at most once per day. A newer version is indicated in the Hub and tray without an interrupting popup.
+## Plan your play time
 
-**Download update** opens the official installer URL in your browser. You choose when to download and run it; the app does not download or install executables in the background. Temporary automatic-check failures stay in the log. Builds older than 2.26.0 need a manual download to gain this feature.
+A shared daily budget covers all tracked games. Time counts while a recognized game is in the foreground, including its menus or pauses; background games, launchers and locked sessions do not consume the budget. The daily allowance resets at local midnight.
 
-### Windows trust
+Use the seven day buttons in **Settings → Weekly schedule** to configure each day separately or apply a plan to a group. Set a daily budget, early warning and bedtime, with optional automatic minimization when a limit is reached.
 
-The installer and main executable are currently **unsigned**. Windows may warn about an unknown publisher or block execution under local security policies. File icons, version properties and a matching SHA-256 do not constitute Microsoft approval or a publisher signature. The app does not add antivirus exceptions or disable Windows protection. See the [Windows trust/signing guide (Hungarian)](docs/WINDOWS-TRUST.hu.md).
+The optional **Cap remaining game time at bedtime** setting limits the countdown to whichever comes first: the end of your daily allowance or bedtime. With two hours left at 23:00 and bedtime at midnight, the countdown shows one hour.
 
-## Daily limits, weekly schedule and bedtime
-
-Use **Settings → Weekly schedule**. Seven day buttons and **Every day / Weekdays / Weekend** shortcuts select a single day or any group. Mixed values are marked; a group edit changes only fields you edit. A separate command copies a day's complete plan. Existing weekend settings remain compatible.
-
-| Setting | Fresh-profile value |
-| --- | --- |
-| Daily budget, shared across tracked games | 120 minutes |
-| Early warning | After 100 minutes |
-| Optional play-restriction threshold | 125 minutes; restriction off |
-| Bedtime warning / bedtime / morning resume | 23:55 / 00:00 / 06:00; bedtime off |
-| Cap remaining game time at bedtime | Off |
-| Countdown / RTSS / cloud synchronization | Off |
-| Automatic update checks | On |
-
-The daily quota resets at **local midnight**. The optional **Cap remaining game time at bedtime** shows the smaller of the unused quota and the time until bedtime. For example, with two hours still unused at 23:00 and bedtime at 00:00, it shows one hour. The Hub, tray and desktop/RTSS countdown agree. During the configured sleep window, the cap stays at zero until morning resume. It changes the displayed available time, not the configured quota or calendar-day history.
-
-Daily restriction and bedtime minimization are separate opt-in controls. Daily restriction repeatedly minimizes an eligible tracked game after its threshold, allowing ten seconds to save/quit on a return. Bedtime minimization can affect eligible foreground apps, including browsers, every ten seconds until resume. **The app does not shut down the PC.** A minimized game may keep running, and online games may apply inactivity/leaving penalties. Protected games have additional safeguards below.
-
-Bedtime follows the local clock while the monitor runs; it does not wake the computer or replay a missed warning. The Hub remains accessible to change settings. This is a personal reminder tool, not tamper-resistant parental control.
+This is a personal time-management tool, not tamper-resistant parental control. Automatic minimization does not close games or shut down the PC and can have inactivity or leaving consequences in online games.
 
 ![Bedtime settings](docs/images/bedtime-en.png)
 
-## Countdown, preview and custom reminders
+## Make the countdown and reminders your own
 
-Enable the countdown in **Settings**. Choose a monitor, opacity and separate normal/warning colors. Set an **8–72 pt** text size and precise horizontal/vertical pixel coordinates, or drag the miniature. Arrow keys move one pixel; Shift + arrow moves ten. Instructions stay below the miniature instead of covering it on hover.
+Choose a display, precise position, text size, opacity and separate normal and warning colors. Drag the placement preview or enter pixel coordinates. **Per-game countdowns** let you use a different position and style for each game, or hide its countdown.
 
-**Per-game countdowns**, also accessible from a game's menu, list installed games. Each game can inherit the global settings, use its own monitor/position/size/colors, or hide its countdown. Opacity and the RTSS automatic-mode switch are global. Hiding a countdown does not disable time tracking; reminder fallback remains available. Removed games leave the installed-game selector while their history and saved preferences remain.
+Check the result with a ten-second preview over a compatible running game. A dim game image can help with placement; it is held only in memory. Compatible fullscreen games can use [RTSS 7.3.7 or later, installed separately](https://www.guru3d.com/download/rtss-rivatuner-statistics-server-download/).
 
-The editor can show a dim **still image** of an allowed running game's client window. Opening the editor or choosing **Refresh game image** requests a capture; it is not a live video feed. Some renderers cannot supply an image. Pictures stay in memory and are neither saved nor synchronized.
+Under **Settings → Custom messages**, personalize warning, daily-limit and bedtime messages, add time placeholders and choose a notification sound. Default messages can be restored at any time.
 
-**Preview (10s)** brings an allowed recognized game to the foreground, restores it if minimized and uses the desktop/RTSS path. Alt–Tab away ends that preview. Draft changes update the existing countdown; preview numbers are examples while actual foreground time tracking continues. Choose the preview state next to the preview button, then save or cancel the drafts.
+### Protected games
 
-For compatible fullscreen games, install [RTSS 7.3.7+ separately](https://www.guru3d.com/download/rtss-rivatuner-statistics-server-download/) and enable it in the countdown settings. The app automatically selects recognized, allowed games; a manual EXE list is not needed. A game that was already running may need to be saved and restarted once after enabling RTSS. Desktop fallback and reminder behavior depend on the renderer and Windows notification state.
+For detected protected games, overlays and game-image previews require explicit per-game risk consent. Automatic minimization requires separate consent, and some actions remain blocked. Reminders use nonactivating windows or sound where appropriate. These precautions do not guarantee compatibility or protection from bans. Review the [anti-cheat compatibility guide (Hungarian)](docs/ANTICHEAT.hu.md) before enabling these features.
 
-Under **Settings → Custom messages**, edit the warning, daily-limit, later-session and bedtime texts. Editors start with the editable default. Supported time tokens are `{remaining}`, `{minutes}`, `{time}` and `{bedtime}`; other text stays literal. Defaults can be restored. Sound choices include Windows sounds, a local WAV file and silence. Messages, sounds, per-game styles and risk permissions stay local.
+## Statistics across your computers
 
-## Protected games and anti-cheat limitations
+Use **Statistics** to compare time by game or computer, select a date range and inspect individual days. Computer names can be edited to keep charts easy to read.
 
-Detection uses game identifiers, executable names and known installation markers. It is game-specific and does not distinguish ranked/offline modes by reading game data. Compatibility detection is not publisher approval and cannot guarantee freedom from bans or crashes for every game/version.
+To link PCs, open **Statistics → Link computers** on the first computer, sign in with GitHub and enable synchronization. Enter its connection code on your other computers; joining an existing code does not require another GitHub sign-in.
 
-| Action | Detected protected game |
-| --- | --- |
-| Foreground time measurement | Continues where Windows permits process identification. |
-| Overlay, image capture and live preview | Off until explicit per-game overlay risk consent. Controls remain hidden without permission. |
-| Automatic minimization | Off until separate per-game minimization consent; overlay permission does not grant it. |
-| Automatic Escape | Always disabled, including after consent. |
-| Reminders | Nonactivating windows; fullscreen situations unsuitable for a visual reminder use the selected sound. Muted/failed sound leaves delivery pending. |
-| Uncheckable installations / anti-cheat helper processes | Consent cannot override these blocks. |
+Synchronization is optional and encrypted on your computer. **Keep the connection code private: anyone with it can access and change the group's shared history.** Budgets, settings and game exclusions remain local.
 
-Review or revoke permission in **Per-game countdowns → Review overlay risks**. Consent is stored locally for the game and installation location; changes can require renewed acceptance. Casual/unprotected games retain their configured features. RTSS remains external hooking software, and revoking permission cannot unload a module another program already injected. See the [compatibility review and official references (Hungarian)](docs/ANTICHEAT.hu.md).
-
-## Statistics and optional computer linking
-
-Statistics provide stacked, color-coded daily bars with a **game/computer** switch, matching legends/table markers, time/share summaries, date ranges and daily details on hover/click. **Rename computer** works for every linked computer: your own name is shared on the next sync; aliases for other computers are local to the current connection and work offline.
+Updates between computers are not immediate: requests are at least ten minutes apart, with a shared limit of 20 successful requests per UTC day and 600 per month. Local tracking remains available offline and during service outages.
 
 ![Daily statistics](docs/images/statistics-en.png)
 
-To link your own computers:
+## Your data
 
-1. On the first computer, open **Statistics → Link computers**, sign in with GitHub, enable synchronization and save.
-2. Copy the connection code into the same dialog on another computer and save. Joining an existing code does not require another GitHub sign-in.
+Your profile is stored in the Windows Documents folder under `GameTimeMonitor\data`. There is no advertising or general analytics telemetry. Local history is not encrypted; optional cloud statistics are encrypted before upload.
 
-Sync is event-driven: once at startup, when tracked gameplay starts, and after it stops, combining nearby changes after a quiet minute. There is no periodic background sync. **Sync now** is also available. Each computer waits at least ten minutes between requests, including after restart. The shared service permits 20 successful requests per UTC day and 600 per UTC month across linked computers, also limited per code owner. Pending uploads wait for the guard; the computer must remain on and online for its latest time to reach other computers. Use 2.12.0 or newer on every linked computer; the latest version is recommended for current fixes.
+Automatic update checks contact GitHub at most once a day. GitHub receives normal connection metadata, including your IP address; the check sends no play history, game details or computer name. Checks can be disabled.
 
-Charts can combine computers, but **daily budgets, settings and game exclusions remain local**. The shared service has registration/resource limits and no guaranteed availability. Local tracking continues during sync outages.
+To back up your profile, exit the monitor and copy the complete data folder. Uninstalling preserves that folder. See [Privacy](PRIVACY.md) for stored data, cloud retention and deletion, and [Security](SECURITY.md) for account and connection-code protection.
 
-## Privacy, backup and removal
+## Help and development
 
-- Local daily history/settings are stored in `Documents\GameTimeMonitor\data` (using Windows' actual Documents location). There is no advertising or general analytics telemetry; the local history database is not encrypted.
-- The default daily update request gives GitHub normal connection metadata, including IP address, but sends no play history, game paths/names, computer name, credentials, device ID or installed version. Automatic requests can be disabled.
-- Optional sync encrypts game times, game names/sources and computer display names on the client. The service receives encrypted snapshots and request metadata. **Anyone with the connection code can access/change the group's shared history: keep it private.**
-- Saved connection codes and account sessions use Windows user-scoped protection. Backups are private; a move to another Windows account/computer may require signing in or entering the connection code again.
+Report bugs or request features through [GitHub Issues](https://github.com/Blintboi/windows-game-time-monitor/issues). Keep connection codes, tokens and profile databases out of public reports; report security issues through the private route in [Security](SECURITY.md).
 
-For a backup, **exit the monitor from the tray**, then copy the complete data folder. Updates create profile backups. Uninstalling preserves the profile; deleting local data also requires removing the folder/backups you no longer need. Disabling sync or signing out does not revoke an existing code or remove copies on other computers. Owner revocation/replacement and hosted retention are explained in [Privacy](PRIVACY.md) and [Security](SECURITY.md).
+The project is released under the [MIT license](LICENSE), with separate [third-party notices](THIRD-PARTY-NOTICES.md). Development can be supported through [GitHub Sponsors](https://github.com/sponsors/Blintboi).
 
-## Common questions
-
-| Situation | What to check |
-| --- | --- |
-| An installed game is missing | Refresh discovery, check its launcher records, or assign an accessible game EXE. Keep the Games folder for standalone games. |
-| An uninstalled game appears in history | History is retained intentionally; per-game countdown choices only list installed games. |
-| No countdown / game image | Check global/per-game settings, the selected monitor, risk permission and RTSS availability. Image capture is renderer-dependent. |
-| The timer shows less than the daily quota | Check the optional bedtime cap and that day's schedule. |
-| A closed window still tracks | X hides to the tray. Use Exit monitor to stop it. |
-| Another computer's time is delayed | Check synchronization, connectivity and the ten-minute/shared-service limits. |
-| A temporary discovery problem appears | Automatic retries stay in the log; a persistent failure shows an understandable notice. |
-
-## Project, support and development
-
-Report reproducible bugs through [GitHub Issues](https://github.com/Blintboi/windows-game-time-monitor/issues), including app/Windows versions, game source and reproduction steps. Never attach connection codes, tokens or personal profile databases to a public issue. Report security issues privately through the route in [Security](SECURITY.md).
-
-You can [support development through GitHub Sponsors](https://github.com/sponsors/Blintboi). Support is optional; the app stays free and open source. The project's own code/documentation use the [MIT license](LICENSE); artwork and bundled components retain their respective rights and [licenses](THIRD-PARTY-NOTICES.md).
-
-For source setup/builds and contribution testing, see [Development](docs/DEVELOPMENT.md), [Architecture](ARCHITECTURE.md) and [Testing](TESTING.md). Releases include source and installer secret scans; checks reduce risk rather than guarantee universal compatibility.
+For building or contributing, see [Development](docs/DEVELOPMENT.md), [Architecture](ARCHITECTURE.md) and [Testing](TESTING.md).

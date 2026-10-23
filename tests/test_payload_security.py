@@ -1,11 +1,13 @@
 """Poisoned release inputs must fail without printing or executing their secrets."""
 import base64
+import hashlib
 import importlib.util
 import io
 import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import Mock,patch
 import zipfile
 
 spec = importlib.util.spec_from_file_location('audit_payload', Path(__file__).resolve().parents[1] / 'packaging/audit_payload.py')
@@ -25,6 +27,24 @@ class PayloadSecurityTests(unittest.TestCase):
         claims = base64.urlsafe_b64encode(json.dumps({'role': 'service_role'}).encode()).rstrip(b'=')
         self.audit.scan('compiled', b'eyJhbGciOiJIUzI1NiJ9.' + claims + b'.signature')
         self.assertEqual(self.audit.findings[0]['rule'], 'supabase-service-role-jwt')
+
+    def test_reviewed_auth_fixture_is_exact_for_lf_and_crlf_checkouts(self):
+        raw=(Path(__file__).resolve().parent/'test_statistics_auth.py').read_bytes().replace(b'\r\n',b'\n')
+        windows=raw.replace(b'\n',b'\r\n')
+        cases=((raw,'generic-api-key',20,True),(windows,'generic-api-key',20,True),
+               (raw+b'\n# changed\n','generic-api-key',20,False),
+               (windows+b'\r\n# changed\r\n','generic-api-key',20,False),
+               (raw,'generic-api-key',21,False),(raw,'private-key',20,False))
+        for number,(content,rule,line,accepted) in enumerate(cases):
+            with self.subTest(number=number):
+                audit=audit_payload.Audit(self.audit.corpus.parent/str(number))
+                audit.scan('tests/test_statistics_auth.py',content)
+                digest=hashlib.sha256(content).hexdigest()
+                row={'File':str(audit.corpus/(digest+'.txt')),'RuleID':rule,'StartLine':line}
+                (audit.corpus.parent/'scanner.json').write_text(json.dumps([row]))
+                with patch.object(audit_payload.subprocess,'run',return_value=Mock(returncode=1)):
+                    self.assertEqual(audit.gitleaks('isolated-scanner.exe'),int(accepted))
+                self.assertEqual(len(audit.findings),0 if accepted else 1)
 
     def test_binary_and_utf16_injected_secrets_are_blocked_and_redacted(self):
         for prefix in (b'sb_' + b'secret_', b'gh' + b'p_', b'g' + b'sk_'):
