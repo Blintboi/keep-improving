@@ -15,8 +15,8 @@ Ingyenes, nyílt forráskódú Windows-alkalmazás, magyar és angol felülettel
 - **Játékidő-statisztikák:** színkódolt diagramok játékok vagy gépek szerint, napi részletek és a kiválasztott időszak összesítése.
 - **Gépek összekapcsolása:** a saját számítógépek statisztikáinak összesítése titkosított szinkronnal és átnevezhető gépekkel.
 
-![Játékkönyvtár és napi időkeret](docs/images/library-en.png)
-*Az angol felület szemléltetése. A képek korábbi elrendezést és példaelőzményeket is mutathatnak. A játékborítók jogai az eredeti tulajdonosoké.*
+![Játékkönyvtár és napi időkeret](docs/images/library-hu.png)
+*A 2.26.2-es felület példaelőzményekkel. A játékborítók jogai az eredeti tulajdonosoké.*
 
 ## Követelmények és támogatott játékforrások
 
@@ -48,7 +48,7 @@ Az **A hátralévő játékidő igazodjon a lefekvéshez** beállítással a sz�
 
 A program személyes időbeosztást segít, nem megkerülhetetlen szülői felügyelet. Az automatikus minimalizálás nem zárja be a játékot és nem kapcsolja le a gépet; online játékban inaktivitási vagy meccselhagyási következményekkel járhat.
 
-![Lefekvési beállítások](docs/images/bedtime-en.png)
+![Heti időrend és lefekvési beállítások](docs/images/bedtime-hu.png)
 
 ## Számláló és emlékeztetők a saját igényeidhez
 
@@ -72,7 +72,7 @@ A szinkron választható, az adatokat a program a gépeden titkosítja. **A kapc
 
 A gépek közötti frissítés nem azonnali: két kérés között legalább tíz perc telik el, a közös szolgáltatási keret UTC-naponként 20, havonta 600 sikeres kérés. A helyi időmérés internet nélkül és szolgáltatáskieséskor is működik.
 
-![Napi statisztikák](docs/images/statistics-en.png)
+![Napi statisztikák](docs/images/statistics-hu.png)
 
 ## Saját adatok kezelése
 

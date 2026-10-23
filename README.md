@@ -16,7 +16,7 @@ Free and open source, with an English and Hungarian interface. Local tracking wo
 - **Optional computer linking:** combine statistics from your own PCs through encrypted synchronization and give each computer a recognizable name.
 
 ![Game library and daily budget](docs/images/library-en.png)
-*English interface. Screenshots may show an earlier layout and sample history. Game artwork belongs to its respective owners.*
+*Version 2.26.2 with sample history. Game artwork belongs to its respective owners.*
 
 ## Requirements and game support
 
@@ -48,7 +48,7 @@ The optional **Cap remaining game time at bedtime** setting limits the countdown
 
 This is a personal time-management tool, not tamper-resistant parental control. Automatic minimization does not close games or shut down the PC and can have inactivity or leaving consequences in online games.
 
-![Bedtime settings](docs/images/bedtime-en.png)
+![Weekly schedule and bedtime settings](docs/images/bedtime-en.png)
 
 ## Make the countdown and reminders your own
 
