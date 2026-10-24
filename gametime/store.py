@@ -1,5 +1,5 @@
 from dataclasses import asdict
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import json
 from pathlib import Path
 import sqlite3
@@ -16,11 +16,15 @@ class Store:
         self.db.execute("PRAGMA synchronous=FULL")
         self.db.execute("PRAGMA secure_delete=ON")
         self.credentials_unavailable=False; self._unavailable_credential=''; self._secret_migrated=False
+        self._budget_pruned_day = None
         self.db.executescript("""
             CREATE TABLE IF NOT EXISTS games (
               id TEXT PRIMARY KEY, name TEXT NOT NULL, source TEXT NOT NULL,
               root TEXT NOT NULL, metadata TEXT NOT NULL, installed INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS usage (
+              day TEXT NOT NULL, game_id TEXT NOT NULL, seconds REAL NOT NULL,
+              PRIMARY KEY(day, game_id));
+            CREATE TABLE IF NOT EXISTS budget_usage (
               day TEXT NOT NULL, game_id TEXT NOT NULL, seconds REAL NOT NULL,
               PRIMARY KEY(day, game_id));
             CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -175,19 +179,25 @@ class Store:
     def _merge(self, old_id, new_id):
         row=self.db.execute("SELECT value FROM settings WHERE key='config'").fetchone()
         if row:
-            config=json.loads(row[0]); overlays=config.get('game_overlays',{})
-            if old_id in overlays:
-                value=overlays.pop(old_id); overlays.setdefault(new_id,value)
-                self.db.execute("UPDATE settings SET value=? WHERE key='config'",(json.dumps(config,ensure_ascii=False),))
+            config=json.loads(row[0]); changed=False
+            for field in ('game_overlays', 'game_limits'):
+                values=config.get(field,{})
+                if old_id in values:
+                    value=values.pop(old_id)
+                    if field == 'game_limits': values[new_id]=min(value,values.get(new_id,value))
+                    else: values.setdefault(new_id,value)
+                    changed=True
+            if changed: self.db.execute("UPDATE settings SET value=? WHERE key='config'",(json.dumps(config,ensure_ascii=False),))
         preferred = self.launch_executable(old_id)
         if preferred and not self.launch_executable(new_id):
             self.db.execute("INSERT INTO settings VALUES (?,?)", ('launch_exe:' + new_id, preferred))
         self.db.execute("DELETE FROM settings WHERE key=?", ('launch_exe:' + old_id,))
-        rows = list(self.db.execute("SELECT day,seconds FROM usage WHERE game_id=?", (old_id,)))
-        self.db.executemany("INSERT INTO usage VALUES (?,?,?) ON CONFLICT(day,game_id) "
-                            "DO UPDATE SET seconds=seconds+excluded.seconds",
-                            [(day, new_id, seconds) for day, seconds in rows])
-        self.db.execute("DELETE FROM usage WHERE game_id=?", (old_id,))
+        for table in ('usage', 'budget_usage'):
+            rows = list(self.db.execute(f"SELECT day,seconds FROM {table} WHERE game_id=?", (old_id,)))
+            self.db.executemany(f"INSERT INTO {table} VALUES (?,?,?) ON CONFLICT(day,game_id) "
+                                "DO UPDATE SET seconds=seconds+excluded.seconds",
+                                [(day, new_id, seconds) for day, seconds in rows])
+            self.db.execute(f"DELETE FROM {table} WHERE game_id=?", (old_id,))
         self.db.execute("UPDATE OR IGNORE overrides SET game_id=? WHERE game_id=?", (new_id, old_id))
         self.db.execute("UPDATE OR IGNORE game_preferences SET game_id=? WHERE game_id=?", (new_id, old_id))
         self.db.execute("UPDATE rules SET game_id=? WHERE game_id=?", (new_id, old_id))
@@ -213,11 +223,35 @@ class Store:
         with self.db:
             self.db.execute("INSERT OR REPLACE INTO settings VALUES (?,?)", ('launch_exe:' + game_id, str(path)))
 
-    def add_usage(self, entries):
+    def add_usage(self, entries, budget_entries=None):
         with self.db:
             self.db.executemany("INSERT INTO usage VALUES (?,?,?) ON CONFLICT(day,game_id) "
                                 "DO UPDATE SET seconds=seconds+excluded.seconds",
                                 [(day, gid, seconds) for (day, gid), seconds in entries.items()])
+            if budget_entries:
+                self.db.executemany("INSERT INTO budget_usage VALUES (?,?,?) ON CONFLICT(day,game_id) "
+                                    "DO UPDATE SET seconds=seconds+excluded.seconds",
+                                    [(day, gid, seconds) for (day, gid), seconds in budget_entries.items()])
+                # Only current/recent quota periods are needed; history lives in usage.
+                latest = max(day for day, gid in budget_entries)
+                if self._budget_pruned_day != latest:
+                    oldest = (date.fromisoformat(latest) - timedelta(days=2)).isoformat()
+                    self.db.execute('DELETE FROM budget_usage WHERE day < ?', (oldest,))
+                    self._budget_pruned_day = latest
+
+    def budget_clock(self):
+        row = self.db.execute("SELECT value FROM settings WHERE key='budget_clock'").fetchone()
+        return json.loads(row[0]) if row else None
+
+    def budget_totals(self, day):
+        return dict(self.db.execute('SELECT game_id,seconds FROM budget_usage WHERE day=?', (str(day),)))
+
+    def reset_budget_clock(self, clock, revision, day, totals, alert_keys):
+        with self.db:
+            self.db.execute('DELETE FROM budget_usage')
+            self.db.executemany('INSERT INTO budget_usage VALUES (?,?,?)', [(str(day), gid, seconds) for gid, seconds in totals.items()])
+            self.db.execute("INSERT OR REPLACE INTO settings VALUES ('budget_clock',?)", (json.dumps({'minutes':clock,'revision':revision}),))
+            self.db.executemany('INSERT OR IGNORE INTO alerts VALUES (?,?)', [(str(day), key) for key in alert_keys])
 
     def overrides(self):
         return {key: bool(val) for key, val in self.db.execute("SELECT * FROM overrides")}

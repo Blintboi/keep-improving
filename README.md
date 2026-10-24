@@ -1,6 +1,6 @@
-# Game Time Monitor — 2.26.2
+# Game Time Monitor — 2.28.2
 
-**[Download for Windows x64 — 2.26.2](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256) · [Magyar](README.hu.md)
+**[Download for Windows x64 — 2.28.2](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256) · [Magyar](README.hu.md)
 
 Game Time Monitor brings your installed games, daily play time and personal reminders into one Windows application. Plan your gaming time, follow your remaining allowance and review your habits across your own computers.
 
@@ -10,13 +10,14 @@ Free and open source, with an English and Hungarian interface. Local tracking wo
 
 - **Game library:** discover and launch installed games, search your collection and choose which games to track.
 - **Daily budgets and weekly schedules:** set time limits, warnings and bedtime reminders for individual days or groups of days.
+- **Per-game limits:** set an optional cap inside the shared daily budget from a game's menu or Settings. The overlay shows the smaller remaining allowance; the Hub keeps the shared countdown and shows each capped game's own remaining time on its card. Both caps renew together and include time already played. Game caps use the existing 10-second minimization grace and protected-game permission checks.
 - **Customizable countdown:** see your remaining time while playing, with adjustable position, size, opacity and colors, including per-game styles.
 - **Personal reminders:** write your own messages with remaining-time information, choose a sound or use a local WAV file.
 - **Play-time statistics:** explore color-coded charts by game or computer, daily details and summaries for a selected period.
 - **Optional computer linking:** combine statistics from your own PCs through encrypted synchronization and give each computer a recognizable name.
 
 ![Game library and daily budget](docs/images/library-en.png)
-*Version 2.26.2 with sample history. Game artwork belongs to its respective owners.*
+*Version 2.27.0 with sample history. Game artwork belongs to its respective owners.*
 
 ## Requirements and game support
 
@@ -40,9 +41,9 @@ The application is currently **unsigned**, so Windows may show an unknown-publis
 
 ## Plan your play time
 
-A shared daily budget covers all tracked games. Time counts while a recognized game is in the foreground, including its menus or pauses; background games, launchers and locked sessions do not consume the budget. The daily allowance resets at local midnight.
+A shared daily budget covers all tracked games. Time counts while a recognized game is in the foreground, including its menus or pauses; background games, launchers and locked sessions do not consume the budget. The allowance renews at the reset time configured for each day, with midnight as the default. Statistics follow calendar days.
 
-Use the seven day buttons in **Settings → Weekly schedule** to configure each day separately or apply a plan to a group. Set a daily budget, early warning and bedtime, with optional automatic minimization when a limit is reached.
+Use the seven day buttons in **Settings → Weekly schedule** to configure each day separately or apply a plan to a group. Set a daily budget, reset time, early warning and bedtime, with optional automatic minimization when a limit is reached. For example, renew the budget at 06:00 on weekdays and 08:00 at weekends. Until renewal, the previous day's budget applies; changing reset times preserves time already used.
 
 The optional **Cap remaining game time at bedtime** setting limits the countdown to whichever comes first: the end of your daily allowance or bedtime. With two hours left at 23:00 and bedtime at midnight, the countdown shows one hour.
 

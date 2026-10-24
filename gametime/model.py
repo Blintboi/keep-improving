@@ -57,6 +57,7 @@ class Settings:
     games_root: str = r"C:\Games"
     warning_seconds: float = 6000
     limit_seconds: float = 7200
+    budget_reset_minute: int = 0
     steam_roots: list = field(default_factory=list)
     epic_manifest_dirs: list = field(default_factory=list)
     ubisoft_roots: list = field(default_factory=list)
@@ -93,10 +94,19 @@ class Settings:
     weekend_enabled: bool = False
     weekend_schedule: dict = field(default_factory=dict)
     game_overlays: dict = field(default_factory=dict)
+    game_limits: dict = field(default_factory=dict)
     daily_schedules: dict = field(default_factory=dict)
 
     def validate(self):
         from .schedule import SCHEDULE_FIELDS,DayScheduleError
+        if (not isinstance(self.game_limits, dict) or any(
+                not isinstance(gid, str) or not gid or '\0' in gid
+                or isinstance(value, bool) or not isinstance(value, (int, float))
+                or not math.isfinite(value) or not 0 < value <= 86400
+                for gid, value in self.game_limits.items())):
+            raise ValueError('Choose per-game limits between 0 and 1440 minutes.')
+        if type(self.budget_reset_minute) is not int or not 0 <= self.budget_reset_minute < 1440:
+            raise ValueError('Choose a valid daily budget reset time.')
         if not isinstance(self.check_updates, bool):
             raise ValueError('Automatic update checks must be on or off.')
         if (not isinstance(self.daily_schedules,dict) or any(key not in tuple(map(str,range(7))) or not isinstance(value,dict)

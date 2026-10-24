@@ -1,6 +1,10 @@
 """Small explicit English/Hungarian catalog. Stored IDs and paths never translate."""
 LANGUAGES = {"English": "en", "Magyar": "hu"}
 HU = {
+    'Daily budget resets at': 'A napi keret megújulása',
+    'Choose a valid daily budget reset time.': 'Adj meg érvényes megújulási időpontot a napi kerethez.',
+    'The selected days receive a fresh budget at this local time. Until then, the previous day’s budget applies. Changing the time keeps already used time; statistics still use calendar days.': 'A kijelölt napokon helyi idő szerint ekkor indul új keret. Addig az előző nap kerete érvényes. Az időpont átállítása megtartja a már elhasznált időt; a statisztikák továbbra is naptári napok szerint készülnek.',
+    'Next budget reset: {time}': 'A keret következő megújulása: {time}',
     'Application updates': 'Programfrissítések',
     'Installed version: {version}': 'Telepített verzió: {version}',
     'Check for updates automatically (once a day)': 'Frissítések automatikus ellenőrzése (naponta egyszer)',
@@ -494,6 +498,24 @@ HU.update({
     'Sign-in was cancelled.': 'A bejelentkezés megszakadt.',
     'Sign-in timed out. Try again.': 'A bejelentkezési idő lejárt. Próbáld újra.',
     'Signed out locally. The server session could not be revoked while offline.': 'Ezen a gépen kijelentkeztél. Kapcsolat nélkül a szerveroldali munkamenetet nem lehetett visszavonni.',
+})
+
+
+HU.update({
+    'Per-game limits': 'Játékonkénti korlátok',
+    'Per-game limits…': 'Játékonkénti korlátok…',
+    'Per-game limit…': 'Játék időkorlátja…',
+    'Limit this game': 'Külön időkorlát ehhez a játékhoz',
+    'Game limit (minutes)': 'Játékhatár (perc)',
+    'Each game limit is part of the shared daily budget. The overlay shows whichever runs out first.': 'A játék saját kerete a közös napi kereten belül értendő. Az overlay a hamarabb elfogyó időt mutatja.',
+    'Uses the same daily reset as the shared budget, including time already played. At the limit, this game cannot be started from the Hub and is minimized after 10 seconds in the foreground. Protected games require the existing minimization permission; otherwise a reminder is shown.': 'A közös kerettel együtt indul újra, és a már lejátszott idő is beleszámít. A határt elérve a játék a Hubból nem indítható, előtérben pedig 10 másodperc után kis méretűre vált. Védett játékoknál ehhez a meglévő kis méretre váltási engedély szükséges; enélkül emlékeztető jelenik meg.',
+    'This game is excluded from tracking. Its limit takes effect when tracking is enabled again.': 'Ez a játék ki van zárva a mérésből. Az időkorlát a mérés visszakapcsolásakor lép érvénybe.',
+    'Played in this budget period: {used}': 'Ebből a napi keretből lejátszva: {used}',
+    'No installed games available.': 'Nincs elérhető telepített játék.',
+    'Game: {remaining} left': 'Játékból még: {remaining}',
+    '{name}: game limit reached': '{name}: a játék időkerete elfogyott',
+    '{name}: the {minutes:g}-minute game limit has been reached. Time to finish playing.': '{name}: elérted a játék {minutes:g} perces időkorlátját. Ideje befejezni a játékot.',
+    'Choose per-game limits between 0 and 1440 minutes.': 'A játékonkénti időkorlát legyen 0 percnél több és legfeljebb 1440 perc.',
 })
 
 

@@ -1,5 +1,18 @@
 # Architecture
 
+`Settings.game_limits` stores optional local per-game caps in seconds, separately
+from countdown appearance. It uses the existing quota-period per-game totals,
+including prior consumption, with the same reset schedule and no extra ledger,
+polling or synchronization fields. `gameplay_budget` bounds the overlay by the
+shared allowance, game allowance and opted-in bedtime cap. Hub/tray shared time
+retains its existing meaning; game cards add an independent remaining-time line.
+The game menu and Settings open `qt_game_limits`, which saves only edited games
+against current settings and preserves unrelated drafts. Discovery merges keep
+the stricter cap alongside merged usage. Exclusions suspend the game cap.
+Launches and delayed foreground minimization recheck both restriction policies,
+retaining the existing save/quit grace and protected-game consent gate. Expiry
+alerts carry the game ID and are discarded on game switches or cap changes.
+
 `updates.py` reads a fixed public HTTPS release manifest (8 KiB, no redirects,
 bounded version/schema/hash/size fields). A lazy single-request daemon returns
 data through a queue; it never reads the profile or installs code. `qt_updates`

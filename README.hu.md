@@ -1,6 +1,6 @@
-# Játékidőfigyelő — 2.26.2
+# Játékidőfigyelő — 2.28.2
 
-**[Letöltés Windows x64-re — 2.26.2](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256) · [English](README.md)
+**[Letöltés Windows x64-re — 2.28.2](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256) · [English](README.md)
 
 A Játékidőfigyelő egy helyen kezeli a telepített játékaidat, a napi játékidőt és a személyes emlékeztetőket. Tervezd meg a játékra szánt időt, kövesd a megmaradt keretedet, és tekintsd át a játékszokásaidat a saját számítógépeiden.
 
@@ -10,13 +10,14 @@ Ingyenes, nyílt forráskódú Windows-alkalmazás, magyar és angol felülettel
 
 - **Játékkönyvtár:** telepített játékok felismerése és indítása, keresés a gyűjteményben, az időmérésbe bevont játékok kiválasztása.
 - **Napi keret és heti időrend:** időkeretek, figyelmeztetések és lefekvési emlékeztetők külön napokra vagy napcsoportokra.
+- **Játékonkénti korlát:** a játék menüjéből vagy a Beállításokból külön határt adhatsz a közös napi kereten belül. Az overlay a kisebb hátralévő időt mutatja, a Hub fő számlálója a közöset, a játék kártyája pedig a sajátját. A keretek együtt indulnak újra, és a már lejátszott idő is beleszámít. A játékhatár a meglévő 10 másodperces türelmi idővel és a védett játékok engedélyellenőrzésével vált kis méretre.
 - **Testreszabható számláló:** hátralévő játékidő megjelenítése állítható helyzettel, mérettel, fedettséggel és színekkel, akár játékonként eltérően.
 - **Személyes emlékeztetők:** saját üzenetek a hátralévő idő adataival, választható hangjelzéssel vagy saját WAV-fájllal.
 - **Játékidő-statisztikák:** színkódolt diagramok játékok vagy gépek szerint, napi részletek és a kiválasztott időszak összesítése.
 - **Gépek összekapcsolása:** a saját számítógépek statisztikáinak összesítése titkosított szinkronnal és átnevezhető gépekkel.
 
 ![Játékkönyvtár és napi időkeret](docs/images/library-hu.png)
-*A 2.26.2-es felület példaelőzményekkel. A játékborítók jogai az eredeti tulajdonosoké.*
+*A 2.27.0-s felület példaelőzményekkel. A játékborítók jogai az eredeti tulajdonosoké.*
 
 ## Követelmények és támogatott játékforrások
 
@@ -40,9 +41,9 @@ A program jelenleg **nincs digitálisan aláírva**, ezért a Windows ismeretlen
 
 ## Tervezd meg a játékidőt
 
-A követett játékok közös napi keretet használnak. Az idő akkor számít, amikor a felismert játék van az előtérben, beleértve annak menüjét vagy szünetét is. A háttérben futó játék, az indítókliens és a zárolt gép nem fogyasztja a keretet. A napi keret helyi idő szerint éjfélkor újul meg.
+A követett játékok közös napi keretet használnak. Az idő akkor számít, amikor a felismert játék van az előtérben, beleértve annak menüjét vagy szünetét is. A háttérben futó játék, az indítókliens és a zárolt gép nem fogyasztja a keretet. A keret naponta megadott időpontban újul meg, alapértelmezés szerint éjfélkor. A statisztikák naptári napok szerint készülnek.
 
-A **Beállítások → Heti időrend** hét napgombjával minden nap külön állítható, vagy egyszerre több napra is alkalmazható ugyanaz a terv. Megadható napi keret, korai figyelmeztetés és lefekvés, valamint választható automatikus minimalizálás a korlát elérésekor.
+A **Beállítások → Heti időrend** hét napgombjával minden nap külön állítható, vagy egyszerre több napra is alkalmazható ugyanaz a terv. Megadható napi keret, megújulási időpont, korai figyelmeztetés és lefekvés, valamint választható automatikus minimalizálás a korlát elérésekor. Például hétköznap 06:00-kor, hétvégén 08:00-kor indulhat új keret. Addig az előző nap kerete érvényes; az időpont átállítása megtartja a már elhasznált időt.
 
 Az **A hátralévő játékidő igazodjon a lefekvéshez** beállítással a számláló a napi keretből és a lefekvésig hátralévő időből a rövidebbet mutatja. Ha 23:00-kor még két órád lenne, de éjfélkor lefekszel, egy órát jelez.
 

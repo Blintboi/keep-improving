@@ -1,5 +1,40 @@
 # Testing
 
+## 2.28.2 uniform game-card grid — 2026-10-24
+
+All visible cards share the height required by the most detailed visible card.
+The grid stays compact without time details and expands uniformly for daily
+usage or per-game allowances, including when a cap is added or removed. The
+existing render pass computes the shared height; unchanged values do not alter
+widget geometry. Temporary-profile captures check mixed capped/uncapped games,
+both metadata rows and shrinking after filters or settings changes. Local
+delivery verifies the installer, matching frozen source and profile preservation.
+
+## 2.28.1 compact game cards — 2026-10-24
+
+The artwork launch highlight has a straight lower edge; its top corners retain
+the card outline. Cards reserve a compact 56-pixel title area and add space only
+for visible time details. Mixed-height grid rows align at the top. Temporary
+profiles exercise the Qt library, game limits and background resource behavior.
+Nine visual renders cover narrow/wide cards, wrapped titles, hover, selection
+and both time-detail rows. Local delivery verifies the installer, frozen UI
+source and profile preservation before reopening the installed application.
+
+## 2.28.0 per-game limits — 2026-10-24
+
+Isolated-profile cases cover shared and per-game consumption, smaller overlay
+allowances versus the shared Hub counter, both desktop and RTSS rendering,
+preexisting usage, custom reset times, bedtime caps, restarts, strict validation,
+excluded games, game-scoped alert deduplication, discovery merges and local-only
+preferences. Qt cases exercise save, cancellation, storage failures, language
+changes, multiple game drafts, empty inventories and unrelated unsaved settings.
+Restriction fixtures retain the foreground grace, recheck changed settings and
+focus before delayed minimization, and preserve protected-game consent gates.
+Temporary-profile Hub/editor captures check Hungarian/English layout and the
+remaining-time line at the minimum card width. Installer delivery checks the
+extracted payload hashes, matching frozen modules, fresh install, upgrade and
+uninstall, including preservation of game limits and existing profile data.
+
 ## 2.26.2 rapid foreground and preview transitions — 2026-10-23
 
 Temporary-profile Qt sequences count actual Show/Hide events through repeated

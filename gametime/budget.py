@@ -2,6 +2,26 @@
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from .schedule import day_settings, bedtime_occurrence
+from .quota import period_day, reset_clock
+
+
+def quota_plan(settings, wall=None):
+    return day_settings(settings, period_day(wall or datetime.now().astimezone(), reset_clock(settings)))
+
+
+def game_remaining(settings, game_id, used):
+    limit = settings.game_limits.get(game_id)
+    return max(0, limit - used) if limit is not None else None
+
+
+def gameplay_budget(settings, wall, totals, game_id, elapsed=0):
+    """Overlay time is the smallest applicable cap; the Hub keeps the shared cap."""
+    budget = remaining_budget(settings, wall, sum(totals.values()) + elapsed)
+    own = game_remaining(settings, game_id, totals.get(game_id, 0) + elapsed)
+    if own is not None and own <= budget.remaining:
+        return RemainingBudget(own, budget.quota_remaining,
+                               budget.warning or own <= min(600, settings.game_limits[game_id] / 5))
+    return budget
 
 
 @dataclass(frozen=True)
@@ -24,7 +44,7 @@ def _deadline(day, plan, wall):
 
 
 def remaining_budget(settings, wall, used):
-    plan = day_settings(settings, wall)
+    plan = quota_plan(settings, wall)
     quota = max(0, plan.limit_seconds - used)
     warning = used >= plan.warning_seconds
     # No date searches or extra work for existing profiles with this option off.

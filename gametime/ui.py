@@ -503,6 +503,7 @@ class App(MonitorActions):
         # Alerts must remain independent even if the main window is hidden later.
         window = self._dialog("Game time alert", "590x260", transient=False,passive=passive)
         self.popup_window, self.popup_day = window, alert.day
+        self.popup_kind = alert.kind
         window.attributes("-topmost", True)
         title = "Time to stop playing" if alert.kind in ("limit", "session") else "Game time reminder"
         ttk.Label(window, text=self.t(title), style="Title.TLabel", padding=(22, 18, 22, 4)).pack(anchor="w")
@@ -551,7 +552,7 @@ class App(MonitorActions):
         day = now.date().isoformat()
         totals = self.tracker.totals(day)
         total = sum(totals.values())
-        budget = remaining_budget(self.settings, now, total)
+        budget = remaining_budget(self.settings, now, sum(self.tracker.quota_totals(now).values()))
         self.total_text.set(duration(total))
         self.remaining_text.set(self.t("Time remaining: {remaining}  ·  Daily limit: {minutes:g} min",
                                        remaining=duration(budget.remaining), minutes=self.settings.limit_seconds/60))

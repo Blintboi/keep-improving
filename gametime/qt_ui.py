@@ -1,7 +1,7 @@
 """Native Qt Gaming Hub. All controller and UI state belongs to this GUI thread."""
 from dataclasses import replace
 from collections import Counter
-from datetime import datetime
+from datetime import datetime,timedelta
 from pathlib import Path
 import ctypes
 import logging
@@ -33,7 +33,8 @@ from .statistics_sync import StatisticsData
 from .statistics_cloud import CloudSyncWorker,SERVICE_URL,SYNC_COOLDOWN
 from .statistics_auth import AuthWorker
 from .schedule import day_settings,game_settings,any_countdown,bedtime_occurrence,DayScheduleError,DAY_NAMES
-from .budget import remaining_budget
+from .budget import remaining_budget,quota_plan,game_remaining,gameplay_budget
+from .quota import reset_clock,period_day,reset_at
 from .sound import play_notification
 from .game_preview import SnapshotWorker,running_window
 from .qt_game_preview import background_controls
@@ -448,6 +449,10 @@ class App(QMainWindow,MonitorActions):
         for name in ('limit','warning','restriction_enabled','restriction_minutes','bedtime_enabled','bedtime_times','bedtime_minimize','bedtime_controls','bedtime_caps_budget'):
             setattr(self,name,getattr(self.schedule_editor,name))
         body_layout.addWidget(self.schedule_editor)
+        limits=panel(); limits_layout=QVBoxLayout(limits); limits_layout.setContentsMargins(22,20,22,22); limits_layout.setSpacing(12)
+        limits_layout.addWidget(label(self.t('Per-game limits'),'section'))
+        note=label(self.t('Each game limit is part of the shared daily budget. The overlay shows whichever runs out first.'),'muted'); note.setWordWrap(True); limits_layout.addWidget(note)
+        limits_layout.addWidget(button(self.t('Per-game limits…'),self.game_limits_dialog),0,Qt.AlignLeft); body_layout.addWidget(limits)
         messages=panel(); message_layout=QVBoxLayout(messages); message_layout.setContentsMargins(22,20,22,22); message_layout.setSpacing(12)
         message_layout.addWidget(label(self.t('Reminder messages'),'section'))
         note=label(self.t('These messages are shared by all days. The test uses today’s saved bedtime schedule.'),'muted'); note.setWordWrap(True); message_layout.addWidget(note)
@@ -616,7 +621,7 @@ class App(QMainWindow,MonitorActions):
         self.start_overlay_preview()
 
     def preview_game_overlay(self,settings):
-        self._overlay_preview_settings=replace(day_settings(settings),overlay_enabled=True)
+        self._overlay_preview_settings=replace(quota_plan(settings),overlay_enabled=True)
         return self.start_overlay_preview(getattr(self,'_overlay_preview_game_id',None))
 
     def start_overlay_preview(self,gid=None):
@@ -723,7 +728,7 @@ class App(QMainWindow,MonitorActions):
         if self.closed: return
         preview=time.monotonic()<self._overlay_preview_until
         if not preview: self._overlay_preview_target=None
-        settings=day_settings(self.settings)
+        settings=quota_plan(self.settings)
         if preview: settings=getattr(self,'_overlay_preview_settings',None) or replace(settings,**self.overlay_values())
         elif self.tracker.active: settings=game_settings(settings,self.tracker.active.id)
         # The one-second tracker starts this timer when gameplay begins. Keep
@@ -765,17 +770,20 @@ class App(QMainWindow,MonitorActions):
                 warning=total>=settings.warning_seconds
                 automatic=foreground_screen_name() if target else self.screen().name() if self.screen() else ''
             else:
-                settings=game_settings(day_settings(self.settings,current.wall.date()),self.tracker.active.id)
+                settings=game_settings(quota_plan(self.settings,current.wall),self.tracker.active.id)
                 active=self.tracker.active
                 game=self.catalog.resolve(current.path)
                 if not active or not game or game.id!=active.id or current.identity!=self.tracker.identity:
                     self.hide_countdown(); return
-                total=sum(self.tracker.totals(current.wall.date()).values())
+                totals=self.tracker.quota_totals(current.wall)
+                elapsed=0
                 previous=self.tracker.previous
                 if previous and previous.identity==current.identity:
                     elapsed=current.awake-previous.awake
-                    if 0<elapsed<=1.5 and abs((current.wall-previous.wall).total_seconds()-elapsed)<1.5 and previous.wall.date()==current.wall.date(): total+=elapsed
-                budget=remaining_budget(self.settings,current.wall,total)
+                    if not (0<elapsed<=1.5 and abs((current.wall-previous.wall).total_seconds()-elapsed)<1.5
+                            and period_day(previous.wall,reset_clock(self.settings))==period_day(current.wall,reset_clock(self.settings))): elapsed=0
+                budget=gameplay_budget(self.settings,current.wall,totals,active.id,elapsed)
+                total=sum(totals.values())+elapsed
                 remaining=budget.remaining; warning=budget.warning; automatic=foreground_screen_name()
             screen=choose_screen(settings.overlay_screen,automatic)
             attempted=(not preview or self._overlay_preview_target is not None) and settings.overlay_rtss_auto and self.rtss_available()
@@ -884,7 +892,7 @@ class App(QMainWindow,MonitorActions):
             blocked=self.language.blockSignals(True)
             self.language.setCurrentIndex(self.language.findData(language)); self.language.blockSignals(blocked)
             self.status_text=self.t(self.status_key,**self.status_values); self.status_label.setText(self.status_text)
-            self.ring.setToolTip(self.t('Daily budget')+f': {day_settings(self.settings).limit_seconds/60:g} '+self.t('min'))
+            self.ring.setToolTip(self.t('Daily budget')+f': {quota_plan(self.settings).limit_seconds/60:g} '+self.t('min'))
             self.overlay_picker.setAccessibleName(self.t('Countdown position'))
             self.statistics.retranslate_report()
             self.update_launch_button(); self.update_statistics_sync_status(); self.update_tray()
@@ -915,6 +923,10 @@ class App(QMainWindow,MonitorActions):
         self.raise_(); self.activateWindow(); win32.u.SetForegroundWindow(hwnd)
     def open_games(self): self.switch_page(0); self.show()
     def restriction_notice(self): self.open_games()
+
+    def game_limits_dialog(self,gid=None):
+        from .qt_game_limits import game_limits_dialog
+        game_limits_dialog(self,gid if isinstance(gid,str) else None)
     def closeEvent(self,event):
         if self.closed: event.accept()
         else: event.ignore(); self.hide()
@@ -955,6 +967,7 @@ class App(QMainWindow,MonitorActions):
         tracking='Exclude from tracking' if self.catalog.enabled(game) else 'Track game'
         visibility='Show in library' if game.id in self.hidden_ids else 'Hide from library'
         for text,callback in [('Open game folder',self.open_game_folder),('Assign EXE',self.assign_exe),('EXE rules',self.rules_dialog),
+                              ('Per-game limit…',lambda:self.game_limits_dialog(game.id)),
                               ('Per-game countdown…',lambda:self.game_countdown_dialog(game.id)),(tracking,self.toggle_game),(visibility,self.toggle_hidden)]: menu.addAction(self.t(text),callback)
         menu.addSeparator(); menu.addAction(self.t('Uninstall game…'),self.uninstall_game)
         menu.exec(card.more.mapToGlobal(QPoint(0,card.more.height())))
@@ -1035,7 +1048,7 @@ class App(QMainWindow,MonitorActions):
         if mode=='defer': return False
         if mode=='audio': return self.audio_notification(alert)
         passive=mode=='passive'
-        window=AlertDialog(self,passive); self.popup_window=window; self.popup_day=alert.day
+        window=AlertDialog(self,passive); self.popup_window=window; self.popup_day=alert.day; self.popup_kind=alert.kind
         bedtime=alert.kind=='bedtime'; caption=self.t('Bedtime reminder' if bedtime else 'Game time alert')
         screen=QApplication.primaryScreen().availableGeometry()
         width=min(620,max(420,screen.width()-60))
@@ -1088,7 +1101,7 @@ class App(QMainWindow,MonitorActions):
 
     def update_tray(self):
         now=datetime.now().astimezone(); total=sum(self.tracker.totals(now.date().isoformat()).values())
-        budget=remaining_budget(self.settings,now,total)
+        budget=remaining_budget(self.settings,now,sum(self.tracker.quota_totals(now).values()))
         tip=self.t('Game Time Monitor\nToday: {total} · remaining: {remaining}\nLeft click: open · right click: menu',total=duration(total),remaining=duration(budget.remaining))
         if self.updates.available: tip=self.t('Update {version} available',version=self.updates.available.version)+'\n'+tip
         self.tray.update(tip)
@@ -1096,13 +1109,17 @@ class App(QMainWindow,MonitorActions):
     def render(self):
         self.sync_hub()
         now=datetime.now().astimezone(); day=now.date().isoformat(); totals=self.tracker.totals(day); total=sum(totals.values())
-        plan=day_settings(self.settings,day)
-        budget=remaining_budget(self.settings,now,total)
+        plan=quota_plan(self.settings,now)
+        quota_totals=self.tracker.quota_totals(now)
+        used=sum(quota_totals.values())
+        budget=remaining_budget(self.settings,now,used)
         self.total_label.setText(duration(total)); self.remaining_label.setText(duration(budget.remaining))
-        self.remaining_label.setToolTip(self.t('Unused daily budget: {remaining}',remaining=duration(budget.quota_remaining)))
+        tomorrow=period_day(now,reset_clock(self.settings))+timedelta(days=1)
+        renewal=reset_at(tomorrow,reset_clock(self.settings)[tomorrow.weekday()],now)
+        self.remaining_label.setToolTip(self.t('Unused daily budget: {remaining}',remaining=duration(budget.quota_remaining))+'\n'+self.t('Next budget reset: {time}',time=renewal.strftime('%Y-%m-%d %H:%M')))
         self.remaining_reason.setText((self.t('Bedtime has started') if budget.bedtime.timestamp()<=now.timestamp() else self.t('Until bedtime at {time}',time=budget.bedtime.strftime('%H:%M'))) if budget.bedtime else '')
         self.remaining_reason.setVisible(budget.bedtime is not None)
-        self.ring.set_ratio(total/plan.limit_seconds); self.ring.setToolTip(self.t('Daily budget')+f': {plan.limit_seconds/60:g} '+self.t('min'))
+        self.ring.set_ratio(used/plan.limit_seconds); self.ring.setToolTip(self.t('Daily budget')+f': {plan.limit_seconds/60:g} '+self.t('min'))
         self.active_label.setText(self.tracker.active.name if self.tracker.active else ''); self.active_label.setVisible(self.tracker.active is not None)
         self.active_label.setToolTip(self.t('Active game: {name}',name=self.tracker.active.name) if self.tracker.active else '')
         games={g.id:g for g in self.store.games()}; games.update(self.catalog.games); self.hidden_ids=self.store.hidden_ids()
@@ -1144,9 +1161,18 @@ class App(QMainWindow,MonitorActions):
             if self.selected_id not in self.cards: self.selected_id=None
             self._art_queue=list(dict.fromkeys([gid for gid in getattr(self,'_art_queue',[]) if gid in self.cards]+artwork))
             if self._art_queue: self.call_later(10,self.load_next_art)
-        self.restriction_banner.setVisible(self.restriction_reached())
-        self.restriction_label.setText(self.t('Play restriction active · {minutes:g} min',minutes=plan.restriction_seconds/60))
-        for gid,card in self.cards.items(): card.set_state(totals.get(gid,0),gid==self.selected_id,not self.launching and not self.launch_restricted(card.game))
+        shared_restricted=self.restriction_reached(now)
+        active=self.tracker.active or self.selected()
+        own_restricted=active and self.restriction_reached(now,active)
+        self.restriction_banner.setVisible(bool(shared_restricted or own_restricted))
+        self.restriction_label.setText(self.t('Play restriction active · {minutes:g} min',minutes=plan.restriction_seconds/60) if shared_restricted else
+            self.t('{name}: game limit reached',name=active.name) if own_restricted else '')
+        card_height=244
+        for gid,card in self.cards.items():
+            card.set_game_remaining(game_remaining(self.settings,gid,quota_totals.get(gid,0)) if self.catalog.enabled(card.game) else None)
+            card.set_state(totals.get(gid,0),gid==self.selected_id,not self.launching and not self.launch_restricted(card.game))
+            card_height=max(card_height,card.required_height())
+        self.grid.set_card_height(card_height)
         self.update_launch_button()
         self.update_tray()
         if self.isVisible() and not self.isMinimized() and self.pages.currentIndex()==1 and time.monotonic()-self.statistics.last_refresh>=10: self.statistics.refresh()

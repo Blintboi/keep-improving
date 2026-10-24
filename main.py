@@ -134,6 +134,7 @@ def main():
                               "weekend_enabled": store.settings().weekend_enabled,
                               "scheduled_day_count": len(store.settings().daily_schedules),
                               "game_countdown_count": len(store.settings().game_overlays),
+                              "game_limit_count": len(store.settings().game_limits),
                               "overlay_replace_warning": store.settings().overlay_replace_warning,
                               "limit_popup_enabled": store.settings().limit_popup_enabled,
                               "restriction_enabled": store.settings().restriction_enabled,
@@ -144,6 +145,7 @@ def main():
                               "bedtime_resume_minute": store.settings().bedtime_resume_minute,
                               "bedtime_minimize": store.settings().bedtime_minimize,
                               "bedtime_caps_budget": store.settings().bedtime_caps_budget,
+                              "budget_reset_minute": store.settings().budget_reset_minute,
                               "check_updates": store.settings().check_updates,
                               "tracking_started_on": store.tracking_started_on(),
                               "today_seconds": sum(store.totals(datetime.now().date()).values())})

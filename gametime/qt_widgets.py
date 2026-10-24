@@ -271,16 +271,21 @@ class LocalArtwork:
 
 class ImageLaunchButton(QPushButton):
     """The artwork itself is an accessible button; its play cue appears on hover."""
+    @staticmethod
+    def _shape(rect,radius):
+        shape=QPainterPath(); shape.addRoundedRect(rect,radius,radius)
+        bottom=QPainterPath(); bottom.addRect(QRectF(rect.left(),rect.bottom()-radius,rect.width(),radius))
+        return shape.united(bottom)
     def paintEvent(self,event):
         if not self.isEnabled() or not (self.underMouse() or self.hasFocus()): return
         p=QPainter(self); p.setRenderHint(QPainter.Antialiasing)
-        p.setPen(Qt.NoPen); p.setBrush(QColor(8,17,21,42)); p.drawRoundedRect(QRectF(self.rect()),14,14)
+        p.fillPath(self._shape(QRectF(self.rect()),14),QColor(8,17,21,42))
         center=self.rect().center(); x,y=center.x(),center.y()
-        p.setBrush(QColor(12,28,24,220)); p.drawEllipse(QRectF(x-25,y-25,50,50))
+        p.setPen(Qt.NoPen); p.setBrush(QColor(12,28,24,220)); p.drawEllipse(QRectF(x-25,y-25,50,50))
         triangle=QPainterPath(); triangle.moveTo(x-5,y-10); triangle.lineTo(x+11,y); triangle.lineTo(x-5,y+10); triangle.closeSubpath()
         p.fillPath(triangle,QColor(ACCENT))
         if self.hasFocus():
-            p.setBrush(Qt.NoBrush); p.setPen(QPen(QColor(ACCENT),1.5)); p.drawRoundedRect(QRectF(self.rect()).adjusted(2,2,-2,-2),13,13)
+            p.setBrush(Qt.NoBrush); p.setPen(QPen(QColor(ACCENT),1.5)); p.drawPath(self._shape(QRectF(self.rect()).adjusted(2,2,-2,-2),12))
     def enterEvent(self,event): super().enterEvent(event); self.update()
     def leaveEvent(self,event): super().leaveEvent(event); self.update()
     def mouseDoubleClickEvent(self,event): event.accept()
@@ -292,7 +297,8 @@ class GameCard(QFrame):
     options_requested=Signal(str)
     def __init__(self,game,t):
         super().__init__(); self.game=game; self.t=t; self.chosen=False; self.hovered=False; self.seconds=0; self.art=(None,None); self.show_source=False
-        self.setFixedHeight(260); self.setMinimumWidth(190); self.setCursor(Qt.PointingHandCursor)
+        self.game_remaining=None
+        self.setFixedHeight(244); self.setMinimumWidth(190); self.setCursor(Qt.PointingHandCursor)
         self.setFocusPolicy(Qt.StrongFocus); self.setAccessibleName(game.name)
         self.play=ImageLaunchButton('',self); self.play.clicked.connect(lambda:self.launched.emit(self.game.id))
         self.play.setCursor(Qt.PointingHandCursor); self.play.setToolTip(t('▶ Play')); self.play.setAccessibleName(t('▶ Play')+' '+game.name)
@@ -302,17 +308,30 @@ class GameCard(QFrame):
         self.more.setStyleSheet('QPushButton {background:#202c31; border:1px solid #40544f; border-radius:10px; padding:0;} QPushButton:hover {background:#315143;}')
         self.setToolTip(game.name+' · '+game.source)
     def resizeEvent(self,event):
-        self.play.setGeometry(1,1,self.width()-2,187); self.more.move(self.width()-49,198)
+        self.play.setGeometry(1,1,self.width()-2,187); self._position_options()
+    def _title_top(self):
+        return 195
+    def required_height(self):
+        details=int(bool(self.seconds) or not self.game.installed)+int(self.game_remaining is not None)
+        return 244+details*21
+    def _position_options(self):
+        self.more.move(self.width()-49,round(self._title_top()+4))
     def set_game(self,game):
         if self.game==game: return
         self.game=game; self.setAccessibleName(game.name)
         self.play.setAccessibleName(self.t('▶ Play')+' '+game.name)
         self.more.setAccessibleName(self.t('Game options')+' '+game.name); self.update()
     def set_state(self,seconds,chosen,enabled=True):
-        if self.seconds!=seconds or self.chosen!=chosen: self.seconds=seconds; self.chosen=chosen; self.update()
+        if self.seconds!=seconds or self.chosen!=chosen:
+            self.seconds=seconds; self.chosen=chosen; self.update()
         source=self.t('Manual') if self.game.source=='Kézi' else self.t('Games folder') if self.game.source=='Games' else self.game.source
         self.setToolTip(self.game.name+' · '+source+'\n'+self.t('Today')+': '+duration(seconds))
+        if self.game_remaining is not None:
+            self.setToolTip(self.toolTip()+'\n'+self.t('Game: {remaining} left',remaining=duration(self.game_remaining)))
         self.play.setEnabled(enabled and self.game.installed)
+    def set_game_remaining(self,value):
+        if value is not None: value=max(0,int(value))
+        if value!=self.game_remaining: self.game_remaining=value; self.update()
     def enterEvent(self,event): self.hovered=True; self.update()
     def leaveEvent(self,event): self.hovered=False; self.update()
     def mousePressEvent(self,event):
@@ -326,13 +345,17 @@ class GameCard(QFrame):
     def paintEvent(self,event):
         p=QPainter(self); p.setRenderHint(QPainter.Antialiasing)
         rect=QRectF(1,1,self.width()-2,self.height()-2); clip=QPainterPath(); clip.addRoundedRect(rect,15,15)
-        p.setClipPath(clip); p.fillRect(rect,QColor('#202d33' if self.hovered else PANEL))
+        background=QColor('#202d33' if self.hovered else PANEL)
+        p.setClipPath(clip); p.fillRect(rect,background)
+        # Keep artwork decoration above the title, and blend into the current
+        # card background so hovering never exposes a stripe across the name.
+        p.save(); p.setClipRect(QRectF(0,0,self.width(),188),Qt.IntersectClip)
         seed=hashlib.sha256(self.game.name.encode()).digest(); color=QColor.fromHsv(seed[0]*359//255,105,77)
         grad=QLinearGradient(0,0,self.width(),188); grad.setColorAt(0,color); grad.setColorAt(1,QColor('#14262c'))
         p.fillRect(QRectF(0,0,self.width(),188),grad)
         p.setPen(Qt.NoPen); p.setBrush(QColor(255,255,255,9)); p.drawEllipse(QRectF(self.width()-160,-76,240,240))
         p.setBrush(QColor(255,255,255,6)); p.drawEllipse(QRectF(-60,45,180,180))
-        fade=QLinearGradient(0,130,0,202); fade.setColorAt(0,QColor(25,33,38,0)); fade.setColorAt(1,QColor(PANEL)); p.fillRect(QRectF(0,130,self.width(),76),fade)
+        fade=QLinearGradient(0,130,0,188); fade.setColorAt(0,QColor(25,33,38,0)); fade.setColorAt(1,background); p.fillRect(QRectF(0,130,self.width(),58),fade)
         # Every source uses the same large tile. Icons stay complete; cover-only
         # games receive a centered square crop without stretching their artwork.
         tile=QRectF((self.width()-156)/2,16,156,156); area=tile.adjusted(6,6,-6,-6)
@@ -359,25 +382,39 @@ class GameCard(QFrame):
             p.setFont(QFont('Segoe UI',8,QFont.DemiBold)); badge_width=p.fontMetrics().horizontalAdvance(source)+18
             p.setPen(Qt.NoPen); p.setBrush(QColor(12,22,25,205)); p.drawRoundedRect(QRectF(12,12,badge_width,23),7,7)
             p.setPen(QColor('#c5d9d5')); p.drawText(QRectF(21,12,badge_width-12,23),Qt.AlignVCenter,source)
+        p.restore()
+        title_top=self._title_top()
         p.setFont(QFont('Segoe UI',11,QFont.DemiBold)); p.setPen(QColor(TEXT))
-        p.drawText(QRectF(15,193,self.width()-78,42),Qt.TextWordWrap|Qt.AlignVCenter,self.game.name)
+        p.drawText(QRectF(15,title_top,self.width()-78,42),Qt.TextWordWrap|Qt.AlignLeft|Qt.AlignVCenter,self.game.name)
         p.setFont(QFont('Segoe UI',9)); p.setPen(QColor(MUTED))
         caption=(duration(self.seconds) if self.seconds else '') if self.game.installed else self.t('Removed')
-        p.drawText(QRectF(15,239,self.width()-30,17),Qt.AlignVCenter,caption)
+        details_top=title_top+46
+        if caption:
+            p.drawText(QRectF(15,details_top,self.width()-30,17),Qt.AlignLeft|Qt.AlignVCenter,caption)
+            details_top+=21
+        if self.game_remaining is not None:
+            p.setFont(QFont('Segoe UI',9,QFont.DemiBold)); p.setPen(QColor(ACCENT if self.game_remaining else '#ff9197'))
+            p.drawText(QRectF(15,details_top,self.width()-30,18),Qt.AlignLeft|Qt.AlignVCenter,self.t('Game: {remaining} left',remaining=duration(self.game_remaining)))
         p.setClipping(False); p.setBrush(Qt.NoBrush); p.setPen(QPen(QColor(ACCENT if self.chosen else '#3b514e' if self.hovered else '#2b393f'),1.6 if self.chosen else 1))
         p.drawRoundedRect(rect,15,15)
 
 class CardGrid(QWidget):
     def __init__(self):
-        super().__init__(); self.cards=[]; self.columns=0
+        super().__init__(); self.cards=[]; self.columns=0; self.card_height=244
         self.grid=QGridLayout(self); self.grid.setContentsMargins(0,0,8,0); self.grid.setSpacing(16); self.grid.setAlignment(Qt.AlignTop)
+    def set_card_height(self,height):
+        if height==self.card_height: return
+        self.card_height=height
+        for card in self.cards: card.setFixedHeight(height)
     def set_cards(self,cards):
         if self.cards==cards: return
         self.setUpdatesEnabled(False)
         for old in self.cards:
             self.grid.removeWidget(old)
             if old not in cards: old.hide(); old.deleteLater()
-        self.cards=cards; self.reflow(force=True)
+        self.cards=cards
+        for card in cards: card.setFixedHeight(self.card_height)
+        self.reflow(force=True)
         self.setUpdatesEnabled(True)
     def resizeEvent(self,event): self.reflow()
     def reflow(self,force=False):
@@ -385,7 +422,7 @@ class CardGrid(QWidget):
         columns=max(1,(self.width()+16)//238)
         if columns==self.columns and not force: return
         for card in self.cards: self.grid.removeWidget(card)
-        for i,card in enumerate(self.cards): self.grid.addWidget(card,i//columns,i%columns)
+        for i,card in enumerate(self.cards): self.grid.addWidget(card,i//columns,i%columns,Qt.AlignTop)
         for col in range(max(columns,self.columns)): self.grid.setColumnStretch(col,1 if col<columns else 0)
         self.columns=columns
 

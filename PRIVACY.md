@@ -49,6 +49,10 @@ sound leaves delivery pending until a visual reminder can be shown.
 
 The standard profile is in the Windows Documents folder under `GameTimeMonitor\data`. Local artwork is read from installed files and caches; artwork and executable paths are not uploaded by statistics sync. Upgrade backups stay beside the profile. Local history is not an encrypted database.
 
+If daily quota reset times differ from midnight, recent quota-period totals are stored separately from calendar-day history. These local per-game totals preserve the current allowance across midnight and restarts, are limited to recent periods, and are not included in statistics synchronization. Reset schedules and alert markers also remain local.
+
+Optional per-game time limits are stored in the local settings and are not included in statistics synchronization. They reuse the existing measured foreground time and quota periods.
+
 ## Optional computer linking
 
 Synchronization is off by default. When enabled, the app uploads each computer's cumulative daily game times, game names/sources and the computer's chosen display name. These contents are encrypted on the client using keys derived from the connection code. The service stores encrypted snapshots, random device identifiers, revisions, timestamps and resource counters. It does not receive the connection code or its encryption key.

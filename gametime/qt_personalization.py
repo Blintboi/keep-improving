@@ -154,7 +154,8 @@ def game_overlay_dialog(app,gid=None):
         update_colors()
         if current[0] and getattr(app,'_overlay_preview_game_id',None)==current[0]:
             app._overlay_game_preview_state=preview_state.currentData()
-            app._overlay_preview_settings=game_settings(day_settings(candidate()),current[0]); app.update_overlay()
+            from .budget import quota_plan
+            app._overlay_preview_settings=game_settings(quota_plan(candidate()),current[0]); app.update_overlay()
         error.hide()
     def choose(*args):
         if current[0] and getattr(app,'_overlay_preview_game_id',None)==current[0]:

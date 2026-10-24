@@ -47,6 +47,8 @@ try {
     $report.fresh_restriction_is_opt_in = -not $first.restriction_enabled -and $first.restriction_seconds -eq 7500
     $report.fresh_bedtime_is_opt_in = -not $first.bedtime_enabled -and -not $first.bedtime_minimize -and $first.bedtime_warning_minute -eq 1435 -and $first.bedtime_minute -eq 0 -and $first.bedtime_resume_minute -eq 360
     $report.fresh_bedtime_budget_is_opt_in = $first.bedtime_caps_budget -eq $false
+    $report.fresh_budget_resets_at_midnight = $first.budget_reset_minute -eq 0
+    $report.fresh_per_game_limits_are_empty = $first.game_limit_count -eq 0
     $report.bedtime_handover_script_bundled = Test-Path -LiteralPath (Join-Path $app '_internal\gametime\bedtime_legacy.ps1')
     $hubIcon = Join-Path $data 'assets\gaming-hub.ico'
     $report.hub_icon_installed = (Test-Path -LiteralPath $hubIcon) -and (Get-FileHash -LiteralPath $hubIcon).Hash -eq (Get-FileHash -LiteralPath (Join-Path $app '_internal\gametime\app.ico')).Hash
@@ -91,6 +93,7 @@ d=sqlite3.connect(sys.argv[1]); code='1'*32; day='2026-01-01'
 c=json.loads(d.execute("SELECT value FROM settings WHERE key='config'").fetchone()[0])
 c.update(bedtime_caps_budget=True,notification_sound='silent',notification_sound_path=r'C:\Fixture\saved.wav',weekend_enabled=True,weekend_schedule={'limit_seconds':10800,'warning_seconds':9000,'bedtime_minute':60,'bedtime_resume_minute':480},game_overlays={'test:hidden':{'overlay_enabled':False,'overlay_font_size':36,'overlay_x':0.1,'overlay_y':0.9,'overlay_color_normal':'#aabbcc','overlay_color_warning':'#dd5566'}})
 c.update(daily_schedules={'1':{'limit_seconds':13200,'warning_seconds':12000,'bedtime_minute':90}})
+c.update(game_limits={'test:hidden':1800})
 c.update(statistics_sync_group=code,statistics_sync_enabled=False,statistics_device_name='Fixture Desktop')
 d.execute("UPDATE settings SET value=? WHERE key='config'",(json.dumps(c),))
 d.execute('INSERT INTO statistics_devices VALUES (?,?,?,?,?)',(code,'a'*32,'Other fixture PC',99,day))
@@ -171,6 +174,8 @@ d.close()
     $report.sound_weekend_and_game_preferences_preserved_on_upgrade = $customConfig -eq 'True'
     $dailyConfig = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); print(c["daily_schedules"]=={"1":{"limit_seconds":13200,"warning_seconds":12000,"bedtime_minute":90}})' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     $report.weekly_day_preferences_preserved_on_upgrade = $dailyConfig -eq 'True'
+    $gameCaps = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); print(c["game_limits"]=={"test:hidden":1800})' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    $report.per_game_limits_preserved_on_upgrade = $gameCaps -eq 'True'
 
     $report.bedtime_preferences_preserved_on_upgrade = (Get-Content -LiteralPath $diag -Raw -Encoding UTF8 | ConvertFrom-Json).bedtime_minute -eq 30 -and (Get-Content -LiteralPath $diag -Raw -Encoding UTF8 | ConvertFrom-Json).bedtime_minimize
     $report.bedtime_budget_preference_preserved_on_upgrade = (Get-Content -LiteralPath $diag -Raw -Encoding UTF8 | ConvertFrom-Json).bedtime_caps_budget -eq $true

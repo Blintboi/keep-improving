@@ -14,7 +14,8 @@ from .schedule import day_settings,game_settings
 from . import win32
 from .game_safety import policy as safety
 from .background import DISCOVERY_PROBLEM, HUB_PROBLEM
-from .budget import remaining_budget
+from .budget import remaining_budget, quota_plan
+from .quota import period_day, reset_clock
 
 log=logging.getLogger(__name__)
 
@@ -237,8 +238,8 @@ class MonitorActions:
 
 
     def test_popup(self):
-        self.popup(Alert(datetime.now().date().isoformat(), (), "limit",
-                         notification_text(self.settings,'limit',test=True), self.t("OK, I’ll stop")))
+        self.popup(Alert(period_day(datetime.now().astimezone(),reset_clock(self.settings)).isoformat(), (), "limit",
+                         notification_text(quota_plan(self.settings),'limit',test=True), self.t("OK, I’ll stop")))
 
 
     def consume_silent_alert(self, alert):
@@ -251,7 +252,7 @@ class MonitorActions:
                 required = not self.overlay_warning_visible()
             except (AttributeError, OSError, RuntimeError):
                 required = True
-        if self.restriction_reached(alert.day) and not getattr(self,'_restriction_reminder_only',False):
+        if self.restriction_reached(alert.day, self.tracker.active) and not getattr(self,'_restriction_reminder_only',False):
             required = False  # The persistent restriction notice replaces queued reminders.
         if required:
             return False
@@ -286,9 +287,11 @@ class MonitorActions:
 
     def finish_notification(self, alert):
         self.notification_timer = None
-        if self.closed or alert.day != datetime.now().date().isoformat():
+        if self.closed or alert.day != period_day(datetime.now().astimezone(), reset_clock(self.settings)).isoformat():
             return
         if not self.tracker.alerts or self.tracker.alerts[0] != alert:
+            return
+        if not self.tracker.alert_current(alert, datetime.now().astimezone()):
             return
         if self.consume_silent_alert(alert):
             return
@@ -336,24 +339,30 @@ class MonitorActions:
                 self.catalog_changed()
 
 
-    def restriction_reached(self, day=None):
-        day=day or datetime.now().date(); settings=day_settings(self.settings,day)
-        return settings.restriction_enabled and sum(self.tracker.totals(day).values())>=settings.restriction_seconds
+    def restriction_reached(self, day=None, game=None):
+        wall=day if isinstance(day,datetime) else datetime.now().astimezone()
+        self.tracker.configure_budget(wall)
+        day=period_day(wall,reset_clock(self.settings)) if day is None or isinstance(day,datetime) else day
+        settings=day_settings(self.settings,day)
+        totals=self.tracker.quota_day_totals(day)
+        shared=settings.restriction_enabled and sum(totals.values())>=settings.restriction_seconds
+        cap=self.settings.game_limits.get(game.id) if game and self.catalog.enabled(game) else None
+        return shared or (cap is not None and totals.get(game.id,0)>=cap)
 
     def launch_restricted(self, game):
-        return self.catalog.enabled(game) and self.restriction_reached()
+        return self.catalog.enabled(game) and self.restriction_reached(game=game)
 
     def restriction_notice(self):
         self.open_games()
         self.set_status("Today's {minutes:g}-minute play restriction is active. Change it in Settings.",
-                        minutes=day_settings(self.settings).restriction_seconds/60)
+                        minutes=quota_plan(self.settings).restriction_seconds/60)
 
     def enforce_gameplay(self, current):
         self._restriction_reminder_only=False
-        if not self.restriction_reached(current.wall.date()) or not current.interactive:
+        game = self.catalog.resolve(current.path)
+        if not current.interactive or not self.restriction_reached(current.wall, game):
             self._restriction_grace = None
             return False
-        game = self.catalog.resolve(current.path)
         if not game or not current.identity or current.identity != self.tracker.identity:
             self._restriction_grace = None
             return False
@@ -363,7 +372,7 @@ class MonitorActions:
             return False  # Keep ordinary reminders; do not interrupt this match.
         if getattr(self, "restriction_timer", None) is not None:
             return True
-        key = (current.wall.date().isoformat(), current.identity)
+        key = (period_day(current.wall,reset_clock(self.settings)).isoformat(), current.identity)
         target = (*key, norm(current.path))
         previous = getattr(self, "_restriction_grace", None)
         if previous:
@@ -394,13 +403,14 @@ class MonitorActions:
         self.restriction_timer = None
         # A return to the game, or a failed minimize, must allow a new full grace.
         self._restriction_grace = None
-        if self.closed or day != datetime.now().date().isoformat() or not self.restriction_reached(day):
+        if self.closed or day != period_day(datetime.now().astimezone(),reset_clock(self.settings)).isoformat():
             return
         try:
             current = win32.sample()
             if (not current.interactive or current.identity != identity or norm(current.path) != norm(path)
                     or not self.catalog.resolve(current.path)):
                 return
+            if not self.restriction_reached(day, self.catalog.resolve(current.path)): return
             if not self.minimization_allowed(path,identity): return
             consented=bool(safety.reason(path,self.catalog.resolve(path)))
             minimized=win32.minimize_game(path,identity,consented=True) if consented else win32.minimize_game(path,identity)
@@ -418,7 +428,7 @@ class MonitorActions:
         remaining=None
         if '{remaining}' in settings.notification_messages.get('bedtime',''):
             now=wall or datetime.now().astimezone()
-            total=sum(self.tracker.totals(now.date().isoformat()).values())
+            total=sum(self.tracker.quota_totals(now).values())
             remaining=math.ceil(remaining_budget(self.settings,now,total).remaining/60)
         return notification_text(settings,'bedtime',remaining,day=day)
 
@@ -480,8 +490,9 @@ class MonitorActions:
                 if getattr(self, 'restriction_timer', None) is not None:
                     self.restriction_timer.stop(); self.restriction_timer = None
             restricting = bedtime_restricting or self.enforce_gameplay(current)
-            today = datetime.now().date().isoformat()
-            if self.popup_window and self.popup_day != today:
+            today = period_day(current.wall,reset_clock(self.settings)).isoformat()
+            popup_day = current.wall.date().isoformat() if getattr(self,'popup_kind',None)=='bedtime' else today
+            if self.popup_window and self.popup_day != popup_day:
                 self.dismiss_popup()
                 self.popup_window = self.popup_day = None
             if not restricting and not self.popup_window and self.notification_timer is None and self.tracker.alerts:

@@ -2,7 +2,7 @@
 from dataclasses import replace
 from datetime import date,datetime,timedelta
 
-SCHEDULE_FIELDS=('warning_seconds','limit_seconds','restriction_enabled','restriction_seconds',
+SCHEDULE_FIELDS=('warning_seconds','limit_seconds','budget_reset_minute','restriction_enabled','restriction_seconds',
                  'bedtime_enabled','bedtime_warning_minute','bedtime_minute','bedtime_resume_minute','bedtime_minimize','bedtime_caps_budget')
 DAY_NAMES=('Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday')
 

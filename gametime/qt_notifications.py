@@ -1,6 +1,6 @@
 """Edit local reminder messages without changing budgets or alert delivery."""
 from dataclasses import replace
-from datetime import date
+from datetime import date,datetime
 import math
 from sqlite3 import Error as SQLiteError
 from PySide6.QtWidgets import QVBoxLayout,QHBoxLayout
@@ -9,6 +9,8 @@ from .qt_widgets import label,button,NoWheelComboBox
 from .notification_text import KINDS,MAX_MESSAGE_LENGTH,notification_text,default_notification_template
 from .tracker import Alert
 from .schedule import day_settings
+from .budget import quota_plan,remaining_budget
+from .quota import period_day,reset_clock
 
 
 def messages_dialog(app):
@@ -32,17 +34,19 @@ def messages_dialog(app):
     hint.setWordWrap(True); layout.addWidget(hint)
     error=label('','danger'); error.setWordWrap(True); error.hide(); layout.addWidget(error)
     drafts={key:value for key,value in app.settings.notification_messages.items() if value.strip()}; current=[None]
+    def default_plan(kind):
+        return day_settings(app.settings) if kind=='bedtime' else quota_plan(app.settings)
     def update_count():
         count.setText(t('{count}/1000 characters',count=len(editor.toPlainText())))
     def edited():
         text=editor.toPlainText(); kind=current[0]
-        if text.strip() and text!=default_notification_template(day_settings(app.settings),kind): drafts[kind]=text
+        if text.strip() and text!=default_notification_template(default_plan(kind),kind): drafts[kind]=text
         else: drafts.pop(kind,None)
         update_count()
         error.hide()
     def choose(*args):
         current[0]=kinds.currentData(); blocked=editor.blockSignals(True)
-        editor.setPlainText(drafts.get(current[0],default_notification_template(day_settings(app.settings),current[0])))
+        editor.setPlainText(drafts.get(current[0],default_notification_template(default_plan(current[0]),current[0])))
         editor.blockSignals(blocked); update_count(); error.hide()
     def refresh_default():
         if current[0] not in drafts: choose()
@@ -53,13 +57,15 @@ def messages_dialog(app):
     def settings():
         return replace(app.settings,notification_messages={key:value for key,value in drafts.items() if value.strip()}).validate()
     def preview():
-        try: value=day_settings(settings())
+        kind=current[0]; now=datetime.now().astimezone()
+        try: value=day_settings(settings()) if kind=='bedtime' else quota_plan(settings(),now)
         except ValueError as exc: error.setText(t(str(exc))); error.show(); return
-        kind=current[0]; remaining=None
+        remaining=None
         if kind=='bedtime' and '{remaining}' in drafts.get(kind,''):
-            remaining=max(0,math.ceil((value.limit_seconds-sum(app.tracker.totals(date.today()).values()))/60))
+            remaining=max(0,math.ceil(remaining_budget(app.settings,now,sum(app.tracker.quota_totals(now).values())).remaining/60))
         text=notification_text(value,kind,remaining)
-        alert=Alert(date.today().isoformat(),(),kind,text,t('OK, I’ll finish' if kind=='bedtime' else 'OK' if kind=='warning' else 'OK, I’ll stop'))
+        day=now.date() if kind=='bedtime' else period_day(now,reset_clock(app.settings))
+        alert=Alert(day.isoformat(),(),kind,text,t('OK, I’ll finish' if kind=='bedtime' else 'OK' if kind=='warning' else 'OK, I’ll stop'))
         if not app.popup(alert): error.setText(t('Close the current alert before previewing another.')); error.show()
     def save():
         try:
