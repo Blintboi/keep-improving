@@ -14,7 +14,7 @@ try {
         $root -eq [IO.Path]::GetPathRoot($root).TrimEnd('\')) { throw 'Invalid installation marker; nothing was removed.' }
     if (-not $Quiet) {
         Add-Type -AssemblyName PresentationFramework
-        $answer = [System.Windows.MessageBox]::Show('Remove Game Time Monitor and its Windows startup entries? Games, Gaming Hub shortcuts, settings and play history will be kept.','Uninstall Game Time Monitor','YesNo','Question')
+        $answer = [System.Windows.MessageBox]::Show('Remove Keep Improving and its Windows startup entries? Games, settings and history will be kept.','Uninstall Keep Improving','YesNo','Question')
         if ($answer -ne 'Yes') { exit 0 }
     }
     $exe = Join-Path $root 'GameTimeMonitor.exe'
@@ -55,7 +55,7 @@ try {
         if (-not (Get-ChildItem -LiteralPath $_.FullName -Force | Select-Object -First 1)) { Remove-Item -LiteralPath $_.FullName }
     }
     if (-not (Get-ChildItem -LiteralPath $root -Force | Select-Object -First 1)) { Remove-Item -LiteralPath $root }
-    if (-not $Quiet) { [System.Windows.MessageBox]::Show('Game Time Monitor was removed. Your games and data were kept.','Uninstall complete') | Out-Null }
+    if (-not $Quiet) { [System.Windows.MessageBox]::Show('Keep Improving was removed. Your games and data were kept.','Uninstall complete') | Out-Null }
 } catch {
     if (-not $Quiet) {
         Add-Type -AssemblyName PresentationFramework

@@ -1,13 +1,16 @@
-# Játékidőfigyelő — 2.28.2
+# Keep Improving — 2.31.1
 
-**[Letöltés Windows x64-re — 2.28.2](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256) · [English](README.md)
+**[Letöltés Windows x64-re — 2.31.1](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256) · [English](README.md)
 
-A Játékidőfigyelő egy helyen kezeli a telepített játékaidat, a napi játékidőt és a személyes emlékeztetőket. Tervezd meg a játékra szánt időt, kövesd a megmaradt keretedet, és tekintsd át a játékszokásaidat a saját számítógépeiden.
+A Keep Improving egy helyen kínál Pomodoro-fókuszt, alkalmazás- és weboldalidő-mérést, valamint játékkönyvtárat. Kövesd a szokásaidat, tiltsd a figyelemelterelő oldalakat munka közben, és tervezd meg a játékidődet.
 
 Ingyenes, nyílt forráskódú Windows-alkalmazás, magyar és angol felülettel. A helyi időmérés internet és fiók nélkül is működik; a gépek összekapcsolása választható.
 
 ## Főbb funkciók
 
+- **Áttekinthető nézetek:** a tevékenységet, időszakot és gépet egyetlen szűrősorban választhatod ki. Az alapdiagram napi összesítést mutat; a részletes bontás legfeljebb öt fő tételt emel ki. Válassz napot vagy keress a listában a részletekhez. Az egyéni dátumokat naptárból állíthatod. A Fókusz módban az időzítő és a látható tiltólista kapott helyet, a használati előzmények külön Aktivitás fülre kerültek. A játékkliensek a Játéktáron belüli, alapból csukott panelből nyithatók meg; a játékok alapból láthatók. Kinyitva minden kliens teljes magasságban jelenik meg, külön görgetősáv nélkül.
+- **Aktivitási statisztikák:** szűrés játékokra, játékok nélküli alkalmazásokra, weboldalakra vagy mindenre. A Minden nézet a weboldalidőt a böngészőidő részeként számolja. A tiltólistához teljes URL-t vagy domaint közvetlenül is hozzáadhatsz, korábbi látogatás nélkül.
+- **Fókusz és aktivitás:** minden előtérben használt alkalmazás helyi napi időmérése, 60 másodperces tétlenségi határral. A mellékelt Brave-, Chrome- vagy Edge-bővítmény az aktív weboldal domainjét is méri. Állítható Pomodoro-munka, rövid és hosszú szünet, valamint alkalmazás- és weboldaltiltólisták segítik a koncentrációt. A tiltás csak futó fókuszszakaszban él, szüneteltetéssel vagy alaphelyzetbe állítással feloldható. Az aktivitás helyi marad, a játékkeretet és a felhőszinkront nem érinti. Beállítás: **Fókusz és aktivitás → Brave / böngésző csatlakoztatása**.
 - **Játékkönyvtár:** telepített játékok felismerése és indítása, keresés a gyűjteményben, az időmérésbe bevont játékok kiválasztása.
 - **Napi keret és heti időrend:** időkeretek, figyelmeztetések és lefekvési emlékeztetők külön napokra vagy napcsoportokra.
 - **Játékonkénti korlát:** a játék menüjéből vagy a Beállításokból külön határt adhatsz a közös napi kereten belül. Az overlay a kisebb hátralévő időt mutatja, a Hub fő számlálója a közöset, a játék kártyája pedig a sajátját. A keretek együtt indulnak újra, és a már lejátszott idő is beleszámít. A játékhatár a meglévő 10 másodperces türelmi idővel és a védett játékok engedélyellenőrzésével vált kis méretre.
@@ -30,7 +33,7 @@ Az önálló vagy fel nem ismert játékokhoz használható a beállított **Gam
 ## Első lépések
 
 1. Töltsd le és indítsd el a **GameTimeMonitor-Setup.exe** fájlt a fenti hivatkozásról.
-2. Nyisd meg a **Gaming Hubot** az asztali parancsikonról vagy a tálcáról, és tekintsd át a játékkönyvtáradat.
+2. Nyisd meg a **Keep Improving** alkalmazást az asztali parancsikonról vagy a tálcáról, és tekintsd át a játékkönyvtáradat.
 3. Add meg az időrendet és az emlékeztetőket a **Beállításokban**, majd válaszd a **Mentés** gombot.
 
 A figyelő a Windows-bejelentkezéskor a tálcán indul. A Hub **X** gombja után a mérés és az emlékeztetők tovább működnek; a programot a tálcamenü **Kilépés a figyelőből** pontja állítja le.

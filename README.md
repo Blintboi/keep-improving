@@ -1,13 +1,16 @@
-# Game Time Monitor — 2.28.2
+# Keep Improving — 2.31.1
 
-**[Download for Windows x64 — 2.28.2](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256) · [Magyar](README.hu.md)
+**[Download for Windows x64 — 2.31.1](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256) · [Magyar](README.hu.md)
 
-Game Time Monitor brings your installed games, daily play time and personal reminders into one Windows application. Plan your gaming time, follow your remaining allowance and review your habits across your own computers.
+Keep Improving combines Pomodoro focus sessions, application and website time tracking, and your game library in one Windows application. Review your habits, block distractions during work and plan your gaming time.
 
 Free and open source, with an English and Hungarian interface. Local tracking works offline without an account; computer linking is optional.
 
 ## Features
 
+- **Clear overview:** choose activity, period and computer in one filter row. Daily totals are the default; optional breakdowns show up to five leading series plus the rest. Pick a day or search the ranking for details. Calendar dates, computer linking and sync controls are grouped by purpose. Focus mode now separates the timer and visible blacklist from Activity history. Launchers live in a collapsed panel inside the Library, while games are visible by default. Expanded launchers use their full height without an inner scrollbar.
+- **Activity statistics:** filter Games, Applications (excluding games), Websites or Everything. Everything counts website time within browser time. Paste a full URL or domain directly into the focus blacklist, including sites you have never visited.
+- **Focus & activity:** local foreground time for all applications, with a 60-second idle cutoff and daily history. Pair the included browser extension for Brave, Chrome or Edge to measure active website domains. Pomodoro work/short/long breaks and app/site blacklists keep distractions away during running focus sessions. Pause or reset immediately releases restrictions. Activity history stays on this computer and does not use the game budget or cloud sync. Open **Focus & activity → Connect Brave / browser** for extension setup.
 - **Game library:** discover and launch installed games, search your collection and choose which games to track.
 - **Daily budgets and weekly schedules:** set time limits, warnings and bedtime reminders for individual days or groups of days.
 - **Per-game limits:** set an optional cap inside the shared daily budget from a game's menu or Settings. The overlay shows the smaller remaining allowance; the Hub keeps the shared countdown and shows each capped game's own remaining time on its card. Both caps renew together and include time already played. Game caps use the existing 10-second minimization grace and protected-game permission checks.
@@ -30,7 +33,7 @@ For standalone or unrecognized games, use the configured **Games folder** or ass
 ## Getting started
 
 1. Download and run **GameTimeMonitor-Setup.exe** using the link above.
-2. Open **Gaming Hub** from the desktop shortcut or tray icon and review your library.
+2. Open **Keep Improving** from the desktop shortcut or tray icon and review your library.
 3. Set your schedule and reminders under **Settings**, then select **Save**.
 
 The monitor starts in the tray when you sign in to Windows. Closing the Hub with **X** keeps tracking and reminders active; **Exit monitor** in the tray menu stops the application.

@@ -120,20 +120,21 @@ class AssetClientInterfaceTests(unittest.TestCase):
             self.app.refresh_clients(); worker.results.put((None,'Could not refresh launchers. Try again.')); self.app.poll_assets()
             self.assertEqual(self.app.clients,[client]); self.assertEqual(self.store.client_cache(),[client])
             self.assertTrue(self.app.clients_status.text())
-    def test_launcher_page_is_separate_translated_and_available_while_restricted(self):
+    def test_library_launcher_panel_is_translated_and_available_while_restricted(self):
         class Worker:
             def __init__(me): me.results=Queue(); me.requests=[]
             def request(me,settings): me.requests.append(settings)
             def close(me): pass
         worker=Worker(); self.app.client_worker=worker
-        self.app.switch_page(3); self.assertEqual(len(worker.requests),1); self.assertEqual(self.app.nav[3].text(),'Játékkliensek')
+        self.app.switch_page(3); self.assertEqual(len(worker.requests),1); self.assertEqual(self.app.clients_toggle.text(),'Játékkliensek')
+        self.assertEqual(self.app.pages.currentIndex(),0); self.assertNotIn(3,self.app.nav)
         client=Client('riot','Riot Client',str(self.exe)); worker.results.put(([client],'')); self.app.poll_assets()
         self.app.settings=self.app.catalog.settings=replace(self.app.settings,restriction_enabled=True)
         self.app.tracker.cache[str(__import__('datetime').date.today())]={self.game.id:7500}; self.app.render()
         self.assertTrue(self.app.client_buttons['riot'].isEnabled())
         with patch('gametime.clients.start_client') as execute:
             self.app.client_buttons['riot'].click(); execute.assert_called_once_with(client)
-        self.app.set_language('en'); self.assertEqual(self.app.pages.currentIndex(),3); self.assertEqual(self.app.nav[3].text(),'Launchers')
+        self.app.set_language('en'); self.assertEqual(self.app.pages.currentIndex(),0); self.assertEqual(self.app.clients_toggle.text(),'Launchers')
         self.assertEqual(self.app.tracker.totals(__import__('datetime').date.today())[self.game.id],7500)
     def test_missing_client_failure_is_visible_and_does_not_start_game_worker(self):
         with patch('gametime.clients.start_client',side_effect=ValueError('This launcher is no longer available. Refresh the launcher list.')):

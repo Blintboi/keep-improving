@@ -129,7 +129,26 @@ try {
     $shell = New-Object -ComObject WScript.Shell
     $links = @()
     foreach ($directory in @([Environment]::GetFolderPath('Startup'),[Environment]::GetFolderPath('Programs'))) {
-        $linkPath = Join-Path $directory ($StartupName + '.lnk')
+        $shortcutName = if ($directory -eq [Environment]::GetFolderPath('Programs')) { 'Keep Improving' } else { $StartupName }
+        $linkPath = Join-Path $directory ($shortcutName + '.lnk')
+        $oldProgramLink = Join-Path $directory ($StartupName + '.lnk')
+        if ($linkPath -ne $oldProgramLink -and (Test-Path -LiteralPath $oldProgramLink)) {
+            $priorProgramLink = $shell.CreateShortcut($oldProgramLink)
+            if ($priorProgramLink.TargetPath -eq $exe -and $priorProgramLink.Description -eq 'Game Time Monitor - GameTimeMonitor.bundle.v1') {
+                Copy-Item -LiteralPath $oldProgramLink -Destination (Join-Path $backup 'previous-start-menu.lnk')
+                Remove-Item -LiteralPath $oldProgramLink
+            }
+        }
+        if (Test-Path -LiteralPath $linkPath) {
+            $priorLink = $shell.CreateShortcut($linkPath)
+            if ($priorLink.TargetPath -ne $exe -or $priorLink.Description -ne 'Game Time Monitor - GameTimeMonitor.bundle.v1') {
+                $linkPath = Join-Path $directory ('Keep Improving - ' + $StartupName + '.lnk')
+                if (Test-Path -LiteralPath $linkPath) {
+                    $alternate = $shell.CreateShortcut($linkPath)
+                    if ($alternate.TargetPath -ne $exe -or $alternate.Description -ne 'Game Time Monitor - GameTimeMonitor.bundle.v1') { throw 'Unrelated shortcut was preserved.' }
+                }
+            }
+        }
         $link = $shell.CreateShortcut($linkPath)
         $link.TargetPath = $exe
         $link.Arguments = if ($directory -eq [Environment]::GetFolderPath('Startup')) { '--background --data-dir "' + $DataDir + '"' } else { '--data-dir "' + $DataDir + '"' }
@@ -141,7 +160,7 @@ try {
     }
     $hubAssets = Join-Path $DataDir 'assets'
     New-Item -ItemType Directory -Path $hubAssets -Force | Out-Null
-    $hubIcon = Join-Path $hubAssets 'gaming-hub.ico'
+    $hubIcon = Join-Path $hubAssets 'keep-improving.ico'
     Copy-Item -LiteralPath (Join-Path $InstallDir '_internal\gametime\app.ico') -Destination $hubIcon -Force
     if (-not $NoDesktopShortcut) {
         $DesktopDir = [IO.Path]::GetFullPath($DesktopDir)
@@ -155,7 +174,16 @@ try {
             }
         }
         if (-not $NoHubShortcut) {
-            $hubPath = Join-Path $DesktopDir 'Gaming Hub.lnk'
+            $legacyHubPath = Join-Path $DesktopDir 'Gaming Hub.lnk'
+            if (Test-Path -LiteralPath $legacyHubPath) {
+                $legacyHub = $shell.CreateShortcut($legacyHubPath)
+                if ($legacyHub.Description -eq 'Game Time Monitor Gaming Hub' -or
+                    ($legacyHub.TargetPath -eq $exe -and $legacyHub.Description -eq 'Game Time Monitor - GameTimeMonitor.bundle.v1')) {
+                    Copy-Item -LiteralPath $legacyHubPath -Destination (Join-Path $backup 'previous-hub-desktop.lnk')
+                    Remove-Item -LiteralPath $legacyHubPath
+                }
+            }
+            $hubPath = Join-Path $DesktopDir 'Keep Improving.lnk'
             if (Test-Path -LiteralPath $hubPath) {
                 $previousHub = $shell.CreateShortcut($hubPath)
                 if ($previousHub.Description -eq 'Game Time Monitor Gaming Hub' -or
@@ -187,7 +215,7 @@ try {
         StartupName=$StartupName; Startup=$startup; UninstallKey=$uninstallKey; Links=$links; Files=$payload.Files }
     $manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $InstallDir 'bundle-install.json') -Encoding UTF8
     New-Item -Path $uninstallKey -Force | Out-Null
-    foreach ($pair in @{DisplayName='Game Time Monitor';DisplayVersion=$payload.Version;Publisher='Game Time Monitor contributors';InstallLocation=$InstallDir;
+    foreach ($pair in @{DisplayName='Keep Improving';DisplayVersion=$payload.Version;Publisher='Keep Improving contributors';InstallLocation=$InstallDir;
                         DisplayIcon=$exe;UninstallString=$uninstall;NoModify=1;NoRepair=1}.GetEnumerator()) {
         Set-ItemProperty -LiteralPath $uninstallKey -Name $pair.Key -Value $pair.Value
     }
@@ -197,13 +225,13 @@ try {
     }
     if (-not $Quiet) {
         Add-Type -AssemblyName PresentationFramework
-        [System.Windows.MessageBox]::Show("Game Time Monitor is installed and starts with Windows.`n`nYour games and play history stay on this computer.`nUse the tray icon to open Settings or exit.",'Setup complete','OK','Information') | Out-Null
+        [System.Windows.MessageBox]::Show("Keep Improving is installed and starts with Windows.`n`nYour history and settings stay on this computer.`nUse the tray icon to open Settings or exit.",'Setup complete','OK','Information') | Out-Null
     }
 } catch {
     $_ | Out-String | Set-Content -LiteralPath $taskLog -Encoding UTF8
     if (-not $Quiet) {
         Add-Type -AssemblyName PresentationFramework
-        [System.Windows.MessageBox]::Show("Installation failed: $($_.Exception.Message)`n`nDetails: $taskLog",'Game Time Monitor setup','OK','Error') | Out-Null
+        [System.Windows.MessageBox]::Show("Installation failed: $($_.Exception.Message)`n`nDetails: $taskLog",'Keep Improving setup','OK','Error') | Out-Null
     }
     exit 1
 } finally {

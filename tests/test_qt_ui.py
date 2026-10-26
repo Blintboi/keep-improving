@@ -294,18 +294,20 @@ class QtInterfaceTests(unittest.TestCase):
         today=date.today().isoformat(); stats=self.app.statistics
         self.store.add_usage({(today,self.games[0].id):100,(today,self.games[1].id):200}); self.app.tracker.cache.clear()
         self.app.switch_page(1); stats.preset(7)
-        day=stats.days_list.item(0); legend=stats.legend.item(0); cells=[stats.games_table.item(0,col) for col in range(5)]
+        stats.chart_mode.setCurrentIndex(stats.chart_mode.findData('game'))
+        day=stats.day_selector.model().item(1); legend=stats.legend.item(0); cells=[stats.games_table.item(0,col) for col in range(5)]
         stats.games_table.selectRow(0); stats.refresh(); stats.refresh()
-        self.assertIs(stats.days_list.item(0),day); self.assertIs(stats.legend.item(0),legend)
+        self.assertIs(stats.day_selector.model().item(1),day); self.assertIs(stats.legend.item(0),legend)
         self.assertEqual([stats.games_table.item(0,col) for col in range(5)],cells)
         self.assertEqual([index.row() for index in stats.games_table.selectionModel().selectedRows()],[0])
         self.store.add_usage({(today,self.games[1].id):50}); self.app.tracker.cache.clear(); stats.refresh()
         self.assertIs(stats.games_table.item(0,3),cells[3]); self.assertEqual(cells[3].text(),'00:04:10')
-        self.assertIn('00:05:50',day.text()); self.assertIn('71,4%',stats.top_detail.text())
-        stats.start.setText('invalid'); stats.refresh(); error=stats.error
+        self.assertIn('5 p',day.text()); self.assertIn('71,4%',stats.top_detail.text())
+        invalid_start=(date.today()+timedelta(days=1)).isoformat()
+        stats.start.setText(invalid_start); stats.refresh(); error=stats.error
         with patch.object(self.app.statistics_data,'history_by_computer') as history,patch.object(self.store,'games') as catalog:
             self.app.set_language('en'); history.assert_not_called(); catalog.assert_not_called()
-        self.assertEqual(stats.start.text(),'invalid'); self.assertIs(stats.error,error); self.assertTrue(error.text())
+        self.assertEqual(stats.start.text(),invalid_start); self.assertIs(stats.error,error); self.assertTrue(error.text())
         self.assertIn('71.4%',stats.top_detail.text()); self.assertEqual(stats.games_table.horizontalHeaderItem(1).text(),'Computer')
         self.assertIs(stats.legend.item(0),legend); self.assertIn('this computer',stats.games_table.item(0,1).text())
 
@@ -585,6 +587,7 @@ class QtInterfaceTests(unittest.TestCase):
         self.app.settings=self.app.catalog.settings=replace(self.app.settings,statistics_sync_group=group)
         self.app.switch_page(1); stats=self.app.statistics
         self.app.statistics_data.ingest(snapshot,group); stats.refresh()
+        stats.chart_mode.setCurrentIndex(stats.chart_mode.findData('game'))
         self.assertEqual(stats.report.total,660)
         self.assertEqual(sorted(stats.chart.segments[day].values()),[180,420])
         game_colors=dict(stats.chart.series)
@@ -636,6 +639,7 @@ class QtInterfaceTests(unittest.TestCase):
         today=date.today(); day=today.isoformat()
         self.store.add_usage({(day,self.games[0].id):.1})
         stats.start.setText((today-timedelta(days=365)).isoformat()); stats.end.setText(day); stats.refresh()
+        stats.chart_mode.setCurrentIndex(stats.chart_mode.findData('game'))
         stats.chart.grab()
         self.assertEqual(len(stats.chart.regions),366); self.assertEqual(len(stats.chart.segment_regions),1)
         rect=stats.chart.segment_regions[0][0]
@@ -798,7 +802,7 @@ class QtInterfaceTests(unittest.TestCase):
         stats.start.setText(recent); stats.end.setText(today.isoformat()); stats.refresh()
         self.assertEqual(stats.report.average_days,2); self.assertEqual(stats.report.average,600)
         self.assertIn(recent,stats.average_note.text()); self.assertIn(recent,stats.average_label.toolTip())
-        stats.start.setText('invalid'); stats.refresh(); self.assertFalse(stats.error.isHidden())
+        stats.start.setText((today+timedelta(days=1)).isoformat()); stats.refresh(); self.assertFalse(stats.error.isHidden())
 
     def test_native_tray_event_reopens_without_toggling_and_close_hides(self):
         from PySide6.QtWidgets import QMainWindow

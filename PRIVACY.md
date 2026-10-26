@@ -1,6 +1,6 @@
 # Privacy and stored data
 
-Game Time Monitor is a personal project maintained by [Blintboi](https://github.com/Blintboi). This page describes the application's current data handling. Local tracking works without an account or internet access.
+Keep Improving is a personal project maintained by [Blintboi](https://github.com/Blintboi). This page describes the application's current data handling. Local tracking works without an account or internet access.
 
 ## Local use
 
@@ -23,7 +23,28 @@ background. Installing an update is a separate action you choose. Requests for
 the installer and any browser security checks follow the browser/provider's
 normal data handling.
 
-The app reads the foreground process identity and executable path, installed-game metadata and local shortcuts to identify a tracked game. It records daily play time by game, settings, exclusions and game availability in a local SQLite profile. It does not record keystrokes, browser history or a continuous list of non-game activity. There is no general analytics or advertising telemetry.
+The app reads the foreground process identity and executable path, installed-game metadata and local shortcuts to identify a tracked game. It records daily play time by game, settings, exclusions and game availability in a local SQLite profile. There is no general analytics or advertising telemetry.
+
+**Focus & activity** also records daily active time by application executable path,
+enabled by default and switchable on that page. Only the foreground application
+counts; locked desktops, sleep gaps and 60 seconds without keyboard/mouse input
+pause this activity measurement. Input contents are never captured. The app
+stores daily aggregates, not a chronological activity timeline.
+
+Website tracking requires manually loading and pairing the included browser
+extension. It sends only the focused tab's HTTP(S) domain and browser family
+to an authenticated server bound to `127.0.0.1` on this computer. URL paths,
+queries, fragments, page titles and contents are not sent or stored. Private
+tabs and local/numeric hosts are excluded. Website time is a breakdown of browser
+time. Application/site aggregates, focus blacklists, completed-round counts and
+timer state stay in the local SQLite profile; none are included in cloud sync.
+The pairing token is Windows-user protected in the desktop profile and stored
+in the extension's local browser storage after pairing. It is not a cloud key.
+The extension has host permissions to redirect blocked sites during focus and
+does not contact an internet service. Disabling activity tracking stops new
+aggregates; existing local history is retained. Focus restrictions release on
+pause, reset, break or loss of the extension's local connection. Protected
+game minimization retains the existing permission gate.
 
 When a countdown position editor opens, or you choose to refresh its game image, the app can capture a still image of a recognized running game's client window to help position the countdown. This is not continuous screen recording. The image is held only in memory for the preview, is not saved to disk by the app, and is never included in statistics sync or uploaded to the service. Closing or hiding the editor clears the displayed image.
 

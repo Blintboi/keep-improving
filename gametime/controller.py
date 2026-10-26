@@ -154,7 +154,7 @@ class MonitorActions:
     def tray_menu(self):
         if self.closed:
             return
-        items = [(1, "Open Game Time Monitor"), (2, "Open Gaming Hub"),
+        items = [(1, "Open Keep Improving"), (2, "Open game library"),
                                        (3, "Settings"), (4, "Refresh games and hub"),
                                        None, (5, "Exit monitor")]
         updates=getattr(self,'updates',None)
@@ -477,6 +477,8 @@ class MonitorActions:
                 self.show()
             self.drain_discovery()
             current = win32.sample()
+            focus_tick = getattr(self, 'focus_tick', None)
+            if focus_tick: focus_tick(current)
             was_playing = self.tracker.active is not None
             self.tracker.tick(current)
             activity_changed = getattr(self, 'statistics_activity_changed', None)

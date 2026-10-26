@@ -9,7 +9,7 @@ from queue import Empty
 from .model import within, helper
 from PySide6.QtCore import Qt, QRectF, QPointF, Signal, QTimer, QFileInfo
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap, QLinearGradient, QRegion
-from PySide6.QtWidgets import QWidget,QFrame,QGridLayout,QFileIconProvider,QToolTip,QAbstractSpinBox
+from PySide6.QtWidgets import QWidget,QFrame,QGridLayout,QFileIconProvider,QToolTip,QAbstractSpinBox,QDateEdit
 from .qt_translation import QLabel,QPushButton,QComboBox,QDoubleSpinBox,QTimeEdit,QSlider
 
 BG, PANEL, TEXT, MUTED, ACCENT = '#101619', '#192126', '#edf4f2', '#93a3a7', '#7de5bf'
@@ -79,6 +79,7 @@ QCheckBox::indicator:checked {{ image: url({Path(__file__).with_name('icons').as
 
 def label(text='', role=None, parent=None):
     widget=QLabel(text,parent)
+    widget.setCursor(Qt.ArrowCursor)
     widget.setTextFormat(Qt.PlainText)
     if role: widget.setProperty('role',role)
     return widget
@@ -131,6 +132,10 @@ class NoWheelDoubleSpinBox(_SpinButtons,_IgnoreWheel,QDoubleSpinBox):
     pass
 
 
+class NoWheelDateEdit(_IgnoreWheel,QDateEdit):
+    pass
+
+
 class NoWheelTimeEdit(_SpinButtons,_IgnoreWheel,QTimeEdit):
     pass
 
@@ -147,6 +152,9 @@ def glyph(name, color=ACCENT, size=20):
     elif name=='stats':
         p.drawLine(4,20,21,20)
         for x,y in ((7,11),(13,6),(19,3)): p.drawLine(x,16,x,y)
+    elif name=='focus':
+        p.drawEllipse(QRectF(5,5,14,14)); p.drawEllipse(QRectF(9,9,6,6))
+        for x1,y1,x2,y2 in ((12,2,12,5),(12,19,12,22),(2,12,5,12),(19,12,22,12)): p.drawLine(x1,y1,x2,y2)
     elif name=='search':
         p.drawEllipse(QRectF(4,3,12,12)); p.drawLine(15,15,21,21)
     elif name=='settings':
@@ -438,12 +446,13 @@ class DailyChart(QWidget):
     def paintEvent(self,event):
         p=QPainter(self); p.setRenderHint(QPainter.Antialiasing); self.regions=[]; self.segment_regions=[]
         if not self.days: return
-        peak=max(self.days.values()); maximum=max(900,ceil(peak/900)*900)
+        peak=max(self.days.values()); unit=60 if peak<=60 else 120 if peak<=600 else 600 if peak<=3600 else 1800 if peak<=14400 else 3600
+        maximum=max(unit,ceil(peak/unit)*unit)
         left,right,top,bottom=68,max(69,self.width()-12),24,self.height()-30
         p.setFont(QFont('Segoe UI',8))
         for fraction in (0,.5,1):
             y=bottom-(bottom-top)*fraction
-            p.setPen(QColor(MUTED)); p.drawText(QRectF(0,y-10,62,20),Qt.AlignLeft|Qt.AlignVCenter,duration(maximum*fraction))
+            p.setPen(QColor(MUTED)); p.drawText(QRectF(0,y-10,62,20),Qt.AlignLeft|Qt.AlignVCenter,getattr(self,'axis_format',duration)(maximum*fraction))
             p.setPen(QPen(QColor('#304047'),1,Qt.DotLine)); p.drawLine(QPointF(left,y),QPointF(right,y))
         step=(right-left)/len(self.days); every=max(1,(len(self.days)+6)//7)
         for i,(day,seconds) in enumerate(self.days.items()):
@@ -467,12 +476,12 @@ class DailyChart(QWidget):
                 p.setBrush(Qt.NoBrush); p.setPen(QPen(QColor(TEXT),2)); p.drawPath(path)
             self.regions.append((QRectF(x,top,step,bottom-top),day,seconds))
             if seconds and bar.width()>=48:
-                p.setPen(QColor(TEXT)); p.drawText(QRectF(x,bar.top()-21,step,18),Qt.AlignCenter,duration(seconds))
+                p.setPen(QColor(TEXT)); p.drawText(QRectF(x,bar.top()-21,step,18),Qt.AlignCenter,getattr(self,'axis_format',duration)(seconds))
             if i%every==0 or i==len(self.days)-1:
                 p.setPen(QColor(TEXT if day==self.selected else MUTED)); p.drawText(QRectF(x-10,bottom+7,step+20,20),Qt.AlignCenter,day[5:])
         if not peak:
             p.fillRect(QRectF(left,top,right-left,bottom-top-4),QColor(PANEL))
-            p.setPen(QColor(MUTED)); p.drawText(QRectF(left,top,right-left,bottom-top),Qt.AlignCenter,self.t('No recorded play time'))
+            p.setPen(QColor(MUTED)); p.drawText(QRectF(left,top,right-left,bottom-top),Qt.AlignCenter,self.t(getattr(self,'empty_text','No recorded play time')))
     def mousePressEvent(self,event):
         if event.button()!=Qt.LeftButton: return
         for rect,day,seconds in self.regions:

@@ -134,8 +134,8 @@ class AuthClient:
                     self.server.outcome=AuthError('closed' if error_code.startswith('hook_') else
                         'cancelled' if query.get('error')==['access_denied'] and not error_code else 'unavailable')
                 else: self.send_error(404); return
-                content=('<!doctype html><html lang="hu"><meta charset="utf-8"><title>Game Time Monitor</title>'
-                    '<h1>Game Time Monitor</h1><p>Visszatérhetsz a Játékfigyelő alkalmazásba.</p>'
+                content=('<!doctype html><html lang="hu"><meta charset="utf-8"><title>Keep Improving</title>'
+                    '<h1>Keep Improving</h1><p>Visszatérhetsz a Játékfigyelő alkalmazásba.</p>'
                     '<p>Return to the application to finish signing in.</p></html>').encode('utf-8')
                 self.send_response(200)
                 for key,value in {'Content-Type':'text/html; charset=utf-8','Content-Length':str(len(content)),

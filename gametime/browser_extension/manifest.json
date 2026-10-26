@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Keep Improving Focus",
+  "version": "2.30.0",
+  "description": "Local active website time and Pomodoro focus lists for Brave, Chrome and Edge.",
+  "permissions": ["tabs", "storage", "alarms", "declarativeNetRequest"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "background": {"service_worker": "background.js"},
+  "options_page": "options.html",
+  "action": {"default_title": "Connect Keep Improving"},
+  "web_accessible_resources": [{"resources": ["blocked.html", "style.css"], "matches": ["http://*/*", "https://*/*"]}]
+}

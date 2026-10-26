@@ -119,7 +119,7 @@ class CloudSyncWorker(SyncWorker):
         if getattr(error,'status',0) in (429,507):
             return 'The sync limit was reached. Local statistics are kept; try syncing manually later.'
         if getattr(error,'status',0)==426:
-            return 'Update Game Time Monitor to synchronize statistics. Local statistics are kept.'
+            return 'Update Keep Improving to synchronize statistics. Local statistics are kept.'
         return self.failure_message
 
     def request(self, service, code, snapshot, known=None):

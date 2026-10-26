@@ -10,7 +10,7 @@ NOTICE_VERSION=1
 PREFIX='overlay_risk_consent:'
 MINIMIZE_PREFIX='minimize_risk_consent:'
 MINIMIZE_NOTICE='Automatic minimization can interrupt an online match without pausing or closing the game. Inactivity, disconnection or abandoning a match may cause penalties, cooldowns or account restrictions. Fullscreen transitions may also cause compatibility problems, freezes or crashes in some games. You allow automatic minimization for this game at your own risk. The developer does not accept responsibility for resulting penalties, lost progress or other damage. This permission is separate from overlay consent and never permits automatic Escape or anti-cheat bypasses.'
-NOTICE='An anti-cheat system or the game publisher may block overlays, disconnect you, or suspend or permanently ban your account. Game Time Monitor and RTSS are not approved by every publisher, and compatibility cannot be guaranteed. You use the overlay and game-image preview at your own risk. The developer does not accept responsibility for resulting sanctions, account loss or other damage. Consent does not disable or bypass anti-cheat protection. Automatic Escape remains disabled for protected games.'
+NOTICE='An anti-cheat system or the game publisher may block overlays, disconnect you, or suspend or permanently ban your account. Keep Improving and RTSS are not approved by every publisher, and compatibility cannot be guaranteed. You use the overlay and game-image preview at your own risk. The developer does not accept responsibility for resulting sanctions, account loss or other damage. Consent does not disable or bypass anti-cheat protection. Automatic Escape remains disabled for protected games.'
 
 
 def token(game):

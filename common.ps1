@@ -86,6 +86,8 @@ function Build-GameTimeRTSSBridge([string]$SourceRoot) {
 }
 
 function Get-GameTimeFiles {
+    @('gametime\focus.py','gametime\browser_activity.py','gametime\qt_focus.py')
+    @('gametime\browser_extension\manifest.json','gametime\browser_extension\background.js','gametime\browser_extension\policy.js','gametime\browser_extension\options.html','gametime\browser_extension\options.js','gametime\browser_extension\blocked.html','gametime\browser_extension\style.css')
     @('gametime\launcher_defs.py','gametime\platforms.py','gametime\battlenet.py')
     @('LICENSE','PRIVACY.md','docs\DEVELOPMENT.md','docs\images\library-en.png','docs\images\statistics-en.png','docs\images\bedtime-en.png')
     @('gametime\bedtime.py','gametime\bedtime_legacy.py','gametime\bedtime_legacy.ps1')

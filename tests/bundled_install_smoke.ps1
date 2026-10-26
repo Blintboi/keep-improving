@@ -34,6 +34,7 @@ try {
     $installedVersion = (Get-Content -LiteralPath (Join-Path $app 'bundle-install.json') -Raw -Encoding UTF8 | ConvertFrom-Json).Version
     $report.runtime_version_matches_payload = $first.version -eq $installedVersion
     $report.runtime_file_version_matches_payload = (Get-Item -LiteralPath $exe).VersionInfo.ProductVersion -eq $installedVersion
+    $report.visible_product_name_is_keep_improving = (Get-Item -LiteralPath $exe).VersionInfo.ProductName -eq 'Keep Improving'
     $report.fresh_update_checks_enabled = $first.check_updates -eq $true
     $report.runtime_and_profile_verified = $process.ExitCode -eq 0 -and $first.data -eq $data -and $first.games_root -eq $games -and $first.hub_enabled -and $first.language -eq 'en'
     $report.fresh_overlay_is_opt_in = -not $first.overlay_enabled -and $first.overlay_replace_warning -and $first.limit_popup_enabled
@@ -50,10 +51,10 @@ try {
     $report.fresh_budget_resets_at_midnight = $first.budget_reset_minute -eq 0
     $report.fresh_per_game_limits_are_empty = $first.game_limit_count -eq 0
     $report.bedtime_handover_script_bundled = Test-Path -LiteralPath (Join-Path $app '_internal\gametime\bedtime_legacy.ps1')
-    $hubIcon = Join-Path $data 'assets\gaming-hub.ico'
+    $hubIcon = Join-Path $data 'assets\keep-improving.ico'
     $report.hub_icon_installed = (Test-Path -LiteralPath $hubIcon) -and (Get-FileHash -LiteralPath $hubIcon).Hash -eq (Get-FileHash -LiteralPath (Join-Path $app '_internal\gametime\app.ico')).Hash
     $shell = New-Object -ComObject WScript.Shell
-    $hubPath = Join-Path $desktop 'Gaming Hub.lnk'
+    $hubPath = Join-Path $desktop 'Keep Improving.lnk'
     $hubLink = $shell.CreateShortcut($hubPath)
     $report.desktop_hub_opens_integrated_app = $hubLink.TargetPath -eq $exe -and $hubLink.Arguments -eq ('--hub --data-dir "' + $data + '"') -and $hubLink.IconLocation -eq ($hubIcon + ',0')
     $report.single_shared_desktop_icon = @(Get-ChildItem -LiteralPath $desktop -Filter '*.lnk').Count -eq 1
@@ -72,7 +73,7 @@ try {
             Start-Sleep -Milliseconds 200
             $gui.Refresh()
             if ($gui.HasExited) { throw 'Frozen Qt interface exited before opening.' }
-            $guiVisible = $gui.MainWindowTitle -eq 'Gaming Hub'
+            $guiVisible = $gui.MainWindowTitle -eq 'Keep Improving'
         } until ($guiVisible -or [DateTime]::UtcNow -ge $guiDeadline)
         if (-not $guiVisible) { throw 'Frozen Qt interface did not become visible; inspect its monitor.log.' }
         $report.qt_window_opens_from_background = $true
@@ -109,8 +110,10 @@ d.commit(); d.close()
     $report.startup_registered = (Get-ItemPropertyValue -LiteralPath $runKey -Name $name) -like ('"' + $exe + '" --background*')
     $report.foreign_startup_preserved_on_install = (Get-ItemProperty -LiteralPath $runKey).PSObject.Properties[$sentinelName].Value -eq $sentinelValue
     $report.installed_apps_registered = Test-Path -LiteralPath ('HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\' + $name)
-    $programLink = Join-Path ([Environment]::GetFolderPath('Programs')) ($name + '.lnk')
-    $report.start_menu_registered = Test-Path -LiteralPath $programLink
+    $programLinks = @((Get-Content -LiteralPath (Join-Path $app 'bundle-install.json') -Raw | ConvertFrom-Json).Links | Where-Object { (Split-Path -Parent $_) -eq [Environment]::GetFolderPath('Programs') })
+    if ($programLinks.Count -ne 1) { throw 'Expected one owned Start Menu shortcut.' }
+    $programLink = $programLinks[0]
+    $report.start_menu_registered = (Test-Path -LiteralPath $programLink) -and (Split-Path -Leaf $programLink).StartsWith('Keep Improving')
     'unrelated file' | Set-Content -LiteralPath (Join-Path $app 'user-note.txt')
     'save data' | Set-Content -LiteralPath (Join-Path $data 'keep.txt')
     'import sqlite3,sys; from datetime import date; d=sqlite3.connect(sys.argv[1]); d.execute("INSERT INTO game_preferences VALUES (?,?)",("test:hidden",1)); d.execute("INSERT INTO overrides VALUES (?,?)",("test:hidden",0)); d.execute("INSERT INTO usage VALUES (?,?,?)",(date.today().isoformat(),"test:hidden",123)); d.commit()' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
@@ -129,8 +132,12 @@ d.commit(); d.close()
     $legacyDesktop = Join-Path $desktop ($name + '.lnk')
     $oldMonitor = $shell.CreateShortcut($legacyDesktop)
     $oldMonitor.TargetPath = $exe; $oldMonitor.Description = 'Game Time Monitor - GameTimeMonitor.bundle.v1'; $oldMonitor.Save()
-    $oldHub = $shell.CreateShortcut($hubPath)
+    $legacyHubPath = Join-Path $desktop 'Gaming Hub.lnk'
+    $oldHub = $shell.CreateShortcut($legacyHubPath)
     $oldHub.TargetPath = $games; $oldHub.Arguments = ''; $oldHub.Description = 'Game Time Monitor Gaming Hub'; $oldHub.Save()
+    $legacyProgramPath = Join-Path ([Environment]::GetFolderPath('Programs')) ($name + '.lnk')
+    $oldProgram = $shell.CreateShortcut($legacyProgramPath)
+    $oldProgram.TargetPath = $exe; $oldProgram.Description = 'Game Time Monitor - GameTimeMonitor.bundle.v1'; $oldProgram.Save()
     $foreign = Join-Path $desktop 'unrelated.txt'
     'preserve' | Set-Content -LiteralPath $foreign
     # Reproduce a resident helper still mapping an identical runtime DLL.
@@ -142,6 +149,8 @@ d.commit(); d.close()
         if ($LASTEXITCODE -ne 0) { throw 'Upgrade failed with an unchanged locked runtime DLL.' }
         $report.locked_unchanged_runtime_preserved = (Get-FileHash -LiteralPath $lockedRuntime).Hash -eq $runtimeHash
     } finally { $runtimeLock.Dispose() }
+    $report.legacy_desktop_brand_migrated = -not (Test-Path -LiteralPath $legacyHubPath) -and (Test-Path -LiteralPath $hubPath)
+    $report.legacy_start_menu_brand_migrated = -not (Test-Path -LiteralPath $legacyProgramPath)
     # Run the actual frozen startup migration, with cloud sync disabled.
     $securityGui=Start-Process -FilePath $exe -ArgumentList @('--background','--data-dir',('"'+$data+'"')) -WindowStyle Hidden -PassThru
     try {

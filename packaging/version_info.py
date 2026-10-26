@@ -12,8 +12,8 @@ from gametime.updates import version_tuple
 def version_info(version, installer=False):
     numbers = version_tuple(version) + (0,)
     if any(value > 65535 for value in numbers): raise ValueError('Windows file version is out of range.')
-    values = {'FileDescription': 'Game Time Monitor Setup' if installer else 'Game Time Monitor',
-              'FileVersion': version, 'ProductVersion': version, 'ProductName': 'Game Time Monitor',
+    values = {'FileDescription': 'Keep Improving Setup' if installer else 'Keep Improving',
+              'FileVersion': version, 'ProductVersion': version, 'ProductName': 'Keep Improving',
               'OriginalFilename': 'GameTimeMonitor-Setup.exe' if installer else 'GameTimeMonitor.exe'}
     return VSVersionInfo(ffi=FixedFileInfo(filevers=numbers, prodvers=numbers), kids=[
         StringFileInfo([StringTable('040904B0', [StringStruct(key,value) for key,value in values.items()])]),

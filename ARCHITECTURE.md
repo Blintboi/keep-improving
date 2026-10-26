@@ -1,5 +1,45 @@
 # Architecture
 
+Statistics defaults to a single-series daily overview. Category, period and computer are independent filters; custom calendar drafts apply explicitly and live refresh uses the committed range. Breakdowns retain full report totals but group chart series beyond the largest five. A day selector and searchable ranking replace the permanent day sidebar, and irrelevant table columns hide automatically. Computer/sync management is collapsible. Focus has separate Focus mode and Activity views; default focus ticks update the timer/blacklist without querying activity history. The visible blacklist reuses its items until settings or language change. Launchers are a collapsed library panel, loaded only when opened or explicitly refreshed; the old internal navigation index redirects to that panel. Activity links carry their day/category into statistics.
+
+The visible product name is Keep Improving. Executable/profile paths, instance
+mutexes, protocol identifiers and the fixed GitHub installer URL retain their
+GameTimeMonitor identifiers so upgrades preserve data and paired extensions.
+The Windows product resource, main window, navigation brand and uninstall entry
+use the new name. Owned legacy desktop/Start Menu shortcuts migrate to the new
+name; unrelated shortcuts are preserved. The vector icon generator exports
+matching antialiased PNG and nine Windows ICO sizes.
+
+Statistics adds a category filter independently of its computer/date filters.
+Games retain existing local/cloud history. Application and website views read
+only the local activity ledger, classifying known game paths using retained
+catalog/rules (including removed/excluded games). Everything combines recorded
+game time with non-game activity, replacing browser time with website breakdowns
+and the unclassified remainder. No activity data enters cloud payloads. Focus
+settings migrate away from allowlists while preserving blacklist/preferences;
+the desktop always sends blocklist policy in the existing extension wire shape.
+
+`focus.py` owns a separate local activity ledger and Pomodoro state in the existing
+profile. It reuses the one-second foreground sample, validates awake/wall-clock
+continuity, splits at midnight and buffers writes for ten seconds. Idle detection
+uses GetLastInputInfo without reading input contents. Activity never becomes a
+game catalog entry or contributes to game quotas/cloud payloads. Timer state
+checkpoints resume paused after restart; work starts breaks automatically, while
+the next work interval requires an explicit start. App restrictions minimize only
+the exact current process identity and retain the protected-game consent gate.
+
+`browser_activity.py` is an opt-in, authenticated loopback bridge (default port
+47853), started only after pairing setup. Its daemon serves bounded requests and
+keeps a locked, short-lived domain observation/policy in memory; only the GUI
+thread uses SQLite. It rejects ordinary web origins, foreign Host values and
+unpaired requests. Pairing tokens are random and DPAPI-protected in the profile.
+The MV3 extension uses tab/window events plus a ten-second heartbeat (two seconds
+during focus, with a 30-second wake alarm). Session DNR rules redirect blocked
+top-level navigations, and the extension rechecks already open tabs. Failed local
+connections clear browser restrictions. No content script or browsing-history
+API is used. FocusPage queries history only while visible, at most every five
+seconds unless the user changes the day/list/language.
+
 `Settings.game_limits` stores optional local per-game caps in seconds, separately
 from countdown appearance. It uses the existing quota-period per-game totals,
 including prior consumption, with the same reset schedule and no extra ledger,
@@ -282,7 +322,7 @@ Native shell icon pixmaps are normalized to device pixel ratio 1 before logical 
 
 Both initial artwork and asynchronous results use the same native-icon normalization: crop the transparent mask bounds, then reset DPR before card sizing. The launcher page uses it too. This avoids a small mark inside a much larger shell bitmap being scaled into an unreadable dot after a worker update.
 
-The launcher page is separate from the tracked-game library. A lazy client worker reads shortcut targets and known installation records; only recognized client basenames with no game-specific shortcut arguments become entries. Explicit opening revalidates a local absolute EXE and uses an argv list with shell=False and no extra flags. Client access remains available under play restriction; actual game launches remain subject to the tracker policy. The worker closes its own PowerShell bridge when the Hub exits; failures retain the previous client snapshot and show a refresh message.
+The Library contains a collapsed launcher panel below the daily budget. Its two-column grid expands to show every client at full height; the Library shares one scroll area for the budget, clients and game cards. A lazy client worker reads shortcut targets and known installation records; only recognized client basenames with no game-specific shortcut arguments become entries. Explicit opening revalidates a local absolute EXE and uses an argv list with shell=False and no extra flags. Client access remains available under play restriction; actual game launches remain subject to the tracker policy. The worker closes its own PowerShell bridge when the Hub exits; failures retain the previous client snapshot and show a refresh message.
 
 Local artwork searches run on one worker, with per-game limits of 80 folders, depth four, 6000 entries and a 750 ms search budget. Whole-drive roots, reparse points and personal save/screenshot/log/mod folders are excluded. Candidates are ranked by product-specific Steam cache association or artwork filename; arbitrary hashed cache images are accepted only inside that exact Steam app's folder. `steam_appid.txt` is read only as a bounded numeric ID. Minecraft supports the fixed `pack.png` icon and title-logo entries in existing version JARs; file/central-directory/entry limits precede decoding and no archive entry is extracted. Other packed game formats are not parsed. Game EXEs are inspected for icons, never executed by artwork discovery, and bootstrapper/helper icons are avoided. Results are QImages transferred by queues; QPixmap creation, native shell icons and card updates stay on the GUI thread. [QImageReader](https://doc.qt.io/qt-6/qimagereader.html) is reentrant and supports scaled decoding; the worker uses a 64 MiB allocation limit, a 20 MiB ordinary-file limit, a 32-million-pixel dimension limit and 640×420 aspect-preserving thumbnails, downscaling only and retaining the native resolution of small images. Tokens/generations discard retired results on refresh or rule changes. Refresh invalidates both successful and missing-art caches; shutdown cancels the bounded worker.
 

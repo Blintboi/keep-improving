@@ -1,4 +1,4 @@
-"""Draw the editable controller/timer mark; export antialiased PNG and Windows ICO.
+"""Draw the Keep Improving growth mark; export antialiased PNG and Windows ICO.
 
 Standard library only. Coordinates are in a 64-unit vector space. PNG-compressed
 32-bit icon frames cover small tray icons through 256px Explorer/desktop views.
@@ -66,29 +66,15 @@ def line(x, y, ax, ay, bx, by, thickness):
 def color(x, y, edges):
     if not rounded(x, y, 3, 3, 61, 61, 15):
         return 0, 0, 0, 0
-    # Quiet indigo glass, with a cool upper-left highlight and an inset rim.
-    rgb = mix((48, 67, 103), (18, 26, 47), (x+y)/120)
+    # A quiet dark tile and one bold, rising mark stay readable at tray sizes.
+    rgb = mix((54, 91, 78), (17, 34, 33), (x+y)/120)
     if rounded(x, y, 4, 4, 60, 60, 14):
-        rgb = mix((29, 47, 77), (11, 17, 33), (x+y-10)/100)
-    # A clear controller silhouette and dark controls remain legible at 16px.
-    if inside(x, edges):
-        rgb = mix((234, 245, 255), (150, 188, 234), (y-22)/31)
-        if (rounded(x, y, 16, 30, 28, 34, 1) or rounded(x, y, 20, 26, 24, 38, 1)):
-            rgb = (28, 53, 85)
-        if (x-40)**2+(y-28.5)**2 <= 2.2**2 or (x-45)**2+(y-33.5)**2 <= 2.2**2:
-            rgb = (33, 66, 99)
-        if rounded(x, y, 29, 28, 33, 30, 1):
-            rgb = (77, 119, 165)
-    # Mint clock badge: strong separation, a luminous ring, no tiny decoration.
-    distance = hypot(x-47, y-46)
-    if distance <= 14:
-        rgb = (10, 19, 35)
-    if distance <= 12:
-        rgb = mix((139, 255, 226), (36, 196, 203), (y-34)/24)
-    if distance <= 9:
-        rgb = mix((28, 62, 77), (15, 37, 55), (y-37)/18)
-        if line(x, y, 47, 46, 47, 40, 2.9) or line(x, y, 47, 46, 52, 46, 2.9):
-            rgb = (222, 255, 245)
+        rgb = mix((24, 49, 43), (12, 23, 26), (x+y-10)/100)
+    if 21 <= hypot(x-32, y-32) <= 22.4:
+        rgb = (43, 79, 66)
+    if any(line(x,y,*segment,5.4) for segment in
+           ((17,43,28,32),(28,32,35,39),(35,39,47,23),(35,23,47,23),(47,23,47,35))):
+        rgb = mix((174, 255, 220), (70, 207, 151), (y-20)/30)
     return *rgb, 255
 
 

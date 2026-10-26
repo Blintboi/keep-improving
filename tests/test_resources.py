@@ -63,7 +63,8 @@ class ResourceInterfaceTests(unittest.TestCase):
         self.assertEqual(self.app.assets_timer.interval(),1000)
 
     def test_launcher_page_does_not_rescan_when_hidden_or_restored(self):
-        self.app.pages.setCurrentIndex(3)
+        self.store.save_client_cache([])
+        self.app.switch_page(3)
         self.app.client_worker=type('Worker',(),{'results':Queue(),'close':lambda me:None})()
         with patch.object(self.app,'refresh_clients') as refresh:
             self.app.poll_assets(); refresh.assert_not_called()

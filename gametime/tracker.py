@@ -17,6 +17,7 @@ class Sample:
     path: str = ""
     identity: str = ""  # PID + process creation FILETIME, never PID alone
     interactive: bool = True
+    idle_seconds: float = 0
 
 
 @dataclass(frozen=True)

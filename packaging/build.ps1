@@ -44,6 +44,7 @@ if ($FreezeOnly) {
     Write-Output $bundle; return
 }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'uninstall-bundled.ps1') -Destination $bundle
+Copy-Item -LiteralPath (Join-Path $repo 'gametime\browser_extension') -Destination (Join-Path $bundle '_internal\gametime') -Recurse -Force
 foreach ($name in @('README.md','README.hu.md','TESTING.md','ARCHITECTURE.md','THIRD-PARTY-NOTICES.md','SECURITY.md','LICENSE','PRIVACY.md')) {
     Copy-Item -LiteralPath (Join-Path $repo $name) -Destination $bundle
 }
@@ -114,7 +115,7 @@ InstallPrompt=
 DisplayLicense=
 FinishMessage=
 TargetName=$cabExe
-FriendlyName=Game Time Monitor $version Setup
+FriendlyName=Keep Improving $version Setup
 AppLaunched=cmd.exe /d /c setup.cmd
 PostInstallCmd=<None>
 AdminQuietInstCmd=cmd.exe /d /c setup.cmd -Quiet

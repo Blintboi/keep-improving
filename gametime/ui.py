@@ -109,7 +109,7 @@ class App(MonitorActions):
         self.total_text = tk.StringVar(value="00:00:00")
         self.remaining_text = tk.StringVar()
         self.active_text = tk.StringVar(value=self.t("Active game: none"))
-        root.title(self.t("Game Time Monitor"))
+        root.title(self.t("Keep Improving"))
         root.geometry(f"{min(1100, root.winfo_screenwidth() - 80)}x{min(760, root.winfo_screenheight() - 100)}")
         root.minsize(850, 600)
         theme(root)
@@ -142,7 +142,7 @@ class App(MonitorActions):
         self.main_frame.pack(fill="both", expand=True)
         bar = ttk.Frame(self.main_frame, padding=(18, 8))
         bar.pack(fill="x")
-        ttk.Label(bar, text=self.t("Game Time Monitor")).pack(side="left")
+        ttk.Label(bar, text=self.t("Keep Improving")).pack(side="left")
         self.language_choice = tk.StringVar(value=next(name for name, code in LANGUAGES.items() if code == self.settings.language))
         language = ttk.Combobox(bar, textvariable=self.language_choice, values=list(LANGUAGES), state="readonly", width=10)
         language.pack(side="right")
@@ -236,7 +236,7 @@ class App(MonitorActions):
         self.store.save_settings(settings)
         self.settings = self.catalog.settings = settings
         self.main_frame.destroy()
-        self.root.title(self.t("Game Time Monitor"))
+        self.root.title(self.t("Keep Improving"))
         self.status.set(self.t(self.status_key, **self.status_values))
         self.last_rows = None
         self._build()
@@ -301,7 +301,7 @@ class App(MonitorActions):
         return window
 
     def message(self, text):
-        window = self._dialog("Game Time Monitor", "560x220")
+        window = self._dialog("Keep Improving", "560x220")
         ttk.Label(window, text=self.t(text), wraplength=510, padding=20).pack(fill="both", expand=True)
         ttk.Button(window, text=self.t("OK"), command=window.destroy).pack(pady=(0, 20))
 
@@ -600,7 +600,7 @@ class App(MonitorActions):
                 self.tree.yview_moveto(scroll[0])
             self.last_rows = rows
         self.update_launch_button()
-        self.tray.update(self.t("Game Time Monitor\nToday: {total} · remaining: {remaining}\nLeft click: open · right click: menu",
+        self.tray.update(self.t("Keep Improving\nToday: {total} · remaining: {remaining}\nLeft click: open · right click: menu",
                                 total=duration(total), remaining=duration(budget.remaining)))
         if self.notebook.select() == str(self.statistics) and time.monotonic()-self.statistics.last_refresh >= 10:
             self.statistics.refresh()

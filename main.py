@@ -30,7 +30,7 @@ def default_data():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Windows 11 Game Time Monitor")
+    parser = argparse.ArgumentParser(description="Windows 11 Keep Improving")
     parser.add_argument("--data-dir", type=Path, default=default_data())
     parser.add_argument("--background", action="store_true")
     parser.add_argument("--hub", action="store_true", help="Open the integrated Gaming Hub, reusing the running monitor")
@@ -163,9 +163,9 @@ if __name__ == "__main__":
     try:
         main()
     except Exception:
-        logging.exception("Game Time Monitor could not start")
+        logging.exception("Keep Improving could not start")
         if os.name == "nt":
             import ctypes
-            ctypes.windll.user32.MessageBoxW(None, "Game Time Monitor encountered an error. See monitor.log in your data folder.",
-                                            "Game Time Monitor", 0x10)
+            ctypes.windll.user32.MessageBoxW(None, "Keep Improving encountered an error. See monitor.log in your data folder.",
+                                            "Keep Improving", 0x10)
         raise

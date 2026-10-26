@@ -99,7 +99,7 @@ class StatisticsCloudTests(unittest.TestCase):
         self.worker.request(self.relay.url,CODE,self.snapshot(),{})
         token,values,warning=self.worker.results.get(timeout=3)
         self.assertFalse(values)
-        self.assertIn('Update Game Time Monitor',warning)
+        self.assertIn('Update Keep Improving',warning)
         self.assertGreater(self.worker.retry_delay(self.relay.url,CODE),86399)
 
     def test_folder_upgrade_preserves_local_and_cached_history_without_exposing_short_code(self):
