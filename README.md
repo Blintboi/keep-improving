@@ -1,95 +1,83 @@
 # Keep Improving — 2.31.1
 
-**[Download for Windows x64 — 2.31.1](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256) · [Magyar](README.hu.md)
+**[Download for Windows x64 — 2.31.1](https://github.com/Blintboi/keep-improving/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256) · [Magyar](README.hu.md)
 
-Keep Improving combines Pomodoro focus sessions, application and website time tracking, and your game library in one Windows application. Review your habits, block distractions during work and plan your gaming time.
+Keep Improving is a Windows app for understanding how you spend your computer time and deciding when to focus or play. It tracks recognized games while they are in the foreground, shows how much of your daily game budget remains, and can remind you or minimize a game when you reach a limit. Separately, it records active application time and, with its browser extension, time spent on websites. A Pomodoro timer can temporarily block the websites and minimize the applications you choose during a work interval.
 
-Free and open source, with an English and Hungarian interface. Local tracking works offline without an account; computer linking is optional.
+The app is free and open source, with English and Hungarian interfaces. Tracking and the focus timer work locally without an account or internet connection; website tracking and blocking require the included extension. Linking game statistics between your own PCs is optional.
 
-## Features
+![Library with example games and a daily budget](docs/images/library-en.png)
+*The library shown is from 2.27.0 with sample history; navigation has since changed. Game artwork belongs to its respective owners.*
 
-- **Clear overview:** choose activity, period and computer in one filter row. Daily totals are the default; optional breakdowns show up to five leading series plus the rest. Pick a day or search the ranking for details. Calendar dates, computer linking and sync controls are grouped by purpose. Focus mode now separates the timer and visible blacklist from Activity history. Launchers live in a collapsed panel inside the Library, while games are visible by default. Expanded launchers use their full height without an inner scrollbar.
-- **Activity statistics:** filter Games, Applications (excluding games), Websites or Everything. Everything counts website time within browser time. Paste a full URL or domain directly into the focus blacklist, including sites you have never visited.
-- **Focus & activity:** local foreground time for all applications, with a 60-second idle cutoff and daily history. Pair the included browser extension for Brave, Chrome or Edge to measure active website domains. Pomodoro work/short/long breaks and app/site blacklists keep distractions away during running focus sessions. Pause or reset immediately releases restrictions. Activity history stays on this computer and does not use the game budget or cloud sync. Open **Focus & activity → Connect Brave / browser** for extension setup.
-- **Game library:** discover and launch installed games, search your collection and choose which games to track.
-- **Daily budgets and weekly schedules:** set time limits, warnings and bedtime reminders for individual days or groups of days.
-- **Per-game limits:** set an optional cap inside the shared daily budget from a game's menu or Settings. The overlay shows the smaller remaining allowance; the Hub keeps the shared countdown and shows each capped game's own remaining time on its card. Both caps renew together and include time already played. Game caps use the existing 10-second minimization grace and protected-game permission checks.
-- **Customizable countdown:** see your remaining time while playing, with adjustable position, size, opacity and colors, including per-game styles.
-- **Personal reminders:** write your own messages with remaining-time information, choose a sound or use a local WAV file.
-- **Play-time statistics:** explore color-coded charts by game or computer, daily details and summaries for a selected period.
-- **Optional computer linking:** combine statistics from your own PCs through encrypted synchronization and give each computer a recognizable name.
+## Install and start
 
-![Game library and daily budget](docs/images/library-en.png)
-*Version 2.27.0 with sample history. Game artwork belongs to its respective owners.*
+1. On **Windows 11 x64**, download and run the installer above. It includes the runtime: you do not need to install Python. Normal installation does not require administrator rights.
+2. Open **Keep Improving** from the desktop or Start menu. Select English or Magyar at the bottom of the sidebar.
+3. Open **Library** to review discovered games. If one is missing, use **Add** to select its executable, or configure the **Games folder** in Settings. Other launcher libraries can stay where they are.
+4. Open **Settings → Weekly schedule**, select the days you want to change, set the daily budget and warning, then select **Save**. The initial budget is 120 minutes with a warning after 100 minutes; change these to suit you.
+5. For website history and focus blocking, [connect the browser extension](#connect-the-browser-extension). For a focus session, open **Focus & activity**.
 
-## Requirements and game support
+The monitor starts with Windows. Closing the window with **X** leaves it running in the system tray; choose **Exit monitor** from the tray menu to stop tracking and reminders. The installer is currently unsigned, so Windows may show an unknown-publisher warning. See the [Windows trust guide](docs/WINDOWS-TRUST.hu.md).
 
-**Windows 11 x64.** The installer includes the required runtime; Python does not need to be installed separately. Normal installation and use do not require administrator rights.
+## What is measured?
 
-Supported game sources include **Steam, Epic Games Launcher, Ubisoft Connect, Riot Client, EA app / Origin, Battle.net, GOG Galaxy and offline GOG games, Xbox / Microsoft Store, Rockstar Games Launcher, Amazon Games and Minecraft: Java Edition**.
+- **Games:** the recognized, tracked game in the foreground consumes the shared daily game budget. Its menus and pauses count too; a game left in the background, a launcher, or a locked session does not. Game time continues to count even if you are not moving the mouse or keyboard.
+- **Applications:** the foreground application is recorded locally while you are active. Recording pauses after 60 seconds without keyboard or mouse input. In **Focus & activity → Activity history**, you can turn **Measure active time** off. This activity history is independent of the game budget.
+- **Websites:** with a paired extension, the active public website domain is recorded while the browser is in the foreground and you are active. Private tab domains, page titles, full URLs and page contents are not recorded; the browser can still be measured as an application during private browsing. Website time is a breakdown of browser time, not extra time added on top of it.
 
-For standalone or unrecognized games, use the configured **Games folder** or assign a game executable manually. Existing launcher libraries can stay in their original locations. Recognition and launch support depend on the installation; some protected or Store packages may be unavailable.
+For example, if you play a tracked game for 30 minutes in the foreground and then switch to your browser, 30 minutes count against the game budget. After pairing the extension, time on `example.com` appears under websites when that tab is active. Local application and website history stays on that PC; only game statistics participate in optional computer linking.
 
-## Getting started
+## Focus sessions and activity
 
-1. Download and run **GameTimeMonitor-Setup.exe** using the link above.
-2. Open **Keep Improving** from the desktop shortcut or tray icon and review your library.
-3. Set your schedule and reminders under **Settings**, then select **Save**.
+Open **Focus & activity → Focus mode**. The default cycle is 25 minutes of work, a 5-minute short break, and a 15-minute long break after four work intervals. Use **Timer settings** to change these durations and the number of rounds.
 
-The monitor starts in the tray when you sign in to Windows. Closing the Hub with **X** keeps tracking and reminders active; **Exit monitor** in the tray menu stops the application.
+Add a website by pasting its domain or URL and selecting **Add website**; the domain and its subdomains are included. Add an application by choosing its `.exe` under **Applications**. Select **Start focus** to start the work interval: listed websites are blocked in connected browsers, while listed foreground applications are minimized. Website blocking requires the extension; protected games retain their separate minimization permission. Pausing or stopping the timer releases restrictions. A break starts automatically after work; after the break, start the next work interval yourself. Restarting the app does not automatically resume a session.
 
-Updates preserve your history, settings and tracking exclusions. Automatic update notifications are enabled by default and can be disabled in Settings. **Download update** opens the installer in your browser; you choose when to download and install it.
+The **Activity history** tab shows the selected day's applications and websites and lets you add an entry to the blacklist. **Statistics** provides longer date ranges and comparisons.
 
-The application is currently **unsigned**, so Windows may show an unknown-publisher warning or restrict execution. See the [Windows trust and signing guide (Hungarian)](docs/WINDOWS-TRUST.hu.md).
+![Focus timer and example blacklist](docs/images/focus-en.png)
+*The 2.31.1 interface with an example list.*
 
-## Plan your play time
+## Connect the browser extension
 
-A shared daily budget covers all tracked games. Time counts while a recognized game is in the foreground, including its menus or pauses; background games, launchers and locked sessions do not consume the budget. The allowance renews at the reset time configured for each day, with midnight as the default. Statistics follow calendar days.
+The extension is included with the Windows app; you load its folder in each browser you want to use. These steps cover Brave, Chrome and Edge:
 
-Use the seven day buttons in **Settings → Weekly schedule** to configure each day separately or apply a plan to a group. Set a daily budget, reset time, early warning and bedtime, with optional automatic minimization when a limit is reached. For example, renew the budget at 06:00 on weekdays and 08:00 at weekends. Until renewal, the previous day's budget applies; changing reset times preserves time already used.
+1. Keep the monitor running. In the app, open **Focus & activity → Focus mode → Browser connection**. Leave the dialog open; it shows the extension folder and a **Copy pairing code** button.
+2. In your browser, open its extension page: `brave://extensions`, `chrome://extensions`, or `edge://extensions`. Turn on **Developer mode**.
+3. Choose **Load unpacked** and select the `browser_extension` folder shown in the app's dialog. **Open extension folder** can help you find it. Select the folder itself, not a file inside it.
+4. Open **Keep Improving Focus** from the browser's extensions menu or its **Details → Extension options** page. Paste the code copied from the app, choose the browser you are using, and select **Save & connect**. Wait for **Connected**; the app also shows the connection status.
+5. Repeat the loading and pairing steps in every browser and Windows profile where you want to measure sites or block them. Keep the pairing code private.
 
-The optional **Cap remaining game time at bedtime** setting limits the countdown to whichever comes first: the end of your daily allowance or bedtime. With two hours left at 23:00 and bedtime at midnight, the countdown shows one hour.
+To check it, visit a public website in the foreground, use it for a short time, then open **Focus & activity → Activity history → Websites**. If it does not appear, check that the monitor and extension are running, the correct browser is selected, and the pairing code was copied in full. The extension sends the domain to the app over a local connection, not to an internet service. If the monitor is unavailable, browser restrictions are released. Removing or disabling the extension stops website tracking and website blocking in that browser; application tracking still works.
 
-This is a personal time-management tool, not tamper-resistant parental control. Automatic minimization does not close games or shut down the PC and can have inactivity or leaving consequences in online games.
+## Game library, limits and reminders
 
-![Weekly schedule and bedtime settings](docs/images/bedtime-en.png)
+The library can discover games from Steam, Epic Games Launcher, Ubisoft Connect, Riot Client, EA app / Origin, Battle.net, GOG Galaxy and offline GOG games, Xbox / Microsoft Store, Rockstar Games Launcher, Amazon Games and Minecraft: Java Edition. Discovery and launching depend on the individual installation; some protected or Store packages may not be available. You can search, launch, hide or exclude games, or assign an executable manually. Hiding a game is different from excluding it from tracking.
 
-## Make the countdown and reminders your own
+The daily allowance is shared across tracked games. In **Settings → Weekly schedule**, select individual days or a group, set the budget, warning and reset time, and save. Midnight is the default reset; until the configured reset time the previous day's allowance applies. Statistics use calendar days. You can set a per-game cap from a game's menu or Settings: the on-screen countdown shows whichever allowance is smaller. At the per-game limit, the game is minimized and cannot be launched from the Hub, subject to protected-game permissions. A bedtime reminder can optionally cap remaining game time at bedtime.
 
-Choose a display, precise position, text size, opacity and separate normal and warning colors. Drag the placement preview or enter pixel coordinates. **Per-game countdowns** let you use a different position and style for each game, or hide its countdown.
+Reminders can use custom text and sounds. You can enable a countdown over games and adjust its position, size, opacity and colors, including per-game settings. Exclusive fullscreen games may need [RTSS 7.3.7 or later](https://www.guru3d.com/download/rtss-rivatuner-statistics-server-download/), installed separately.
 
-Check the result with a ten-second preview over a compatible running game. A dim game image can help with placement; it is held only in memory. Compatible fullscreen games can use [RTSS 7.3.7 or later, installed separately](https://www.guru3d.com/download/rtss-rivatuner-statistics-server-download/).
+Automatic minimization is optional. Game-limit minimization gives a 10-second grace period; bedtime minimization can also affect other foreground applications. It does not close the game or shut down Windows and may have consequences in online games. Protected games require explicit per-game consent for overlays or previews and separate consent for minimization; compatibility and freedom from bans cannot be guaranteed. Read the [anti-cheat guide](docs/ANTICHEAT.hu.md). This is a personal time-management tool, not tamper-resistant parental control.
 
-Under **Settings → Custom messages**, personalize warning, daily-limit and bedtime messages, add time placeholders and choose a notification sound. Default messages can be restored at any time.
+![Weekly schedule with daily budget settings](docs/images/bedtime-en.png)
+*The 2.31.1 interface with example settings.*
 
-### Protected games
+## Statistics and optional computer linking
 
-For detected protected games, overlays and game-image previews require explicit per-game risk consent. Automatic minimization requires separate consent, and some actions remain blocked. Reminders use nonactivating windows or sound where appropriate. These precautions do not guarantee compatibility or protection from bans. Review the [anti-cheat compatibility guide (Hungarian)](docs/ANTICHEAT.hu.md) before enabling these features.
+In **Statistics**, choose Games, Applications, Websites or Everything, a date range and a computer. Charts show daily totals; select a day for its details. Applications excludes recognized games, and Everything avoids counting website time twice. Data on a newly installed computer begins accumulating as you use it.
 
-## Statistics across your computers
+![Statistics with example history](docs/images/statistics-en.png)
+*An earlier statistics interface with sample data; the current filters and layout differ.*
 
-Use **Statistics** to compare time by game or computer, select a date range and inspect individual days. Computer names can be edited to keep charts easy to read.
+To combine **game statistics** from your own PCs, open **Statistics → Computers & sync → Link computers**. On the first PC, sign in with GitHub and enable synchronization; enter its connection code on the other PCs. Joining an existing code does not require another GitHub sign-in. The code grants access to and the ability to change shared history, so keep it private. Statistics are encrypted on the computer before upload; budgets, settings, exclusions, and application and website activity stay local.
 
-To link PCs, open **Statistics → Link computers** on the first computer, sign in with GitHub and enable synchronization. Enter its connection code on your other computers; joining an existing code does not require another GitHub sign-in.
+Sync is not immediate: requests are at least ten minutes apart, with a shared limit of 20 successful requests per UTC day and 600 per month. Local tracking continues offline or when the service is unavailable.
 
-Synchronization is optional and encrypted on your computer. **Keep the connection code private: anyone with it can access and change the group's shared history.** Budgets, settings and game exclusions remain local.
+## Data, updates and help
 
-Updates between computers are not immediate: requests are at least ten minutes apart, with a shared limit of 20 successful requests per UTC day and 600 per month. Local tracking remains available offline and during service outages.
+Your profile is stored under `Documents\GameTimeMonitor\data`. To back it up, exit the monitor and copy the whole folder. Uninstalling preserves it. Local history is not encrypted. The app has no advertising or general analytics telemetry; see [Privacy](PRIVACY.md) and [Security](SECURITY.md) for storage, synchronization, retention and deletion.
 
-![Daily statistics](docs/images/statistics-en.png)
+Automatic update checks contact GitHub at most once a day and can be disabled in Settings. GitHub receives normal connection metadata such as your IP address; the check does not send your history, game details or computer name. An update is downloaded through your browser and installed when you choose; upgrades preserve your history and settings.
 
-## Your data
-
-Your profile is stored in the Windows Documents folder under `GameTimeMonitor\data`. There is no advertising or general analytics telemetry. Local history is not encrypted; optional cloud statistics are encrypted before upload.
-
-Automatic update checks contact GitHub at most once a day. GitHub receives normal connection metadata, including your IP address; the check sends no play history, game details or computer name. Checks can be disabled.
-
-To back up your profile, exit the monitor and copy the complete data folder. Uninstalling preserves that folder. See [Privacy](PRIVACY.md) for stored data, cloud retention and deletion, and [Security](SECURITY.md) for account and connection-code protection.
-
-## Help and development
-
-Report bugs or request features through [GitHub Issues](https://github.com/Blintboi/windows-game-time-monitor/issues). Keep connection codes, tokens and profile databases out of public reports; report security issues through the private route in [Security](SECURITY.md).
-
-The project is released under the [MIT license](LICENSE), with separate [third-party notices](THIRD-PARTY-NOTICES.md). Development can be supported through [GitHub Sponsors](https://github.com/sponsors/Blintboi).
-
-For building or contributing, see [Development](docs/DEVELOPMENT.md), [Architecture](ARCHITECTURE.md) and [Testing](TESTING.md).
+Report problems or request features in [GitHub Issues](https://github.com/Blintboi/keep-improving/issues). Do not post connection codes, tokens or profile databases there; use the private reporting route in [Security](SECURITY.md) for security issues. The project uses the [MIT license](LICENSE); see [third-party notices](THIRD-PARTY-NOTICES.md), [development](docs/DEVELOPMENT.md), [architecture](ARCHITECTURE.md) and [testing](TESTING.md).

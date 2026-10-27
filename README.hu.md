@@ -1,95 +1,83 @@
 # Keep Improving — 2.31.1
 
-**[Letöltés Windows x64-re — 2.31.1](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256) · [English](README.md)
+**[Letöltés Windows x64-re — 2.31.1](https://github.com/Blintboi/keep-improving/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256) · [English](README.md)
 
-A Keep Improving egy helyen kínál Pomodoro-fókuszt, alkalmazás- és weboldalidő-mérést, valamint játékkönyvtárat. Kövesd a szokásaidat, tiltsd a figyelemelterelő oldalakat munka közben, és tervezd meg a játékidődet.
+A Keep Improving Windows-alkalmazás megmutatja, mire fordítod a számítógépes idődet, és segít eldönteni, mikor szeretnél összpontosítani vagy játszani. Méri a felismert, előtérben futó játékok idejét, megmutatja a napi játékkeretből hátralévő időt, és a határ elérésekor emlékeztethet vagy kis méretre válthatja a játékot. Ettől külön méri az aktívan használt alkalmazásokat, a böngészőbővítménnyel pedig a weboldalakon töltött időt is. A Pomodoro-időzítő munkaszakaszában ideiglenesen letilthatod a kiválasztott oldalakat, és kis méretre válthatod a megadott alkalmazásokat.
 
-Ingyenes, nyílt forráskódú Windows-alkalmazás, magyar és angol felülettel. A helyi időmérés internet és fiók nélkül is működik; a gépek összekapcsolása választható.
+A program ingyenes, nyílt forráskódú, magyar és angol felülettel. A helyi méréshez és a fókuszidőzítőhöz nem kell fiók vagy internet; a weboldalak méréséhez és tiltásához a mellékelt bővítmény szükséges. A saját gépek játékstatisztikáinak összekapcsolása választható.
 
-## Főbb funkciók
+![Játéktár példajátékokkal és napi kerettel](docs/images/library-hu.png)
+*Korábbi, 2.27.0-s játéktár példaelőzményekkel; a navigáció azóta változott. A játékborítók jogai az eredeti tulajdonosoké.*
 
-- **Áttekinthető nézetek:** a tevékenységet, időszakot és gépet egyetlen szűrősorban választhatod ki. Az alapdiagram napi összesítést mutat; a részletes bontás legfeljebb öt fő tételt emel ki. Válassz napot vagy keress a listában a részletekhez. Az egyéni dátumokat naptárból állíthatod. A Fókusz módban az időzítő és a látható tiltólista kapott helyet, a használati előzmények külön Aktivitás fülre kerültek. A játékkliensek a Játéktáron belüli, alapból csukott panelből nyithatók meg; a játékok alapból láthatók. Kinyitva minden kliens teljes magasságban jelenik meg, külön görgetősáv nélkül.
-- **Aktivitási statisztikák:** szűrés játékokra, játékok nélküli alkalmazásokra, weboldalakra vagy mindenre. A Minden nézet a weboldalidőt a böngészőidő részeként számolja. A tiltólistához teljes URL-t vagy domaint közvetlenül is hozzáadhatsz, korábbi látogatás nélkül.
-- **Fókusz és aktivitás:** minden előtérben használt alkalmazás helyi napi időmérése, 60 másodperces tétlenségi határral. A mellékelt Brave-, Chrome- vagy Edge-bővítmény az aktív weboldal domainjét is méri. Állítható Pomodoro-munka, rövid és hosszú szünet, valamint alkalmazás- és weboldaltiltólisták segítik a koncentrációt. A tiltás csak futó fókuszszakaszban él, szüneteltetéssel vagy alaphelyzetbe állítással feloldható. Az aktivitás helyi marad, a játékkeretet és a felhőszinkront nem érinti. Beállítás: **Fókusz és aktivitás → Brave / böngésző csatlakoztatása**.
-- **Játékkönyvtár:** telepített játékok felismerése és indítása, keresés a gyűjteményben, az időmérésbe bevont játékok kiválasztása.
-- **Napi keret és heti időrend:** időkeretek, figyelmeztetések és lefekvési emlékeztetők külön napokra vagy napcsoportokra.
-- **Játékonkénti korlát:** a játék menüjéből vagy a Beállításokból külön határt adhatsz a közös napi kereten belül. Az overlay a kisebb hátralévő időt mutatja, a Hub fő számlálója a közöset, a játék kártyája pedig a sajátját. A keretek együtt indulnak újra, és a már lejátszott idő is beleszámít. A játékhatár a meglévő 10 másodperces türelmi idővel és a védett játékok engedélyellenőrzésével vált kis méretre.
-- **Testreszabható számláló:** hátralévő játékidő megjelenítése állítható helyzettel, mérettel, fedettséggel és színekkel, akár játékonként eltérően.
-- **Személyes emlékeztetők:** saját üzenetek a hátralévő idő adataival, választható hangjelzéssel vagy saját WAV-fájllal.
-- **Játékidő-statisztikák:** színkódolt diagramok játékok vagy gépek szerint, napi részletek és a kiválasztott időszak összesítése.
-- **Gépek összekapcsolása:** a saját számítógépek statisztikáinak összesítése titkosított szinkronnal és átnevezhető gépekkel.
+## Telepítés és első lépések
 
-![Játékkönyvtár és napi időkeret](docs/images/library-hu.png)
-*A 2.27.0-s felület példaelőzményekkel. A játékborítók jogai az eredeti tulajdonosoké.*
+1. **Windows 11 x64** rendszeren töltsd le és indítsd el a fenti telepítőt. A szükséges futtatókörnyezetet tartalmazza, Pythont nem kell külön telepíteni. A szokásos telepítéshez nem kell rendszergazdai jogosultság.
+2. Nyisd meg a **Keep Improving** alkalmazást az asztalról vagy a Start menüből. A bal alsó sarokban választhatsz magyar és angol nyelvet.
+3. A **Játéktárban** nézd át a felismert játékokat. Ha valami hiányzik, a **Hozzáadás** gombbal válaszd ki az indítófájlját, vagy állítsd be a **Játékmappát** a Beállításokban. A játékkliensek meglévő könyvtárait nem kell áthelyezni.
+4. A **Beállítások → Heti időrend** részen jelöld ki a módosítandó napokat, állítsd be a napi keretet és a figyelmeztetést, majd válaszd a **Mentés** gombot. Az induló keret 120 perc, a figyelmeztetés 100 perc után érkezik; ezeket szabadon módosíthatod.
+5. A weboldalak méréséhez és tiltásához [csatlakoztasd a böngészőbővítményt](#a-böngészőbővítmény-csatlakoztatása). Fókuszidő indításához nyisd meg a **Fókusz és aktivitás** oldalt.
 
-## Követelmények és támogatott játékforrások
+A figyelő a Windowszal indul. Az ablak **X** gombja után a tálcán tovább fut; a mérés és az emlékeztetők leállításához válaszd a tálcamenü **Kilépés a figyelőből** pontját. A telepítő jelenleg nincs digitálisan aláírva, ezért a Windows ismeretlen kiadóra figyelmeztethet. Részletek: [Windows bizalmi útmutató](docs/WINDOWS-TRUST.hu.md).
 
-**Windows 11 x64.** A telepítő tartalmazza a szükséges futtatókörnyezetet; Pythont nem kell külön telepíteni. A szokásos telepítéshez és használathoz nem szükséges rendszergazdai jogosultság.
+## Mit és mikor mér a program?
 
-Támogatott források: **Steam, Epic Games Launcher, Ubisoft Connect, Riot Client, EA app / Origin, Battle.net, GOG Galaxy és offline GOG-játékok, Xbox / Microsoft Store, Rockstar Games Launcher, Amazon Games és Minecraft: Java Edition**.
+- **Játékok:** a felismert, mérésbe bevont játék előtérben töltött ideje fogyasztja a közös napi játékkeretet. A játék menüje és szüneteltetése is beleszámít; a háttérben hagyott játék, a játékindító és a zárolt munkamenet nem. A játékidő akkor is számít, ha közben nem mozgatod az egeret vagy nem nyomod a billentyűzetet.
+- **Alkalmazások:** a program az előtérben használt alkalmazást méri helyben, amíg aktív vagy. 60 másodperc egér- és billentyűzet-tétlenség után a mérés szünetel. A **Fókusz és aktivitás → Aktivitás** fülön az **Aktív idő mérése** kikapcsolható. Ez az előzmény független a játékkerettől.
+- **Weboldalak:** párosított bővítménnyel az aktív, nyilvános weboldal domainje számít, amikor a böngésző előtérben van és aktív vagy. A privát lapok domainjét, a lap címét, a teljes URL-t és az oldal tartalmát nem rögzíti. A böngésző alkalmazásként privát böngészés közben is mérhető. A weboldalidő a böngészőidő bontása, nem azon felül hozzáadott idő.
 
-Az önálló vagy fel nem ismert játékokhoz használható a beállított **Games mappa**, illetve kézzel is hozzárendelhető a játék indítófájlja. A meglévő klienskönyvtárakat nem kell áthelyezni. A felismerés és az indítás a telepítéstől is függ; egyes védett vagy Store-csomagoknál korlátozott lehet.
+Például ha 30 percig egy mért játékkal játszol előtérben, majd átváltasz a böngészőre, a játékkeretből 30 perc fogy. Párosítás után az `example.com` oldalon töltött aktív idő a weboldalak között jelenik meg. Az alkalmazás- és weboldalelőzmények ezen a gépen maradnak; az opcionális gépösszekapcsolás csak a játékstatisztikákat érinti.
 
-## Első lépések
+## Fókuszidő és aktivitás
 
-1. Töltsd le és indítsd el a **GameTimeMonitor-Setup.exe** fájlt a fenti hivatkozásról.
-2. Nyisd meg a **Keep Improving** alkalmazást az asztali parancsikonról vagy a tálcáról, és tekintsd át a játékkönyvtáradat.
-3. Add meg az időrendet és az emlékeztetőket a **Beállításokban**, majd válaszd a **Mentés** gombot.
+Nyisd meg a **Fókusz és aktivitás → Fókusz mód** oldalt. Az alapértelmezett ciklus 25 perc munka, 5 perc rövid szünet, négy munkaszakasz után pedig 15 perc hosszú szünet. Az **Időzítő beállításai** gombbal módosíthatod az időtartamokat és a körök számát.
 
-A figyelő a Windows-bejelentkezéskor a tálcán indul. A Hub **X** gombja után a mérés és az emlékeztetők tovább működnek; a programot a tálcamenü **Kilépés a figyelőből** pontja állítja le.
+Weboldalhoz illeszd be a domaint vagy URL-t, majd válaszd a **Weboldal hozzáadása** gombot: az adott domain és aldomainjei is érintettek. Az **Alkalmazások** fülön egy `.exe` fájlt adhatsz hozzá. A **Fókusz indítása** gombbal elindul a munkaszakasz: a listán szereplő weboldalak tiltva lesznek a csatlakoztatott böngészőkben, a listázott előtérben lévő alkalmazások pedig kis méretre váltanak. A weboldaltiltáshoz bővítmény kell; a védett játékokra külön engedélyezés vonatkozik. Szüneteltetés vagy leállítás azonnal feloldja a korlátozásokat. A munka után a szünet automatikusan indul, a következő munkaszakaszt viszont te indítod. A program újraindításakor a munkaszakasz nem folytatódik magától.
 
-A frissítés megőrzi az előzményeket, a beállításokat és az időmérési kizárásokat. Az automatikus frissítési értesítés alapból bekapcsolt, a Beállításokban kikapcsolható. A **Frissítés letöltése** a böngészőben nyitja meg a telepítőt; a letöltés és a telepítés időpontját te választod meg.
+Az **Aktivitás** fülön a kiválasztott nap alkalmazásait és weboldalait láthatod, és egy bejegyzést a tiltólistára is tehetsz. Hosszabb időszakokat a **Statisztikák** oldalon hasonlíthatsz össze.
 
-A program jelenleg **nincs digitálisan aláírva**, ezért a Windows ismeretlen kiadóra figyelmeztethet vagy korlátozhatja a futását. Részletek: [Windows-megbízhatóság és aláírás](docs/WINDOWS-TRUST.hu.md).
+![Fókuszidőzítő példa tiltólistával](docs/images/focus-hu.png)
+*A 2.31.1-es felület, kitalált példalistával.*
 
-## Tervezd meg a játékidőt
+## A böngészőbővítmény csatlakoztatása
 
-A követett játékok közös napi keretet használnak. Az idő akkor számít, amikor a felismert játék van az előtérben, beleértve annak menüjét vagy szünetét is. A háttérben futó játék, az indítókliens és a zárolt gép nem fogyasztja a keretet. A keret naponta megadott időpontban újul meg, alapértelmezés szerint éjfélkor. A statisztikák naptári napok szerint készülnek.
+A bővítményt a Windows-alkalmazás tartalmazza; abban a böngészőben kell betöltened, amelyben használni szeretnéd. A lépések Brave, Chrome és Edge böngészőre vonatkoznak:
 
-A **Beállítások → Heti időrend** hét napgombjával minden nap külön állítható, vagy egyszerre több napra is alkalmazható ugyanaz a terv. Megadható napi keret, megújulási időpont, korai figyelmeztetés és lefekvés, valamint választható automatikus minimalizálás a korlát elérésekor. Például hétköznap 06:00-kor, hétvégén 08:00-kor indulhat új keret. Addig az előző nap kerete érvényes; az időpont átállítása megtartja a már elhasznált időt.
+1. Hagyd futni a figyelőt. Nyisd meg a **Fókusz és aktivitás → Fókusz mód → Böngészőkapcsolat** részt. Hagyd nyitva az ablakot: ebben látszik a bővítmény mappája és a **Párosítási kód másolása** gomb.
+2. A böngésző címsorába írd be a megfelelő címet: `brave://extensions`, `chrome://extensions` vagy `edge://extensions`. Kapcsold be a **Fejlesztői módot**.
+3. Válaszd a **Kicsomagolt bővítmény betöltése** / **Load unpacked** lehetőséget, és jelöld ki az alkalmazás ablakában látható `browser_extension` mappát. A **Bővítmény mappájának megnyitása** gomb segít megtalálni. Magát a mappát válaszd ki, ne egy benne lévő fájlt.
+4. A böngésző bővítménymenüjéből vagy a **Részletek → Bővítmény beállításai** oldalon nyisd meg a **Keep Improving Focus** beállításait. Illeszd be az alkalmazásból másolt kódot, válaszd ki a használt böngészőt, majd kattints a **Mentés és kapcsolódás** gombra. Várd meg a **Csatlakoztatva** jelzést; a kapcsolat állapota az alkalmazásban is látható.
+5. A betöltést és a párosítást ismételd meg minden használni kívánt böngészőben és Windows-profilban. A párosítási kódot kezeld bizalmasan.
 
-Az **A hátralévő játékidő igazodjon a lefekvéshez** beállítással a számláló a napi keretből és a lefekvésig hátralévő időből a rövidebbet mutatja. Ha 23:00-kor még két órád lenne, de éjfélkor lefekszel, egy órát jelez.
+Ellenőrzéshez nyiss meg egy nyilvános weboldalt, használd rövid ideig az előtérben, majd nézd meg a **Fókusz és aktivitás → Aktivitás → Weboldalak** fület. Ha nem jelenik meg, ellenőrizd, hogy fut-e a figyelő, be van-e kapcsolva a bővítmény, a megfelelő böngészőt választottad-e, és a teljes kódot másoltad-e be. A bővítmény helyi kapcsolaton küldi a domaint az alkalmazásnak, nem egy internetes szolgáltatásnak. Ha a figyelő nem érhető el, a böngészős korlátozás feloldódik. A bővítmény eltávolításával vagy kikapcsolásával abban a böngészőben megszűnik a weboldalak mérése és tiltása; az alkalmazások mérése tovább működhet.
 
-A program személyes időbeosztást segít, nem megkerülhetetlen szülői felügyelet. Az automatikus minimalizálás nem zárja be a játékot és nem kapcsolja le a gépet; online játékban inaktivitási vagy meccselhagyási következményekkel járhat.
+## Játéktár, keretek és emlékeztetők
 
-![Heti időrend és lefekvési beállítások](docs/images/bedtime-hu.png)
+A játéktár többek között a Steam, Epic Games Launcher, Ubisoft Connect, Riot Client, EA app / Origin, Battle.net, GOG Galaxy és offline GOG, Xbox / Microsoft Store, Rockstar Games Launcher, Amazon Games és Minecraft: Java Edition játékait keresi. A felismerés és indítás a telepítéstől függ; egyes védett vagy Store-csomagok nem feltétlenül érhetők el. A játékok között kereshetsz, elindíthatod, elrejtheted vagy kizárhatod őket a mérésből, és kézzel is megadhatod az indítófájlt. Az elrejtés nem ugyanaz, mint a mérésből kizárás.
 
-## Számláló és emlékeztetők a saját igényeidhez
+A napi keret a mért játékok között közös. A **Beállítások → Heti időrend** részen jelölj ki egyes napokat vagy napcsoportot, állítsd be a keretet, figyelmeztetést és megújulási időt, majd mentsd el. Alapból éjfélkor újul meg a keret; a beállított időig az előző napi keret érvényes. A statisztikák naptári napokat használnak. A játék menüjében vagy a Beállításokban játékonkénti korlátot is megadhatsz a közös kereten belül; a játék közbeni számláló a kisebb hátralévő időt mutatja. A játékonkénti korlát elérésekor a játék kis méretre vált és a Hubból nem indítható, a védett játékokra vonatkozó engedélyezéssel. A lefekvési emlékeztetőhöz beállítható, hogy a hátralévő játékidőt legfeljebb a lefekvésig hátralévő időre korlátozza.
 
-Válassz kijelzőt, pontos elhelyezést, betűméretet, fedettséget, valamint külön normál és figyelmeztető színt. Az elhelyezés húzással vagy pixelkoordinátákkal adható meg. A **Játékonkénti számlálók** között minden játékhoz külön helyzet és megjelenés állítható, illetve elrejthető a számláló.
+Az emlékeztetők szövege és hangja módosítható. Bekapcsolhatsz játék közbeni számlálót, és állíthatod a helyét, méretét, fedettségét és színeit, akár játékonként. Exkluzív teljes képernyőn szükség lehet a külön telepíthető [RTSS 7.3.7 vagy újabb](https://www.guru3d.com/download/rtss-rivatuner-statistics-server-download/) programra.
 
-A tíz másodperces előnézettel egy kompatibilis, futó játék fölött is kipróbálható a megjelenés. Az elhelyezést halvány játékkép segítheti, amely csak a memóriában marad. Kompatibilis teljes képernyős játékokhoz külön telepíthető az [RTSS 7.3.7 vagy újabb verziója](https://www.guru3d.com/download/rtss-rivatuner-statistics-server-download/).
+Az automatikus kis méretre váltás választható. A játékhatárnál 10 másodperc áll rendelkezésre a mentésre és kilépésre; a lefekvéshez kötött kis méretre váltás más előtérbeli alkalmazásokat is érinthet. Nem zárja be a játékot és nem állítja le a gépet; online játékokban következménye lehet. Védett játékoknál a számlálóhoz és előnézethez játékonkénti, a kis méretre váltáshoz külön hozzájárulás szükséges; a kompatibilitás és a kitiltás elkerülése nem garantálható. Olvasd el az [anti-cheat útmutatót](docs/ANTICHEAT.hu.md). Ez személyes időbeosztási eszköz, nem kijátszásbiztos szülői felügyelet.
 
-A **Beállítások → Egyéni üzenetek** alatt személyre szabható a figyelmeztetések, a napi keret és a lefekvési emlékeztetők szövege, időadatok helyettesítőivel és választható hangjelzéssel. Az alapüzenetek bármikor visszaállíthatók.
+![Heti időrend és napi játékkeret beállításai](docs/images/bedtime-hu.png)
+*A 2.31.1-es felület, példa beállításokkal.*
 
-### Védett játékok
+## Statisztikák és gépek összekapcsolása
 
-A felismert védett játékoknál az overlay és a játékképes előnézet külön, játékonkénti kockázati beleegyezéshez kötött. Az automatikus minimalizálás önálló engedélyt igényel, bizonyos műveletek pedig nem engedélyezhetők. Az emlékeztető fókuszt nem kérő ablakkal vagy indokolt esetben hanggal jelez. Ezek az óvintézkedések nem garantálják a kompatibilitást vagy a kitiltás elkerülését. A funkciók engedélyezése előtt tekintsd át az [anticheat-kompatibilitási útmutatót](docs/ANTICHEAT.hu.md).
+A **Statisztikák** oldalon válaszd ki, hogy játékokat, alkalmazásokat, weboldalakat vagy mindent szeretnél látni, majd az időszakot és a gépet. A diagram napi összesítést mutat, egy napra kattintva annak részleteit is láthatod. Az alkalmazások nézet nem tartalmazza a felismert játékokat, a Minden nézet pedig nem számolja kétszer a weboldalidőt. Új telepítés után az adatok a használattal kezdenek gyűlni.
 
-## Statisztikák több számítógépen
+![Statisztikák példaelőzményekkel](docs/images/statistics-hu.png)
+*Korábbi statisztikai felület példaadatokkal; a jelenlegi szűrők és elrendezés eltérnek.*
 
-A **Statisztikák** oldalon összehasonlítható a játékidő játékok vagy gépek szerint, kiválasztható az időszak, és megtekinthetők az egyes napok részletei. A gépek neve szerkeszthető, hogy a diagramok könnyen áttekinthetők legyenek.
+Saját gépeid **játékstatisztikáinak** egyesítéséhez nyisd meg a **Statisztikák → Gépek és szinkron → Gépek összekapcsolása** részt. Az első gépen jelentkezz be GitHubbal és engedélyezd a szinkront; a másik gépen add meg a kapott kapcsolódási kódot. Meglévő kódhoz csatlakozáshoz nem kell újabb GitHub-bejelentkezés. A kóddal más is hozzáférhet és módosíthatja a közös előzményeket, ezért kezeld bizalmasan. A statisztikák feltöltés előtt a gépen titkosítódnak; a keretek, beállítások, kizárások, valamint az alkalmazás- és weboldalaktivitás helyben maradnak.
 
-Az összekapcsoláshoz az első gépen nyisd meg a **Statisztikák → Gépek összekapcsolása** ablakot, jelentkezz be GitHubbal, és engedélyezd a szinkront. A kapott kapcsolati kódot add meg a többi gépen; meglévő kódhoz csatlakozáshoz nem kell újabb GitHub-belépés.
+A szinkron nem azonnali: a kérések között legalább tíz perc telik el, a közös limit UTC-naponként 20 és havonta 600 sikeres kérés. A helyi mérés internet vagy a szolgáltatás elérése nélkül is folytatódik.
 
-A szinkron választható, az adatokat a program a gépeden titkosítja. **A kapcsolati kódot tartsd titokban: a birtokosa hozzáférhet a csoport közös előzményeihez, és módosíthatja azokat.** A napi keretek, a beállítások és a játékkizárások helyben maradnak.
+## Adatok, frissítés és segítség
 
-A gépek közötti frissítés nem azonnali: két kérés között legalább tíz perc telik el, a közös szolgáltatási keret UTC-naponként 20, havonta 600 sikeres kérés. A helyi időmérés internet nélkül és szolgáltatáskieséskor is működik.
+A profil a `Dokumentumok\GameTimeMonitor\data` mappában található. Biztonsági mentéshez lépj ki a figyelőből és másold le a teljes mappát. Az eltávolítás megőrzi. A helyi előzmény nincs titkosítva. A programban nincs hirdetés vagy általános analitikai telemetria; tárolásról, szinkronról és törlésről lásd az [adatvédelmi](PRIVACY.md) és [biztonsági](SECURITY.md) leírást.
 
-![Napi statisztikák](docs/images/statistics-hu.png)
+Az automatikus frissítésellenőrzés legfeljebb naponta egyszer kapcsolatba lép a GitHubbal, és a Beállításokban kikapcsolható. A GitHub a szokásos kapcsolati adatokat, például az IP-címet látja; a program nem küldi el a játéklistát, előzményt vagy gépnevet. A frissítés a böngészőben tölthető le, telepítéséről te döntesz; a frissítés megőrzi az előzményeket és beállításokat.
 
-## Saját adatok kezelése
-
-A profil a Windows Dokumentumok mappáján belüli `GameTimeMonitor\data` könyvtárban található. Nincs reklám vagy általános analitikai adatgyűjtés. A helyi előzmény-adatbázis nem titkosított; a választható felhőszinkron statisztikái feltöltés előtt titkosítást kapnak.
-
-Az automatikus verzióellenőrzés legfeljebb naponta egyszer kapcsolódik a GitHubhoz. A GitHub normál kapcsolati adatokat, köztük IP-címet kap; az ellenőrzés nem küld játékidőt, játékadatot vagy gépnevet. Az automatikus ellenőrzés kikapcsolható.
-
-Biztonsági mentéshez lépj ki a figyelőből, majd másold ki a teljes adatmappát. Az eltávolítás megőrzi ezt a mappát. A tárolt adatokról, felhőbeli megőrzésről és törlésről az [adatkezelési leírásban](PRIVACY.md), a fiók és a kapcsolati kód védelméről a [biztonsági leírásban](SECURITY.md) olvashatsz.
-
-## Segítség és fejlesztés
-
-Hibajelzést és funkciójavaslatot a [GitHub Issues](https://github.com/Blintboi/windows-game-time-monitor/issues) oldalon várunk. Kapcsolati kódot, tokent és saját profiladatbázist ne csatolj nyilvánosan; biztonsági problémát a [biztonsági leírás](SECURITY.md) szerinti privát útvonalon jelezz.
-
-A projekt [MIT licencű](LICENSE), az összetevőkre külön [harmadik féltől származó licencek](THIRD-PARTY-NOTICES.md) vonatkoznak. A fejlesztés [GitHub Sponsorson támogatható](https://github.com/sponsors/Blintboi).
-
-Fejlesztőknek: [fejlesztői útmutató](docs/DEVELOPMENT.md), [felépítés](ARCHITECTURE.md), [tesztelés](TESTING.md).
+Hibát és ötletet a [GitHub Issues](https://github.com/Blintboi/keep-improving/issues) oldalon jelezhetsz. Kapcsolódási kódot, tokent vagy profiladatbázist ne tegyél közzé; biztonsági hibához a [Security](SECURITY.md) dokumentumban megadott privát utat használd. A projekt [MIT licencű](LICENSE); további dokumentumok: [külső összetevők](THIRD-PARTY-NOTICES.md), [fejlesztés](docs/DEVELOPMENT.md), [architektúra](ARCHITECTURE.md), [tesztelés](TESTING.md).
