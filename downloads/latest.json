@@ -1,7 +1,7 @@
 {
-  "version": "2.31.1",
+  "version": "2.31.2",
   "installer_url": "https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe",
-  "sha256": "9a0745e0304391dbdd4ecfbd5f2ca16d27ea9482d2d726a7b1193676bafdd04b",
-  "size": 45113344,
+  "sha256": "865c5f9784a69bf4d3a1e521a93a5099f6c16316f3af021b7e8398588dc26712",
+  "size": 46571520,
   "schema": 1
 }

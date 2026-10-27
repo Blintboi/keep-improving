@@ -86,6 +86,12 @@ function Build-GameTimeRTSSBridge([string]$SourceRoot) {
 }
 
 function Get-GameTimeFiles {
+    @('gametime\background.py','gametime\budget.py','gametime\game_preview.py','gametime\game_safety.py',
+      'gametime\notification_text.py','gametime\overlay_consent.py','gametime\preferences_sync.py',
+      'gametime\qt_game_limits.py','gametime\qt_game_preview.py','gametime\qt_notifications.py',
+      'gametime\qt_overlay_consent.py','gametime\qt_personalization.py','gametime\qt_schedule.py',
+      'gametime\qt_translation.py','gametime\qt_updates.py','gametime\quota.py','gametime\schedule.py',
+      'gametime\sound.py','gametime\updates.py')
     @('gametime\focus.py','gametime\browser_activity.py','gametime\qt_focus.py')
     @('gametime\browser_extension\manifest.json','gametime\browser_extension\background.js','gametime\browser_extension\policy.js','gametime\browser_extension\options.html','gametime\browser_extension\options.js','gametime\browser_extension\blocked.html','gametime\browser_extension\style.css')
     @('gametime\launcher_defs.py','gametime\platforms.py','gametime\battlenet.py')

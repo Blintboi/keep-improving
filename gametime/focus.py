@@ -56,6 +56,7 @@ class FocusSettings:
     rounds: int = 4
     block_apps: list = field(default_factory=list)
     block_sites: list = field(default_factory=list)
+    excluded_apps: list = field(default_factory=list)
 
     def validate(self):
         if type(self.tracking) is not bool:
@@ -64,7 +65,7 @@ class FocusSettings:
             value = getattr(self, key)
             if type(value) is not int or not 1 <= value <= maximum:
                 raise ValueError('Invalid focus settings.')
-        for key in ('block_apps', 'block_sites'):
+        for key in ('block_apps', 'block_sites', 'excluded_apps'):
             items = getattr(self, key)
             if not isinstance(items, list) or len(items) > 200:
                 raise ValueError('Use at most 200 entries in each focus list.')
@@ -89,6 +90,9 @@ class FocusSettings:
 
     def site_blocked(self, host):
         return any(matches(host, item) for item in self.block_sites)
+
+    def app_excluded(self, path):
+        return app_key(path) in self.excluded_apps
 
 
 class Focus:
@@ -142,6 +146,7 @@ class Focus:
 
     def configure(self, settings):
         settings.validate()
+        previous_settings=self.settings
         self.flush()
         self.previous = None
         old_duration = getattr(self.settings, 'work' if self.phase == 'focus' else self.phase) * 60
@@ -149,6 +154,7 @@ class Focus:
             self.remaining = getattr(settings, 'work' if self.phase == 'focus' else self.phase) * 60
         self.settings = settings
         with self.store.db: self._save('focus_config', asdict(settings))
+        if previous_settings!=settings: self.store.observe_preferences()
         self.revision += 1
         self._dirty = True
         self.flush()
@@ -207,13 +213,13 @@ class Focus:
             delta = sample.awake - prev.awake
             wall = sample.wall.timestamp() - prev.wall.timestamp()
             if (0 < delta <= 3 and wall > 0 and abs(wall - delta) <= 1.5 and prev.interactive
-                    and sample.interactive and prev.path and prev.identity and getattr(prev, 'idle_seconds', 0) < 60
-                    and getattr(sample, 'idle_seconds', 0) < 60):
+                    and sample.interactive and prev.path and prev.identity):
                 key = app_key(prev.path)
-                self._credit('app', key, ntpath.basename(prev.path), prev.wall, sample.wall, delta)
-                # Website totals are a breakdown of browser time, not additional screen time.
-                if prev_site and ntpath.basename(key) in BROWSERS:
-                    self._credit('site', prev_site, prev_site, prev.wall, sample.wall, delta)
+                if not self.settings.app_excluded(key):
+                    self._credit('app', key, ntpath.basename(prev.path), prev.wall, sample.wall, delta)
+                    # Website totals are a breakdown of browser time, not additional screen time.
+                    if prev_site and ntpath.basename(key) in BROWSERS:
+                        self._credit('site', prev_site, prev_site, prev.wall, sample.wall, delta)
         if self.last_flush is None: self.last_flush = sample.awake
         if sample.awake - self.last_flush >= 10:
             self.flush()
@@ -276,7 +282,8 @@ class Focus:
             'JOIN activity_items i ON i.kind=u.kind AND i.key=u.key WHERE u.day>=? AND u.day<=?', (str(start), str(end))))
         game_paths = {key for key in {row[2] for row in rows if row[1]=='app'} if is_game(key)}
         apps = [(day, 'activity:app:' + key, name, 'Application', seconds)
-                for day, kind, key, name, seconds in rows if kind == 'app' and key not in game_paths]
+                for day, kind, key, name, seconds in rows if kind == 'app' and key not in game_paths
+                and not self.settings.app_excluded(key)]
         sites = [(day, 'activity:site:' + key, name, 'Website', seconds)
                  for day, kind, key, name, seconds in rows if kind == 'site']
         if category == 'apps': return apps

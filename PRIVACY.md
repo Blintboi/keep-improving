@@ -25,10 +25,10 @@ normal data handling.
 
 The app reads the foreground process identity and executable path, installed-game metadata and local shortcuts to identify a tracked game. It records daily play time by game, settings, exclusions and game availability in a local SQLite profile. There is no general analytics or advertising telemetry.
 
-**Focus & activity** also records daily active time by application executable path,
-enabled by default and switchable on that page. Only the foreground application
-counts; locked desktops, sleep gaps and 60 seconds without keyboard/mouse input
-pause this activity measurement. Input contents are never captured. The app
+The app also records daily time by application executable path,
+enabled by default and switchable in Statistics. Only the foreground application
+counts, even while reading without keyboard or mouse input; locked desktops and
+sleep gaps pause this activity measurement. Input contents are never captured. The app
 stores daily aggregates, not a chronological activity timeline.
 
 Website tracking requires manually loading and pairing the included browser
@@ -36,8 +36,9 @@ extension. It sends only the focused tab's HTTP(S) domain and browser family
 to an authenticated server bound to `127.0.0.1` on this computer. URL paths,
 queries, fragments, page titles and contents are not sent or stored. Private
 tabs and local/numeric hosts are excluded. Website time is a breakdown of browser
-time. Application/site aggregates, focus blacklists, completed-round counts and
-timer state stay in the local SQLite profile; none are included in cloud sync.
+time. Application/site aggregates are stored in the local SQLite profile and, when computer linking is enabled, synchronize in encrypted snapshots. Completed-round counts and timer state remain local. Focus preferences
+and blacklists also synchronize in encrypted snapshots; application rules can contain
+executable paths and may not match paths on another computer.
 The pairing token is Windows-user protected in the desktop profile and stored
 in the extension's local browser storage after pairing. It is not a cloud key.
 The extension has host permissions to redirect blocked sites during focus and
@@ -68,15 +69,15 @@ notification state cannot support a visual reminder during fullscreen play,
 the app uses the selected sound without creating a popup; muted or unavailable
 sound leaves delivery pending until a visual reminder can be shown.
 
-The standard profile is in the Windows Documents folder under `GameTimeMonitor\data`. Local artwork is read from installed files and caches; artwork and executable paths are not uploaded by statistics sync. Upgrade backups stay beside the profile. Local history is not an encrypted database.
+The standard profile is in the Windows Documents folder under `GameTimeMonitor\data`. Local artwork is read from installed files and caches and is not uploaded. Application paths in focus blocklists and exclusions are included in encrypted settings synchronization. Upgrade backups stay beside the profile. Local history is not an encrypted database.
 
-If daily quota reset times differ from midnight, recent quota-period totals are stored separately from calendar-day history. These local per-game totals preserve the current allowance across midnight and restarts, are limited to recent periods, and are not included in statistics synchronization. Reset schedules and alert markers also remain local.
+If daily quota reset times differ from midnight, recent quota-period totals are stored separately from calendar-day history. These local per-game totals preserve the current allowance across midnight and restarts, are limited to recent periods, and are not included in statistics synchronization. Alert markers remain local; reset schedules can synchronize.
 
-Optional per-game time limits are stored in the local settings and are not included in statistics synchronization. They reuse the existing measured foreground time and quota periods.
+Optional per-game time limits can synchronize with linked computers. They reuse each computer's locally measured foreground time and quota periods.
 
 ## Optional computer linking
 
-Synchronization is off by default. When enabled, the app uploads each computer's cumulative daily game times, game names/sources and the computer's chosen display name. These contents are encrypted on the client using keys derived from the connection code. The service stores encrypted snapshots, random device identifiers, revisions, timestamps and resource counters. It does not receive the connection code or its encryption key.
+Synchronization is off by default. When enabled, the app uploads each computer's cumulative daily game times, game names/sources, daily application executable paths and website domains with their measured times, chosen display name and supported settings, including focus lists, application-rule paths and per-game preferences. These contents are encrypted on the client using keys derived from the connection code. Account credentials, computer names as settings, local game folders, monitor selection, custom WAV paths and protected-game consent remain local. The service stores encrypted snapshots, random device identifiers, revisions, timestamps and resource counters. It does not receive the connection code or its encryption key.
 
 Anyone who has the connection code can access and change that group's shared history. Treat it as a password. Connection codes and Supabase account sessions saved by the client use Windows user-scoped DPAPI. Protection does not extend to malware running as the same user or to all old profile backups.
 

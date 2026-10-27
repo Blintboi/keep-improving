@@ -1,16 +1,15 @@
-"""Focus page: Pomodoro, local application/site history and explicit focus lists."""
+"""Focus timer and explicit application and website blocklists."""
 from dataclasses import asdict
 import math
 import os
 from pathlib import Path
-import time
 
-from PySide6.QtCore import Qt, QDate
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QTabWidget,
-    QHeaderView, QAbstractItemView, QPlainTextEdit, QScrollArea,QListWidget,QListWidgetItem)
-from .qt_translation import QCheckBox, QTableWidget, QTableWidgetItem, QLineEdit
-from .qt_widgets import label, button, panel, duration, NoWheelDoubleSpinBox,NoWheelDateEdit
-from .focus import FocusSettings, domain, matches
+    QAbstractItemView, QPlainTextEdit, QScrollArea,QListWidget,QListWidgetItem)
+from .qt_translation import QLineEdit
+from .qt_widgets import label, button, panel, NoWheelDoubleSpinBox
+from .focus import FocusSettings, domain
 
 
 class FocusPage(QWidget):
@@ -25,17 +24,11 @@ class FocusPage(QWidget):
         ''')
         self.owner = owner
         self.focus = owner.focus
-        self.fingerprint = None
-        self.last_refresh = 0
         t = owner.t
         outer=QVBoxLayout(self); outer.setContentsMargins(28,24,28,20); outer.setSpacing(12)
-        heading=QHBoxLayout(); heading.addWidget(label(t('Focus & activity'),'title'),1)
+        heading=QHBoxLayout(); heading.addWidget(label(t('Focus mode'),'title'),1)
         heading.addWidget(button(t('How does focus work?'),self.explain,'quiet')); outer.addLayout(heading)
-        self.sections=QTabWidget(); outer.addWidget(self.sections,1)
-        focus_page=QWidget(); self.sections.addTab(focus_page,t('Focus mode'))
-        activity_page=QWidget(); self.sections.addTab(activity_page,t('Activity history'))
-        focus_outer=QVBoxLayout(focus_page); focus_outer.setContentsMargins(0,12,0,0)
-        focus_scroll=QScrollArea(); focus_scroll.setWidgetResizable(True); focus_outer.addWidget(focus_scroll)
+        focus_scroll=QScrollArea(); focus_scroll.setWidgetResizable(True); outer.addWidget(focus_scroll,1)
         focus_content=QWidget(); focus_scroll.setWidget(focus_content)
         focus_box=QVBoxLayout(focus_content); focus_box.setContentsMargins(0,0,5,0); focus_box.setSpacing(14)
         timer_card=panel(); box=QVBoxLayout(timer_card); box.setContentsMargins(22,16,22,16); box.setSpacing(10)
@@ -58,7 +51,7 @@ class FocusPage(QWidget):
         status.addWidget(button(t('Browser connection'),self.browser_dialog,'quiet')); rules_box.addLayout(status)
         self.rule_tabs=QTabWidget(); self.block_lists={}
         for kind,name in (('site','Websites'),('app','Applications')):
-            container=QWidget(); container_box=QVBoxLayout(container); container_box.setContentsMargins(0,12,0,0); container_box.setSpacing(8)
+            container=QWidget(); container_box=QVBoxLayout(container); container_box.setContentsMargins(12,12,12,12); container_box.setSpacing(8)
             if kind=='site':
                 url_row=QHBoxLayout(); self.url_input=QLineEdit()
                 self.url_input.setPlaceholderText(t('Paste a URL or domain, e.g. https://youtube.com'))
@@ -66,7 +59,11 @@ class FocusPage(QWidget):
                 url_row.addWidget(self.url_input,1); self.add_url_button=button(t('Add website'),self.add_url)
                 url_row.addWidget(self.add_url_button); container_box.addLayout(url_row)
                 hint=label(t('The whole domain and its subdomains will be blocked during work.'),'muted'); hint.setWordWrap(True); container_box.addWidget(hint)
-            else: container_box.addWidget(button(t('Add application…'),self.choose_application))
+            else:
+                choices=QHBoxLayout()
+                choices.addWidget(button(t('Choose from detected applications…'),self.choose_detected_applications))
+                choices.addWidget(button(t('Choose executable…'),self.choose_application))
+                choices.addStretch(); container_box.addLayout(choices)
             listing=QListWidget(); listing.setMinimumHeight(76); listing.setMaximumHeight(155)
             listing.setSelectionMode(QAbstractItemView.SingleSelection)
             listing.itemSelectionChanged.connect(self.rule_selection_changed)
@@ -79,30 +76,6 @@ class FocusPage(QWidget):
         self.url_status=label('','muted'); self.url_status.setWordWrap(True); self.url_status.hide(); rules_box.addWidget(self.url_status)
         focus_box.addWidget(rules_card); focus_box.addStretch()
         self._rules_snapshot=None
-        history=QVBoxLayout(activity_page); history.setContentsMargins(0,14,0,0); history.setSpacing(12)
-        controls=QHBoxLayout(); self.tracking=QCheckBox(t('Measure active time')); self.tracking.setChecked(self.focus.settings.tracking)
-        self.tracking.toggled.connect(self.tracking_changed); controls.addWidget(self.tracking,1)
-        controls.addWidget(label(t('Day'),'muted')); self.day=NoWheelDateEdit(QDate.currentDate()); self.day.setCalendarPopup(True)
-        self.day.setDisplayFormat('yyyy-MM-dd'); self.day.setMaximumDate(QDate.currentDate())
-        self.day.dateChanged.connect(lambda *_:self.refresh(force=True)); controls.addWidget(self.day)
-        controls.addWidget(button(t('Detailed statistics'),self.open_statistics,'quiet')); history.addLayout(controls)
-        privacy=label(t('Only the foreground application or active website counts. Tracking pauses after 60 seconds without input.'),'muted')
-        privacy.setWordWrap(True); history.addWidget(privacy)
-        self.tabs=QTabWidget(); self.tables={}
-        for kind,name in (('app','Applications'),('site','Websites')):
-            table=QTableWidget(0,3); table.setHorizontalHeaderLabels([t(name),t('Active time'),t('Focus rule')])
-            table.horizontalHeader().setSectionResizeMode(0,QHeaderView.Stretch)
-            for column in (1,2): table.horizontalHeader().setSectionResizeMode(column,QHeaderView.ResizeToContents)
-            table.verticalHeader().hide(); table.setSelectionBehavior(QAbstractItemView.SelectRows)
-            table.setSelectionMode(QAbstractItemView.SingleSelection); table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-            table.itemSelectionChanged.connect(self.activity_selection_changed)
-            self.tables[kind]=table; self.tabs.addTab(table,t(name))
-        self.tabs.currentChanged.connect(lambda *_:self.refresh(force=True)); history.addWidget(self.tabs,1)
-        self.empty_activity=label('','muted'); self.empty_activity.setWordWrap(True); history.addWidget(self.empty_activity)
-        actions=QHBoxLayout(); self.activity_action=button(t('Add to blacklist'),self.toggle_activity_rule); self.activity_action.setEnabled(False)
-        actions.addWidget(self.activity_action); actions.addStretch()
-        actions.addWidget(label(t('Game history is available in Statistics → Games.'),'muted')); history.addLayout(actions)
-        self.sections.currentChanged.connect(lambda *_:self.refresh(force=True))
         self.refresh(force=True)
 
     def explain(self):
@@ -110,7 +83,7 @@ class FocusPage(QWidget):
         for text in ('Start a work interval to enable your blacklist. Pausing or stopping releases the restrictions immediately.',
                      'Breaks start automatically. After a break, you choose when to start working again.',
                      'Website blocking needs the paired browser extension. Protected games retain their existing minimization permission.',
-                     'Activity history works independently of the timer and is stored on this computer.'):
+                     'Activity history works independently of the timer and is shared when computer sync is enabled.'):
             note=label(self.owner.t(text)); note.setWordWrap(True); box.addWidget(note)
         box.addWidget(button(self.owner.t('Close'),dialog.accept)); dialog.show()
 
@@ -120,6 +93,28 @@ class FocusPage(QWidget):
         if not path: return
         values=asdict(self.focus.settings); values['block_apps'].append(path)
         self.focus.configure(FocusSettings(**values)); self.owner.update_focus_policy(); self.refresh(force=True)
+
+    def choose_detected_applications(self):
+        t=self.owner.t; dialog,box=self.dialog(t('Detected applications'),720)
+        note=label(t('Select one or more previously detected applications. The full executable path is shown when you hover over an entry.'),'muted')
+        note.setWordWrap(True); box.addWidget(note)
+        listing=QListWidget(); listing.setMinimumHeight(200); listing.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        for path,name in self.focus.store.db.execute("SELECT key,name FROM activity_items WHERE kind='app' ORDER BY lower(name),key"):
+            item=QListWidgetItem(name); item.setData(Qt.UserRole,path); item.setToolTip(path); listing.addItem(item)
+        box.addWidget(listing)
+        empty=label(t('No applications detected yet. Use the computer with activity tracking enabled, or choose an executable.'),'muted')
+        empty.setWordWrap(True); empty.setVisible(not listing.count()); box.addWidget(empty)
+        error=label('','danger'); error.setWordWrap(True); box.addWidget(error)
+        actions=QHBoxLayout(); actions.addStretch(); actions.addWidget(button(t('Cancel'),dialog.reject))
+        def add_selected():
+            values=asdict(self.focus.settings)
+            values['block_apps'].extend(item.data(Qt.UserRole) for item in listing.selectedItems())
+            try: self.focus.configure(FocusSettings(**values))
+            except ValueError as exc: error.setText(t(str(exc))); return
+            self.owner.update_focus_policy(); self.refresh(force=True); dialog.accept()
+        add=button(t('Add selected'),add_selected,'primary'); add.setEnabled(False)
+        listing.itemSelectionChanged.connect(lambda:add.setEnabled(bool(listing.selectedItems())))
+        actions.addWidget(add); box.addLayout(actions); dialog.show()
 
     def refresh_rules(self):
         import ntpath
@@ -134,7 +129,10 @@ class FocusPage(QWidget):
                     listing.addItem(item)
                     if key==selected: listing.setCurrentItem(item)
                 listing.blockSignals(blocked)
-                listing.setFixedHeight(min(155,max(44,listing.count()*39+8)))
+                # Size from the actual styled rows; fixed pixel estimates clipped
+                # the last row and introduced a scrollbar with only two entries.
+                height=sum(listing.sizeHintForRow(i) for i in range(min(3,listing.count())))
+                listing.setFixedHeight(max(1,height+2*listing.frameWidth()))
                 listing.setVisible(listing.count()>0)
         self.rule_selection_changed()
 
@@ -152,87 +150,56 @@ class FocusPage(QWidget):
         values[field]=[value for value in values[field] if value!=item.data(Qt.UserRole)]
         self.focus.configure(FocusSettings(**values)); self.owner.update_focus_policy(); self.refresh(force=True)
 
-    def activity_selection_changed(self):
-        kind='app' if self.tabs.currentIndex()==0 else 'site'; table=self.tables[kind]
-        item=table.item(table.currentRow(),0); self.activity_action.setEnabled(item is not None)
-        blocked=False
-        if item:
-            key=item.data(Qt.UserRole); blocked=self.focus.settings.app_blocked(key) if kind=='app' else self.focus.settings.site_blocked(key)
-        inherited=bool(item and kind=='site' and blocked and key not in self.focus.settings.block_sites)
-        self.activity_action.setText(self.owner.t('Edit blocking rule' if inherited else 'Remove from blacklist' if blocked else 'Add to blacklist'))
+    def exclude_application(self, path):
+        values=asdict(self.focus.settings)
+        if path not in values['excluded_apps']: values['excluded_apps'].append(path)
+        self.focus.configure(FocusSettings(**values))
+        self.refresh(force=True)
+        if self.owner.pages.currentIndex()==1: self.owner.statistics.refresh()
 
-    def toggle_activity_rule(self):
-        kind='app' if self.tabs.currentIndex()==0 else 'site'; table=self.tables[kind]; item=table.item(table.currentRow(),0)
-        if not item: return
-        key=item.data(Qt.UserRole); blocked=self.focus.settings.app_blocked(key) if kind=='app' else self.focus.settings.site_blocked(key)
-        if kind=='site' and blocked and key not in self.focus.settings.block_sites:
-            self.sections.setCurrentIndex(0); self.rule_tabs.setCurrentIndex(0)
-            rules=sorted((rule for rule in self.focus.settings.block_sites if matches(key,rule)),key=len,reverse=True)
-            for index in range(self.block_lists['site'].count()):
-                entry=self.block_lists['site'].item(index)
-                if entry.data(Qt.UserRole)==rules[0]: self.block_lists['site'].setCurrentItem(entry); break
-            return
-        self.add_selected('remove' if blocked else 'block')
-
-    def open_statistics(self):
-        page=self.owner.statistics; page.category.setCurrentIndex(page.category.findData('apps' if self.tabs.currentIndex()==0 else 'websites'))
-        page.period.setCurrentIndex(page.period.findData('custom'))
-        text=self.day.date().toString('yyyy-MM-dd'); page.start.setText(text); page.end.setText(text); page.apply_dates()
-        self.owner.switch_page(1)
+    def excluded_apps_dialog(self):
+        t=self.owner.t
+        dialog,box=self.dialog(t('Excluded applications'),720)
+        note=label(t('Excluded applications are no longer measured and are hidden from application statistics. Past records are kept and return if restored. Excluding a browser also stops new website measurements in it. Game time is unaffected.'),'muted')
+        note.setWordWrap(True); box.addWidget(note)
+        listing=QListWidget(); listing.setMinimumHeight(150); box.addWidget(listing)
+        def fill():
+            listing.clear()
+            for path in self.focus.settings.excluded_apps: listing.addItem(path)
+        fill()
+        actions=QHBoxLayout(); restore=button(t('Restore selected'),lambda: remove())
+        restore.setEnabled(False); listing.itemSelectionChanged.connect(lambda: restore.setEnabled(listing.currentItem() is not None))
+        actions.addWidget(restore); actions.addStretch(); actions.addWidget(button(t('Close'),dialog.accept,'primary')); box.addLayout(actions)
+        def remove():
+            item=listing.currentItem()
+            if not item: return
+            values=asdict(self.focus.settings); values['excluded_apps'].remove(item.text())
+            self.focus.configure(FocusSettings(**values)); fill(); self.refresh(force=True)
+            if self.owner.pages.currentIndex()==1: self.owner.statistics.refresh()
+        dialog.show()
 
     def refresh(self, force=False):
         owner, focus, t = self.owner, self.focus, self.owner.t
         seconds = math.ceil(focus.remaining)
         paused=not focus.running and (focus.phase!='focus' or focus.remaining<focus.settings.work*60)
-        if self.sections.currentIndex()==0 or force:
-            self.clock.setText(f'{seconds // 60:02d}:{seconds % 60:02d}')
-            self.phase_label.setText(t({'focus':'Focus','short_break':'Short break','long_break':'Long break'}[focus.phase]))
-            self.timer_state.setText(t('Running' if focus.running else 'Paused' if paused else 'Ready'))
-            self.timer_state.setStyleSheet('color:'+('#7de5bf' if focus.running else '#f0ba68' if paused else '#93a3a7')+';')
-            self.start_button.setText(t('Pause focus' if focus.running else 'Continue break' if focus.phase!='focus' else 'Resume focus' if paused else 'Start focus'))
-            self.stop_button.setEnabled(focus.running or paused or focus.round>0)
-            self.round_label.setText(t('Completed rounds: {count}',count=focus.round))
-            self.plan_label.setText(t('Work: {work} min · short break: {rest} min',work=focus.settings.work,rest=focus.settings.short_break))
-            self.notice.setText(t(focus.notice or ('Blacklist active until this work interval ends.' if focus.restricting else
-                                                 'Paused. Restrictions are off until you continue.' if paused else
-                                                 'Take a break. Restrictions are off.' if focus.phase!='focus' else
-                                                 'Start when you are ready. Your blacklist applies during work.')))
+        self.clock.setText(f'{seconds // 60:02d}:{seconds % 60:02d}')
+        self.phase_label.setText(t({'focus':'Focus','short_break':'Short break','long_break':'Long break'}[focus.phase]))
+        self.timer_state.setText(t('Running' if focus.running else 'Paused' if paused else 'Ready'))
+        self.timer_state.setStyleSheet('color:'+('#7de5bf' if focus.running else '#f0ba68' if paused else '#93a3a7')+';')
+        self.start_button.setText(t('Pause focus' if focus.running else 'Continue break' if focus.phase!='focus' else 'Resume focus' if paused else 'Start focus'))
+        self.stop_button.setEnabled(focus.running or paused or focus.round>0)
+        self.round_label.setText(t('Completed rounds: {count}',count=focus.round))
+        self.plan_label.setText(t('Work: {work} min · short break: {rest} min',work=focus.settings.work,rest=focus.settings.short_break))
+        self.notice.setText(t(focus.notice or ('Blacklist active until this work interval ends.' if focus.restricting else
+                                             'Paused. Restrictions are off until you continue.' if paused else
+                                             'Take a break. Restrictions are off.' if focus.phase!='focus' else
+                                             'Start when you are ready. Your blacklist applies during work.')))
         self.mode_label.setText(t('{apps} apps · {sites} websites',apps=len(focus.settings.block_apps),sites=len(focus.settings.block_sites)))
         bridge = owner.browser_bridge
         self.connection.setText(t('Browser connected' if bridge and bridge.connected else 'Browser not connected'))
         self.connection.setStyleSheet('color:#7de5bf;' if bridge and bridge.connected else 'color:#f0ba68;' if focus.settings.block_sites else 'color:#93a3a7;')
         self.refresh_rules()
-        self.sections.setTabText(0,t('Focus mode')); self.sections.setTabText(1,t('Activity history'))
         for index,name in enumerate(('Websites','Applications')): self.rule_tabs.setTabText(index,t(name))
-        for kind,table in self.tables.items():
-            name='Applications' if kind=='app' else 'Websites'
-            self.tabs.setTabText(0 if kind=='app' else 1,t(name)); table.setHorizontalHeaderLabels([t(name),t('Active time'),t('Focus rule')])
-        if self.sections.currentIndex()!=1: return
-        self.day.setMaximumDate(QDate.currentDate())
-        fingerprint = (focus.revision, self.day.date().toString('yyyy-MM-dd'), owner.settings.language)
-        if not force and (fingerprint == self.fingerprint or time.monotonic() - self.last_refresh < 5): return
-        self.fingerprint = fingerprint; self.last_refresh = time.monotonic()
-        focus.flush()
-        rows=[('app',key[len('activity:app:'):],name,amount) for _,key,name,_,amount in focus.history(fingerprint[1],fingerprint[1],'apps')]
-        rows += [row for row in focus.usage(fingerprint[1]) if row[0]=='site']
-        for kind, table in self.tables.items():
-            name = 'Applications' if kind == 'app' else 'Websites'
-            self.tabs.setTabText(0 if kind == 'app' else 1, t(name))
-            table.setHorizontalHeaderLabels([t(name), t('Active time'), t('Focus rule')])
-            selected = table.item(table.currentRow(), 0)
-            selected_key = selected.data(Qt.UserRole) if selected else None
-            values = sorted((row for row in rows if row[0] == kind), key=lambda row: (-row[3], row[2]))
-            table.setRowCount(len(values))
-            for index, (_, key, name, amount) in enumerate(values):
-                first = QTableWidgetItem(name); first.setData(Qt.UserRole, key); first.setToolTip(key)
-                table.setItem(index, 0, first); table.setItem(index, 1, QTableWidgetItem(duration(amount)))
-                blocked = focus.settings.app_blocked(key) if kind == 'app' else focus.settings.site_blocked(key)
-                table.setItem(index, 2, QTableWidgetItem(t('Blocked during focus' if blocked else 'Allowed during focus')))
-                if key == selected_key: table.selectRow(index)
-        kind='app' if self.tabs.currentIndex()==0 else 'site'
-        self.empty_activity.setText(t('No recorded applications on this day.' if kind=='app' else 'No recorded websites on this day. Keep the browser extension connected while browsing.'))
-        self.empty_activity.setVisible(self.tables[kind].rowCount()==0)
-        self.activity_selection_changed()
 
     def toggle(self):
         focus = self.focus
@@ -243,22 +210,6 @@ class FocusPage(QWidget):
 
     def reset(self):
         self.focus.stop(); self.owner.update_focus_policy(); self.refresh(force=True)
-
-    def tracking_changed(self, enabled):
-        values = asdict(self.focus.settings); values['tracking'] = enabled
-        self.focus.configure(FocusSettings(**values))
-        self.owner.update_focus_policy(); self.refresh(force=True)
-
-    def add_selected(self, action):
-        kind = 'app' if self.tabs.currentIndex() == 0 else 'site'
-        table = self.tables[kind]; item = table.item(table.currentRow(), 0)
-        if not item: return
-        values = asdict(self.focus.settings)
-        key = item.data(Qt.UserRole)
-        entries = values['block_' + kind + 's']
-        if action == 'block': entries.append(key)
-        else: values['block_' + kind + 's'] = [value for value in entries if value != key]
-        self.focus.configure(FocusSettings(**values)); self.owner.update_focus_policy(); self.refresh(force=True)
 
     def add_url(self):
         t = self.owner.t

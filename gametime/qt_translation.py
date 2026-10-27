@@ -3,6 +3,7 @@
 User-entered names and paths remain ordinary strings and are never translated.
 """
 from PySide6 import QtWidgets as W
+from PySide6.QtCore import QPoint,QRect
 from .i18n import tr
 
 
@@ -83,7 +84,33 @@ class QLineEdit(_Translated,W.QLineEdit):
 class QComboBox(_Translated,W.QComboBox):
     def __init__(self,*args,**kwargs):
         self._ui_items={}; super().__init__(*args,**kwargs)
+        # The popup container is outside the item view and keeps a native white background on Windows.
+        self.view().window().setStyleSheet('QComboBoxPrivateContainer { background: #1c282d; }')
         self.setSizeAdjustPolicy(W.QComboBox.AdjustToContents)
+    def showPopup(self):
+        super().showPopup()
+        popup=self.view().window(); owner=self.window()
+        bounds=QRect(owner.mapToGlobal(QPoint(0,0)),owner.size())
+        screen=self.screen()
+        if screen: bounds=bounds.intersected(screen.availableGeometry())
+        if bounds.isEmpty(): return
+        anchor=self.mapToGlobal(QPoint(0,0))
+        below=max(0,bounds.bottom()-(anchor.y()+self.height())+1)
+        above=max(0,anchor.y()-bounds.top())
+        height=popup.height()
+        if height<=below:
+            y=anchor.y()+self.height()
+        elif height<=above:
+            y=anchor.y()-height
+        elif above>below:
+            height=min(height,above); y=anchor.y()-height
+        else:
+            height=min(height,below); y=anchor.y()+self.height()
+        width=min(popup.width(),bounds.width())
+        if height<=0 or width<=0: return
+        popup.resize(width,height)
+        x=max(bounds.left(),min(anchor.x(),bounds.right()-width+1))
+        popup.move(x,max(bounds.top(),min(y,bounds.bottom()-height+1)))
     def addItem(self,*args,**kwargs):
         index=self.count(); super().addItem(*args,**kwargs)
         value=next((value for value in args if isinstance(value,UiText)),kwargs.get('text'))

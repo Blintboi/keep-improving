@@ -152,10 +152,13 @@ in [Privacy](PRIVACY.md).
 ## Limits and remaining threats
 
 The code is a bearer secret: anyone who obtains it can read and falsify that
-group's statistics. Treat it like a password. DPAPI does not defend against malware
+group's statistics and supported settings. Treat it like a password. DPAPI does not defend against malware
 running as the same Windows user, administrators, screenshots while revealed, or
 a compromised running client. Local history/cache is not an encrypted database.
-No remote statistics or computer name may execute code or select local paths.
+Remote statistics and computer names cannot execute code or choose local paths.
+Synchronized focus rules can contain executable paths and change which foreground
+applications are minimized during focus; only share a code with trusted devices.
+Protected-game risk consent remains local and is not carried by a snapshot.
 
 Old upgrade backups can still contain the previously plaintext code. Keep backups
 private and encrypted when sharing/storing them. The app preserves those backups

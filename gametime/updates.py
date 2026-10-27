@@ -10,6 +10,8 @@ from urllib.error import HTTPError
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 log = logging.getLogger(__name__)
+# The repository was renamed, but released clients validate this exact URL.
+# GitHub redirects the old name to keep-improving, preserving their update path.
 REPOSITORY = 'https://github.com/Blintboi/windows-game-time-monitor'
 DOWNLOAD_URL = REPOSITORY + '/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe'
 MANIFEST_URL = 'https://raw.githubusercontent.com/Blintboi/windows-game-time-monitor/refs/heads/main/downloads/latest.json'

@@ -244,20 +244,6 @@ def process_running(executable):
     finally: k.CloseHandle(snapshot)
 
 
-class LASTINPUTINFO(C.Structure):
-    _fields_ = [('cbSize', W.UINT), ('dwTime', W.DWORD)]
-
-
-api(u, 'GetLastInputInfo', [C.POINTER(LASTINPUTINFO)], W.BOOL)
-api(k, 'GetTickCount64', [], C.c_ulonglong)
-
-
-def idle_seconds():
-    info = LASTINPUTINFO(C.sizeof(LASTINPUTINFO), 0)
-    if not u.GetLastInputInfo(C.byref(info)): return float('inf')
-    return ((k.GetTickCount64() - info.dwTime) & 0xffffffff) / 1000
-
-
 def sample():
     active = interactive_desktop()
     pid = W.DWORD()
@@ -265,7 +251,7 @@ def sample():
     if window:
         u.GetWindowThreadProcessId(window, C.byref(pid))
     path, identity = process_image(pid.value) if pid.value else ("", "")
-    return Sample(datetime.now().astimezone(), awake_seconds(), path, identity, active, idle_seconds())
+    return Sample(datetime.now().astimezone(), awake_seconds(), path, identity, active)
 
 
 class Instance:

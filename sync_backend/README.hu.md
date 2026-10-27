@@ -38,7 +38,10 @@ csoportot. A kód és a titkosítási kulcs nem kerül a szerverhez. A szerver
 titkosított statisztikát és véletlen gépazonosítót tárol; a játéknevek, gépnevek
 és időadatok a titkosított csomagban vannak. Minden kliens a saját összesített
 napi adatait tölti fel, ezért a más gépről származó idő nem többszöröződik meg.
-A napi keret és a kizárások továbbra is helyi beállítások.
+A felhasznált napi keret és a helyi előzmények gépenként külön maradnak. A
+támogatott beállítások és játékonkénti kizárások a titkosított csomagban
+szinkronizálódnak; a gépspecifikus mappák és a védett játékokra adott
+hozzájárulások helyben maradnak.
 
 ## Újratelepítés vagy másik saját háttér
 

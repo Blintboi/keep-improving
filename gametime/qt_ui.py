@@ -74,6 +74,44 @@ class CodeVisibilityGuard(QObject):
         return False
 
 
+class NestedScrollGuard(QObject):
+    """Do not pass a wheel gesture from a scrollable child to its parent at an edge."""
+    def eventFilter(self,watched,event):
+        if event.type()!=QEvent.Wheel or not isinstance(watched,QWidget): return False
+        current=watched
+        inner=None
+        while current:
+            if isinstance(current,QAbstractScrollArea):
+                if inner is None:
+                    inner=current
+                else:
+                    vertical=event.pixelDelta().y() or event.angleDelta().y()
+                    horizontal=event.pixelDelta().x() or event.angleDelta().x()
+                    if inner.property('revealOnWheel') and isinstance(current,QScrollArea) and vertical:
+                        viewport=current.viewport()
+                        top=inner.mapTo(viewport,QPoint(0,0)).y()
+                        target=inner.parentWidget() if inner.property('revealParentBottomOnWheel') else inner
+                        bottom=target.mapTo(viewport,QPoint(0,0)).y()+target.height()
+                        # First reveal the edge in the direction of travel. Once
+                        # visible, the gesture belongs to the inner list only.
+                        hidden=(vertical<0 and bottom>viewport.height()) or (vertical>0 and top<0)
+                        pagebar=current.verticalScrollBar()
+                        if hidden and pagebar.maximum()>pagebar.minimum():
+                            pixels=event.pixelDelta().y()
+                            step=pixels if pixels else int(vertical*36/120) or (1 if vertical>0 else -1)
+                            before=pagebar.value(); pagebar.setValue(before-step)
+                            if pagebar.value()!=before:
+                                event.accept(); return True
+                    bar=inner.verticalScrollBar() if vertical else inner.horizontalScrollBar()
+                    delta=vertical or horizontal
+                    if bar.maximum()>bar.minimum() and delta and ((delta>0 and bar.value()==bar.minimum()) or
+                                                                  (delta<0 and bar.value()==bar.maximum())):
+                        event.accept(); return True
+                    return False
+            current=current.parentWidget()
+        return False
+
+
 class AlertDialog(QDialog):
     def __init__(self,owner,passive=False):
         flags=Qt.Dialog|Qt.WindowStaysOnTopHint|Qt.WindowCloseButtonHint
@@ -90,23 +128,28 @@ class App(QMainWindow,MonitorActions):
 
     def __init__(self,store,data_dir,background=False,service=None,hub=None,updates=False):
         super().__init__()
+        self.scroll_guard=NestedScrollGuard(self)
+        QApplication.instance().installEventFilter(self.scroll_guard)
         self.setCursor(Qt.ArrowCursor)
         self.store,self.data_dir=store,Path(data_dir)
         from .bedtime_legacy import migrate
         migrate(store,self.data_dir)
         self.settings=store.settings(); self.catalog=Catalog(self.settings,store.games(True),store.overrides(),store.rules())
+        self._preferences_known_games={game.id for game in store.games()}
         self.overlay_consents=Consents(store); self.catalog.overlay_consents=self.overlay_consents
         self.minimize_consents=MinimizeConsents(store)
-        self.statistics_data=StatisticsData(store); self.statistics_sync=CloudSyncWorker()
+        self.focus=Focus(store)
+        self.statistics_data=StatisticsData(store,self.focus); self.statistics_sync=CloudSyncWorker()
         self.account_auth=AuthWorker(); self.account_session=store.account_session()
         self._auth_busy=False; self._auth_callback=None
         self._sync_busy=False; self._sync_status='Sync enabled.'; self._sync_success_at=''
         self._sync_startup_pending=self.settings.statistics_sync_enabled
         self._sync_event_pending=False
+        self._preferences_pending=False
         self.statistics_event_timer=QTimer(self); self.statistics_event_timer.setSingleShot(True)
         self.statistics_event_timer.timeout.connect(self.sync_statistics_event)
         self.tracker=Tracker(store,self.catalog); self.hub=hub or HubWorker(data_dir); self.hub_fingerprint=None
-        self.focus=Focus(store); self.browser_bridge=None; self._focus_notice=''
+        self.browser_bridge=None; self._focus_notice=''
         if store.db.execute("SELECT 1 FROM settings WHERE key='browser_pairing'").fetchone(): self.enable_browser_bridge()
         self.service=service or DiscoveryService(self.settings)
         self.catalog.steam_libraries=self.service.discovery.libraries_from_metadata()
@@ -132,6 +175,10 @@ class App(QMainWindow,MonitorActions):
         self.overlay_timer=QTimer(self); self.overlay_timer.setInterval(200); self.overlay_timer.timeout.connect(self.update_overlay)
         self.assets_timer=QTimer(self); self.assets_timer.setInterval(1000); self.assets_timer.timeout.connect(self.poll_assets)
         self._build(); dark_window(self)
+        if self.settings.statistics_sync_enabled:
+            from .preferences_sync import pending_key
+            self._preferences_pending=bool(self.store.db.execute('SELECT 1 FROM settings WHERE key=?',
+                (pending_key(self.settings.statistics_sync_group),)).fetchone())
         try: self.overlay=CountdownOverlay(self)
         except Exception:
             self.overlay_failed=True; log.exception('Countdown initialization failed')
@@ -164,7 +211,7 @@ class App(QMainWindow,MonitorActions):
         name=label('Keep Improving'); name.setFont(QFont('Segoe UI',11,QFont.Bold)); brand.addWidget(name,1); side.addLayout(brand)
         side.addSpacing(32)
         self.nav={}
-        for index,text,icon in ((0,'Library','library'),(4,'Focus & activity','focus'),(1,'Statistics','stats'),(2,'Settings','settings')):
+        for index,text,icon in ((0,'Library','library'),(4,'Focus mode','focus'),(1,'Statistics','stats'),(2,'Settings','settings')):
             item=button(self.t(text),lambda checked=False,n=index:self.switch_page(n),'nav'); item.setCheckable(True); item.setIcon(glyph(icon)); item.setMinimumHeight(45)
             self.nav[index]=item; side.addWidget(item)
         side.addStretch()
@@ -206,7 +253,6 @@ class App(QMainWindow,MonitorActions):
         self.statistics._range=(self.statistics.start.text(),self.statistics.end.text())
         self.statistics.selected_day=state.get('day')
         self.statistics.scope=state.get('statistics_scope','all')
-        self.statistics.chart_mode.setCurrentIndex(self.statistics.chart_mode.findData(state.get('statistics_chart_mode','total')))
         self.pages.setCurrentIndex(0 if state.get('page')==3 else state.get('page',0))
         for i,item in self.nav.items(): item.setChecked(i==self.pages.currentIndex())
 
@@ -394,7 +440,9 @@ class App(QMainWindow,MonitorActions):
             if token!=(SERVICE_URL,self.settings.statistics_sync_group,self.statistics_sync.generation): continue
             self._sync_busy=False; changed=False
             for value in values:
-                try: changed=self.statistics_data.ingest(value,token[1]) or changed
+                try:
+                    changed=self.statistics_data.ingest(value,token[1]) or changed
+                    if value.get('preferences'): self._preferences_pending=True
                 except ValueError: warning='Some computer data could not be read. Try syncing manually later.'
             delay=self.statistics_sync.retry_delay(SERVICE_URL,self.settings.statistics_sync_group)
             if delay: self.statistics_data.defer_sync(delay)
@@ -404,14 +452,72 @@ class App(QMainWindow,MonitorActions):
                 self.schedule_statistics_event()
             if changed and self.isVisible() and not self.isMinimized() and self.pages.currentIndex()==1: self.statistics.refresh(live=True)
             self.update_statistics_sync_status()
+        if self._preferences_pending: self.apply_synchronized_preferences()
         self.update_statistics_sync_controls()
         if self._sync_startup_pending:
             self._sync_startup_pending=False
             self.request_statistics_sync()
 
+    def settings_have_draft(self):
+        try:
+            proposed=replace(self.schedule_editor.settings(self.settings),games_root=self.games_path.text().strip(),
+                steam_roots=[p.strip() for p in self.paths['steam'].text().split(';') if p.strip()],
+                epic_manifest_dirs=[p.strip() for p in self.paths['epic'].text().split(';') if p.strip()],
+                ubisoft_roots=[p.strip() for p in self.paths['ubisoft'].text().split(';') if p.strip()],
+                hub_enabled=self.hub_enabled.isChecked(),check_updates=self.updates.automatic.isChecked(),
+                **self.overlay_values(),**self.sound_values())
+            return proposed!=self.settings
+        except (ValueError,TypeError): return True
+
+    def apply_synchronized_preferences(self):
+        if not self._preferences_pending or not self.settings.statistics_sync_enabled: return
+        if (self.isVisible() and self.pages.currentIndex()==2) or self.settings_have_draft(): return
+        if any(window.isVisible() for window in self._dialogs): return
+        from .preferences_sync import apply
+        try:
+            self.tracker.flush()
+            changed=apply(self.store,self.settings.statistics_sync_group,self.statistics_data.device_id(),self.focus)
+            self._preferences_pending=False
+            if not changed: return
+            previous_language=self.settings.language
+            self.settings=self.catalog.settings=self.store.settings()
+            self.catalog.overrides=self.store.overrides(); self.hidden_ids=self.store.hidden_ids()
+            self.tracker.unclassified.clear(); self.tracker.previous=None; self.service.configure(self.settings)
+            self.update_focus_policy(); self.focus_page.refresh(force=True)
+            blocked=self.statistics.tracking.blockSignals(True)
+            self.statistics.tracking.setChecked(self.focus.settings.tracking); self.statistics.tracking.blockSignals(blocked)
+            old=self.settings_page; replacement=self._build_settings()
+            self.pages.insertWidget(2,replacement); self.pages.removeWidget(old); self.settings_page=replacement; old.deleteLater()
+            if previous_language!=self.settings.language:
+                retranslate_widgets(self,self.settings.language)
+                blocked=self.language.blockSignals(True)
+                self.language.setCurrentIndex(self.language.findData(self.settings.language)); self.language.blockSignals(blocked)
+                self.statistics.retranslate_report()
+            self.last_rows=None; self.update_overlay(); self.render(); self.updates.saved()
+            if self.isVisible() and self.pages.currentIndex()==1: self.statistics.refresh()
+            self.set_status('Settings synchronized from your linked computers.')
+        except (ValueError,TypeError,OverflowError,OSError,SQLiteError):
+            self._preferences_pending=False
+            self._sync_status='Some synchronized settings could not be applied; local settings were kept.'
+            self.update_statistics_sync_status()
+            log.warning('Could not apply synchronized settings',exc_info=True)
+
     def statistics_sync_dialog(self):
         from .qt_account import statistics_dialog
         statistics_dialog(self)
+
+    def catalog_changed(self):
+        MonitorActions.catalog_changed(self)
+        games=self.store.games(); new=[game for game in games if game.id not in self._preferences_known_games]
+        self._preferences_known_games.update(game.id for game in games)
+        if not new or not self.settings.statistics_sync_enabled: return
+        from .preferences_sync import read,key,stage
+        from .statistics_sync import game_key
+        state=read(self.store,key(self.settings.statistics_sync_group))
+        identities={game_key(game.id,game.name,game.source) for game in new}
+        wanted={f'game.{kind}.{gid}' for gid in identities for kind in ('enabled','hidden','limit','overlay')}
+        relevant={name:value for name,value in state.items() if name in wanted}
+        if relevant and stage(self.store,self.settings.statistics_sync_group,relevant,force=True): self._preferences_pending=True
 
     def refresh_sources(self):
         self.art.invalidate(); self._art_queue=list(self.cards); self.call_later(10,self.load_next_art)
@@ -457,9 +563,18 @@ class App(QMainWindow,MonitorActions):
     def _build_settings(self):
         page=QWidget(); outer=QVBoxLayout(page); outer.setContentsMargins(32,25,32,22); outer.setSpacing(16)
         heading=label(self.t('Settings'),'title'); heading.setToolTip('Keep Improving '+__version__); outer.addWidget(heading)
+        intro=label(self.t('Choose a section to find its settings. Changes on this page take effect after Save; separate dialogs have their own save buttons.'),'muted')
+        intro.setWordWrap(True); outer.addWidget(intro)
+        shortcuts=QHBoxLayout(); shortcuts.setSpacing(6); self.settings_shortcuts={}
+        for key,title in (('schedule','Game time'),('reminders','Reminders'),('countdown','Countdown'),('games','Game folders'),('other','Updates and sync')):
+            item=button(self.t(title),lambda checked=False,k=key:self.show_settings_section(k),'section-link')
+            item.setAccessibleName(self.t('Go to {section}',section=self.t(title)))
+            shortcuts.addWidget(item,1); self.settings_shortcuts[key]=item
+        outer.addLayout(shortcuts)
         scroll=QScrollArea(); scroll.setWidgetResizable(True); outer.addWidget(scroll,1)
+        self.settings_scroll=scroll
         body=QWidget(); body_layout=QVBoxLayout(body); body_layout.setContentsMargins(0,0,8,0); body_layout.setSpacing(18); scroll.setWidget(body)
-        body_layout.addWidget(self.updates.settings_panel())
+        self.settings_body=body
         from .qt_schedule import WeeklyScheduleEditor
         self.schedule_editor=WeeklyScheduleEditor(self.settings,self.t)
         for name in ('limit','warning','restriction_enabled','restriction_minutes','bedtime_enabled','bedtime_times','bedtime_minimize','bedtime_controls','bedtime_caps_budget'):
@@ -476,11 +591,7 @@ class App(QMainWindow,MonitorActions):
         actions.addWidget(button(self.t('Test bedtime reminder'),self.test_bedtime_popup,'quiet')); actions.addStretch(); message_layout.addLayout(actions); body_layout.addWidget(messages)
         from .qt_personalization import sound_panel
         body_layout.addWidget(sound_panel(self))
-        sync=panel(); sync_layout=QVBoxLayout(sync); sync_layout.setContentsMargins(22,20,22,22); sync_layout.setSpacing(12)
-        sync_layout.addWidget(label(self.t('Linked statistics'),'section'))
-        self.sync_summary=label(self.statistics_sync_status(),'muted'); self.sync_summary.setWordWrap(True); sync_layout.addWidget(self.sync_summary)
-        sync_layout.addWidget(button(self.t('Link computers'),self.statistics_sync_dialog),0,Qt.AlignLeft); body_layout.addWidget(sync)
-        body_layout.addWidget(self.build_overlay_settings())
+        countdown=self.build_overlay_settings(); body_layout.addWidget(countdown)
         locations=panel(); places=QVBoxLayout(locations); places.setContentsMargins(22,20,22,22); places.setSpacing(12)
         places.addWidget(label(self.t('Games folder'),'section'))
         browse=QHBoxLayout(); self.games_path=QLineEdit(self.settings.games_root); browse.addWidget(self.games_path,1); browse.addWidget(button(self.t('Browse…'),self.browse_root)); places.addLayout(browse)
@@ -493,10 +604,20 @@ class App(QMainWindow,MonitorActions):
         self.paths={}
         for key,text,values in [('steam','Additional Steam installations (separated by semicolons)',self.settings.steam_roots),('epic','Additional Epic manifest folders (separated by semicolons)',self.settings.epic_manifest_dirs),('ubisoft','Additional Ubisoft Connect installations (separated by semicolons)',self.settings.ubisoft_roots)]:
             extra_layout.addWidget(label(self.t(text),'muted')); edit=QLineEdit(';'.join(values)); extra_layout.addWidget(edit); self.paths[key]=edit
-        body_layout.addWidget(locations); body_layout.addStretch()
+        body_layout.addWidget(locations)
+        sync=panel(); sync_layout=QVBoxLayout(sync); sync_layout.setContentsMargins(22,20,22,22); sync_layout.setSpacing(12)
+        sync_layout.addWidget(label(self.t('Linked statistics'),'section'))
+        self.sync_summary=label(self.statistics_sync_status(),'muted'); self.sync_summary.setWordWrap(True); sync_layout.addWidget(self.sync_summary)
+        sync_layout.addWidget(button(self.t('Link computers'),self.statistics_sync_dialog),0,Qt.AlignLeft); body_layout.addWidget(sync)
+        body_layout.addWidget(self.updates.settings_panel()); body_layout.addStretch()
+        self.settings_sections={'schedule':self.schedule_editor,'reminders':messages,'countdown':countdown,'games':locations,'other':sync}
         footer=QHBoxLayout(); self.settings_error=label('','danger'); self.settings_error.setWordWrap(True); footer.addWidget(self.settings_error,1)
         footer.addWidget(button(self.t('Save'),self.save_settings,'primary')); outer.addLayout(footer)
         return page
+
+    def show_settings_section(self,key):
+        target=self.settings_sections[key]
+        self.settings_scroll.verticalScrollBar().setValue(target.mapTo(self.settings_body,QPoint(0,0)).y())
 
     def update_bedtime_banner(self,active):
         if self.bedtime_banner.isHidden()==bool(active): self.bedtime_banner.setVisible(active)
@@ -924,6 +1045,7 @@ class App(QMainWindow,MonitorActions):
         if index==3:
             self.pages.setCurrentIndex(0); self.clients_toggle.setChecked(True); self.set_clients_expanded(True); index=0
         self.pages.setCurrentIndex(index)
+        if index!=2 and self._preferences_pending: self.apply_synchronized_preferences()
         for n,item in self.nav.items(): item.setChecked(n==index)
         if index==1: self.statistics.refresh(live=True)
         if index==4: self.focus_page.refresh(force=True)
@@ -956,7 +1078,13 @@ class App(QMainWindow,MonitorActions):
     def focus_tick(self,current):
         import ntpath
         website=self.browser_bridge.website(current.path) if self.browser_bridge else ''
+        previous=self.focus.previous
+        revision=self.focus.revision
         self.focus.tick(current,website)
+        if (previous and self.focus.revision != revision
+                and (app_key(previous[0].path) != app_key(current.path) or previous[1] != website)):
+            # Reuse the existing debounced, rate-limited sync when tracked activity changes.
+            self.schedule_statistics_event(60)
         self.update_focus_policy()
         focus=self.focus
         if focus.notice and self._focus_notice!=focus.notice:
@@ -1255,6 +1383,7 @@ class App(QMainWindow,MonitorActions):
     def close(self):
         if self.closed: return
         self.closed=True
+        QApplication.instance().removeEventFilter(self.scroll_guard)
         self.statistics_event_timer.stop()
         self.focus.close()
         if self.browser_bridge: self.browser_bridge.close()

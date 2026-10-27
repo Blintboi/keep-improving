@@ -1,5 +1,15 @@
 # Testing
 
+## 2.31.2 activity, synchronization and statistics
+
+Temporary profiles cover application and website measurement, exclusions,
+focus restrictions, settings synchronization and encrypted per-computer
+activity snapshots. Qt tests cover daily stacked computer sections, all
+activities, computer color legends even when only one computer has data,
+custom calendar ranges, nested scrolling and draggable scrollbars. The
+source-install smoke test checks reinstall, startup and profile preservation;
+local delivery verifies the bundled installer and preserves the real profile.
+
 ## 2.28.2 uniform game-card grid — 2026-10-24
 
 All visible cards share the height required by the most detailed visible card.

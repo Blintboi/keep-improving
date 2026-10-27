@@ -8,6 +8,7 @@ from datetime import date
 import hashlib
 import json
 import math
+import ntpath
 import os
 from pathlib import Path
 from queue import Queue, Empty, Full
@@ -82,6 +83,27 @@ def validate_snapshot(value, group):
             if key in seen:
                 raise ValueError()
             seen.add(key)
+        if 'preferences' in value:
+            from .preferences_sync import validate
+            validate(value['preferences'])
+        if 'activity' in value:
+            if date.fromisoformat(value['activity_started']).isoformat() != value['activity_started']:
+                raise ValueError()
+            activity = value['activity']
+            if not isinstance(activity, list) or len(activity) > MAX_ROWS:
+                raise ValueError()
+            seen_activity = set()
+            for row in activity:
+                if not isinstance(row, (list, tuple)) or len(row) != 5:
+                    raise ValueError()
+                day, kind, key, name, seconds = row
+                if (date.fromisoformat(day).isoformat() != day or kind not in ('app', 'site')
+                        or not isinstance(key, str) or not 1 <= len(key) <= 512
+                        or not isinstance(name, str) or not 1 <= len(name) <= 512
+                        or type(seconds) not in (int, float) or not math.isfinite(seconds)
+                        or not 0 < seconds <= 172800 or (day, kind, key) in seen_activity):
+                    raise ValueError()
+                seen_activity.add((day, kind, key))
     except (KeyError, TypeError, ValueError, OverflowError):
         raise ValueError('Invalid statistics file.') from None
     return value
@@ -89,8 +111,8 @@ def validate_snapshot(value, group):
 
 class StatisticsData:
     """GUI-thread repository; remote data is separate from tracked usage."""
-    def __init__(self, store):
-        self.store = store
+    def __init__(self, store, focus=None):
+        self.store, self.focus = store, focus
         store.db.executescript('''
             CREATE TABLE IF NOT EXISTS statistics_devices (
               group_id TEXT NOT NULL, device_id TEXT NOT NULL, name TEXT NOT NULL,
@@ -101,6 +123,14 @@ class StatisticsData:
               game_id TEXT NOT NULL, name TEXT NOT NULL, source TEXT NOT NULL,
               seconds REAL NOT NULL,
               PRIMARY KEY(group_id, device_id, day, game_id));
+            CREATE TABLE IF NOT EXISTS statistics_activity (
+              group_id TEXT NOT NULL, device_id TEXT NOT NULL, day TEXT NOT NULL,
+              kind TEXT NOT NULL, item_key TEXT NOT NULL, name TEXT NOT NULL,
+              seconds REAL NOT NULL,
+              PRIMARY KEY(group_id, device_id, day, kind, item_key));
+            CREATE TABLE IF NOT EXISTS statistics_activity_devices (
+              group_id TEXT NOT NULL, device_id TEXT NOT NULL, started TEXT NOT NULL,
+              PRIMARY KEY(group_id, device_id));
         ''')
         self._migrate_group_labels()
         store.checkpoint_credentials()
@@ -150,13 +180,8 @@ class StatisticsData:
             if migrated: self.store._secret_migrated=True
 
     def device_id(self):
-        row = self.store.db.execute("SELECT value FROM settings WHERE key='statistics_device_id'").fetchone()
-        if row and ID.fullmatch(row[0]):
-            return row[0]
-        identity = uuid.uuid4().hex
-        with self.store.db:
-            self.store.db.execute("INSERT OR REPLACE INTO settings VALUES ('statistics_device_id',?)", (identity,))
-        return identity
+        from .preferences_sync import identity
+        return identity(self.store)
 
     def local_rows(self, start='0001-01-01', end='9999-12-31'):
         grouped = {}
@@ -168,6 +193,20 @@ class StatisticsData:
     def snapshot(self, group, name):
         value = dict(format=FORMAT, group=group, device=self.device_id(),
                      name=name or computer_name(), started=self.store.tracking_started_on(), rows=self.local_rows())
+        settings=self.store.settings()
+        if settings.statistics_sync_enabled and settings.statistics_sync_group==group:
+            if self.focus:
+                self.focus.flush()
+                value['activity_started'] = self.focus.started_on
+                value['activity'] = sorted(
+                    [[day, kind, item[len(prefix):], title, seconds]
+                     for kind, category, prefix in (('app', 'apps', 'activity:app:'), ('site', 'websites', 'activity:site:'))
+                     for day, item, title, source, seconds in self.focus.history('0001-01-01', '9999-12-31', category)])
+            from .preferences_sync import read,key,observe,initialized_key
+            state=read(self.store,key(group))
+            if not self.store.db.execute('SELECT 1 FROM settings WHERE key=?',(initialized_key(group),)).fetchone():
+                state=observe(self.store,group,value['device'])
+            if state: value['preferences']=state
         digest = hashlib.sha256(json.dumps(value, ensure_ascii=False, allow_nan=False).encode()).hexdigest()
         key = 'statistics_snapshot:' + local_group(group)
         row = self.store.db.execute('SELECT value FROM settings WHERE key=?', (key,)).fetchone()
@@ -195,6 +234,14 @@ class StatisticsData:
             self.store.db.execute('DELETE FROM statistics_remote WHERE group_id=? AND device_id=?', key)
             self.store.db.executemany('INSERT INTO statistics_remote VALUES (?,?,?,?,?,?,?)',
                                      [(*key, *row) for row in value['rows']])
+            if 'activity' in value:
+                self.store.db.execute('INSERT OR REPLACE INTO statistics_activity_devices VALUES (?,?,?)', (*key, value['activity_started']))
+                self.store.db.execute('DELETE FROM statistics_activity WHERE group_id=? AND device_id=?', key)
+                self.store.db.executemany('INSERT INTO statistics_activity VALUES (?,?,?,?,?,?,?)',
+                                          [(*key, *row) for row in value['activity']])
+        if 'preferences' in value:
+            from .preferences_sync import stage
+            stage(self.store,group,value['preferences'])
         return True
 
     def devices(self, group):
@@ -255,6 +302,53 @@ class StatisticsData:
         dates = [self.store.tracking_started_on()] if scope in ('all', 'local') else []
         dates += [started for identity, name, started in self.devices(group) if scope == 'all' or scope == identity]
         return min(dates) if dates else self.store.tracking_started_on()
+
+    def activity_started_on(self, group, scope='all'):
+        dates = [self.focus.started_on] if self.focus and scope in ('all', 'local') else []
+        if group and scope != 'local':
+            sql = 'SELECT device_id,started FROM statistics_activity_devices WHERE group_id=?'
+            dates += [started for identity, started in self.store.db.execute(sql, (local_group(group),))
+                      if scope == 'all' or scope == identity]
+        return min(dates) if dates else self.store.tracking_started_on()
+
+    def activity_history_by_computer(self, start, end, group, scope='all', category='all', local_name=''):
+        """Return local and imported daily activity without republishing imports."""
+        from .focus import BROWSERS
+        rows = [(*row, 'local', local_name or computer_name())
+                for row in self.focus.history(start, end, category)] if self.focus and scope in ('all', 'local') else []
+        if not group or scope == 'local': return rows
+        sql = '''SELECT a.day,a.kind,a.item_key,a.name,a.seconds,a.device_id,d.name
+                 FROM statistics_activity a JOIN statistics_devices d
+                 ON a.group_id=d.group_id AND a.device_id=d.device_id
+                 WHERE a.group_id=? AND a.day>=? AND a.day<=?'''
+        args = [local_group(group), str(start), str(end)]
+        if scope != 'all': sql += ' AND a.device_id=?'; args.append(scope)
+        by_device = {}
+        for day, kind, item, name, seconds, identity, device_name in self.store.db.execute(sql, args):
+            if kind == 'app' and self.focus and self.focus.settings.app_excluded(item): continue
+            by_device.setdefault((identity, device_name), []).append((day, kind, item, name, seconds))
+        for (identity, device_name), items in by_device.items():
+            apps = [(day, 'activity:app:'+item, name, 'Application', seconds) for day, kind, item, name, seconds in items if kind == 'app']
+            sites = [(day, 'activity:site:'+item, name, 'Website', seconds) for day, kind, item, name, seconds in items if kind == 'site']
+            if category == 'apps': selected = apps
+            elif category == 'websites': selected = sites
+            elif category == 'all':
+                browser_totals, site_totals = {}, {}
+                selected = []
+                for row in apps:
+                    if ntpath.basename(row[1][len('activity:app:'):]) in BROWSERS:
+                        browser_totals[row[0]] = browser_totals.get(row[0], 0) + row[4]
+                    else: selected.append(row)
+                for row in sites: site_totals[row[0]] = site_totals.get(row[0], 0) + row[4]
+                for day, key, name, source, seconds in sites:
+                    scale = min(1, browser_totals.get(day, 0) / site_totals[day])
+                    if scale: selected.append((day, key, name, source, seconds * scale))
+                for day, seconds in browser_totals.items():
+                    remainder = max(0, seconds - site_totals.get(day, 0))
+                    if remainder: selected.append((day, 'activity:browser:other', 'Other browser time', 'Browser', remainder))
+            else: selected = []
+            rows.extend((*row, identity, device_name) for row in selected)
+        return rows
 
 
 class SyncWorker:

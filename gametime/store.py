@@ -3,9 +3,12 @@ from datetime import date, datetime, timedelta
 import json
 from pathlib import Path
 import sqlite3
+import logging
 from .model import Game, Settings, norm, LAUNCHER_SOURCES
 from .secrets import PREFIX,protect,unprotect
 from .launcher_defs import PLATFORM_SOURCES
+
+log=logging.getLogger(__name__)
 
 
 class Store:
@@ -101,6 +104,17 @@ class Store:
         with self.db:
             self.db.execute("INSERT OR REPLACE INTO settings VALUES ('config',?)",
                             (json.dumps(config, ensure_ascii=False),))
+        self.observe_preferences(settings)
+
+    def observe_preferences(self,settings=None):
+        """Only active linked profiles maintain a local preference revision."""
+        settings=settings or self.settings()
+        if not settings.statistics_sync_enabled or len(settings.statistics_sync_group)!=32: return
+        try:
+            from .preferences_sync import identity,observe
+            observe(self,settings.statistics_sync_group,identity(self))
+        except (OSError,ValueError,sqlite3.Error):
+            log.warning('Could not record settings for synchronization',exc_info=True)
 
     def checkpoint_credentials(self):
         if self._secret_migrated:
@@ -262,10 +276,12 @@ class Store:
     def set_hidden(self, gid, hidden):
         with self.db:
             self.db.execute("INSERT OR REPLACE INTO game_preferences VALUES (?,?)", (gid, int(hidden)))
+        self.observe_preferences()
 
     def set_enabled(self, gid, enabled):
         with self.db:
             self.db.execute("INSERT OR REPLACE INTO overrides VALUES (?,?)", (gid, int(enabled)))
+        self.observe_preferences()
 
     def rules(self):
         return dict(self.db.execute("SELECT path,game_id FROM rules"))

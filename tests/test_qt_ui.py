@@ -294,10 +294,9 @@ class QtInterfaceTests(unittest.TestCase):
         today=date.today().isoformat(); stats=self.app.statistics
         self.store.add_usage({(today,self.games[0].id):100,(today,self.games[1].id):200}); self.app.tracker.cache.clear()
         self.app.switch_page(1); stats.preset(7)
-        stats.chart_mode.setCurrentIndex(stats.chart_mode.findData('game'))
-        day=stats.day_selector.model().item(1); legend=stats.legend.item(0); cells=[stats.games_table.item(0,col) for col in range(5)]
+        day=stats.day_selector.model().item(1); cells=[stats.games_table.item(0,col) for col in range(5)]
         stats.games_table.selectRow(0); stats.refresh(); stats.refresh()
-        self.assertIs(stats.day_selector.model().item(1),day); self.assertIs(stats.legend.item(0),legend)
+        self.assertIs(stats.day_selector.model().item(1),day)
         self.assertEqual([stats.games_table.item(0,col) for col in range(5)],cells)
         self.assertEqual([index.row() for index in stats.games_table.selectionModel().selectedRows()],[0])
         self.store.add_usage({(today,self.games[1].id):50}); self.app.tracker.cache.clear(); stats.refresh()
@@ -309,7 +308,7 @@ class QtInterfaceTests(unittest.TestCase):
             self.app.set_language('en'); history.assert_not_called(); catalog.assert_not_called()
         self.assertEqual(stats.start.text(),invalid_start); self.assertIs(stats.error,error); self.assertTrue(error.text())
         self.assertIn('71.4%',stats.top_detail.text()); self.assertEqual(stats.games_table.horizontalHeaderItem(1).text(),'Computer')
-        self.assertIs(stats.legend.item(0),legend); self.assertIn('this computer',stats.games_table.item(0,1).text())
+        self.assertIn('this computer',stats.games_table.item(0,1).text())
 
     def test_settings_validation_and_saved_language(self):
         self.app.limit.setValue(5); self.app.warning.setValue(10); self.app.save_settings()
@@ -414,8 +413,8 @@ class QtInterfaceTests(unittest.TestCase):
         before=self.app.settings; snapshot=self.app.statistics_data.snapshot(group,'Old PC')
         self.app.switch_page(1); stats=self.app.statistics
         stats.devices.setCurrentIndex(stats.devices.findData('local'))
-        stats.chart_mode.setCurrentIndex(stats.chart_mode.findData('computer')); stats.choose_day(day)
-        color=stats.chart.series['local'][1]
+        stats.choose_day(day)
+        color=stats.chart.device_colors['local']
         def open_dialog():
             stats.rename_computer.click(); window=self.app._dialogs[-1]
             name=window.findChild(QLineEdit)
@@ -435,8 +434,9 @@ class QtInterfaceTests(unittest.TestCase):
         reader=Store(self.store.path)
         try: self.assertEqual(reader.settings(),expected)
         finally: reader.close()
-        self.assertEqual((stats.scope,stats.selected_day,stats.chart_mode.currentData()),('local',day,'computer'))
-        self.assertEqual(stats.chart.series['local'],('Játszós PC <otthon> (ez a gép)',color))
+        self.assertEqual((stats.scope,stats.selected_day),('local',day))
+        self.assertEqual(stats.chart.computer_names['local'],'Játszós PC <otthon> (ez a gép)')
+        self.assertEqual(stats.chart.device_colors['local'],color)
         self.assertEqual(stats.devices.currentText(),'Játszós PC <otthon> (ez a gép)')
         self.assertEqual(stats.games_table.item(0,1).text(),'Játszós PC <otthon> (ez a gép)')
         stats.chart.resize(700,220); stats.chart.grab()
@@ -487,8 +487,8 @@ class QtInterfaceTests(unittest.TestCase):
                 self.app.statistics_data.ingest(snapshot,group)
             finally: remote.close()
         self.app.switch_page(1); stats=self.app.statistics
-        stats.chart_mode.setCurrentIndex(stats.chart_mode.findData('computer')); stats.choose_day(day)
-        identity=snapshots[0]['device']; colors={key:row[1] for key,row in stats.chart.series.items()}
+        stats.choose_day(day)
+        identity=snapshots[0]['device']; colors=dict(stats.chart.device_colors)
         stats.rename_computer.click(); window=self.app._dialogs[-1]
         selector=window.findChild(QComboBox); self.assertEqual(selector.count(),3)
         selector.setCurrentIndex(selector.findData(identity)); name=window.findChild(QLineEdit)
@@ -498,8 +498,8 @@ class QtInterfaceTests(unittest.TestCase):
             save.click(); account.assert_not_called(); sync.assert_not_called()
         self.assertEqual((stats.scope,stats.selected_day),('all',day))
         self.assertEqual(stats.computer_names[identity],'Játszós laptop <fent>')
-        self.assertEqual({key:row[1] for key,row in stats.chart.series.items()},colors)
-        self.assertEqual(stats.chart.series[identity][0],'Játszós laptop <fent>')
+        self.assertEqual(stats.chart.device_colors,colors)
+        self.assertEqual(stats.chart.computer_names[identity],'Játszós laptop <fent>')
         target=next(i for i in range(stats.games_table.rowCount()) if stats.games_table.item(i,1).data(Qt.UserRole)==identity)
         self.assertEqual(stats.games_table.item(target,1).text(),'Játszós laptop <fent>')
         self.assertEqual(self.app.settings,before); self.assertEqual(self.store.totals(day),{self.games[0].id:120})
@@ -521,7 +521,7 @@ class QtInterfaceTests(unittest.TestCase):
         window.reject(); self.app.settings=self.app.catalog.settings=before
         self.app.set_language('en'); stats=self.app.statistics
         self.assertEqual(stats.scope,identity); self.assertEqual(stats.devices.currentText(),'Játszós laptop <fent>')
-        self.assertEqual(stats.chart.series[identity][1],colors[identity])
+        self.assertEqual(stats.chart.device_colors[identity],colors[identity])
 
     def test_linked_statistics_filter_computers_without_changing_local_budget(self):
         from gametime.store import Store
@@ -587,50 +587,46 @@ class QtInterfaceTests(unittest.TestCase):
         self.app.settings=self.app.catalog.settings=replace(self.app.settings,statistics_sync_group=group)
         self.app.switch_page(1); stats=self.app.statistics
         self.app.statistics_data.ingest(snapshot,group); stats.refresh()
-        stats.chart_mode.setCurrentIndex(stats.chart_mode.findData('game'))
         self.assertEqual(stats.report.total,660)
         self.assertEqual(sorted(stats.chart.segments[day].values()),[180,420])
         game_colors=dict(stats.chart.series)
         self.assertEqual(len({color for name,color in game_colors.values()}),2)
         self.assertIn('72,7%',stats.top_detail.text())
         stats.chart.resize(700,220); stats.chart.grab()
-        self.assertEqual(len(stats.chart.segment_regions),3)
-        area=next(area for area,d,key in stats.chart.segment_regions if d==day)
-        self.assertIn('70,0%',stats.chart.tooltip_at(area.center()))
+        self.assertEqual(len(stats.chart.segment_regions),4)
+        area=next(area for area,d,identity in stats.chart.computer_regions if d==day and identity==snapshot['device'])
+        self.assertIn('100,0%',stats.chart.tooltip_at(area.center()))
         QTest.mouseClick(stats.chart,Qt.LeftButton,pos=area.center().toPoint())
         self.assertEqual(stats.selected_day,day)
         self.assertEqual(stats.games_table.rowCount(),3)
-        stats.chart_mode.setCurrentIndex(stats.chart_mode.findData('computer'))
         self.assertEqual(stats.selected_day,day)
-        self.assertEqual(stats.chart.segments[day],{'local':300,snapshot['device']:300})
+        self.assertEqual({identity:sum(values.values()) for identity,values in stats.chart.computer_segments[day].items()},{'local':300,snapshot['device']:300})
         self.assertEqual(stats.chart.days[day],600)
-        device_colors=dict(stats.chart.series)
-        self.assertNotEqual(device_colors['local'][1],device_colors[snapshot['device']][1])
+        device_colors=dict(stats.chart.device_colors)
+        self.assertNotEqual(device_colors['local'],device_colors[snapshot['device']])
         stats.chart.grab()
         self.assertIn('Laptop &lt;guest&gt;',stats.chart.tooltip_at(area.center()))
         self.assertEqual(stats.chart.tooltip_at(QPointF(-1,-1)),'')
         for row in range(stats.games_table.rowCount()):
             item=stats.games_table.item(row,1)
             self.assertFalse(item.icon().isNull())
-            self.assertEqual(item.foreground().color().name(),device_colors[item.data(Qt.UserRole)][1])
+            self.assertEqual(item.foreground().color().name(),device_colors[item.data(Qt.UserRole)])
         with patch.object(self.app.statistics_data,'history_by_computer',side_effect=AssertionError('Grouping must reuse cached data')):
-            stats.chart_mode.setCurrentIndex(stats.chart_mode.findData('game'))
             stats.choose_day(yesterday); stats.show_period()
         self.assertEqual(stats.chart.series,game_colors)
         stats.devices.setCurrentIndex(stats.devices.findData('local'))
         self.assertEqual(stats.report.total,360); self.assertEqual(stats.chart.series,game_colors)
-        stats.chart_mode.setCurrentIndex(stats.chart_mode.findData('computer'))
-        self.assertEqual(stats.chart.series['local'],device_colors['local'])
+        self.assertEqual(stats.chart.device_colors['local'],device_colors['local'])
         self.app.set_language('en'); stats=self.app.statistics
-        self.assertEqual(stats.chart_mode.currentData(),'computer')
-        self.assertEqual(stats.colors.color('local','computer'),device_colors['local'][1])
+        self.assertFalse(hasattr(stats,'chart_mode'))
+        self.assertEqual(stats.colors.color('local','computer'),device_colors['local'])
         self.assertEqual(self.store.totals(day),{self.games[0].id:120,self.games[1].id:180})
 
     def test_statistics_empty_days_and_dense_period_remain_clickable(self):
         from PySide6.QtCore import Qt
         from PySide6.QtTest import QTest
         self.app.switch_page(1); stats=self.app.statistics
-        self.assertEqual(stats.report.total,0); self.assertEqual(stats.legend.count(),0)
+        self.assertEqual(stats.report.total,0); self.assertEqual(stats.chart.series,{})
         stats.chart.resize(700,220); stats.chart.grab()
         self.assertFalse(stats.chart.segment_regions)
         rect,day,seconds=stats.chart.regions[-1]
@@ -639,7 +635,6 @@ class QtInterfaceTests(unittest.TestCase):
         today=date.today(); day=today.isoformat()
         self.store.add_usage({(day,self.games[0].id):.1})
         stats.start.setText((today-timedelta(days=365)).isoformat()); stats.end.setText(day); stats.refresh()
-        stats.chart_mode.setCurrentIndex(stats.chart_mode.findData('game'))
         stats.chart.grab()
         self.assertEqual(len(stats.chart.regions),366); self.assertEqual(len(stats.chart.segment_regions),1)
         rect=stats.chart.segment_regions[0][0]

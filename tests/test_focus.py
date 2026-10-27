@@ -43,19 +43,45 @@ class FocusTests(unittest.TestCase):
         self.assertEqual(sum(row[3] for row in rows if row[0] == 'app'), 3)
         self.assertEqual(sum(row[3] for row in rows if row[0] == 'site'), 2)
 
-    def test_idle_lock_sleep_clock_jump_and_tracking_off_drop_intervals(self):
+    def test_reading_without_input_continues_past_one_minute(self):
+        for second in range(92):
+            self.tick(second,r'C:\Brave\brave.exe','example.com',idle_seconds=second)
+        rows=self.focus.usage(self.start.date())
+        self.assertEqual(sum(row[3] for row in rows if row[0]=='app'),91)
+        self.assertEqual(sum(row[3] for row in rows if row[0]=='site'),91)
+
+    def test_excluded_application_stops_measurement_and_can_restore_history(self):
+        day=self.start.date().isoformat()
+        self.tick(0); self.tick(1); self.focus.flush()
+        self.focus.configure(replace(self.focus.settings,excluded_apps=[r'C:\Apps\work.exe']))
+        self.tick(2); self.tick(3); self.focus.flush()
+        self.assertEqual(self.focus.history(day,day,'apps'),[])
+        self.assertEqual(self.store.db.execute("SELECT seconds FROM activity_usage WHERE kind='app'").fetchone()[0],1)
+        restored=Focus(self.store)
+        self.assertTrue(restored.settings.app_excluded(r'c:\APPS\work.exe'))
+        restored.configure(replace(restored.settings,excluded_apps=[]))
+        self.assertEqual(restored.history(day,day,'apps')[0][4],1)
+        self.assertEqual(self.store.totals(day),{})
+
+    def test_excluding_browser_stops_new_site_measurement(self):
+        self.focus.configure(replace(self.focus.settings,excluded_apps=[r'C:\Brave\brave.exe']))
+        self.tick(0,r'C:\Brave\brave.exe','example.com')
+        self.tick(1,r'C:\Brave\brave.exe','example.com')
+        self.assertEqual(self.focus.usage(self.start.date()),[])
+
+    def test_reading_counts_but_lock_sleep_clock_jump_and_tracking_off_drop_intervals(self):
         self.tick(0); self.tick(1, idle_seconds=60); self.tick(2, interactive=False); self.tick(3)
         self.tick(30); self.tick(31)
-        self.assertEqual(sum(row[3] for row in self.focus.usage(self.start.date())), 1)
+        self.assertEqual(sum(row[3] for row in self.focus.usage(self.start.date())), 2)
         self.focus.configure(replace(self.focus.settings, tracking=False))
         self.tick(32); self.tick(33)
-        self.assertEqual(sum(row[3] for row in self.focus.usage(self.start.date())), 1)
+        self.assertEqual(sum(row[3] for row in self.focus.usage(self.start.date())), 2)
         self.focus.configure(replace(self.focus.settings, tracking=True))
         self.tick(34); self.tick(35)
-        self.assertEqual(sum(row[3] for row in self.focus.usage(self.start.date())), 2)
+        self.assertEqual(sum(row[3] for row in self.focus.usage(self.start.date())), 3)
         current = Sample(self.start + timedelta(hours=1), 36, r'C:\Apps\work.exe', '10:123')
         self.focus.tick(current)
-        self.assertEqual(sum(row[3] for row in self.focus.usage(self.start.date())), 2)
+        self.assertEqual(sum(row[3] for row in self.focus.usage(self.start.date())), 3)
 
     def test_midnight_conserves_activity_and_pending_survives_restart(self):
         self.start = self.start.replace(hour=23, minute=59, second=59, microsecond=500000)

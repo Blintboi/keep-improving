@@ -46,7 +46,7 @@ def statistics_dialog(app):
     new=button(t('New code'),regenerate); code_row.addWidget(new)
     code_row.addWidget(button(t('Copy'),lambda:QApplication.clipboard().setText(code.text()))); layout.addLayout(code_row)
     secret=label(t('Keep your code private: anyone with it can link a computer. Replacing your managed code disconnects its other computers.'),'muted'); secret.setWordWrap(True); layout.addWidget(secret)
-    help_text=label(t('Only statistics are shared. Daily limits, exclusions, executable paths and settings stay on each computer.'),'muted'); help_text.setWordWrap(True); layout.addWidget(help_text)
+    help_text=label(t('Game, application and website statistics and supported settings synchronize automatically. Game budget consumption stays local. Account credentials, protected-game consent, computer names and machine-specific folders remain on this computer.'),'muted'); help_text.setWordWrap(True); layout.addWidget(help_text)
     error=label('','danger'); error.setWordWrap(True); layout.addWidget(error)
     def update():
         if not isValid(window): return

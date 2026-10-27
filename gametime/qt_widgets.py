@@ -38,6 +38,8 @@ QPushButton[role="nav"]:hover { background: #152125; color: #edf4f2; }
 QPushButton[role="nav"]:checked { background: #1d352d; color: #a0f0d1; }
 QPushButton[role="quiet"] { background: transparent; border: none; color: #a1b4b5; }
 QPushButton[role="quiet"]:hover { background: #1f2d31; color: #edf4f2; }
+QPushButton[role="section-link"] { background: #19262a; border: 1px solid #304047; padding: 8px 5px; font-size: 12px; color: #c0d6d2; }
+QPushButton[role="section-link"]:hover { background: #254039; border-color: #527b68; color: #edf4f2; }
 QPushButton[role="preset"]:checked { background: #24483b; color: #a1f0d2; border-color: #396451; }
 QPushButton[role="day"] { border-radius:22px; padding:0; color:#b9c9c9; font-weight:600; }
 QPushButton[role="day"]:checked { background:#7de5bf; color:#10291f; border-color:#7de5bf; }
@@ -47,15 +49,22 @@ QLineEdit, QPlainTextEdit, QComboBox, QDoubleSpinBox, QTimeEdit { background: #1
 QLineEdit:focus, QPlainTextEdit:focus, QComboBox:focus, QDoubleSpinBox:focus, QTimeEdit:focus { border-color: #7de5bf; }
 QLineEdit { color: #e5eeec; }
 QAbstractSpinBox[hideStepButtons="true"]::up-button, QAbstractSpinBox[hideStepButtons="true"]::down-button { width:0; height:0; border:none; }
-QComboBox { padding-right: 28px; }
+QComboBox { padding-right: 28px; combobox-popup: 0; }
 QComboBox::drop-down { border: none; width: 24px; }
 QComboBox QAbstractItemView { background: #1c282d; border: 1px solid #3c504e; selection-background-color: #315343; padding: 5px; outline: none; }
+QComboBox QAbstractItemView::item { min-height: 32px; padding: 2px 8px; }
 QScrollArea, QStackedWidget { border: none; background: transparent; }
 QScrollArea > QWidget > QWidget { background: transparent; }
-QScrollBar:vertical { background: transparent; width: 7px; margin: 2px; }
-QScrollBar::handle:vertical { background: #35474c; border-radius: 3px; min-height: 35px; }
+QScrollBar:vertical { background: transparent; width: 13px; margin: 2px; }
+QScrollBar::handle:vertical { background: #435b60; border-radius: 4px; min-height: 40px; }
+QScrollBar::handle:vertical:hover, QScrollBar::handle:horizontal:hover { background: #66827d; }
+QScrollBar::handle:vertical:pressed, QScrollBar::handle:horizontal:pressed { background: #7da79a; }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
+QScrollBar:horizontal { background: transparent; height: 13px; margin: 2px; }
+QScrollBar::handle:horizontal { background: #435b60; border-radius: 4px; min-width: 40px; }
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: transparent; }
 QTableWidget, QListWidget { background: #192126; border: none; gridline-color: transparent; outline: none; }
 QTableWidget::item { padding: 10px; border-bottom: 1px solid #263339; }
 QTableWidget::item:selected, QListWidget::item:selected { background: #26453b; color: #c4f7e3; }
@@ -439,15 +448,22 @@ class DailyChart(QWidget):
     def __init__(self,t=lambda text,**values:text.format(**values),format_share=lambda value,total:f'{value/total:.1%}' if total else '0%'):
         super().__init__(); self.t=t; self.days={}; self.selected=None; self.regions=[]; self.segment_regions=[]
         self.format_share=format_share
-        self.segments={}; self.series={}; self.setMinimumHeight(220); self.setMouseTracking(True)
+        self.segments={}; self.series={}; self.computer_segments={}; self.computer_names={}; self.device_colors={}; self.computer_regions=[]
+        self.show_computer_markers=False
+        self.setMinimumHeight(220); self.setMouseTracking(True)
         self.setAccessibleName(t('Daily play time'))
-    def set_days(self,days,selected=None,segments=None,series=None):
-        self.days=days; self.selected=selected; self.segments=segments or {}; self.series=series or {}; self.update()
+    def set_days(self,days,selected=None,segments=None,series=None,computers=None,computer_names=None,device_colors=None,show_computer_markers=None):
+        self.days=days; self.selected=selected; self.segments=segments or {}; self.series=series or {}
+        self.computer_segments=computers or {}; self.computer_names=computer_names or {}; self.device_colors=device_colors or {}
+        self.show_computer_markers=len(self.device_colors)>1 if show_computer_markers is None else show_computer_markers
+        self.update()
     def paintEvent(self,event):
-        p=QPainter(self); p.setRenderHint(QPainter.Antialiasing); self.regions=[]; self.segment_regions=[]
+        p=QPainter(self); p.setRenderHint(QPainter.Antialiasing); self.regions=[]; self.segment_regions=[]; self.computer_regions=[]
         if not self.days: return
-        peak=max(self.days.values()); unit=60 if peak<=60 else 120 if peak<=600 else 600 if peak<=3600 else 1800 if peak<=14400 else 3600
+        peak=max(self.days.values())
+        unit=60 if peak<=60 else 120 if peak<=600 else 600 if peak<=3600 else 1800 if peak<=14400 else 3600
         maximum=max(unit,ceil(peak/unit)*unit)
+        multiple=self.show_computer_markers
         left,right,top,bottom=68,max(69,self.width()-12),24,self.height()-30
         p.setFont(QFont('Segoe UI',8))
         for fraction in (0,.5,1):
@@ -456,27 +472,38 @@ class DailyChart(QWidget):
             p.setPen(QPen(QColor('#304047'),1,Qt.DotLine)); p.drawLine(QPointF(left,y),QPointF(right,y))
         step=(right-left)/len(self.days); every=max(1,(len(self.days)+6)//7)
         for i,(day,seconds) in enumerate(self.days.items()):
-            x=left+i*step; height=max(3,(bottom-top)*seconds/maximum); gap=min(6,step/5)
-            bar=QRectF(x+gap,bottom-height,max(.5,step-gap*2),height)
-            path=QPainterPath(); path.addRoundedRect(bar,min(4,bar.width()/3),min(4,bar.width()/3))
-            p.save(); p.setClipPath(path); p.setPen(Qt.NoPen)
-            p.fillRect(bar,QColor('#68b4ab' if seconds else '#304249'))
-            y=bottom
-            for key,value in self.segments.get(day,{}).items():
-                if value<=0 or seconds<=0: continue
-                name,color=self.series[key]
-                segment_height=height*value/seconds
-                rect=QRectF(bar.left(),y-segment_height,bar.width(),segment_height)
-                p.fillRect(rect,QColor(color))
-                if segment_height>=5:
-                    p.setPen(QPen(QColor(PANEL),1)); p.drawLine(rect.topLeft(),rect.topRight())
-                self.segment_regions.append((rect,day,key)); y-=segment_height
-            p.restore()
-            if day==self.selected:
-                p.setBrush(Qt.NoBrush); p.setPen(QPen(QColor(TEXT),2)); p.drawPath(path)
-            self.regions.append((QRectF(x,top,step,bottom-top),day,seconds))
-            if seconds and bar.width()>=48:
+            x=left+i*step; gap=min(6,step*.12)
+            per_day=self.computer_segments.get(day,{})
+            groups=[(identity,values) for identity,values in per_day.items() if sum(values.values())>0]
+            if not groups and seconds>0: groups=[(None,self.segments.get(day,{}))]
+            height=max(3,(bottom-top)*seconds/maximum)
+            rail=min(5,max(.25,step*.12)) if multiple and groups else 0
+            spacing=min(2,max(.1,step*.04)) if rail else 0
+            width=min(46,max(.5,step-2*gap-rail-spacing))
+            bar=QRectF(x+(step-width-rail-spacing)/2+rail+spacing,bottom-height,width,height)
+            if not groups:
+                p.fillRect(bar,QColor('#304249'))
+            block_gap=min(3,height/(len(groups)*4)) if len(groups)>1 else 0
+            filled=max(0,height-block_gap*max(0,len(groups)-1))
+            cursor=float(bottom)
+            for index,(identity,values) in enumerate(groups):
+                group_bottom=cursor
+                for key,value in values.items():
+                    if value<=0 or seconds<=0: continue
+                    segment_height=filled*value/seconds
+                    rect=QRectF(bar.left(),cursor-segment_height,bar.width(),segment_height)
+                    p.fillRect(rect,QColor(self.series[key][1]))
+                    self.segment_regions.append((rect,day,key)); cursor-=segment_height
+                group=QRectF(bar.left(),cursor,bar.width(),group_bottom-cursor)
+                if day==self.selected:
+                    p.setBrush(Qt.NoBrush); p.setPen(QPen(QColor(TEXT),1.5)); p.drawRect(group)
+                if identity is not None:
+                    if rail: p.fillRect(QRectF(bar.left()-spacing-rail,cursor,rail,group.height()),QColor(self.device_colors[identity]))
+                    self.computer_regions.append((QRectF(bar.left()-spacing-rail,cursor,bar.width()+spacing+rail,group.height()),day,identity))
+                if index<len(groups)-1: cursor-=block_gap
+            if seconds and step>=65:
                 p.setPen(QColor(TEXT)); p.drawText(QRectF(x,bar.top()-21,step,18),Qt.AlignCenter,getattr(self,'axis_format',duration)(seconds))
+            self.regions.append((QRectF(x,top,step,bottom-top),day,seconds))
             if i%every==0 or i==len(self.days)-1:
                 p.setPen(QColor(TEXT if day==self.selected else MUTED)); p.drawText(QRectF(x-10,bottom+7,step+20,20),Qt.AlignCenter,day[5:])
         if not peak:
@@ -487,6 +514,15 @@ class DailyChart(QWidget):
         for rect,day,seconds in self.regions:
             if rect.contains(event.position()): self.day_clicked.emit(day); break
     def tooltip_at(self,position):
+        for rect,day,identity in self.computer_regions:
+            if not rect.contains(position): continue
+            values=self.computer_segments[day][identity]; seconds=sum(values.values())
+            lines=['<b>'+escape(day)+' · '+escape(str(self.computer_names.get(identity,identity)))+' · '+duration(seconds)+'</b>']
+            for key,value in values.items():
+                if value<=0: continue
+                name,color=self.series[key]; share=self.format_share(value,seconds)
+                lines.append('<span style="color:'+color+'">●</span> '+escape(name)+' · '+duration(value)+' · '+share)
+            return '<br>'.join(lines)
         for rect,day,seconds in self.regions:
             if not rect.contains(position): continue
             lines=['<b>'+escape(day)+' · '+duration(seconds)+'</b>']

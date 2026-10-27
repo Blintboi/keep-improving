@@ -211,7 +211,9 @@ class UpdateInterfaceTests(unittest.TestCase):
         updates=self.worker(); self.app.settings_dialog(); self.pump(.02)
         area=self.app.settings_page.findChildren(QScrollArea)[0]; area.verticalScrollBar().setValue(area.verticalScrollBar().maximum())
         with patch.object(self.app.tray,'popup_menu',return_value=6): self.app.tray_menu()
-        self.assertEqual(self.app.pages.currentIndex(),2); self.assertLess(area.verticalScrollBar().value(),100)
+        self.assertEqual(self.app.pages.currentIndex(),2)
+        point=self.app.updates.check.mapTo(area.viewport(),self.app.updates.check.rect().center())
+        self.assertTrue(area.viewport().rect().contains(point))
         self.fake.request.assert_called_once()
 
 

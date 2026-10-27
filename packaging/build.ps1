@@ -48,7 +48,7 @@ Copy-Item -LiteralPath (Join-Path $repo 'gametime\browser_extension') -Destinati
 foreach ($name in @('README.md','README.hu.md','TESTING.md','ARCHITECTURE.md','THIRD-PARTY-NOTICES.md','SECURITY.md','LICENSE','PRIVACY.md')) {
     Copy-Item -LiteralPath (Join-Path $repo $name) -Destination $bundle
 }
-foreach ($name in @('docs\DEVELOPMENT.md','docs\ANTICHEAT.hu.md','docs\WINDOWS-TRUST.hu.md','docs\images\library-en.png','docs\images\statistics-en.png','docs\images\bedtime-en.png','docs\images\library-hu.png','docs\images\statistics-hu.png','docs\images\bedtime-hu.png')) {
+foreach ($name in @('docs\DEVELOPMENT.md','docs\ANTICHEAT.hu.md','docs\WINDOWS-TRUST.hu.md','docs\images\library-en.png','docs\images\statistics-en.png','docs\images\bedtime-en.png','docs\images\focus-en.png','docs\images\library-hu.png','docs\images\statistics-hu.png','docs\images\bedtime-hu.png','docs\images\focus-hu.png')) {
     $target = Join-Path $bundle $name
     New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $repo $name) -Destination $target

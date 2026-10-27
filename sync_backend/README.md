@@ -9,6 +9,8 @@ The service consists of PostgreSQL, Supabase Auth and two Edge Functions:
 
 The client generates a random 128-bit code and derives separate authentication and AES-256-GCM keys. The server stores an authentication-key hash, device identifiers, encrypted snapshots and accounting metadata. It does not receive the code or encryption key. Each computer uploads its own cumulative daily totals; imported time does not become a new upload or consume another computer's local budget.
 
+Supported preferences are optional fields inside the same encrypted snapshots. They do not introduce another endpoint or sync schedule; older clients continue to exchange statistics and ignore those fields. Local budget consumption, protected-game consent and machine-specific folders remain local.
+
 The hosted endpoint is `https://jtvdbqwmejrckjejjrdl.supabase.co/functions/v1/statistics-sync`. Its `/about` route describes data handling. See [Privacy](../PRIVACY.md) and [Security](../SECURITY.md) for retention, owner controls and known limitations.
 
 ## Deployment and operator controls
