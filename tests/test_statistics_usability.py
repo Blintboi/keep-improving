@@ -85,6 +85,36 @@ class StatisticsUsabilityTests(unittest.TestCase):
         self.assertFalse(page.empty_details.isHidden())
         page.search.clear(); self.assertEqual(page.games_table.rowCount(),2)
 
+    def test_list_combines_names_and_filters_computers_independently(self):
+        from gametime.statistics_sync import FORMAT
+        today=date.today().isoformat(); group='ab'*16; laptop='12'*16
+        self.app.settings=replace(self.app.settings,statistics_sync_group=group)
+        self.store.add_usage({(today,self.games[0].id):120})
+        snapshot=dict(format=FORMAT,group=group,device=laptop,name='Laptop',revision=1,started=today,
+                      rows=[[today,'other-game','  fixture alpha  ','Steam',60],
+                            [today,'third-game','Another game','Steam',30]])
+        self.app.statistics_data.ingest(snapshot,group); self.app.switch_page(1)
+        page=self.app.statistics; page.category.setCurrentIndex(page.category.findData('games'))
+        self.assertEqual(page.report.total,210); self.assertEqual(page.games_table.rowCount(),3)
+        page.merge_duplicates.setChecked(True)
+        self.assertEqual(page.games_table.rowCount(),2)
+        self.assertEqual(page.games_table.item(0,3).text(),'00:03:00')
+        self.assertEqual(page.games_table.item(0,1).text(),'Több gép')
+        self.assertEqual(page.games_table.item(0,4).text(),'85,7%')
+        page.detail_devices.setCurrentIndex(page.detail_devices.findData(laptop))
+        self.assertEqual(page.scope,'all'); self.assertEqual(page.report.total,210)
+        self.assertEqual(page.games_table.rowCount(),2)
+        self.assertEqual(page.games_table.item(0,3).text(),'00:01:00')
+        self.assertEqual(page.games_table.item(0,4).text(),'66,7%')
+        page.search.setText('alpha'); self.assertEqual(page.games_table.rowCount(),1)
+        self.assertEqual(page.games_table.item(0,4).text(),'66,7%')
+        page.search.clear(); page.detail_devices.setCurrentIndex(page.detail_devices.findData('all'))
+        page.merge_duplicates.setChecked(False); self.assertEqual(page.games_table.rowCount(),3)
+        page.choose_day(today); self.assertEqual(page.games_table.rowCount(),3)
+        self.app.set_language('en')
+        self.assertEqual(page.detail_devices.currentData(),'all'); self.assertFalse(page.merge_duplicates.isChecked())
+        self.assertEqual(page.merge_duplicates.text(),'Combine matching names')
+
     def test_each_activity_category_defaults_to_colored_breakdown(self):
         from datetime import datetime,timedelta
         now=datetime.now().astimezone(); focus=self.app.focus

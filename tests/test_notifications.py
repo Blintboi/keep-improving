@@ -121,29 +121,28 @@ class NotificationTests(unittest.TestCase):
             now = datetime.now().astimezone()
             with patch("gametime.ui.win32.sample", return_value=Sample(now, 102, self.exe, "fixture:1")):
                 self.app.tick()
-            escape.assert_called_once_with(self.exe, "fixture:1")
+            escape.assert_not_called()
         self.pump()
         self.assert_popup_visible()
         self.assertEqual(len(self.app.tracker.alerts), 0)
         self.assertIn("warning:6000", self.store.alert_keys(datetime.now().date().isoformat()))
 
-    def test_escape_precedes_popup_by_200ms_for_the_active_game(self):
+    def test_active_game_popup_never_injects_escape(self):
         events = []
         original = self.native.present_notification
         def escape(*args):
             self.assertIsNone(self.app.popup_window)
             events.append(("escape", time.monotonic()))
             return True
-        def present(hwnd):
+        def present(hwnd,**kwargs):
             events.append(("popup", time.monotonic()))
-            return original(hwnd)
+            return original(hwnd,**kwargs)
         self.root.iconify()
         with patch("gametime.ui.win32.escape_game", side_effect=escape) as sent, \
                 patch("gametime.ui.win32.present_notification", side_effect=present):
             self.cross_threshold(6000, "warning")
-        sent.assert_called_once_with(self.exe, "fixture:1")
-        self.assertEqual([event[0] for event in events], ["escape", "popup"])
-        self.assertGreaterEqual(events[1][1] - events[0][1], .19)
+        sent.assert_not_called()
+        self.assertEqual([event[0] for event in events], ["popup"])
         self.assert_popup_visible()
 
     def test_background_alert_does_not_send_escape_to_an_unrelated_app(self):
@@ -169,7 +168,10 @@ class NotificationTests(unittest.TestCase):
         self.pump(.1)
         self.assertTrue(game.winfo_viewable())
         self.root.iconify()
-        self.cross_threshold(6000, "warning")
+        # This checks desktop stacking. Fullscreen renderer routing is covered
+        # by the Qt fullscreen-notification suite, not this legacy Tk fixture.
+        with patch.object(self.app,'notification_mode',return_value='normal'):
+            self.cross_threshold(6000, "warning")
         self.assert_popup_visible()
         hwnd = dark_title(self.app.popup_window)
         rectangle = self.native.W.RECT()

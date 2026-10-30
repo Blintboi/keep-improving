@@ -5,6 +5,7 @@ import ntpath
 import os
 import re
 from .launcher_defs import CLIENT_PROCESSES, PLATFORM_SOURCES, client_id
+from .activity_identity import is_idle_app
 
 
 def norm(path):
@@ -34,7 +35,7 @@ HELPERS = re.compile(r"unins|uninstall|(^|[-_ ])setup|^install|launcher|updater|
 def blocked(path):
     from .game_safety import anti_helper
     parts = norm(path).split("\\")
-    return (anti_helper(path) or parts[-1] in BROWSERS | CLIENTS or client_id(path) == 'rockstar'
+    return (is_idle_app(path) or anti_helper(path) or parts[-1] in BROWSERS | CLIENTS or client_id(path) == 'rockstar'
             or any(part in {"riot client", "riot vanguard"} for part in parts[:-1]))
 
 
@@ -88,16 +89,33 @@ class Settings:
     statistics_sync_enabled: bool = False
     statistics_sync_group: str = ""
     statistics_device_name: str = ""
+    scheduled_notifications: list = field(default_factory=list)
     notification_messages: dict = field(default_factory=dict)
     notification_sound: str = 'default'
     notification_sound_path: str = ''
     weekend_enabled: bool = False
     weekend_schedule: dict = field(default_factory=dict)
     game_overlays: dict = field(default_factory=dict)
+    counter_overlays: dict = field(default_factory=dict)
+    activity_overlays: dict = field(default_factory=dict)
     game_limits: dict = field(default_factory=dict)
     daily_schedules: dict = field(default_factory=dict)
+    wellbeing_rules: list = field(default_factory=list)
+    restriction_plans: dict = field(default_factory=dict)
+    game_budget_enabled: bool = True
+    # Legacy/configured profiles retain their game budget; Store supplies the
+    # opt-in defaults for a genuinely new profile.
+    budget_setup_completed: bool = True
 
     def validate(self):
+        from .restriction_policy import validate_plans
+        validate_plans(self.restriction_plans)
+        from .scheduled_notifications import validate_notifications
+        validate_notifications(self.scheduled_notifications)
+        from .wellbeing import validate_rules
+        validate_rules(self.wellbeing_rules)
+        if type(self.game_budget_enabled) is not bool: raise ValueError('Invalid time budget.')
+        if type(self.budget_setup_completed) is not bool: raise ValueError('Invalid time budget.')
         from .schedule import SCHEDULE_FIELDS,DayScheduleError
         if (not isinstance(self.game_limits, dict) or any(
                 not isinstance(gid, str) or not gid or '\0' in gid
@@ -120,17 +138,29 @@ class Settings:
         if (not isinstance(self.notification_sound_path,str) or len(self.notification_sound_path)>32767 or '\0' in self.notification_sound_path
                 or self.notification_sound=='custom' and (not ntpath.isabs(self.notification_sound_path) or not self.notification_sound_path.lower().endswith('.wav'))):
             raise ValueError('Choose a WAV sound file.')
-        overlay_fields=('overlay_enabled','overlay_x','overlay_y','overlay_font_size','overlay_screen','overlay_color_normal','overlay_color_warning')
+        overlay_fields=('overlay_enabled','overlay_x','overlay_y','overlay_font_size','overlay_screen','overlay_color_normal','overlay_color_warning','overlay_opacity')
         if (not isinstance(self.game_overlays,dict) or any(not isinstance(gid,str) or not gid or '\0' in gid
                 or not isinstance(value,dict) or any(key not in overlay_fields for key in value) for gid,value in self.game_overlays.items())):
             raise ValueError('Choose valid per-game countdown settings.')
+        if (not isinstance(self.counter_overlays,dict) or len(self.counter_overlays)>100 or any(
+                not isinstance(key,str) or not re.fullmatch(r'[a-zA-Z0-9_-]{1,64}',key) or not isinstance(value,dict)
+                or any(field not in overlay_fields or field=='overlay_enabled' for field in value)
+                for key,value in self.counter_overlays.items())):
+            raise ValueError('Choose valid countdown settings.')
+        from .wellbeing import target
+        if not isinstance(self.activity_overlays,dict) or len(self.activity_overlays)>2000:
+            raise ValueError('Choose valid countdown settings.')
+        for key,value in self.activity_overlays.items():
+            if (not isinstance(key,str) or not key.startswith(('app:','site:')) or target(*key.split(':',1))['value']!=key.split(':',1)[1]
+                    or not isinstance(value,dict) or any(field not in overlay_fields for field in value)):
+                raise ValueError('Choose valid countdown settings.')
         if self.weekend_schedule:
-            replace(self,weekend_enabled=False,weekend_schedule={},daily_schedules={},game_overlays={},**self.weekend_schedule).validate()
+            replace(self,weekend_enabled=False,weekend_schedule={},daily_schedules={},game_overlays={},counter_overlays={},activity_overlays={},**self.weekend_schedule).validate()
         for day,value in self.daily_schedules.items():
-            try: replace(self,weekend_enabled=False,weekend_schedule={},daily_schedules={},game_overlays={},**value).validate()
+            try: replace(self,weekend_enabled=False,weekend_schedule={},daily_schedules={},game_overlays={},counter_overlays={},activity_overlays={},**value).validate()
             except ValueError as exc: raise DayScheduleError(int(day),exc) from exc
-        for value in self.game_overlays.values():
-            replace(self,weekend_enabled=False,weekend_schedule={},daily_schedules={},game_overlays={},**value).validate()
+        for value in (*self.game_overlays.values(),*self.counter_overlays.values(),*self.activity_overlays.values()):
+            replace(self,weekend_enabled=False,weekend_schedule={},daily_schedules={},game_overlays={},counter_overlays={},activity_overlays={},**value).validate()
         from .notification_text import KINDS,MAX_MESSAGE_LENGTH
         if (not isinstance(self.notification_messages,dict) or any(kind not in KINDS for kind in self.notification_messages)
                 or any(not isinstance(value,str) or len(value)>MAX_MESSAGE_LENGTH or '\0' in value for value in self.notification_messages.values())):

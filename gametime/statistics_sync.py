@@ -314,6 +314,7 @@ class StatisticsData:
     def activity_history_by_computer(self, start, end, group, scope='all', category='all', local_name=''):
         """Return local and imported daily activity without republishing imports."""
         from .focus import BROWSERS
+        from .activity_identity import is_idle_app
         rows = [(*row, 'local', local_name or computer_name())
                 for row in self.focus.history(start, end, category)] if self.focus and scope in ('all', 'local') else []
         if not group or scope == 'local': return rows
@@ -325,7 +326,7 @@ class StatisticsData:
         if scope != 'all': sql += ' AND a.device_id=?'; args.append(scope)
         by_device = {}
         for day, kind, item, name, seconds, identity, device_name in self.store.db.execute(sql, args):
-            if kind == 'app' and self.focus and self.focus.settings.app_excluded(item): continue
+            if kind == 'app' and (is_idle_app(item) or self.focus and self.focus.settings.app_excluded(item)): continue
             by_device.setdefault((identity, device_name), []).append((day, kind, item, name, seconds))
         for (identity, device_name), items in by_device.items():
             apps = [(day, 'activity:app:'+item, name, 'Application', seconds) for day, kind, item, name, seconds in items if kind == 'app']

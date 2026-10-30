@@ -1,5 +1,7 @@
 # Architecture
 
+Notifications share title/icon selection across desktop and fullscreen rendering. The Notifications page owns immediate fullscreen and protected-game display switches; the latter is a versioned, local-only opt-in, separate from legacy per-game image-preview/minimization consent. Revocation stops active displays and clears RTSS authorizations. Desktop reminders keep a native close/drag title bar and reject mouse activation, preserving foreground keyboard input. Combo popups are positioned before Show, with the language selector opening upwards; cursor changes are event-driven.
+
 Statistics defaults to Everything, with one daily bar split by computer and activity. Category, period and computer are independent filters; custom calendar drafts apply explicitly and live refresh uses the committed range. The chart retains every activity and full report totals. A day selector and searchable ranking replace the permanent day sidebar, and irrelevant table columns hide automatically. Computer/sync management is collapsible. The Focus page contains the timer and blacklist; application and website history lives in Statistics. Focus ticks do not query activity history. The visible blacklist reuses its items until settings or language change. Launchers are a collapsed library panel, loaded only when opened or explicitly refreshed; the old internal navigation index redirects to that panel.
 
 The visible product name is Keep Improving. Executable/profile paths, instance
@@ -21,7 +23,7 @@ the desktop always sends blocklist policy in the existing extension wire shape.
 
 `focus.py` owns a separate local activity ledger and Pomodoro state in the existing
 profile. It reuses the one-second foreground sample, validates awake/wall-clock
-continuity, splits at midnight and buffers writes for ten seconds. Idle detection
+continuity, splits at the shared local day boundary and buffers writes for ten seconds. Idle detection
 uses GetLastInputInfo without reading input contents. Activity never becomes a
 game catalog entry or contributes to game quotas/cloud payloads. Timer state
 checkpoints resume paused after restart; work starts breaks automatically, while
@@ -72,7 +74,7 @@ manifest is a release output and is published with the source, canonical
 installer, checksum and README changes. Its SHA-256 is integrity metadata,
 not a substitute for a separately trusted publisher signature.
 
-`budget.py` computes remaining time from the unused calendar-day quota and an
+`budget.py` computes remaining time from the unused daily quota and an
 optional bedtime deadline. `bedtime_caps_budget` defaults false and is a local
 per-day schedule field, editable with the existing grouped-day controls. The
 owning reminder day retains its bedtime and resume window across midnight;
@@ -81,7 +83,7 @@ Absolute timestamps handle overnight UTC-offset changes, including native
 samples with a fixed current local offset. The Hub, tray and desktop/RTSS HUD
 share the calculation; bedtime warning phase can select the warning palette.
 Synthetic normal/warning previews retain their sample states. Measured usage,
-quota alert keys, restriction grants and calendar-day statistics are unchanged.
+quota alert keys, restriction grants and historical daily aggregates are retained.
 Existing warning-message remaining tokens use the capped value. The option
 adds no timer, background scan, database table or synchronization field.
 
@@ -99,23 +101,22 @@ no added healthy-state polling or catalog reads.
 `overlay_consent.py` stores explicit local risk acknowledgements separately from
 countdown drafts, keyed by a hash of game ID and normalized install location.
 Only current-version, explicitly accepted records with a UTC timestamp authorize
-protected overlays/previews. The modal confirmation has an unchecked checkbox
+protected image previews. The page-wide display permission uses its own local
+record for countdowns and notifications. The modal confirmation has an unchecked checkbox
 and disabled enable button; cancellation/Enter does not save permission.
 Revocation clears active previews, cached image authorization and pending RTSS
 preparation. Capture threads use an immutable consent snapshot, never SQLite.
 The RTSS backend authorizes exact discovered paths and blocks known basename
-collisions unless every protected game involved has consent; exclusions do not
+collisions when another known game is excluded or uncheckable; exclusions do not
 hide such collisions. Revocation disables the per-EXE hook and drains that work
 during shutdown. No consent is synchronized, and it never authorizes automatic
 Escape or anti-cheat helper processes. Invalid/unreadable installation checks
 remain blocked.
 
-The per-game editor hides countdown mode, colors, position, size, image controls,
-preview and save/reset actions while permission is denied. Only game selection,
-the reason, the consent action when applicable, and cancel remain available.
-Granting/revoking consent updates visibility in place without rebuilding controls
-or losing another game's drafts. Merely viewing a blocked game does not rewrite
-its saved countdown preferences.
+The per-game editor allows appearance drafts while protected-game display is
+off, but disables the live preview. It links to the Notifications page switch.
+Image-preview permission remains separate. Uncheckable installations still hide
+the controls. Merely viewing a game does not rewrite its saved preferences.
 
 Countdown game selectors include only installed catalog entries. Manual
 availability and launcher/Games discovery notify open editors when inventory
@@ -145,7 +146,7 @@ and RTSS countdowns, game-image capture, preview activation and automatic Escape
 Known IDs/names and bounded shallow installation-marker probes deny protected
 games; unavailable/incomplete/network-root inspection fails closed. Results are
 cached for up to 60 seconds, without recursive asset scanning or game-memory
-inspection. Runtime gates override enabled global/per-game drafts unless current per-game risk consent explicitly authorizes the overlay/preview. Warning
+inspection. Runtime gates override enabled global/per-game drafts unless current local display consent explicitly authorizes the countdown; image capture has separate per-game consent. Warning
 popups remain available, and anti-cheat helpers are rejected before EXE rules.
 New profiles default RTSS to off; saved choices remain subject to the gate.
 The RTSS worker revokes known protected per-EXE hooking/OSD profiles before
@@ -209,9 +210,17 @@ by local recording date. Legacy Saturday/Sunday settings remain a fallback.
 changed fields, while an explicit copy action unifies a selected group. Saving
 a schedule edit preserves all effective day plans before retiring the legacy
 weekend switch. Unedited schedules are never materialized by unrelated saves.
+The settings and budget pages expose an explicit Back without saving action.
+Cancelling a budget editor restores only that budget from saved settings (or
+removes its unsaved creation), including its weekly schedule; drafts for other
+budgets and the general settings page remain intact. Cancelling the budget list
+discards all budget drafts. General-settings cancellation resets its own fields
+and returns to the originating page without changing saved configuration.
+Countdown, message and focus editors also expose a top-level back action; their
+existing reject/cancel cleanup releases previews without committing drafts.
 Bedtime windows retain their reminder day's plan
 through their own resume time, including overlapping next-day reminders; daily
-foreground accounting still splits at midnight. `sound.py` uses asynchronous
+foreground accounting still splits at the shared local day boundary. `sound.py` uses asynchronous
 Windows aliases or a user-selected WAV, with silent mode and a default-sound
 fallback; it adds no playback process or polling. `qt_personalization.py` edits
 per-game countdown drafts without overwriting other unsaved
@@ -284,6 +293,8 @@ The one-second tracker continues while the Hub is hidden/minimized, including al
 | `qt_ui.py`, `qt_widgets.py` | Default Qt library/settings, responsive painted cards, local artwork, independent alerts/removal dialogs and lifecycle. |
 | `clients.py` | Background installed-client discovery, validated persistent launcher cache and explicit revalidated client opening, independent of game budgets. The page loads cached clients on its first visit; discovery runs only without a valid cache or on explicit refresh, with no periodic rescan. |
 | `artwork.py` | Bounded local asset lookup and thumbnail decoding on a worker; no widget/pixmap, game execution or archive extraction. |
+| `activity_identity.py`, `activities.py` | Portable application identity by executable name (including named, versioned installers), website identity without the `www.` alias, and one library entry across local installations and the active linked-computer group. Historical paths and usage stay intact. Legacy appearance keys and budget paths resolve to the same activity. |
+| `qt_activity_icons.py` | Executable/package-logo icons and asynchronous HTTPS favicons, including self-contained static SVGs. Preload the entire open activity list, prioritize visible rows, reuse surviving installations and the persistent image cache, and retain icons while scrolling. Only changed icons repaint; two concurrent requests, bounded decoding, and immediate pause on hide/minimize. |
 | `controller.py` | Shared UI-neutral tracking/discovery/tray/launch actions; all callbacks use the GUI scheduler. |
 | `overlay.py` | Unparented, translucent, non-activating countdown and the Hub's draggable position editor. |
 | `ui.py`, `statistics_ui.py` | Retained Tk regression fixtures; not imported by the production entry point or collected into the binary. |
@@ -412,3 +423,36 @@ thresholds. Swatch icons update only on explicit palette changes; language
 changes reuse them. Empty messages and white/red defaults retain old behavior.
 Personalization remains in local settings; current encrypted snapshots can also
 include message text and colors. Diagnostics expose only a message count.
+
+### Universal day boundary
+
+`Settings.budget_reset_minute` defines one local start time for every day (00:00
+by default). The per-page gear menus expose a single “Day starts at” dialog.
+Game, application and website intervals, shared and per-game allowances, focus
+completions and daily reminder keys use this boundary. Today/yesterday and live
+statistics use the same logical date. Legacy weekday reset overrides remain
+readable but no longer override the universal time; weekday limits still apply.
+Bedtime and scheduled messages retain their wall-clock times, with weekday
+plans selected by the shared day. Settings edits preserve consumed allowances
+and delivered reminders. Existing daily history is not re-bucketed because it
+contains no interval timestamps. The encrypted preferences payload reuses its
+existing field; no server schema or history payload change is needed.
+
+### Multi-stage restrictions (2.35.0)
+
+`restriction_policy` validates local per-budget plans and owns the SQLite ledger
+for expiry, delivered warnings and the once-per-logical-day save allowance.
+Grant transactions recheck consumption under an immediate transaction. Game
+identity merges and day-boundary edits preserve consumed rights. Custom plans
+replace only the corresponding budget's legacy enforcement; focus remains
+independent. `qt_restrictions` reuses the foreground sampler and existing game
+countdown renderers. Closures run off the GUI thread and bind to a verified
+process handle. `restriction_audio` owns target Core Audio session mutes in a
+short-lived child; pipe EOF restores them when the GUI exits or crashes.
+
+The Chromium extension redirects matching tabs to its block page, retaining
+return URLs only in browser session storage. The authenticated loopback bridge
+accepts domain/token allowance requests, queued to the GUI thread for SQLite
+access. DNR grants are scoped to the requesting tab and domain, and never bypass
+another active budget or focus policy. See the [restriction guide](docs/RESTRICTION-PLAN.hu.md)
+for behavior, fullscreen fallback and native audio/anti-cheat limitations.

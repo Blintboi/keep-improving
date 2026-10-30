@@ -51,7 +51,10 @@ def configure_profile(server, executable, *, consented=False):
     if target.exists(): parser.read(target, encoding="mbcs")
     changed=False
     for section, values in {
-        "Hooking": {"EnableHooking": "1"},
+        # Override RTSS's inherited startup delay only for this eligible game.
+        # Prepare known profiles before launch so its first rendered frames can
+        # show the countdown without waiting for a later retry window.
+        "Hooking": {"EnableHooking": "1", "InjectionDelay": "0"},
         "OSD": {"EnableOSD": "1", "EnableBgnd": "0", "EnableFill": "0", "EnableStat": "0",
                 "ZoomRatio": "1", "CoordinateSpace": "1"},
     }.items():
@@ -166,7 +169,8 @@ class Backend:
         self.approved=frozenset()
         self._withdrawn=True; self._published_pid=0
         self._fallback_identity=''; self._unhealthy_since=None
-        self._generation=0
+        self._retry_at=0; self._retry_count=0
+        self._generation=0; self._result_state=None
 
     @property
     def desktop_ready(self):
@@ -179,6 +183,21 @@ class Backend:
     def fallback_for(self,identity):
         with self.condition:
             return self._withdrawn and self._fallback_identity==identity and self.state is not None and self.state[1]==identity
+
+    def retry_due(self,identity):
+        """The GUI must hide its desktop copy before opting into another attempt."""
+        with self.condition:
+            return bool(self._withdrawn and self._fallback_identity==identity and self.state
+                        and self.state[1]==identity and time.monotonic()>=self._retry_at)
+
+    def _fallback(self,identity):
+        # Called with the condition held. A delayed hook or renderer reset must
+        # not disable the OSD for the rest of this process's lifetime.
+        if self._fallback_identity!=identity:
+            self._retry_at=time.monotonic()+min(30,5*2**min(self._retry_count,3))
+            self._retry_count+=1
+            log.info('RTSS renderer unavailable; retry scheduled: identity=%s',identity)
+        self._fallback_identity=identity
 
     def authorize(self,executables):
         """Exact paths derived from explicit per-game consent on the GUI thread."""
@@ -259,7 +278,7 @@ class Backend:
         # its tray icon; invoking RTSS again can disturb that icon/session.
         if not server_running() and process_running(server) is False: start_server(server)
 
-    def present(self, executable, identity, text, position=None):
+    def present(self, executable, identity, text, position=None, *, require_current=False, retry=False):
         consented=norm(executable) in self.approved
         reason=safety.overlay_reason(executable,consented=consented)
         if Path(executable).name.casefold() in self.denied_names and not consented: reason=reason or PROTECTED
@@ -270,15 +289,23 @@ class Backend:
             if self.identity!=identity:
                 self._generation+=1; self.result=('',False,0,'')
                 self._fallback_identity=''; self._unhealthy_since=None
-            self.identity = identity; self.state = (executable, identity, text, position)
+                self._retry_at=0; self._retry_count=0
+            if retry and self.retry_due(identity):
+                self._generation+=1; self.result=('',False,0,''); self._result_state=None
+                self._fallback_identity=''; self._unhealthy_since=None
+                self.failed_paths.discard(norm(executable))
+            next_state=(executable, identity, text, position)
+            if self.state!=next_state: self._result_state=None
+            self.identity = identity; self.state = next_state
             self._start_worker()
             prior, healthy, timestamp, self.error = self.result
             fallback=self._fallback_identity==identity
+            current_result=self._result_state==self.state
             self.condition.notify()
         now = time.monotonic()
         if self.operation_started and now - self.operation_started > 3:
             self.terminate_bridge(); return False
-        return not fallback and prior == identity and healthy and now - timestamp <= 1.5
+        return not fallback and prior == identity and healthy and now - timestamp <= 1.5 and (not require_current or current_result)
 
     def terminate_bridge(self):
         process = self.process
@@ -340,13 +367,13 @@ class Backend:
                     executable, identity, text, position = state; key = norm(executable)
                     if key in self.failed_paths:
                         with self.condition:
-                            if self._generation==generation and self.state==state: self._fallback_identity=identity
+                            if self._generation==generation and self.state==state: self._fallback(identity)
                         continue
                     server = self.server or installation(); self.server=server
                     if not server: raise OSError("Install RTSS 7.3.7 or newer first.")
                     if not self.configure(server,executable):
                         with self.condition:
-                            if self._generation==generation and self.state==state: self._fallback_identity=identity
+                            if self._generation==generation and self.state==state: self._fallback(identity)
                         continue
                     with self.condition:
                         if self.stopping or self._generation!=generation or self.state != state: continue
@@ -369,11 +396,12 @@ class Backend:
                     with self.condition:
                         if self._generation!=generation or self.state!=state: continue
                         now=time.monotonic(); healthy=bool(reply.get('healthy'))
-                        self.result = (identity, healthy, now, reply.get("error", ""))
-                        if healthy: self._unhealthy_since=None
+                        self.result = (identity, healthy, now, reply.get("error", "")); self._result_state=state
+                        if healthy:
+                            self._unhealthy_since=None; self._retry_count=0
                         else:
                             if self._unhealthy_since is None: self._unhealthy_since=now
-                            elif now-self._unhealthy_since>=1.5: self._fallback_identity=identity
+                            elif now-self._unhealthy_since>=1.5: self._fallback(identity)
                 except Exception as exc:
                     if protection:
                         self.protection_error='Could not disable protected RTSS profiles. RTSS countdown is disabled.'
@@ -382,7 +410,7 @@ class Backend:
                     with self.condition:
                         if self._generation==generation and self.state==state:
                             self.result = ("", False, 0, error)
-                            if state is not None: self._fallback_identity=state[1]
+                            if state is not None: self._fallback(state[1])
                     if error != self.error: log.warning("RTSS countdown: %s", error)
                     self.error = error
                 finally: self.operation_started = 0; last_state = state
@@ -400,8 +428,9 @@ class Backend:
     def hide(self):
         with self.condition:
             if self.state is not None: self._generation+=1
-            self.state = None; self.identity = ""; self.result = ("", False, 0, "")
+            self.state = None; self.identity = ""; self.result = ("", False, 0, ""); self._result_state=None
             self._fallback_identity=''; self._unhealthy_since=None; self.condition.notify()
+            self._retry_at=0; self._retry_count=0
 
     def close(self):
         self.hide()

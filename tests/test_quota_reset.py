@@ -1,4 +1,4 @@
-"""Per-day quota renewal must not alter calendar history or grant time on edits."""
+"""Universal day boundaries preserve history and consumed budgets on edits."""
 from dataclasses import replace
 from datetime import datetime, date, timedelta
 from pathlib import Path
@@ -34,35 +34,36 @@ class QuotaResetTests(unittest.TestCase):
             with self.subTest(value=value),self.assertRaises(ValueError): replace(Settings(),budget_reset_minute=value).validate()
             with self.subTest(day=value),self.assertRaises(ValueError): replace(Settings(),daily_schedules={'1':{'budget_reset_minute':value}}).validate()
 
-    def test_weekend_can_renew_later_and_owns_its_plan_only_after_renewal(self):
+    def test_weekday_plan_changes_at_the_universal_boundary(self):
         settings=replace(self.settings,daily_schedules={'5':{'budget_reset_minute':480,'limit_seconds':10800,'warning_seconds':9000}})
-        before=datetime(2026,10,24,7,59,59); at=before+timedelta(seconds=1)
+        before=datetime(2026,10,24,5,59,59); at=before+timedelta(seconds=1)
         self.assertEqual(period_day(before,reset_clock(settings)),date(2026,10,23))
         self.assertEqual(quota_plan(settings,before).limit_seconds,7200)
         self.assertEqual(quota_plan(settings,at).limit_seconds,10800)
         legacy=replace(Settings(),weekend_enabled=True,weekend_schedule={'budget_reset_minute':480})
-        self.assertEqual(reset_clock(legacy),(0,0,0,0,0,480,480))
+        self.assertEqual(reset_clock(legacy),(0,)*7)
 
-    def test_midnight_preserves_quota_and_splits_only_calendar_history(self):
+    def test_midnight_keeps_both_history_and_quota_on_the_previous_day(self):
         self.tracker._credit(self.game,self.now,self.now+timedelta(seconds=2),2)
         self.assertEqual(self.used(self.now+timedelta(seconds=2)),2)
         self.tracker.flush()
-        self.assertEqual(self.store.totals('2026-10-23'),{'fixture':1})
-        self.assertEqual(self.store.totals('2026-10-24'),{'fixture':1})
+        self.assertEqual(self.store.totals('2026-10-23'),{'fixture':2})
+        self.assertEqual(self.store.totals('2026-10-24'),{})
         self.assertEqual(self.store.budget_totals('2026-10-23'),{'fixture':2})
 
     def test_fractional_interval_splits_at_the_selected_reset(self):
         start=datetime(2026,10,24,5,59,59,500000); end=start+timedelta(seconds=2)
         self.tracker._credit(self.game,start,end,2)
         self.assertEqual(self.used(start),.5); self.assertEqual(self.used(end),1.5)
-        self.assertEqual(sum(self.tracker.totals('2026-10-24').values()),2)
+        self.assertEqual(sum(self.tracker.totals('2026-10-23').values()),.5)
+        self.assertEqual(sum(self.tracker.totals('2026-10-24').values()),1.5)
         self.assertEqual(list(period_slices(start,end,2,reset_clock(self.settings))),[('2026-10-23',.5),('2026-10-24',1.5)])
 
-    def test_weekend_later_reset_does_not_renew_at_weekday_time(self):
+    def test_legacy_weekday_override_does_not_change_universal_reset(self):
         self.catalog.settings=replace(self.settings,daily_schedules={'5':{'budget_reset_minute':480}})
         self.tracker._credit(self.game,self.now,self.now+timedelta(seconds=2),2)
-        self.assertEqual(self.used(datetime(2026,10,24,6)),2)
-        start=datetime(2026,10,24,7,59,59)
+        self.assertEqual(self.used(datetime(2026,10,24,5,59)),2)
+        start=datetime(2026,10,24,5,59,59)
         self.tracker._credit(self.game,start,start+timedelta(seconds=2),2)
         self.assertEqual(self.used(start),3)
         self.assertEqual(self.used(start+timedelta(seconds=2)),1)
@@ -115,7 +116,7 @@ class QuotaResetTests(unittest.TestCase):
         self.store.db.execute('DROP TRIGGER reject_budget'); self.tracker.flush()
         self.assertEqual(self.store.budget_totals('2026-10-23'),{'fixture':1})
 
-    def test_catalog_id_merge_preserves_quota_and_cloud_history_stays_calendar_based(self):
+    def test_catalog_id_merge_and_cloud_history_keep_the_shared_day(self):
         from gametime.statistics_sync import StatisticsData
         self.catalog.games[self.game.id]=self.game
         self.tracker._credit(self.game,self.now,self.now+timedelta(seconds=2),2); self.tracker.flush()
@@ -123,7 +124,7 @@ class QuotaResetTests(unittest.TestCase):
         self.tracker.budget_cache.clear()
         self.assertEqual(self.tracker.quota_totals(self.now+timedelta(seconds=2)),{'renamed':2})
         snapshot=StatisticsData(self.store).snapshot('b'*32,'Fixture')
-        self.assertEqual({row[0] for row in snapshot['rows']},{'2026-10-23','2026-10-24'})
+        self.assertEqual({row[0] for row in snapshot['rows']},{'2026-10-23'})
         self.assertNotIn('budget_',str(snapshot))
 
     def test_bedtime_cap_still_wins_even_when_the_new_quota_arrives_before_resume(self):
@@ -147,25 +148,54 @@ class QuotaResetInterfaceTests(unittest.TestCase):
         setUpClass=classmethod(fixtures.QtInterfaceTests.setUpClass.__func__)
         setUp=fixtures.QtInterfaceTests.setUp; tearDown=fixtures.QtInterfaceTests.tearDown; pump=fixtures.QtInterfaceTests.pump
 
-    def test_reset_time_uses_day_groups_mixed_values_and_language_preserves_draft(self):
+    def test_universal_dialog_saves_only_day_start_and_cancel_discards(self):
         from PySide6.QtCore import QTime
-        editor=self.app.schedule_editor
-        self.assertEqual(editor.budget_reset.time(),QTime(0,0))
-        editor.select_days((0,1)); editor.budget_reset.setTime(QTime(6,0))
-        editor.select_days((1,2)); self.assertFalse(editor._mixed['budget_reset_minute'].isHidden())
-        self.app.set_language('en'); self.assertEqual(editor._selected,{1,2})
-        editor.select_days((0,1)); self.app.save_settings()
-        plans=self.store.settings().daily_schedules
-        self.assertEqual(plans['0']['budget_reset_minute'],360); self.assertEqual(plans['1']['budget_reset_minute'],360)
-        self.assertEqual(plans['2']['budget_reset_minute'],0)
+        from PySide6.QtWidgets import QPushButton
+        from gametime.qt_widgets import NoWheelTimeEdit
+        from gametime.qt_day_start import day_start_dialog
+        self.assertNotIn('budget_reset_minute',self.app.schedule_editor._fields)
+        window=day_start_dialog(self.app)
+        edit=window.findChild(NoWheelTimeEdit,'DayStartTime'); edit.setTime(QTime(1,0))
+        window.reject(); self.assertEqual(self.store.settings().budget_reset_minute,0)
+        # An unrelated schedule draft must survive saving this global setting.
+        self.app.schedule_editor.limit.setValue(180)
+        window=day_start_dialog(self.app)
+        edit=window.findChild(NoWheelTimeEdit,'DayStartTime'); edit.setTime(QTime(1,0))
+        save=next(b for b in window.findChildren(QPushButton) if b.text()=='Mentés'); save.click()
+        self.assertEqual(self.store.settings().budget_reset_minute,60)
+        self.assertEqual(self.store.settings().limit_seconds,7200)
+        self.assertEqual(self.app.focus.day_start_minute,60)
+        self.app.save_settings()
+        self.assertEqual(self.store.settings().budget_reset_minute,60)
+        self.assertEqual(self.store.settings().limit_seconds,10800)
 
-    def test_failed_save_keeps_reset_time_draft_and_profile_unchanged(self):
+    def test_failed_day_start_save_keeps_draft_and_profile_unchanged(self):
         from PySide6.QtCore import QTime
-        self.app.schedule_editor.budget_reset.setTime(QTime(8,30))
-        with patch.object(self.store,'save_settings',side_effect=OSError('fixture')): self.app.save_settings()
+        from PySide6.QtWidgets import QPushButton
+        from gametime.qt_widgets import NoWheelTimeEdit
+        from gametime.qt_day_start import day_start_dialog
+        window=day_start_dialog(self.app)
+        edit=window.findChild(NoWheelTimeEdit,'DayStartTime'); edit.setTime(QTime(1,0))
+        save=next(b for b in window.findChildren(QPushButton) if b.text()=='Mentés')
+        with patch.object(self.store,'save_settings',side_effect=OSError('fixture')): save.click()
+        self.assertTrue(window.isVisible()); self.assertEqual(edit.time(),QTime(1,0))
         self.assertEqual(self.store.settings().budget_reset_minute,0)
-        self.assertEqual(self.app.schedule_editor.budget_reset.time(),QTime(8,30))
-        self.app.save_settings(); self.assertEqual(self.store.settings().budget_reset_minute,510)
+        save.click(); self.assertEqual(self.store.settings().budget_reset_minute,60)
+
+    def test_statistics_today_yesterday_and_live_rollover_use_one_am(self):
+        from gametime.quota import current_day
+        settings=replace(self.app.settings,budget_reset_minute=60)
+        self.app.settings=self.app.catalog.settings=settings
+        before=current_day(settings,datetime(2026,11,1,0,59,59))
+        after=current_day(settings,datetime(2026,11,1,1))
+        page=self.app.statistics
+        with patch('gametime.qt_statistics.current_day',return_value=before):
+            page.period.setCurrentIndex(page.period.findData('today')); page.choose_period()
+            self.assertEqual(page._range,('2026-10-31','2026-10-31'))
+            self.assertEqual(page.period_dates('yesterday'),('2026-10-30','2026-10-30'))
+        with patch('gametime.qt_statistics.current_day',return_value=after):
+            page.refresh(live=True)
+            self.assertEqual(page._range,('2026-11-01','2026-11-01'))
 
     def test_hub_tray_and_restriction_keep_previous_budget_after_midnight(self):
         wall=datetime(2026,10,23,23,59)

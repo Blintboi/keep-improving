@@ -1,4 +1,4 @@
-"""Optional bedtime cap on displayed time; measured usage stays calendar-based."""
+"""Optional bedtime cap on displayed time, using the shared day boundary."""
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from .schedule import day_settings, bedtime_occurrence
@@ -33,6 +33,7 @@ class RemainingBudget:
 
 
 def _deadline(day, plan, wall):
+    day+=timedelta(days=plan.bedtime_warning_minute<plan.budget_reset_minute)
     # Bedtimes after midnight belong to the day their reminder starts.
     minutes = plan.bedtime_warning_minute + (plan.bedtime_minute - plan.bedtime_warning_minute) % 1440
     value = datetime.combine(day, time.min) + timedelta(minutes=minutes)
@@ -45,8 +46,8 @@ def _deadline(day, plan, wall):
 
 def remaining_budget(settings, wall, used):
     plan = quota_plan(settings, wall)
-    quota = max(0, plan.limit_seconds - used)
-    warning = used >= plan.warning_seconds
+    quota = max(0, plan.limit_seconds - used) if settings.game_budget_enabled else float('inf')
+    warning = settings.game_budget_enabled and used >= plan.warning_seconds
     # No date searches or extra work for existing profiles with this option off.
     if not (settings.bedtime_caps_budget
             or settings.weekend_enabled and settings.weekend_schedule.get('bedtime_caps_budget')
@@ -58,7 +59,7 @@ def remaining_budget(settings, wall, used):
     else:
         candidates = []
         for offset in (-1, 0, 1):
-            day = wall.date() + timedelta(days=offset)
+            day = period_day(wall,reset_clock(settings)) + timedelta(days=offset)
             night = day_settings(settings, day)
             if night.bedtime_enabled:
                 deadline = _deadline(day, night, wall)

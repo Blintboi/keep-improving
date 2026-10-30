@@ -5,6 +5,7 @@ from datetime import datetime,timedelta
 from pathlib import Path
 import ctypes
 import logging
+import math
 import os
 import time
 import uuid
@@ -23,7 +24,7 @@ from .tracker import Tracker
 from .hub import HubWorker
 from .i18n import tr,LANGUAGES
 from . import win32,__version__
-from .qt_widgets import STYLE,ACCENT,MUTED,label,button,panel,separator,glyph,duration,BudgetRing,LocalArtwork,CardGrid,GameCard,normalize_icon
+from .qt_widgets import STYLE,ACCENT,MUTED,label,button,back_button,panel,separator,glyph,duration,BudgetRing,LocalArtwork,CardGrid,GameCard,normalize_icon,Disclosure,CursorGuard
 from .qt_widgets import (NoWheelComboBox as QComboBox,NoWheelDoubleSpinBox as QDoubleSpinBox,
     NoWheelTimeEdit as QTimeEdit,NoWheelSlider as QSlider)
 from .qt_statistics import StatisticsPage
@@ -36,12 +37,14 @@ from .statistics_cloud import CloudSyncWorker,SERVICE_URL,SYNC_COOLDOWN
 from .statistics_auth import AuthWorker
 from .schedule import day_settings,game_settings,any_countdown,bedtime_occurrence,DayScheduleError,DAY_NAMES
 from .budget import remaining_budget,quota_plan,game_remaining,gameplay_budget
-from .quota import reset_clock,period_day,reset_at
+from .quota import reset_clock,period_day,reset_at,current_day
 from .sound import play_notification
 from .game_preview import SnapshotWorker,running_window
 from .qt_game_preview import background_controls
+from .wellbeing import Wellbeing
+from .qt_wellbeing_runtime import WellbeingActions
 from .game_safety import policy as safety
-from .overlay_consent import Consents,MinimizeConsents,overlay_reason
+from .overlay_consent import Consents,MinimizeConsents,display_reason as overlay_reason
 
 log=logging.getLogger(__name__)
 
@@ -57,6 +60,8 @@ def dark_window(widget):
 
 def setup_application():
     app=QApplication.instance() or QApplication([])
+    if not hasattr(app,'_cursor_guard'):
+        app._cursor_guard=CursorGuard(app); app.installEventFilter(app._cursor_guard)
     app.setApplicationName('Keep Improving'); app.setOrganizationName('GameTimeMonitor')
     app.setQuitOnLastWindowClosed(False); app.setStyle('Fusion'); app.setStyleSheet(STYLE)
     app.setFont(QFont('Segoe UI',10)); app.setWindowIcon(QIcon(str(Path(__file__).with_name('app.ico'))))
@@ -115,15 +120,22 @@ class NestedScrollGuard(QObject):
 class AlertDialog(QDialog):
     def __init__(self,owner,passive=False):
         flags=Qt.Dialog|Qt.WindowStaysOnTopHint|Qt.WindowCloseButtonHint
+        # Keep the native title bar: Windows supplies dragging and the close X.
+        # NOACTIVATE permits deliberate mouse interaction without taking the
+        # keyboard away from the current application.
         if passive: flags|=Qt.WindowDoesNotAcceptFocus
         super().__init__(None,flags)
         if passive: self.setAttribute(Qt.WA_ShowWithoutActivating)
         self.owner=owner; self.setObjectName('Surface'); self.setAttribute(Qt.WA_DeleteOnClose)
+    def nativeEvent(self,event_type,message):
+        native=win32.W.MSG.from_address(int(message))
+        if native.message==0x21: return True,3  # WM_MOUSEACTIVATE -> MA_NOACTIVATE
+        return super().nativeEvent(event_type,message)
     def closeEvent(self,event):
         if self.owner.popup_window is self: self.owner.popup_window=self.owner.popup_day=None
         event.accept()
 
-class App(QMainWindow,MonitorActions):
+class App(QMainWindow,MonitorActions,WellbeingActions):
     shutdown=Signal()
 
     def __init__(self,store,data_dir,background=False,service=None,hub=None,updates=False):
@@ -149,6 +161,11 @@ class App(QMainWindow,MonitorActions):
         self.statistics_event_timer=QTimer(self); self.statistics_event_timer.setSingleShot(True)
         self.statistics_event_timer.timeout.connect(self.sync_statistics_event)
         self.tracker=Tracker(store,self.catalog); self.hub=hub or HubWorker(data_dir); self.hub_fingerprint=None
+        self.wellbeing=Wellbeing(store,self.catalog,self.focus)
+        from .qt_restrictions import RestrictionRuntime
+        self.restrictions=RestrictionRuntime(self)
+        self.tracker.before_reconcile=self.wellbeing.flush
+        self.tracker.on_aliases=self.budget_aliases
         self.browser_bridge=None; self._focus_notice=''
         if store.db.execute("SELECT 1 FROM settings WHERE key='browser_pairing'").fetchone(): self.enable_browser_bridge()
         self.service=service or DiscoveryService(self.settings)
@@ -211,11 +228,11 @@ class App(QMainWindow,MonitorActions):
         name=label('Keep Improving'); name.setFont(QFont('Segoe UI',11,QFont.Bold)); brand.addWidget(name,1); side.addLayout(brand)
         side.addSpacing(32)
         self.nav={}
-        for index,text,icon in ((0,'Library','library'),(4,'Focus mode','focus'),(1,'Statistics','stats'),(2,'Settings','settings')):
+        for index,text,icon in ((1,'Overview','stats'),(5,'Time budgets','clock'),(6,'Notifications','bell'),(4,'Focus mode','focus'),(0,'Activities','library')):
             item=button(self.t(text),lambda checked=False,n=index:self.switch_page(n),'nav'); item.setCheckable(True); item.setIcon(glyph(icon)); item.setMinimumHeight(45)
             self.nav[index]=item; side.addWidget(item)
         side.addStretch()
-        self.language=QComboBox()
+        self.language=QComboBox(); self.language.popup_upwards=True
         self.language.setAccessibleName(self.t('Language / Nyelv')); self.language.setToolTip(self.t('Language / Nyelv'))
         self.language.setIconSize(QSize(24,16))
         for name,code in LANGUAGES.items(): self.language.addItem(QIcon(str(Path(__file__).with_name('icons')/f'flag-{code}.svg')),name,code)
@@ -241,6 +258,9 @@ class App(QMainWindow,MonitorActions):
         # Keep the previous internal index stable; client navigation now expands the library panel.
         self.pages.addWidget(QWidget())
         self.focus_page=FocusPage(self); self.pages.addWidget(self.focus_page)
+        self.budget_page=self._build_budget_page(); self.pages.addWidget(self.budget_page)
+        from .qt_notification_list import NotificationsPage
+        self.notifications_page=NotificationsPage(self); self.pages.addWidget(self.notifications_page)
         self.status_label=label(self.status_text,'muted'); self.status_label.setSizePolicy(QSizePolicy.Ignored,QSizePolicy.Fixed)
         self.status_label.setStyleSheet('font-size:11px; padding:8px 32px 12px; color:#7d9395;'); right.addWidget(self.status_label)
         self.status_label.setVisible(time.monotonic()<getattr(self,'_status_until',0))
@@ -253,7 +273,7 @@ class App(QMainWindow,MonitorActions):
         self.statistics._range=(self.statistics.start.text(),self.statistics.end.text())
         self.statistics.selected_day=state.get('day')
         self.statistics.scope=state.get('statistics_scope','all')
-        self.pages.setCurrentIndex(0 if state.get('page')==3 else state.get('page',0))
+        self.pages.setCurrentIndex(0 if state.get('page')==3 else state.get('page',1))
         for i,item in self.nav.items(): item.setChecked(i==self.pages.currentIndex())
 
     def _build_clients(self):
@@ -451,6 +471,7 @@ class App(QMainWindow,MonitorActions):
             if self._sync_event_pending and not self.statistics_event_timer.isActive():
                 self.schedule_statistics_event()
             if changed and self.isVisible() and not self.isMinimized() and self.pages.currentIndex()==1: self.statistics.refresh(live=True)
+            if changed and self.isVisible() and not self.isMinimized() and self.pages.currentIndex()==0: self.refresh_activity_lists()
             self.update_statistics_sync_status()
         if self._preferences_pending: self.apply_synchronized_preferences()
         self.update_statistics_sync_controls()
@@ -460,7 +481,7 @@ class App(QMainWindow,MonitorActions):
 
     def settings_have_draft(self):
         try:
-            proposed=replace(self.schedule_editor.settings(self.settings),games_root=self.games_path.text().strip(),
+            proposed=replace(self.budget_editor.settings(self.schedule_editor.settings(self.settings)),games_root=self.games_path.text().strip(),
                 steam_roots=[p.strip() for p in self.paths['steam'].text().split(';') if p.strip()],
                 epic_manifest_dirs=[p.strip() for p in self.paths['epic'].text().split(';') if p.strip()],
                 ubisoft_roots=[p.strip() for p in self.paths['ubisoft'].text().split(';') if p.strip()],
@@ -471,16 +492,19 @@ class App(QMainWindow,MonitorActions):
 
     def apply_synchronized_preferences(self):
         if not self._preferences_pending or not self.settings.statistics_sync_enabled: return
-        if (self.isVisible() and self.pages.currentIndex()==2) or self.settings_have_draft(): return
+        if (self.isVisible() and self.pages.currentIndex() in (2,5)) or self.settings_have_draft(): return
         if any(window.isVisible() for window in self._dialogs): return
         from .preferences_sync import apply
         try:
-            self.tracker.flush()
+            self.tracker.flush(); self.focus.flush(); self.wellbeing.flush()
+            previous_settings=self.settings
             changed=apply(self.store,self.settings.statistics_sync_group,self.statistics_data.device_id(),self.focus)
             self._preferences_pending=False
             if not changed: return
             previous_language=self.settings.language
             self.settings=self.catalog.settings=self.store.settings()
+            from .qt_day_start import apply_day_start
+            apply_day_start(self,previous_settings)
             self.catalog.overrides=self.store.overrides(); self.hidden_ids=self.store.hidden_ids()
             self.tracker.unclassified.clear(); self.tracker.previous=None; self.service.configure(self.settings)
             self.update_focus_policy(); self.focus_page.refresh(force=True)
@@ -488,6 +512,8 @@ class App(QMainWindow,MonitorActions):
             self.statistics.tracking.setChecked(self.focus.settings.tracking); self.statistics.tracking.blockSignals(blocked)
             old=self.settings_page; replacement=self._build_settings()
             self.pages.insertWidget(2,replacement); self.pages.removeWidget(old); self.settings_page=replacement; old.deleteLater()
+            old_budgets=self.budget_page; replacement=self._build_budget_page()
+            self.pages.insertWidget(5,replacement); self.pages.removeWidget(old_budgets); self.budget_page=replacement; old_budgets.deleteLater()
             if previous_language!=self.settings.language:
                 retranslate_widgets(self,self.settings.language)
                 blocked=self.language.blockSignals(True)
@@ -526,11 +552,21 @@ class App(QMainWindow,MonitorActions):
 
     def _build_library(self,state):
         page=QWidget(); layout=QVBoxLayout(page); layout.setContentsMargins(32,25,24,17); layout.setSpacing(17)
-        top=QHBoxLayout(); top.addWidget(label(self.t('Library'),'title'),1)
-        add=button(self.t('Add'),self.add_manual); add.setToolTip(self.t('Add game')); add.setIcon(glyph('plus','#cee1db',17)); top.addWidget(add); layout.addLayout(top)
+        top=QHBoxLayout(); top.addWidget(label(self.t('Activities'),'title'),1)
+        add=button(self.t('Add'),self.add_activity); add.setIcon(glyph('plus','#cee1db',17)); top.addWidget(add); top.addWidget(self.page_settings_button('activities')); layout.addLayout(top)
+        categories=QHBoxLayout(); categories.setSpacing(6); self.activity_categories={}
+        for kind,title in (('game','Games'),('app','Applications'),('site','Websites')):
+            item=button(self.t(title),lambda checked=False,k=kind:self.select_activity_category(k),'section-link')
+            item.setCheckable(True); item.setAutoExclusive(True); categories.addWidget(item,1); self.activity_categories[kind]=item
+        self.activity_categories['game'].setChecked(True); layout.addLayout(categories)
+        self.activity_pages=QStackedWidget(); layout.addWidget(self.activity_pages,1)
+        games_page=QWidget(); game_layout=QVBoxLayout(games_page); game_layout.setContentsMargins(0,0,0,0); self.activity_pages.addWidget(games_page)
+        from .qt_activities import ActivityList
+        self.activity_lists={kind:ActivityList(self,kind) for kind in ('app','site')}
+        for listing in self.activity_lists.values(): self.activity_pages.addWidget(listing)
         self.scroll=QScrollArea(); self.scroll.setWidgetResizable(True); self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        content=QWidget(); body=QVBoxLayout(content); body.setContentsMargins(0,0,8,0); body.setSpacing(17)
-        self.scroll.setWidget(content); layout.addWidget(self.scroll,1); layout=body
+        content=QWidget(); body=QVBoxLayout(content); body.setContentsMargins(0,0,8,0); body.setSpacing(17); body.setAlignment(Qt.AlignTop)
+        self.scroll.setWidget(content); game_layout.addWidget(self.scroll,1); layout=body
         budget=panel('Budget'); budget_row=QHBoxLayout(budget); budget_row.setContentsMargins(20,14,22,14); budget_row.setSpacing(20)
         self.ring=BudgetRing(); budget_row.addWidget(self.ring)
         self.total_label=label('00:00:00','metric'); self.remaining_label=label('00:00:00','metric')
@@ -553,24 +589,42 @@ class App(QMainWindow,MonitorActions):
         self.source_filter=QComboBox(); self.source_filter.setMinimumWidth(170); self.source_filter.addItem(self.t('All sources'),None); toolbar.addWidget(self.source_filter)
         self.hidden_toggle=QCheckBox(self.t('Show hidden games')); self.hidden_toggle.setToolTip(self.t('Show hidden games (hiding does not stop tracking)')); toolbar.addWidget(self.hidden_toggle)
         self.sort=QComboBox(); self.sort.addItem(self.t('Name: A–Z'),'name'); self.sort.addItem(self.t('Most played today'),'today'); self.sort.setFixedWidth(186); toolbar.addWidget(self.sort); layout.addLayout(toolbar)
-        self.grid=CardGrid(); layout.addWidget(self.grid,1)
+        self.grid=CardGrid(); layout.addWidget(self.grid)
         self.empty=label(self.t('No games match this view.'),'muted'); self.empty.setAlignment(Qt.AlignCenter); self.empty.hide(); layout.addWidget(self.empty)
         self.search.textChanged.connect(self.refresh_view); self.source_filter.currentIndexChanged.connect(self.refresh_view)
         self.hidden_toggle.toggled.connect(self.refresh_view); self.sort.currentIndexChanged.connect(self.refresh_view)
         self._restore_source=state.get('source')
         return page
 
+    def select_activity_category(self,kind):
+        self.activity_pages.setCurrentIndex(('game','app','site').index(kind)); self.activity_categories[kind].setChecked(True)
+        if kind in self.activity_lists: self.activity_lists[kind].refresh()
+        elif hasattr(self,'pages'): self.render()
+
+    def refresh_activity_lists(self):
+        for listing in self.activity_lists.values():
+            if listing.isVisible(): listing.refresh()
+
+    def open_activities(self,kind='game'):
+        self.switch_page(0); self.select_activity_category(kind); self.show()
+
+    def add_activity(self):
+        kind=('game','app','site')[self.activity_pages.currentIndex()]
+        if kind=='game': self.add_manual()
+        else: self.activity_lists[kind].add()
+
     def _build_settings(self):
         page=QWidget(); outer=QVBoxLayout(page); outer.setContentsMargins(32,25,32,22); outer.setSpacing(16)
-        heading=label(self.t('Settings'),'title'); heading.setToolTip('Keep Improving '+__version__); outer.addWidget(heading)
-        intro=label(self.t('Choose a section to find its settings. Changes on this page take effect after Save; separate dialogs have their own save buttons.'),'muted')
-        intro.setWordWrap(True); outer.addWidget(intro)
+        header=QHBoxLayout(); heading=label(self.t('Settings'),'title'); heading.setToolTip('Keep Improving '+__version__); header.addWidget(heading,1)
+        self.settings_back=back_button(self.t,self.cancel_general_settings); header.addWidget(self.settings_back); outer.addLayout(header)
         shortcuts=QHBoxLayout(); shortcuts.setSpacing(6); self.settings_shortcuts={}
-        for key,title in (('schedule','Game time'),('reminders','Reminders'),('countdown','Countdown'),('games','Game folders'),('other','Updates and sync')):
+        for key,title in (('reminders','Reminders'),('games','Game folders'),('other','Updates and sync')):
             item=button(self.t(title),lambda checked=False,k=key:self.show_settings_section(k),'section-link')
+            item.setCheckable(True); item.setAutoExclusive(True)
             item.setAccessibleName(self.t('Go to {section}',section=self.t(title)))
             shortcuts.addWidget(item,1); self.settings_shortcuts[key]=item
         outer.addLayout(shortcuts)
+        for item in self.settings_shortcuts.values(): item.hide()
         scroll=QScrollArea(); scroll.setWidgetResizable(True); outer.addWidget(scroll,1)
         self.settings_scroll=scroll
         body=QWidget(); body_layout=QVBoxLayout(body); body_layout.setContentsMargins(0,0,8,0); body_layout.setSpacing(18); scroll.setWidget(body)
@@ -579,19 +633,17 @@ class App(QMainWindow,MonitorActions):
         self.schedule_editor=WeeklyScheduleEditor(self.settings,self.t)
         for name in ('limit','warning','restriction_enabled','restriction_minutes','bedtime_enabled','bedtime_times','bedtime_minimize','bedtime_controls','bedtime_caps_budget'):
             setattr(self,name,getattr(self.schedule_editor,name))
-        body_layout.addWidget(self.schedule_editor)
-        limits=panel(); limits_layout=QVBoxLayout(limits); limits_layout.setContentsMargins(22,20,22,22); limits_layout.setSpacing(12)
-        limits_layout.addWidget(label(self.t('Per-game limits'),'section'))
-        note=label(self.t('Each game limit is part of the shared daily budget. The overlay shows whichever runs out first.'),'muted'); note.setWordWrap(True); limits_layout.addWidget(note)
-        limits_layout.addWidget(button(self.t('Per-game limits…'),self.game_limits_dialog),0,Qt.AlignLeft); body_layout.addWidget(limits)
+        from .qt_budgets import TimeBudgets
+        self.budget_editor=TimeBudgets(self,self.schedule_editor)
         messages=panel(); message_layout=QVBoxLayout(messages); message_layout.setContentsMargins(22,20,22,22); message_layout.setSpacing(12)
         message_layout.addWidget(label(self.t('Reminder messages'),'section'))
-        note=label(self.t('These messages are shared by all days. The test uses today’s saved bedtime schedule.'),'muted'); note.setWordWrap(True); message_layout.addWidget(note)
-        actions=QHBoxLayout(); actions.addWidget(button(self.t('Custom messages…'),self.custom_messages_dialog))
+        actions=QHBoxLayout(); actions.addWidget(button(self.t('Notifications'),lambda:self.switch_page(6)))
         actions.addWidget(button(self.t('Test bedtime reminder'),self.test_bedtime_popup,'quiet')); actions.addStretch(); message_layout.addLayout(actions); body_layout.addWidget(messages)
         from .qt_personalization import sound_panel
-        body_layout.addWidget(sound_panel(self))
-        countdown=self.build_overlay_settings(); body_layout.addWidget(countdown)
+        sounds=sound_panel(self); body_layout.addWidget(sounds)
+        countdown=self.build_overlay_settings()
+        self.budget_editor.attach_shared_countdown(self.overlay_enabled,countdown)
+        message_layout.addWidget(self.countdown_alerts)
         locations=panel(); places=QVBoxLayout(locations); places.setContentsMargins(22,20,22,22); places.setSpacing(12)
         places.addWidget(label(self.t('Games folder'),'section'))
         browse=QHBoxLayout(); self.games_path=QLineEdit(self.settings.games_root); browse.addWidget(self.games_path,1); browse.addWidget(button(self.t('Browse…'),self.browse_root)); places.addLayout(browse)
@@ -609,29 +661,85 @@ class App(QMainWindow,MonitorActions):
         sync_layout.addWidget(label(self.t('Linked statistics'),'section'))
         self.sync_summary=label(self.statistics_sync_status(),'muted'); self.sync_summary.setWordWrap(True); sync_layout.addWidget(self.sync_summary)
         sync_layout.addWidget(button(self.t('Link computers'),self.statistics_sync_dialog),0,Qt.AlignLeft); body_layout.addWidget(sync)
-        body_layout.addWidget(self.updates.settings_panel()); body_layout.addStretch()
-        self.settings_sections={'schedule':self.schedule_editor,'reminders':messages,'countdown':countdown,'games':locations,'other':sync}
+        updates=self.updates.settings_panel()
+        # A section switch changes visibility only. Unsaved values and widgets
+        # survive navigation, translation and opening optional details.
+        self.settings_sections={}
+        for key,widgets in (('reminders',(sounds,messages)),('games',(locations,)),('other',(sync,updates))):
+            section=QWidget(); section_layout=QVBoxLayout(section); section_layout.setContentsMargins(0,0,0,0); section_layout.setSpacing(16)
+            for widget in widgets: section_layout.addWidget(widget)
+            body_layout.addWidget(section); self.settings_sections[key]=section
+        body_layout.addStretch(); self.show_settings_section('reminders')
         footer=QHBoxLayout(); self.settings_error=label('','danger'); self.settings_error.setWordWrap(True); footer.addWidget(self.settings_error,1)
-        footer.addWidget(button(self.t('Save'),self.save_settings,'primary')); outer.addLayout(footer)
+        footer.addWidget(button(self.t('Save'),lambda:self.save_settings(scope='general'),'primary')); outer.addLayout(footer)
         return page
 
+    def _build_budget_page(self):
+        page=QWidget(); layout=QVBoxLayout(page); layout.setContentsMargins(32,25,32,22); layout.setSpacing(18)
+        heading=QHBoxLayout(); heading.addWidget(label(self.t('Time budgets'),'title'),1); heading.addWidget(self.page_settings_button('budgets')); layout.addLayout(heading)
+        scroll=QScrollArea(); scroll.setWidgetResizable(True); self.budget_scroll=scroll
+        body=QWidget(); content=QVBoxLayout(body); content.setContentsMargins(0,0,8,0)
+        content.addWidget(self.budget_editor); content.addStretch(); scroll.setWidget(body); layout.addWidget(scroll,1)
+        footer=QHBoxLayout(); self.budget_error=label('','danger'); self.budget_error.setWordWrap(True); footer.addWidget(self.budget_error,1)
+        self.budget_back=back_button(self.t,self.cancel_budget_settings); footer.addWidget(self.budget_back)
+        footer.addWidget(button(self.t('Save changes'),self.save_budgets,'primary')); layout.addLayout(footer)
+        return page
+
+    def save_budgets(self):
+        self.budget_editor.collect()
+        missing=next((rule for rule in self.budget_editor.rules if not rule['members']),None)
+        if missing:
+            self.budget_error.setText(self.t('Choose what this budget applies to')); self.budget_editor.show_editor(missing['id']); return
+        self.save_settings(scope='budgets')
+        self.budget_error.setText(self.settings_error.text())
+        if not self.settings_error.text(): self.budget_editor.show_list()
+
+    def cancel_general_settings(self):
+        settings=self.settings
+        self.games_path.setText(settings.games_root)
+        for key,values in (('steam',settings.steam_roots),('epic',settings.epic_manifest_dirs),('ubisoft',settings.ubisoft_roots)):
+            self.paths[key].setText(';'.join(values))
+        self.hub_enabled.setChecked(settings.hub_enabled)
+        self.overlay_warning.setChecked(settings.overlay_replace_warning); self.limit_popup.setChecked(settings.limit_popup_enabled)
+        self.updates.automatic.setChecked(settings.check_updates); self.reset_sound(settings)
+        self.settings_error.clear(); self._overlay_preview_until=0; self.update_overlay()
+        self.switch_page(getattr(self,'_return_pages',{}).get(2,1),remember=False)
+        self.set_status('Changes discarded.')
+
+    def cancel_budget_settings(self):
+        if self.budget_editor.views.currentIndex()==1:
+            self.budget_editor.cancel_edit(); return
+        self.budget_editor.current=None
+        self.schedule_editor.saved(self.settings); self.budget_editor.saved(self.settings)
+        self.budget_editor.show_list()
+        if self.settings_error.text()==self.budget_error.text(): self.settings_error.clear()
+        self.budget_error.clear()
+        self.switch_page(getattr(self,'_return_pages',{}).get(5,1),remember=False)
+        self.set_status('Changes discarded.')
+
     def show_settings_section(self,key):
-        target=self.settings_sections[key]
-        self.settings_scroll.verticalScrollBar().setValue(target.mapTo(self.settings_body,QPoint(0,0)).y())
+        if key=='schedule': self.open_budget(); return
+        if key=='countdown':
+            self.switch_page(5); self.budget_editor.show_shared_appearance(); return
+        for name,section in self.settings_sections.items():
+            section.setVisible(name==key)
+        for name,shortcut in self.settings_shortcuts.items(): shortcut.setChecked(name==key)
+        self.settings_scroll.verticalScrollBar().setValue(0)
 
     def update_bedtime_banner(self,active):
         if self.bedtime_banner.isHidden()==bool(active): self.bedtime_banner.setVisible(active)
 
     def build_overlay_settings(self):
         card=panel(); layout=QVBoxLayout(card); layout.setContentsMargins(22,20,22,22); layout.setSpacing(12)
-        layout.addWidget(label(self.t('Countdown'),'section'))
-        self.overlay_enabled=QCheckBox(self.t('Show while gaming')); self.overlay_enabled.setToolTip(self.t('Show a click-through countdown while gaming')); self.overlay_enabled.setChecked(self.settings.overlay_enabled); layout.addWidget(self.overlay_enabled)
-        layout.addWidget(separator()); layout.addWidget(label(self.t('Countdown notifications'),'section'))
-        self.overlay_warning=QCheckBox(self.t('Warning color instead of early popup')); self.overlay_warning.setChecked(self.settings.overlay_replace_warning); layout.addWidget(self.overlay_warning)
-        self.limit_popup=QCheckBox(self.t('Popup when time expires')); self.limit_popup.setChecked(self.settings.limit_popup_enabled); layout.addWidget(self.limit_popup)
-        test=button(self.t('Test alert'),self.test_popup,'quiet'); test.setIcon(glyph('bell',MUTED,18)); layout.addWidget(test,0,Qt.AlignLeft)
+        layout.addWidget(button(self.t('Back to budget'),lambda:self.budget_editor.show_editor('shared-games'),'quiet'),0,Qt.AlignLeft)
+        layout.addWidget(label(self.t('Games · shared budget'),'section'))
+        self.overlay_enabled=QCheckBox(self.t('Show the shared game countdown')); self.overlay_enabled.setToolTip(self.t('Individual application and website countdowns have their own switches.')); self.overlay_enabled.setChecked(self.settings.overlay_enabled); layout.addWidget(self.overlay_enabled)
+        alerts=Disclosure(self.t('Countdown notifications')); self.countdown_alerts=alerts
+        self.overlay_warning=QCheckBox(self.t('Warning color instead of early popup')); self.overlay_warning.setChecked(self.settings.overlay_replace_warning); alerts.body.addWidget(self.overlay_warning)
+        self.limit_popup=QCheckBox(self.t('Popup when time expires')); self.limit_popup.setChecked(self.settings.limit_popup_enabled); alerts.body.addWidget(self.limit_popup)
+        test=button(self.t('Test alert'),self.test_popup,'quiet'); test.setIcon(glyph('bell',MUTED,18)); alerts.body.addWidget(test,0,Qt.AlignLeft)
+        self.overlay_details=Disclosure(self.t('Position and appearance'))
         self.overlay_controls=QWidget(); controls=QVBoxLayout(self.overlay_controls); controls.setContentsMargins(0,4,0,0); controls.setSpacing(10)
-        controls.addWidget(separator()); controls.addWidget(label(self.t('Position and text size'),'section'))
         fields=QHBoxLayout(); fields.addWidget(label(self.t('Monitor'),'muted')); self.overlay_screen=QComboBox(); fields.addWidget(self.overlay_screen,1); controls.addLayout(fields)
         self.overlay_picker=PositionPicker(self.settings.overlay_x,self.settings.overlay_y,QApplication.primaryScreen(),self.settings.overlay_font_size)
         self.overlay_picker.setAccessibleName(self.t('Countdown position'))
@@ -640,7 +748,8 @@ class App(QMainWindow,MonitorActions):
         self.overlay_screen.setCurrentIndex(max(0,self.overlay_screen.findData(self.settings.overlay_screen)))
         controls.addWidget(self.overlay_picker)
         controls.addWidget(background_controls(self,self.overlay_picker,lambda:None,lambda:self.overlay_screen.currentData(),self.update_overlay_coordinates))
-        hint=label(self.t('Drag the timer or enter its position from the display’s top-left corner. Arrow keys move 1 px; Shift + arrow moves 10 px. Preview shows changes before saving.'),'muted')
+        hint=label(self.t('Drag the countdown to where you want it.'),'muted')
+        self.overlay_picker.setToolTip(self.t('Drag the timer or enter its position from the display’s top-left corner. Arrow keys move 1 px; Shift + arrow moves 10 px. Preview shows changes before saving.'))
         hint.setWordWrap(True); controls.addWidget(hint)
         precise=QHBoxLayout(); precise.setSpacing(14); self.overlay_coordinates=[]
         for axis,text in enumerate(('Horizontal (px)','Vertical (px)')):
@@ -677,14 +786,17 @@ class App(QMainWindow,MonitorActions):
         actions.addWidget(label(self.t('Preview state'),'muted')); actions.addWidget(self.overlay_preview_state)
         actions.addStretch(); actions.addWidget(button(self.t('Reset position'),lambda:self.overlay_picker.set_position(1,0))); controls.addLayout(actions)
         self.overlay_preview_status=label(self.t('Preview brings a running game to the foreground. Alt+Tab ends the preview.'),'muted'); self.overlay_preview_status.setWordWrap(True); controls.addWidget(self.overlay_preview_status)
-        note=label(self.t('Exclusive fullscreen may require RTSS.'),'muted'); note.setToolTip(self.t('The countdown never takes focus or mouse input. Exclusive fullscreen may hide desktop overlays; windowed or borderless mode is more reliable.')); note.setWordWrap(True); controls.addWidget(note)
-        controls.addWidget(button(self.t('In-game countdown (RTSS)…'),self.rtss_dialog,'quiet'),0,Qt.AlignLeft)
-        protection=label(self.t('Protected games need separate risk consent under Per-game countdowns. Without consent, overlays and game images stay off. Automatic Escape stays disabled.'),'muted'); protection.setWordWrap(True); controls.addWidget(protection)
-        self.rtss_status=label('','muted'); self.rtss_status.setWordWrap(True); self.rtss_status.hide(); controls.addWidget(self.rtss_status)
-        layout.addWidget(self.overlay_controls)
-        layout.addWidget(button(self.t('Per-game countdowns…'),self.game_countdown_dialog),0,Qt.AlignLeft)
-        self.overlay_enabled.toggled.connect(self.overlay_controls.setEnabled); self.overlay_enabled.toggled.connect(self.overlay_warning.setEnabled)
-        self.overlay_controls.setEnabled(self.overlay_enabled.isChecked()); self.overlay_warning.setEnabled(self.overlay_enabled.isChecked())
+        advanced=Disclosure(self.t('Fullscreen and protected games'))
+        note=label(self.t('Exclusive fullscreen may require RTSS.'),'muted'); note.setToolTip(self.t('The countdown never takes focus or mouse input. Exclusive fullscreen may hide desktop overlays; windowed or borderless mode is more reliable.')); note.setWordWrap(True); advanced.body.addWidget(note)
+        advanced.body.addWidget(button(self.t('In-game display…'),self.rtss_dialog,'quiet'),0,Qt.AlignLeft)
+        protection=label(self.t('Enable display in anti-cheat games on the Notifications page.'),'muted'); protection.setWordWrap(True); advanced.body.addWidget(protection)
+        self.rtss_status=label('','muted'); self.rtss_status.setWordWrap(True); self.rtss_status.hide(); advanced.body.addWidget(self.rtss_status)
+        self.overlay_details.body.addWidget(self.overlay_controls); layout.addWidget(self.overlay_details)
+        layout.addWidget(alerts); layout.addWidget(advanced)
+        self.overlay_enabled.toggled.connect(self.overlay_controls.setEnabled)
+        self.overlay_controls.setEnabled(self.overlay_enabled.isChecked())
+        self.overlay_details.setVisible(self.overlay_enabled.isChecked())
+        self.overlay_enabled.toggled.connect(self.overlay_details.setVisible)
         return card
 
     def refresh_overlay_screens(self,*args):
@@ -741,11 +853,19 @@ class App(QMainWindow,MonitorActions):
         self.overlay_picker.text_color=self.overlay_colors[self.overlay_preview_state.currentData() or 'warning']; self.overlay_picker.update()
         if refresh: self.update_overlay()
 
+    def scheduled_notifications_dialog(self):
+        from .qt_scheduled_notifications import dialog
+        dialog(self)
+
     def custom_messages_dialog(self):
         from .qt_notifications import messages_dialog
         messages_dialog(self)
 
     def game_countdown_dialog(self,gid=None):
+        if isinstance(gid,str) and gid in self.catalog.games:
+            from .activities import has_budget
+            if not has_budget(self.settings,{'kind':'game','value':gid}):
+                self.open_budget(member={'kind':'game','value':gid}); return
         from .qt_personalization import game_overlay_dialog
         game_overlay_dialog(self,gid if isinstance(gid,str) else None)
 
@@ -761,8 +881,12 @@ class App(QMainWindow,MonitorActions):
         self._overlay_preview_settings=replace(quota_plan(settings),overlay_enabled=True)
         return self.start_overlay_preview(getattr(self,'_overlay_preview_game_id',None))
 
-    def start_overlay_preview(self,gid=None):
-        target=running_window(self.catalog,gid)
+    def preview_counter_overlay(self,settings):
+        self._overlay_preview_settings=replace(settings,overlay_enabled=True)
+        return self.start_overlay_preview(desktop=True)
+
+    def start_overlay_preview(self,gid=None,desktop=False):
+        target=None if desktop else running_window(self.catalog,gid)
         self._overlay_preview_target=None
         self._overlay_preview_source_window=win32.u.GetForegroundWindow()
         self._overlay_preview_focus_until=0
@@ -773,7 +897,7 @@ class App(QMainWindow,MonitorActions):
                 self._overlay_preview_until=0; self.hide_countdown()
                 self.overlay_preview_status.setText(self.t(reason)); return self.t(reason)
             restoring=bool(win32.u.IsIconic(target.hwnd))
-            if not target.activate():
+            if not target.activate(display=True):
                 message=self.t('Could not activate the game. Switch to it and try Preview again.')
                 self.overlay_preview_status.setText(message)
                 self.set_status('Could not activate the game. Switch to it and try Preview again.')
@@ -783,28 +907,24 @@ class App(QMainWindow,MonitorActions):
             if restoring: self._overlay_preview_delay_until=time.monotonic()+.25
             message=self.t('Preview in game: {name}. Alt+Tab ends the preview.',name=self.catalog.games[target.game_id].name)
         else:
-            message=self.t('No running game found. Showing the desktop preview.')
+            message=self.t('Preview shows this countdown on the desktop for 10 seconds.' if desktop else 'No running game found. Showing the desktop preview.')
         self.overlay_preview_status.setText(message)
         self._overlay_preview_until=time.monotonic()+10; self.update_overlay()
         return message
 
     def rtss_dialog(self):
-        window=QDialog(self); window.setWindowTitle(self.t('In-game countdown (RTSS)')); window.resize(660,360)
-        layout=QVBoxLayout(window)
-        automatic=QCheckBox(self.t('Use RTSS for games allowed by anti-cheat protection')); automatic.setChecked(self.settings.overlay_rtss_auto); layout.addWidget(automatic)
-        guard=label(self.t('RTSS is off by default. Protected games also require separate per-game risk consent.')); guard.setWordWrap(True); layout.addWidget(guard)
-        note=label(self.t('Use RTSS to show the countdown in supported fullscreen games. If it is unavailable, the app tries the desktop countdown.')); note.setWordWrap(True); layout.addWidget(note)
-        restart=label(self.t('If a game was already running, save it and restart it once after enabling RTSS.'),'muted'); restart.setWordWrap(True); layout.addWidget(restart)
-        status=label('' if rtss_installation() else self.t('Install RTSS 7.3.7 or newer first.'),'muted'); status.setWordWrap(True); layout.addWidget(status)
-        def save():
-            self.settings=replace(self.settings,overlay_rtss_auto=automatic.isChecked()).validate(); self.catalog.settings=self.settings
-            self.store.save_settings(self.settings); self.rtss.hide(); self.rtss.failed_paths.clear()
-            if not self.settings.overlay_rtss_auto: self.rtss.cancel_preparation()
-            self._rtss_checked=0; self.prepare_rtss_profiles(); self.update_overlay()
-            self.set_status('Settings saved.'); window.accept()
-        layout.addStretch(); actions=QHBoxLayout(); actions.addStretch()
-        actions.addWidget(button(self.t('Save'),save,'primary')); actions.addWidget(button(self.t('Cancel'),window.reject)); layout.addLayout(actions)
-        window.exec()
+        # Existing countdown-editor links now lead to the controls on the page.
+        self.switch_page(6)
+        self.notifications_page.fullscreen.setFocus()
+
+    def apply_display_settings(self):
+        active=getattr(self,'_fullscreen_alert',None)
+        if active: active.finish()
+        self.hide_countdown(); self.rtss.hide(); self.rtss.failed_paths.clear()
+        if not self.settings.overlay_rtss_auto: self.rtss.cancel_preparation()
+        self._fullscreen_retry=None; self._rtss_checked=0
+        self.prepare_rtss_profiles(); self.update_overlay()
+        self.notifications_page.refresh()
 
     def rtss_available(self):
         now=time.monotonic()
@@ -813,7 +933,7 @@ class App(QMainWindow,MonitorActions):
         return self._rtss_available
 
     def refresh_rtss_consent(self,extra=()):
-        if not self.overlay_consents.accepted and not self._rtss_consent_paths: return
+        if not self.overlay_consents.display_enabled and not self._rtss_consent_paths: return
         paths=list(self.catalog.rules)+list(extra)
         for values in self.art.executables.values(): paths.extend(values)
         groups={}; approved=set()
@@ -823,10 +943,10 @@ class App(QMainWindow,MonitorActions):
             name=Path(path).name.casefold()
             groups.setdefault(name,[]).append((path,game))
         for group in groups.values():
-            # RTSS profiles are shared by executable basename. Never let one
-            # consent silently authorize another known game with the same name.
-            if any(safety.reason(path,game) and not self.overlay_consents.allows(game) for path,game in group): continue
-            approved.update(path for path,game in group if self.overlay_consents.allows(game) and not overlay_reason(self.catalog,path,game))
+            # RTSS profiles are shared by executable basename. A global consent
+            # must not override an excluded or uncheckable game with that name.
+            if any(overlay_reason(self.catalog,path,game) or not self.catalog.resolve(path,fallback=False) for path,game in group): continue
+            approved.update(path for path,game in group if self.overlay_consents.display_enabled and not overlay_reason(self.catalog,path,game))
         self._rtss_consent_paths=frozenset(norm(path) for path in approved); self._rtss_consent_attempt=None
         self.rtss.authorize(approved)
 
@@ -862,14 +982,22 @@ class App(QMainWindow,MonitorActions):
         return bool(self.overlay and self.overlay.isVisible() and win32.desktop_overlay_available())
 
     def update_overlay(self):
-        if self.closed: return
+        if self.closed or getattr(self,'_fullscreen_alert',None): return
         preview=time.monotonic()<self._overlay_preview_until
         if not preview: self._overlay_preview_target=None
+        if not preview and self.tracker.active is None:
+            self.update_wellbeing_overlay(); return
         settings=quota_plan(self.settings)
         if preview: settings=getattr(self,'_overlay_preview_settings',None) or replace(settings,**self.overlay_values())
         elif self.tracker.active: settings=game_settings(settings,self.tracker.active.id)
+        from .activities import activity_settings
+        if not preview and self.tracker.active and any(activity_settings(self.settings,{'kind':'game','value':self.tracker.active.id},state.rule).overlay_enabled for state in self.wellbeing.active()):
+            if self.settings.game_overlays.get(self.tracker.active.id,{}).get('overlay_enabled',True):
+                settings=replace(settings,overlay_enabled=True)
         # The one-second tracker starts this timer when gameplay begins. Keep
         # the 200 ms foreground/lock guard while a countdown can be visible.
+        if not preview and self.tracker.previous and self.restrictions.save_remaining(self.tracker.previous.path) is not None:
+            settings=replace(settings,overlay_enabled=True)
         if not settings.overlay_enabled or (not preview and self.tracker.active is None):
             self.overlay_timer.stop()
             self.hide_countdown(); return
@@ -922,11 +1050,20 @@ class App(QMainWindow,MonitorActions):
                 budget=gameplay_budget(self.settings,current.wall,totals,active.id,elapsed)
                 total=sum(totals.values())+elapsed
                 remaining=budget.remaining; warning=budget.warning; automatic=foreground_screen_name()
+                member={'kind':'game','value':active.id}
+                states=[state for state in self.wellbeing_states(current) if activity_settings(self.settings,member,state.rule).overlay_enabled]
+                if states:
+                    other=min(states,key=lambda value:value.remaining)
+                    if other.remaining<=remaining:
+                        remaining=max(0,other.remaining-elapsed); warning=other.warning; settings=activity_settings(settings,member,other.rule)
+                save_remaining=self.restrictions.save_remaining(current.path)
+                if save_remaining is not None: remaining=save_remaining; warning=True
+                if not math.isfinite(remaining): self.overlay_timer.stop(); self.hide_countdown(); return
             screen=choose_screen(settings.overlay_screen,automatic)
             attempted=(not preview or self._overlay_preview_target is not None) and settings.overlay_rtss_auto and self.rtss_available()
             if attempted:
-                if self.overlay_consents.allows(game) and norm(current.path) not in self._rtss_consent_paths:
-                    attempt=(norm(current.path),self.overlay_consents.accepted)
+                if self.overlay_consents.display_enabled and norm(current.path) not in self._rtss_consent_paths:
+                    attempt=(norm(current.path),self.overlay_consents.display_enabled)
                     if self._rtss_consent_attempt!=attempt:
                         self.refresh_rtss_consent((current.path,)); self._rtss_consent_attempt=attempt
                 geometry=screen.geometry(); ratio=screen.devicePixelRatio()
@@ -935,18 +1072,19 @@ class App(QMainWindow,MonitorActions):
                 # Withdraw the desktop first; a failed receipt is not proof that
                 # the RTSS copy has disappeared.
                 fallback=self.rtss.fallback_for(current.identity)
-                if self.overlay and self.overlay.isVisible() and not fallback:
+                retry=fallback and self.rtss.retry_due(current.identity)
+                if self.overlay and self.overlay.isVisible() and (not fallback or retry):
                     self.overlay.hide()
                     self._overlay_desktop_until=time.monotonic()+.2
                     self._overlay_backend='none'; self._overlay_identity=''; self._overlay_updated=0
                     # Let the compositor remove this window before starting IPC
                     # on the next existing guard tick; no extra timer or wait.
                     return
-                if not fallback and time.monotonic()<self._overlay_desktop_until:
+                if (not fallback or retry) and time.monotonic()<self._overlay_desktop_until:
                     self._overlay_backend='none'; self._overlay_identity=''; self._overlay_updated=0
                     return
                 self._rtss_publishing=True
-                healthy=self.rtss.present(current.path,current.identity,text,(settings.overlay_x,settings.overlay_y,round(geometry.width()*ratio),round(geometry.height()*ratio),settings.overlay_font_size))
+                healthy=self.rtss.present(current.path,current.identity,text,(settings.overlay_x,settings.overlay_y,round(geometry.width()*ratio),round(geometry.height()*ratio),settings.overlay_font_size),retry=retry)
                 desktop_ready=self.rtss.desktop_ready
                 self.rtss_status.setText(self.t('RTSS connected' if healthy else self.rtss.error or ('RTSS unavailable; using the desktop countdown.' if desktop_ready else 'RTSS connecting…'))); self.rtss_status.show()
                 if healthy:
@@ -976,16 +1114,24 @@ class App(QMainWindow,MonitorActions):
         value=QFileDialog.getExistingDirectory(self,'Keep Improving',self.games_path.text())
         if value: self.games_path.setText(value)
 
-    def save_settings(self):
+    def save_settings(self,scope='all'):
         try:
-            settings=replace(self.schedule_editor.settings(self.settings),games_root=self.games_path.text().strip(),
+            base=self.settings if scope=='general' else self.budget_editor.settings(self.schedule_editor.settings(self.settings))
+            values=self.overlay_values() if scope=='all' else {}
+            if scope!='budgets': values.update(games_root=self.games_path.text().strip(),
                 steam_roots=[p.strip() for p in self.paths['steam'].text().split(';') if p.strip()],
                 epic_manifest_dirs=[p.strip() for p in self.paths['epic'].text().split(';') if p.strip()],
                 ubisoft_roots=[p.strip() for p in self.paths['ubisoft'].text().split(';') if p.strip()],
                 hub_enabled=self.hub_enabled.isChecked(),
-                check_updates=self.updates.automatic.isChecked(),**self.overlay_values(),**self.sound_values()).validate()
+                overlay_replace_warning=self.overlay_warning.isChecked(),limit_popup_enabled=self.limit_popup.isChecked(),
+                check_updates=self.updates.automatic.isChecked(),**self.sound_values())
+            settings=replace(base,**values).validate()
             self.tracker.flush(); self.store.save_settings(settings); self.settings=self.catalog.settings=settings
-            self.schedule_editor.saved(settings)
+            if scope!='general':
+                self.schedule_editor.saved(settings)
+                self.budget_editor.saved(settings)
+            self._wellbeing_grace=None; self._restriction_grace=None
+            self.tracker.evaluate(datetime.now().astimezone()); self.update_focus_policy()
             if not any_countdown(settings): self.rtss.cancel_preparation()
             self.tracker.unclassified.clear(); self.tracker.previous=None; self.service.configure(settings)
             self.art.roots=list(dict.fromkeys(self.art.roots+settings.steam_roots)); self.art.invalidate(); self.art.refresh_links(settings.games_root)
@@ -997,6 +1143,11 @@ class App(QMainWindow,MonitorActions):
             self.update_bedtime_banner(plan.bedtime_minimize and state=='bedtime')
         except (ValueError,OSError,SQLiteError) as exc:
             self.settings_error.setText(self.t('{day}: {error}',day=self.t(DAY_NAMES[exc.day]),error=self.t(str(exc.error))) if isinstance(exc,DayScheduleError) else self.t(str(exc)))
+
+    def budget_aliases(self,aliases):
+        self.wellbeing.remap(aliases)
+        if aliases and hasattr(self,'restrictions'): self.restrictions.state.day=None
+        if hasattr(self,'budget_editor'): self.budget_editor.remap(aliases)
 
     def set_status(self,text,**values):
         from .background import DISCOVERY_PROBLEM, HUB_PROBLEM
@@ -1032,7 +1183,10 @@ class App(QMainWindow,MonitorActions):
             self.ring.setToolTip(self.t('Daily budget')+f': {quota_plan(self.settings).limit_seconds/60:g} '+self.t('min'))
             self.overlay_picker.setAccessibleName(self.t('Countdown position'))
             self.statistics.retranslate_report()
+            self.budget_editor.collect(); self.budget_editor.refresh()
             self.focus_page.refresh(force=True)
+            self.notifications_page.refresh()
+            self.refresh_activity_lists()
             self.update_launch_button(); self.update_statistics_sync_status(); self.update_tray()
             self.updates.refresh()
             for card in self.cards.values(): card.update()
@@ -1041,15 +1195,21 @@ class App(QMainWindow,MonitorActions):
                 area.horizontalScrollBar().setValue(x); area.verticalScrollBar().setValue(y)
         finally: self.setUpdatesEnabled(updates)
 
-    def switch_page(self,index):
+    def switch_page(self,index,*,remember=True):
+        previous=self.pages.currentIndex()
+        if remember and index in (2,5) and previous!=index:
+            if not hasattr(self,'_return_pages'): self._return_pages={}
+            self._return_pages[index]=previous if previous in (0,1,2,4,5,6) else 1
         if index==3:
             self.pages.setCurrentIndex(0); self.clients_toggle.setChecked(True); self.set_clients_expanded(True); index=0
         self.pages.setCurrentIndex(index)
-        if index!=2 and self._preferences_pending: self.apply_synchronized_preferences()
-        for n,item in self.nav.items(): item.setChecked(n==index)
+        if index not in (2,5) and self._preferences_pending: self.apply_synchronized_preferences()
+        selected=getattr(self,'_return_pages',{}).get(2,1) if index==2 else index
+        for n,item in self.nav.items(): item.setChecked(n==selected)
         if index==1: self.statistics.refresh(live=True)
         if index==4: self.focus_page.refresh(force=True)
-        if index==0: self.render()
+        if index==6: self.notifications_page.refresh()
+        if index==0: self.render(); self.refresh_activity_lists()
 
     def set_clients_expanded(self,expanded):
         self.clients_page.setVisible(bool(expanded)); self.clients_toggle.setArrowType(Qt.DownArrow if expanded else Qt.RightArrow)
@@ -1073,14 +1233,19 @@ class App(QMainWindow,MonitorActions):
         self.call_later(60000,lambda: clipboard.clear() if clipboard.text()==code else None)
 
     def update_focus_policy(self):
-        if self.browser_bridge: self.browser_bridge.update(self.focus.policy())
+        if self.browser_bridge:
+            policy=self.wellbeing.policy(self.focus.policy(),datetime.now().astimezone())
+            if hasattr(self,'restrictions'): policy=self.restrictions.browser_policy(policy)
+            self.browser_bridge.update(policy)
 
     def focus_tick(self,current):
         import ntpath
+        self.focus.configure_day_start(self.settings.budget_reset_minute)
         website=self.browser_bridge.website(current.path) if self.browser_bridge else ''
         previous=self.focus.previous
         revision=self.focus.revision
         self.focus.tick(current,website)
+        self.wellbeing.tick(current,website)
         if (previous and self.focus.revision != revision
                 and (app_key(previous[0].path) != app_key(current.path) or previous[1] != website)):
             # Reuse the existing debounced, rate-limited sync when tracked activity changes.
@@ -1102,7 +1267,32 @@ class App(QMainWindow,MonitorActions):
                     self.focus_page.notice.setText(self.t('This protected game requires the existing minimization permission.'))
         if self.isVisible() and not self.isMinimized() and self.pages.currentIndex()==4:
             self.focus_page.refresh()
-    def settings_dialog(self): self.switch_page(2); self.show()
+    def open_settings_section(self,key):
+        self.switch_page(2); self.show_settings_section(key)
+
+    def page_settings_button(self,context):
+        widget=button('',lambda:self.show_page_settings_menu(context,widget),'quiet')
+        widget.setIcon(glyph('settings',MUTED,20)); widget.setFixedSize(42,40)
+        widget.setAccessibleName(self.t('Page settings')); widget.setToolTip(self.t('Page settings'))
+        widget.setProperty('settingsContext',context)
+        return widget
+
+    def show_page_settings_menu(self,context,widget):
+        menu=QMenu(widget)
+        sections={
+            'activities':(('Game folders',lambda:self.open_settings_section('games')),),
+            'overview':(('Linked statistics',self.statistics_sync_dialog),('Updates and sync',lambda:self.open_settings_section('other'))),
+            'budgets':(('Reminders',lambda:self.open_settings_section('reminders')),('Notifications',lambda:self.switch_page(6))),
+            'notifications':(('Reminders',lambda:self.open_settings_section('reminders')) ,),
+            'focus':(('Timer settings',lambda:self.focus_page.timer_settings()),('Edit list',lambda:self.focus_page.rules_dialog()),('Browser connection',lambda:self.focus_page.browser_dialog())),
+        }
+        for name,callback in sections[context]: menu.addAction(self.t(name),callback)
+        from .qt_day_start import day_start_dialog
+        menu.addSeparator(); menu.addAction(self.t('Day starts at…'),lambda:day_start_dialog(self))
+        menu.exec(widget.mapToGlobal(QPoint(0,widget.height())))
+
+    def settings_dialog(self):
+        self.open_settings_section('reminders'); self.show()
     def show(self):
         if self.closed: return
         self.showNormal(); hwnd=dark_window(self)
@@ -1110,12 +1300,22 @@ class App(QMainWindow,MonitorActions):
         # native window as well, including launches through hidden startup links.
         win32.u.ShowWindow(hwnd,9)
         self.raise_(); self.activateWindow(); win32.u.SetForegroundWindow(hwnd)
-    def open_games(self): self.switch_page(0); self.show()
+        if not self.settings.budget_setup_completed and not getattr(self,'_budget_setup_pending',False):
+            self._budget_setup_pending=True
+            from .qt_budget_setup import budget_setup
+            self.call_later(100,lambda:budget_setup(self))
+    def open_games(self): self.open_activities('game')
     def restriction_notice(self): self.open_games()
 
     def game_limits_dialog(self,gid=None):
-        from .qt_game_limits import game_limits_dialog
-        game_limits_dialog(self,gid if isinstance(gid,str) else None)
+        self.open_budget({'kind':'game','value':gid} if isinstance(gid,str) else None)
+
+    def open_budget(self,member=None,members=None):
+        self.switch_page(5)
+        if members: self.budget_editor.create_group(members)
+        elif member: self.budget_editor.open_member(member)
+        else: self.budget_editor.show_list()
+        self.show()
     def closeEvent(self,event):
         if self.closed: event.accept()
         else: event.ignore(); self.hide()
@@ -1155,9 +1355,14 @@ class App(QMainWindow,MonitorActions):
         menu=QMenu(self)
         tracking='Exclude from tracking' if self.catalog.enabled(game) else 'Track game'
         visibility='Show in library' if game.id in self.hidden_ids else 'Hide from library'
+        from .activities import has_budget
+        from .wellbeing import target
         for text,callback in [('Open game folder',self.open_game_folder),('Assign EXE',self.assign_exe),('EXE rules',self.rules_dialog),
-                              ('Per-game limit…',lambda:self.game_limits_dialog(game.id)),
-                              ('Per-game countdown…',lambda:self.game_countdown_dialog(game.id)),(tracking,self.toggle_game),(visibility,self.toggle_hidden)]: menu.addAction(self.t(text),callback)
+                              ('Set time budget…',lambda:self.game_limits_dialog(game.id)),
+                              ('Countdown settings…',lambda:self.game_countdown_dialog(game.id)),
+                              (tracking,self.toggle_game),(visibility,self.toggle_hidden)]:
+            action=menu.addAction(self.t(text),callback)
+            if text=='Countdown settings…': action.setEnabled(has_budget(self.settings,target('game',game.id)))
         menu.addSeparator(); menu.addAction(self.t('Uninstall game…'),self.uninstall_game)
         menu.exec(card.more.mapToGlobal(QPoint(0,card.more.height())))
 
@@ -1234,25 +1439,35 @@ class App(QMainWindow,MonitorActions):
     def popup(self,alert):
         if self.popup_window: return False
         mode=self.notification_mode()
+        current=win32.sample()
+        # Every game reminder uses the same in-game renderer, including budget
+        # expiry and bedtime. A visible desktop HWND is no fullscreen receipt.
+        if getattr(self,'_fullscreen_alert',None) or (current.interactive and self.catalog.resolve(current.path)
+                and self.settings.overlay_rtss_auto and self.rtss_available()):
+            delivered=self.fullscreen_scheduled_notification(alert,current)
+            if delivered or getattr(self,'_fullscreen_alert',None): return delivered
         if mode=='defer': return False
         if mode=='audio': return self.audio_notification(alert)
-        passive=mode=='passive'
+        passive=True
         window=AlertDialog(self,passive); self.popup_window=window; self.popup_day=alert.day; self.popup_kind=alert.kind
-        bedtime=alert.kind=='bedtime'; caption=self.t('Bedtime reminder' if bedtime else 'Game time alert')
+        from .notification_text import notification_presentation
+        caption,heading,icon_name=notification_presentation(alert,self.t)
         screen=QApplication.primaryScreen().availableGeometry()
         width=min(620,max(420,screen.width()-60))
         window.setWindowTitle(caption)
         layout=QVBoxLayout(window); layout.setContentsMargins(28,24,28,24); layout.setSpacing(20)
         header=QHBoxLayout(); header.setSpacing(16)
         badge=label(); badge.setFixedSize(48,48); badge.setAlignment(Qt.AlignCenter)
-        badge.setStyleSheet('background:#243c35; border-radius:14px;')
-        badge.setPixmap(glyph('moon' if bedtime else 'bell',ACCENT,26).pixmap(26,26)); header.addWidget(badge)
-        title=label(self.t('Get ready for bed' if bedtime else 'Time to stop playing' if alert.kind in ('limit','session') else 'Game time reminder'),'title')
+        badge.setStyleSheet('background:#284c3c; border-radius:12px;')
+        custom_icon=QIcon(alert.icon) if alert.icon else QIcon()
+        badge.setPixmap(custom_icon.pixmap(36,36) if not custom_icon.isNull() else glyph(icon_name,ACCENT,30).pixmap(30,30)); header.addWidget(badge)
+        title=label(heading,'title')
+        title.setTextFormat(Qt.PlainText)
         title.setStyleSheet('font-size:24px;'); title.setWordWrap(True); header.addWidget(title,1); layout.addLayout(header)
-        message=panel('ReminderMessage'); message.setStyleSheet('QFrame#ReminderMessage { background:#192328; border:1px solid #2c3a40; border-radius:12px; }')
+        message=panel('ReminderMessage'); message.setStyleSheet('QFrame#ReminderMessage { background:#1d2d31; border:0; border-radius:10px; }')
         message_layout=QVBoxLayout(message); message_layout.setContentsMargins(18,16,18,16)
-        text=label(alert.text); text.setWordWrap(True); text.setAlignment(Qt.AlignLeft|Qt.AlignTop)
-        text.setStyleSheet('font-size:15px; color:#dce8e5;')
+        text=label(alert.text); text.setTextFormat(Qt.PlainText); text.setWordWrap(True); text.setAlignment(Qt.AlignLeft|Qt.AlignTop)
+        text.setStyleSheet('font-size:15pt; color:#edf4f2;')
         text.setTextInteractionFlags(Qt.TextSelectableByMouse); text.ensurePolished()
         text_height=max(30,text.heightForWidth(width-106)); text.setMinimumHeight(text_height)
         body=QScrollArea(); body.setWidgetResizable(True); body.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff); body.setWidget(text)
@@ -1260,20 +1475,28 @@ class App(QMainWindow,MonitorActions):
         message_layout.addWidget(body); layout.addWidget(message,1)
         title.ensurePolished(); header_height=max(48,title.heightForWidth(width-120))
         window.setFixedSize(width,min(max(260,172+header_height+min(260,text_height)),max(260,screen.height()-60)))
-        acknowledge=button(self.t(alert.button),window.accept,'primary'); acknowledge.setDefault(True); layout.addWidget(acknowledge,0,Qt.AlignRight)
         window.finished.connect(lambda result:self._popup_finished(window))
-        window.move(screen.center()-window.rect().center())
+        window.move(screen.right()-width-20,screen.top()+20)
         try:
             window.show(); hwnd=dark_window(window)
-            foreground=win32.present_notification(hwnd,activate=False) if passive else win32.present_notification(hwnd)
-            if not passive: window.raise_(); window.activateWindow()
+            foreground=win32.present_notification(hwnd,activate=False)
             QApplication.processEvents(QEventLoop.ExcludeUserInputEvents)
             if not window.isVisible() or not win32.u.IsWindowVisible(hwnd): raise RuntimeError('Notification window did not become visible')
         except Exception:
             log.exception('Qt notification presentation failed; will retry'); self.dismiss_popup(); return False
         log.info('Notification presented: kind=%s day=%s main_visible=%s foreground=%s',alert.kind,alert.day,self.isVisible(),foreground)
-        play_notification(self.settings)
+        if alert.sound: play_notification(self.settings)
+        # The message can be scrolled with the mouse without keyboard focus.
+        QTimer.singleShot(min(90000,max(12000,len(alert.text)*75)),window.close)
         return True
+
+    def fullscreen_scheduled_notification(self,alert,current):
+        from .qt_fullscreen_notifications import present
+        return present(self,alert,current)
+
+    def scheduled_notification_tick(self,current):
+        from .scheduled_notifications import tick
+        tick(self,current)
 
     def _popup_finished(self,window):
         if self.popup_window is window: self.popup_window=self.popup_day=None
@@ -1283,32 +1506,34 @@ class App(QMainWindow,MonitorActions):
     def render_tick(self):
         # Tracking, alerts, Hub discovery and cloud sync continue in the tray.
         # Refresh widgets on return instead of reading/repainting a hidden UI.
-        if self.isVisible() and not self.isMinimized(): self.render()
+        if self.isVisible() and not self.isMinimized() and self.pages.currentIndex()==6:
+            self.notifications_page.refresh(); self.sync_hub(); self.update_tray(); return
+        if self.isVisible() and not self.isMinimized() and not (self.pages.currentIndex()==0 and self.activity_pages.currentIndex()!=0): self.render()
         else:
             self.sync_hub()
             self.update_tray()
 
     def update_tray(self):
-        now=datetime.now().astimezone(); total=sum(self.tracker.totals(now.date().isoformat()).values())
+        now=datetime.now().astimezone(); total=sum(self.tracker.totals(current_day(self.settings,now).isoformat()).values())
         budget=remaining_budget(self.settings,now,sum(self.tracker.quota_totals(now).values()))
-        tip=self.t('Keep Improving\nToday: {total} · remaining: {remaining}\nLeft click: open · right click: menu',total=duration(total),remaining=duration(budget.remaining))
+        tip=self.t('Keep Improving\nToday: {total} · remaining: {remaining}\nLeft click: open · right click: menu',total=duration(total),remaining=duration(budget.remaining) if math.isfinite(budget.remaining) else self.t('No shared limit'))
         if self.updates.available: tip=self.t('Update {version} available',version=self.updates.available.version)+'\n'+tip
         self.tray.update(tip)
 
     def render(self):
         self.sync_hub()
-        now=datetime.now().astimezone(); day=now.date().isoformat(); totals=self.tracker.totals(day); total=sum(totals.values())
+        now=datetime.now().astimezone(); day=current_day(self.settings,now).isoformat(); totals=self.tracker.totals(day); total=sum(totals.values())
         plan=quota_plan(self.settings,now)
         quota_totals=self.tracker.quota_totals(now)
         used=sum(quota_totals.values())
         budget=remaining_budget(self.settings,now,used)
-        self.total_label.setText(duration(total)); self.remaining_label.setText(duration(budget.remaining))
+        self.total_label.setText(duration(total)); self.remaining_label.setText(duration(budget.remaining) if math.isfinite(budget.remaining) else self.t('No shared limit'))
         tomorrow=period_day(now,reset_clock(self.settings))+timedelta(days=1)
         renewal=reset_at(tomorrow,reset_clock(self.settings)[tomorrow.weekday()],now)
-        self.remaining_label.setToolTip(self.t('Unused daily budget: {remaining}',remaining=duration(budget.quota_remaining))+'\n'+self.t('Next budget reset: {time}',time=renewal.strftime('%Y-%m-%d %H:%M')))
+        self.remaining_label.setToolTip(self.t('Unused daily budget: {remaining}',remaining=duration(budget.quota_remaining))+'\n'+self.t('Next budget reset: {time}',time=renewal.strftime('%Y-%m-%d %H:%M')) if math.isfinite(budget.quota_remaining) else self.t('No shared limit'))
         self.remaining_reason.setText((self.t('Bedtime has started') if budget.bedtime.timestamp()<=now.timestamp() else self.t('Until bedtime at {time}',time=budget.bedtime.strftime('%H:%M'))) if budget.bedtime else '')
         self.remaining_reason.setVisible(budget.bedtime is not None)
-        self.ring.set_ratio(used/plan.limit_seconds); self.ring.setToolTip(self.t('Daily budget')+f': {plan.limit_seconds/60:g} '+self.t('min'))
+        self.ring.set_ratio(used/plan.limit_seconds if self.settings.game_budget_enabled else 0); self.ring.setToolTip(self.t('Daily budget')+f': {plan.limit_seconds/60:g} '+self.t('min') if self.settings.game_budget_enabled else self.t('No shared limit'))
         self.active_label.setText(self.tracker.active.name if self.tracker.active else ''); self.active_label.setVisible(self.tracker.active is not None)
         self.active_label.setToolTip(self.t('Active game: {name}',name=self.tracker.active.name) if self.tracker.active else '')
         games={g.id:g for g in self.store.games()}; games.update(self.catalog.games); self.hidden_ids=self.store.hidden_ids()
@@ -1383,18 +1608,22 @@ class App(QMainWindow,MonitorActions):
     def close(self):
         if self.closed: return
         self.closed=True
+        self.restrictions.close()
         QApplication.instance().removeEventFilter(self.scroll_guard)
         self.statistics_event_timer.stop()
         self.focus.close()
+        self.wellbeing.flush()
         if self.browser_bridge: self.browser_bridge.close()
         self.statistics_sync.close(); self.account_auth.close()
         self.updates.close()
         for timer in list(self._timers): timer.stop(); timer.deleteLater()
         self._timers.clear(); self.dismiss_popup()
         self.overlay_timer.stop()
+        if getattr(self,'_fullscreen_alert',None): self._fullscreen_alert.shutdown()
         self.game_snapshots.close()
         self.rtss.close()
         self.assets_timer.stop(); self.art.close()
+        for listing in self.activity_lists.values(): listing.icons.close()
         if self.client_worker: self.client_worker.close()
         if self.overlay: self.overlay.close(); self.overlay.deleteLater()
         for signal in (QApplication.instance().screenAdded,QApplication.instance().screenRemoved):

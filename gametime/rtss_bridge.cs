@@ -106,14 +106,24 @@ unsafe sealed class RtssBridge {
                 }
                 if (slot < 0) return Reply(false, text.Length > 0 ? "No free RTSS OSD slot" : "",
                     text.Length == 0 && (!hooked || !removalFrame.HasValue || consumedRemoval));
-                // Health probes must not repeatedly erase a visible, unchanged
-                // countdown. Keep slot ownership stable during text updates.
-                if (!owned || duplicates || text.Length == 0 || !lastFrame.HasValue || Text(p, slot + 512, 4096) != text) {
+                // RTSS 2.20+ renders the 32 KiB Ex2 field when the larger
+                // entry exists; older layouts use the 4 KiB Ex field.
+                bool extended = version >= 0x20014 && osdSize >= 299520;
+                long textOffset = extended ? 266752 : 512;
+                int textSize = extended ? 32768 : 4096;
+                // Keep slot ownership stable during unchanged health probes.
+                bool contentChanged = !owned || duplicates || text.Length == 0 || !lastFrame.HasValue || Text(p, slot + textOffset, textSize) != text;
+                if (contentChanged) {
+                    // A receipt for an older countdown is not a receipt for a new image.
+                    confirmed = 0; lastAck = "";
                     if (!owned || text.Length == 0) {
                         Clear(p, slot, 4608);
                         if (version >= 0x20014 && osdSize >= 299520) Clear(p, slot + 266752, 32768);
-                    } else Clear(p, slot + 512, 4096);
-                    if (text.Length > 0) { Put(p, slot + 256, owner); Put(p, slot + 512, text); }
+                    } else {
+                        Clear(p, slot + 512, 4096);
+                        if (extended) Clear(p, slot + 266752, 32768);
+                    }
+                    if (text.Length > 0) { Put(p, slot + 256, owner); Put(p, slot + textOffset, text); }
                     uint next = unchecked(Read(p, 32) + 1); Write(p, 32, next); lastFrame = next;
                     if (text.Length == 0) removalFrame = next;
                 } else if (consumedFrame) {
@@ -153,6 +163,23 @@ unsafe sealed class RtssBridge {
         }
     }
     static void Check(bool value, string label) { if (!value) throw new Exception("Self-test failed: " + label); }
+    static void ExtendedSelfTest() {
+        string name = "GameTimeMonitor.RTSS.Extended." + Guid.NewGuid().ToString("N");
+        const int osd = 10240, slotSize = 299520, capacity = osd + 3 * slotSize;
+        using (var map = MemoryMappedFile.CreateNew(name, capacity))
+        using (var view = map.CreateViewAccessor()) {
+            uint[] header = { Signature, 0x20015, 9232, 128, 1, slotSize, osd, 3, 0, 0 };
+            for (int i = 0; i < header.Length; i++) view.Write(i * 4, header[i]);
+            var bridge = new RtssBridge(name);
+            bridge.Publish("GameTimeMonitor:extended", "77:1", 77, "image tag");
+            long slot = osd + slotSize;
+            byte[] actual = new byte[9]; view.ReadArray(slot + 266752, actual, 0, actual.Length);
+            Check(Encoding.ASCII.GetString(actual) == "image tag", "new layout uses extended field");
+            Check(view.ReadByte(slot) == 0 && view.ReadByte(slot + 512) == 0, "image text published exactly once");
+            bridge.Publish("GameTimeMonitor:extended", "", 77, "");
+            Check(view.ReadByte(slot + 266752) == 0 && view.ReadByte(slot + 256) == 0, "new layout clears owned text");
+        }
+    }
     static int SelfTest() {
         string name = "GameTimeMonitor.RTSS.Test." + Guid.NewGuid().ToString("N");
         const int osd = 10240, slotSize = 4608, capacity = osd + 4 * slotSize;
@@ -169,7 +196,10 @@ unsafe sealed class RtssBridge {
             Check(Encoding.ASCII.GetString(foreign, 512, 4) == "keep", "foreign slot preserved");
             Check(view.ReadByte(osd + 256) == (byte)'P', "slot zero preserved");
             view.Write(128, 77u); view.Write(128 + 264, 7u); view.Write(128 + 332, view.ReadUInt32(32));
-            Check((bool)bridge.Publish(owner, "77:123", 77, "00:19:59")["healthy"], "renderer acknowledgement");
+            Check((bool)bridge.Publish(owner, "77:123", 77, "00:20:00")["healthy"], "renderer acknowledgement");
+            Check(!(bool)bridge.Publish(owner, "77:123", 77, "00:19:59")["healthy"], "changed content awaits new receipt");
+            view.Write(128 + 332, view.ReadUInt32(32));
+            Check((bool)bridge.Publish(owner, "77:123", 77, "00:19:59")["healthy"], "changed content acknowledged");
             view.Write(128 + 9224, 1280u); view.Write(128 + 9228, 720u);
             var resolution = bridge.Publish(owner, "77:123", 77, "00:19:59");
             Check(Convert.ToUInt32(resolution["width"]) == 1280 && Convert.ToUInt32(resolution["height"]) == 720, "game render resolution reported");
@@ -207,7 +237,8 @@ unsafe sealed class RtssBridge {
             try { bridge.Publish(owner, "77:123", 77, "bad"); } catch (InvalidDataException) { rejected = true; }
             Check(rejected && view.ReadInt32(36) == 0, "dead mapping rejected");
         }
-        Console.WriteLine("RTSS native shared-memory self-test passed (17 checks)"); return 0;
+        ExtendedSelfTest();
+        Console.WriteLine("RTSS native shared-memory self-test passed (22 checks)"); return 0;
     }
     static int Main(string[] args) {
         Console.InputEncoding = new UTF8Encoding(false); Console.OutputEncoding = new UTF8Encoding(false);

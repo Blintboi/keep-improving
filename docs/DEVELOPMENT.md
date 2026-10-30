@@ -34,6 +34,17 @@ See [Testing](../TESTING.md) for native fixture tests, source installation check
 
 The build generates `dist/GameTimeMonitor-<version>-Setup.exe` and its SHA-256 file. It includes a replaceable Qt runtime, the original bridge, project documentation and license notices. The release process verifies actual SFX extraction and installation before updating the stable `downloads/GameTimeMonitor-Setup.exe` file and README links.
 
+The frozen directory and final installer must pass `packaging/defender_scan.ps1`
+before distribution. The bundled-install test repeats this preflight before any
+setup or application execution. It requires active Defender, a completed scan
+for the target, no matching detections and unchanged file hashes. A successful
+scan command alone is insufficient: Defender can report success after removing
+a detected file. Missing evidence, disabled protection, excluded artifacts and
+incomplete scans stop delivery. Reports stay beside the build/test output.
+Never change security policy, restore a quarantined sample or rebuild with
+arbitrary byte changes to obtain a passing result. An unresolved detection
+requires provenance investigation and, where appropriate, Microsoft review.
+
 `-SkipFreeze` repackages an existing, verified frozen runtime with documentation changes. Verify the runtime hashes before and after such a repack; it must not substitute for rebuilding changed application code. `-FreezeOnly` stops after creating the frozen runtime.
 
 ## Local testing before publication

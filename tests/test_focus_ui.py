@@ -44,6 +44,7 @@ class FocusInterfaceTests(unittest.TestCase):
         from PySide6.QtCore import QPoint,QRect,Qt
         from PySide6.QtTest import QTest
         self.app.resize(1000,700); self.app.show(); self.app.switch_page(2); self.app.overlay_enabled.setChecked(True)
+        self.app.show_settings_section('countdown'); self.app.overlay_details.setExpanded(True)
         combo=self.app.overlay_screen
         for i in range(50): combo.addItem('Example display '+str(i),str(i))
         self.app.settings_scroll.ensureWidgetVisible(combo); self.pump(.1)
@@ -300,8 +301,9 @@ class FocusInterfaceTests(unittest.TestCase):
         for key,control in self.app.settings_shortcuts.items():
             control.click(); self.pump(.03)
             target=self.app.settings_sections[key]
-            expected=min(scroll.verticalScrollBar().maximum(),target.mapTo(self.app.settings_body,QPoint(0,0)).y())
-            self.assertEqual(scroll.verticalScrollBar().value(),expected)
+            self.assertTrue(target.isVisible()); self.assertTrue(control.isChecked())
+            self.assertEqual([name for name,section in self.app.settings_sections.items() if section.isVisible()],[key])
+            self.assertEqual(scroll.verticalScrollBar().value(),0)
             self.assertEqual(self.app.limit.value(),180)
         self.app.set_language('en')
         self.assertEqual(self.app.settings_shortcuts['reminders'].text(),'Reminders')

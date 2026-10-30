@@ -148,16 +148,12 @@ class OverlayInterfaceTests(unittest.TestCase):
                 self.app.notify(alert); popup.assert_not_called(); escape.assert_not_called()
             self.assertIn(key,self.store.alert_keys(alert.day))
 
-    def test_enabled_limit_still_uses_popup_and_rechecks_delayed_preference(self):
+    def test_enabled_limit_uses_popup_without_injecting_input(self):
         from gametime.tracker import Alert
         alert=Alert(date.today().isoformat(),('limit:7200',),'limit','Expired','OK')
         self.app.tracker._queue(alert); self.app.tracker.active=self.game; self.app.tracker.identity='overlay:1'
-        with patch.object(self.app,'popup',return_value=True) as popup,patch('gametime.controller.win32.sample',return_value=self.sample()),patch('gametime.controller.win32.escape_game',return_value=True):
-            self.app.notify(alert); popup.assert_not_called(); self.pump(.3); popup.assert_called_once_with(alert)
-        other=replace(alert,keys=('session:7200:overlay:2',),kind='session'); self.app.tracker._queue(other)
-        with patch.object(self.app,'popup') as popup,patch('gametime.controller.win32.sample',return_value=self.sample()),patch('gametime.controller.win32.escape_game',return_value=True):
-            self.app.notify(other); self.app.settings=replace(self.app.settings,limit_popup_enabled=False)
-            self.pump(.3); popup.assert_not_called()
+        with patch.object(self.app,'popup',return_value=True) as popup,patch('gametime.controller.win32.escape_game') as escape:
+            self.app.notify(alert); popup.assert_called_once_with(alert); escape.assert_not_called()
         self.assertFalse(self.app.tracker.alerts)
 
     def test_renderer_failure_restores_warning_popup(self):
@@ -265,6 +261,7 @@ class OverlayInterfaceTests(unittest.TestCase):
         from PySide6.QtTest import QTest
         from gametime import win32
         self.app.show(); self.app.switch_page(2)
+        self.app.show_settings_section('countdown'); self.app.overlay_details.setExpanded(True)
         x,y=self.app.overlay_coordinates; x.setFocus(); x.selectAll()
         QTest.keyClicks(x,'314'); QTest.keyClick(x,Qt.Key_Return)
         self.assertEqual(self.app.overlay_picker.pixel_position()[0],314)

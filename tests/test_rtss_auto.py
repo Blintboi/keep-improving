@@ -19,6 +19,7 @@ class AutomaticRTSSInterfaceTests(unittest.TestCase):
         self.backend=self.app.rtss; self.backend.identity=''; self.backend.error=''
         self.backend.configured=set(); self.backend.failed_paths=set(); self.backend.present.return_value=True
         self.backend.desktop_ready=True; self.backend.fallback_for.return_value=False
+        self.backend.retry_due.return_value=False
         self.app.settings=self.app.catalog.settings=replace(self.app.settings,overlay_rtss_auto=True)
         self.app._rtss_checked=time.monotonic(); self.app._rtss_available=True
 
@@ -87,7 +88,7 @@ class AutomaticRTSSInterfaceTests(unittest.TestCase):
         current=self.sample(); self.app.tracker.tick(current)
         self.app._rtss_available=False; self.display(current)
         self.assertTrue(self.app.overlay.isVisible())
-        def publish(*args):
+        def publish(*args,**kwargs):
             self.assertFalse(self.app.overlay.isVisible())
             return False
         self.backend.present.side_effect=publish; self.backend.desktop_ready=False
@@ -141,14 +142,9 @@ class AutomaticRTSSInterfaceTests(unittest.TestCase):
         self.backend.present.assert_not_called(); self.assertFalse(self.app.overlay.isVisible())
 
     def test_automatic_mode_can_be_disabled_and_persists_without_erasing_legacy_data(self):
-        from PySide6.QtCore import QTimer
-        from PySide6.QtWidgets import QCheckBox,QDialog,QPushButton
         self.app.settings=replace(self.app.settings,overlay_rtss_paths=[str(self.exe)])
-        def save():
-            dialog=self.app.findChild(QDialog)
-            automatic=dialog.findChild(QCheckBox); automatic.setChecked(False)
-            next(button for button in dialog.findChildren(QPushButton) if button.text()==self.app.t('Save')).click()
-        QTimer.singleShot(20,save); self.app.rtss_dialog()
+        self.app.rtss_dialog(); self.assertEqual(self.app.pages.currentIndex(),6)
+        self.app.notifications_page.fullscreen.click()
         saved=self.store.settings(); self.assertFalse(saved.overlay_rtss_auto)
         self.assertEqual(saved.overlay_rtss_paths,[str(self.exe)])
         self.backend.cancel_preparation.assert_called_once()

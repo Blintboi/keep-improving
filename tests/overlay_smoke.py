@@ -147,6 +147,16 @@ def run(output):
             iconic=win32.api(win32.u,'IsIconic',[win32.W.HWND],win32.W.BOOL)
             checks['native_fixture_is_minimized']=bool(iconic(fixture))
             checks['fixture_still_running']=child.poll() is None
+            # A regular game's window must retain focus and all input as well.
+            from gametime.tracker import Alert
+            win32.u.ShowWindowAsync(fixture,9); win32.u.SetForegroundWindow(fixture); pump(.2)
+            assert win32.u.GetForegroundWindow()==fixture, 'Notification fixture needs focus'
+            with patch.object(app,'notification_mode',return_value='normal'):
+                checks['ordinary_notification_visible']=app.popup(Alert(datetime.now().date().isoformat(),(),'warning','Fixture reminder','OK'))
+                pump(.15); popup_hwnd=int(app.popup_window.winId()); popup_style=get_style(popup_hwnd,-20)
+                checks['ordinary_notification_keeps_focus']=win32.u.GetForegroundWindow()==fixture
+                checks['ordinary_notification_input_transparent']=bool(popup_style & 0x20) and bool(popup_style & 0x08000000)
+                app.dismiss_popup()
             # Reclassify only our own Form as a protected catalog entry. No
             # actual anti-cheat/game/account is launched to test this gate.
             protected=Game('steam:730','Renamed protected fixture','Steam',str(base))
@@ -172,6 +182,8 @@ def run(output):
                 checks['protected_passive_popup_visible']=app.popup(warning)
                 pump(.15)
                 checks['protected_popup_keeps_native_game_focus']=win32.u.GetForegroundWindow()==fixture
+                popup_hwnd=int(app.popup_window.winId()); popup_style=get_style(popup_hwnd,-20)
+                checks['notification_is_click_through_and_nonactivating']=bool(popup_style & 0x20) and bool(popup_style & 0x08000000)
                 app.dismiss_popup()
             with patch.object(win32,'desktop_overlay_available',return_value=False),patch('gametime.sound.play_notification',return_value=True) as sound:
                 checks['protected_fullscreen_audio_only']=app.popup(warning) and app.popup_window is None and sound.call_count==1

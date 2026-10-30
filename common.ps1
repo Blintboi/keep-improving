@@ -86,6 +86,13 @@ function Build-GameTimeRTSSBridge([string]$SourceRoot) {
 }
 
 function Get-GameTimeFiles {
+    @('gametime\restriction_policy.py','gametime\restriction_native.py','gametime\restriction_audio.py',
+      'gametime\qt_restriction_steps.py','gametime\qt_restrictions.py','gametime\browser_extension\blocked.js')
+    @('gametime\activities.py','gametime\activity_identity.py','gametime\wellbeing.py',
+      'gametime\qt_activities.py','gametime\qt_activity_icons.py','gametime\qt_budget_setup.py',
+      'gametime\qt_budgets.py','gametime\qt_countdown_targets.py','gametime\qt_wellbeing_runtime.py',
+      'gametime\scheduled_notifications.py','gametime\qt_scheduled_notifications.py','gametime\qt_fullscreen_notifications.py','gametime\qt_notification_list.py','gametime\qt_day_start.py',
+      'gametime\icons\flag-hu.svg','gametime\icons\flag-en.svg')
     @('gametime\background.py','gametime\budget.py','gametime\game_preview.py','gametime\game_safety.py',
       'gametime\notification_text.py','gametime\overlay_consent.py','gametime\preferences_sync.py',
       'gametime\qt_game_limits.py','gametime\qt_game_preview.py','gametime\qt_notifications.py',

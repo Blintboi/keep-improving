@@ -2,6 +2,9 @@
       [Parameter(Mandatory=$true)][string]$ReportPath,
       [string]$PythonPath='python.exe')
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot '..\packaging\defender_scan.ps1')
+# Check the extracted package before setup can start its bundled executable.
+Assert-DefenderReleaseScan ([IO.Path]::GetFullPath($PackageDir)) ([IO.Path]::GetFullPath($ReportPath)+'.defender.json')
 $taskRoot = Join-Path $env:TEMP ('GameTimeMonitor-bundle-test-' + [guid]::NewGuid().ToString('N'))
 $app = Join-Path $taskRoot 'App with spaces'
 $data = Join-Path $taskRoot 'Profile with spaces'
@@ -40,6 +43,7 @@ try {
     $report.fresh_overlay_is_opt_in = -not $first.overlay_enabled -and $first.overlay_replace_warning -and $first.limit_popup_enabled
     $report.fresh_rtss_is_opt_in = $first.overlay_rtss_auto -eq $false
     $report.fresh_overlay_risk_consent_is_empty = $first.overlay_risk_consent_count -eq 0
+    $report.fresh_protected_game_display_is_opt_in = $first.protected_game_display_enabled -eq $false
     $report.fresh_minimize_risk_consent_is_empty = $first.minimize_risk_consent_count -eq 0
     $report.fresh_countdown_size_is_compatible = $first.overlay_font_size -eq 25
     $report.fresh_personalization_defaults_are_compatible = $first.overlay_color_normal -eq '#ffffff' -and $first.overlay_color_warning -eq '#ff5c65' -and $first.custom_message_count -eq 0
@@ -50,6 +54,12 @@ try {
     $report.fresh_bedtime_budget_is_opt_in = $first.bedtime_caps_budget -eq $false
     $report.fresh_budget_resets_at_midnight = $first.budget_reset_minute -eq 0
     $report.fresh_per_game_limits_are_empty = $first.game_limit_count -eq 0
+    $freshBudget = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); print(json.dumps({k:c[k] for k in ("game_budget_enabled","budget_setup_completed","wellbeing_rules")}))' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    if ($LASTEXITCODE -ne 0) { throw 'Could not read first-use budget defaults.' }
+    $freshBudget = $freshBudget | ConvertFrom-Json
+    $report.fresh_game_budget_is_opt_in = $freshBudget.game_budget_enabled -eq $false
+    $report.fresh_profile_offers_budget_setup = $freshBudget.budget_setup_completed -eq $false
+    $report.fresh_activity_budgets_are_empty = @($freshBudget.wellbeing_rules).Count -eq 0
     $report.bedtime_handover_script_bundled = Test-Path -LiteralPath (Join-Path $app '_internal\gametime\bedtime_legacy.ps1')
     $hubIcon = Join-Path $data 'assets\keep-improving.ico'
     $report.hub_icon_installed = (Test-Path -LiteralPath $hubIcon) -and (Get-FileHash -LiteralPath $hubIcon).Hash -eq (Get-FileHash -LiteralPath (Join-Path $app '_internal\gametime\app.ico')).Hash
@@ -94,9 +104,12 @@ d=sqlite3.connect(sys.argv[1]); code='1'*32; day='2026-01-01'
 c=json.loads(d.execute("SELECT value FROM settings WHERE key='config'").fetchone()[0])
 c.update(bedtime_caps_budget=True,notification_sound='silent',notification_sound_path=r'C:\Fixture\saved.wav',weekend_enabled=True,weekend_schedule={'limit_seconds':10800,'warning_seconds':9000,'bedtime_minute':60,'bedtime_resume_minute':480},game_overlays={'test:hidden':{'overlay_enabled':False,'overlay_font_size':36,'overlay_x':0.1,'overlay_y':0.9,'overlay_color_normal':'#aabbcc','overlay_color_warning':'#dd5566'}})
 c.update(daily_schedules={'1':{'limit_seconds':13200,'warning_seconds':12000,'bedtime_minute':90}})
+c.update(scheduled_notifications=[{'id':'a'*32,'title':'Fixture reminder','text':'A custom message','icon':r'C:\Fixture\icon.png','minute':875,'enabled':True}])
 c.update(game_limits={'test:hidden':1800})
 c.update(statistics_sync_group=code,statistics_sync_enabled=False,statistics_device_name='Fixture Desktop')
 d.execute("UPDATE settings SET value=? WHERE key='config'",(json.dumps(c),))
+d.execute('INSERT OR IGNORE INTO activity_items VALUES (?,?,?)',('app',r'c:\windows\explorer.exe','explorer.exe'))
+d.execute('INSERT OR REPLACE INTO activity_usage VALUES (?,?,?,?)',(day,'app',r'c:\windows\explorer.exe',900))
 d.execute('INSERT INTO statistics_devices VALUES (?,?,?,?,?)',(code,'a'*32,'Other fixture PC',99,day))
 d.execute('INSERT INTO statistics_remote VALUES (?,?,?,?,?,?,?)',(code,'a'*32,day,'steam:42','Example','Steam',120))
 d.execute('INSERT INTO settings VALUES (?,?)',('statistics_snapshot:'+code,json.dumps({'revision':99,'digest':'fixture'})))
@@ -185,6 +198,11 @@ d.close()
     $report.weekly_day_preferences_preserved_on_upgrade = $dailyConfig -eq 'True'
     $gameCaps = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); print(c["game_limits"]=={"test:hidden":1800})' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     $report.per_game_limits_preserved_on_upgrade = $gameCaps -eq 'True'
+    $scheduledConfig = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); print(c["scheduled_notifications"]==[{"id":"a"*32,"title":"Fixture reminder","text":"A custom message","icon":r"C:\Fixture\icon.png","minute":875,"enabled":True}])' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    $report.scheduled_notifications_preserved_on_upgrade = $scheduledConfig -eq 'True'
+    $explorerHistory = 'import sqlite3,sys; d=sqlite3.connect(sys.argv[1]); print(d.execute("SELECT seconds FROM activity_usage WHERE day=? AND kind=? AND key=?",("2026-01-01","app",r"c:\windows\explorer.exe")).fetchone()==(900.0,))' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    $report.legacy_explorer_history_preserved_on_upgrade = $explorerHistory -eq 'True'
+
 
     $report.bedtime_preferences_preserved_on_upgrade = (Get-Content -LiteralPath $diag -Raw -Encoding UTF8 | ConvertFrom-Json).bedtime_minute -eq 30 -and (Get-Content -LiteralPath $diag -Raw -Encoding UTF8 | ConvertFrom-Json).bedtime_minimize
     $report.bedtime_budget_preference_preserved_on_upgrade = (Get-Content -LiteralPath $diag -Raw -Encoding UTF8 | ConvertFrom-Json).bedtime_caps_budget -eq $true

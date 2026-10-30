@@ -2,7 +2,22 @@
 from PySide6.QtWidgets import QVBoxLayout,QHBoxLayout
 from .qt_translation import QDialog,QCheckBox
 from .qt_widgets import label,button,separator
-from .overlay_consent import NOTICE,MINIMIZE_NOTICE
+from .overlay_consent import NOTICE,MINIMIZE_NOTICE,DISPLAY_NOTICE
+
+
+def request_display_consent(app,parent):
+    window=QDialog(parent); window.setWindowTitle(app.t('Display in anti-cheat games')); window.resize(520,210)
+    layout=QVBoxLayout(window); layout.setContentsMargins(22,20,22,18); layout.setSpacing(14)
+    body=label(app.t(DISPLAY_NOTICE)); body.setWordWrap(True); layout.addWidget(body)
+    check=QCheckBox(app.t('I understand and accept the risk.')); layout.addWidget(check)
+    actions=QHBoxLayout(); actions.addStretch()
+    cancel=button(app.t('Cancel'),window.reject); cancel.setDefault(True); actions.addWidget(cancel)
+    accept=button(app.t('Enable at my own risk'),lambda:window.accept() if check.isChecked() else None,'primary')
+    accept.setAutoDefault(False); accept.setEnabled(False); check.toggled.connect(accept.setEnabled); actions.addWidget(accept)
+    layout.addLayout(actions)
+    from .qt_ui import dark_window
+    dark_window(window)
+    return window.exec()==QDialog.Accepted and check.isChecked()
 
 
 def request_consent(app,parent,game,*,minimization=False):

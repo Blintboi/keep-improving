@@ -11,7 +11,7 @@ from .model import Settings
 
 LOCAL_FIELDS={'games_root','steam_roots','epic_manifest_dirs','ubisoft_roots',
               'overlay_screen','overlay_rtss_paths','notification_sound_path',
-              'statistics_sync_enabled','statistics_sync_group','statistics_device_name'}
+              'scheduled_notifications','statistics_sync_enabled','statistics_sync_group','statistics_device_name','wellbeing_rules','counter_overlays','activity_overlays','budget_setup_completed','restriction_plans'}
 CONFIG_FIELDS={item.name for item in fields(Settings)}-LOCAL_FIELDS
 CONFIG_FIELDS-={'game_limits','game_overlays','limit_seconds','warning_seconds',
                 'bedtime_warning_minute','bedtime_minute','bedtime_resume_minute'}

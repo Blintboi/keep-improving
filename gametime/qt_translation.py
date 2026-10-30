@@ -3,7 +3,7 @@
 User-entered names and paths remain ordinary strings and are never translated.
 """
 from PySide6 import QtWidgets as W
-from PySide6.QtCore import QPoint,QRect
+from PySide6.QtCore import QPoint,QRect,QEvent,Qt
 from .i18n import tr
 
 
@@ -81,14 +81,37 @@ class QLineEdit(_Translated,W.QLineEdit):
         self.textEdited.connect(lambda:self._ui_strings.pop('setText',None))
 
 
+class _ComboRows(W.QStyledItemDelegate):
+    def sizeHint(self,option,index):
+        size=super().sizeHint(option,index)
+        size.setHeight(max(32,size.height()))
+        return size
+
+
 class QComboBox(_Translated,W.QComboBox):
     def __init__(self,*args,**kwargs):
         self._ui_items={}; super().__init__(*args,**kwargs)
+        # Size the layout rows themselves. CSS-only item heights can paint over
+        # the following row in Qt's popup without changing its actual spacing.
+        self.view().setItemDelegate(_ComboRows(self.view()))
         # The popup container is outside the item view and keeps a native white background on Windows.
         self.view().window().setStyleSheet('QComboBoxPrivateContainer { background: #1c282d; }')
+        self.view().window().installEventFilter(self)
+        self.popup_upwards=False
         self.setSizeAdjustPolicy(W.QComboBox.AdjustToContents)
     def showPopup(self):
-        super().showPopup()
+        animated=W.QApplication.isEffectEnabled(Qt.UI_AnimateCombo)
+        W.QApplication.setEffectEnabled(Qt.UI_AnimateCombo,False)
+        try: super().showPopup()
+        finally: W.QApplication.setEffectEnabled(Qt.UI_AnimateCombo,animated)
+
+    def eventFilter(self,watched,event):
+        # Show is delivered before the native popup becomes visible. Position
+        # it here so the first visible frame is already at its final location.
+        if event.type()==QEvent.Show and watched is self.view().window(): self._position_popup()
+        return super().eventFilter(watched,event)
+
+    def _position_popup(self):
         popup=self.view().window(); owner=self.window()
         bounds=QRect(owner.mapToGlobal(QPoint(0,0)),owner.size())
         screen=self.screen()
@@ -98,7 +121,9 @@ class QComboBox(_Translated,W.QComboBox):
         below=max(0,bounds.bottom()-(anchor.y()+self.height())+1)
         above=max(0,anchor.y()-bounds.top())
         height=popup.height()
-        if height<=below:
+        if self.popup_upwards and above:
+            height=min(height,above); y=anchor.y()-height
+        elif height<=below:
             y=anchor.y()+self.height()
         elif height<=above:
             y=anchor.y()-height

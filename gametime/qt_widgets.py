@@ -7,12 +7,29 @@ from math import ceil
 from pathlib import Path
 from queue import Empty
 from .model import within, helper
-from PySide6.QtCore import Qt, QRectF, QPointF, Signal, QTimer, QFileInfo
+from PySide6.QtCore import Qt, QRectF, QPointF, Signal, QTimer, QFileInfo,QObject,QEvent
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap, QLinearGradient, QRegion
-from PySide6.QtWidgets import QWidget,QFrame,QGridLayout,QFileIconProvider,QToolTip,QAbstractSpinBox,QDateEdit
-from .qt_translation import QLabel,QPushButton,QComboBox,QDoubleSpinBox,QTimeEdit,QSlider
+from PySide6.QtWidgets import QWidget,QFrame,QGridLayout,QFileIconProvider,QToolTip,QAbstractSpinBox,QDateEdit,QVBoxLayout,QSizePolicy,QAbstractButton,QLineEdit,QTextEdit,QPlainTextEdit
+from .qt_translation import QLabel,QPushButton,QComboBox,QDoubleSpinBox,QTimeEdit,QSlider,QToolButton
 
 BG, PANEL, TEXT, MUTED, ACCENT = '#101619', '#192126', '#edf4f2', '#93a3a7', '#7de5bf'
+
+
+class CursorGuard(QObject):
+    """Resolve the cursor at entry instead of inheriting a previous hand cursor."""
+    def eventFilter(self,widget,event):
+        if event.type() not in (QEvent.Enter,QEvent.EnabledChange) or not isinstance(widget,QWidget): return False
+        if isinstance(widget,(QAbstractButton,QComboBox,GameCard)):
+            cursor=Qt.PointingHandCursor if widget.isEnabled() else Qt.ArrowCursor
+        elif isinstance(widget,(QLineEdit,QTextEdit,QPlainTextEdit)) or isinstance(widget.parentWidget(),(QTextEdit,QPlainTextEdit)):
+            cursor=Qt.IBeamCursor if widget.isEnabled() else Qt.ArrowCursor
+        elif widget.property('dynamicCursor'):
+            return False
+        else: cursor=Qt.ArrowCursor
+        widget.setCursor(cursor)
+        return False
+
+
 STYLE = '''
 * { font-family: "Segoe UI"; font-size: 13px; color: #edf4f2; }
 QMainWindow, QDialog, QWidget#Surface { background: #101619; }
@@ -40,6 +57,9 @@ QPushButton[role="quiet"] { background: transparent; border: none; color: #a1b4b
 QPushButton[role="quiet"]:hover { background: #1f2d31; color: #edf4f2; }
 QPushButton[role="section-link"] { background: #19262a; border: 1px solid #304047; padding: 8px 5px; font-size: 12px; color: #c0d6d2; }
 QPushButton[role="section-link"]:hover { background: #254039; border-color: #527b68; color: #edf4f2; }
+QPushButton[role="section-link"]:checked { background: #24483b; border-color: #7de5bf; color: #c4f7e3; }
+QToolButton[role="disclosure"] { background: transparent; border: none; border-top: 1px solid #304047; border-radius: 0; padding: 14px 4px; text-align: left; }
+QToolButton[role="disclosure"]:hover { background: #223238; }
 QPushButton[role="preset"]:checked { background: #24483b; color: #a1f0d2; border-color: #396451; }
 QPushButton[role="day"] { border-radius:22px; padding:0; color:#b9c9c9; font-weight:600; }
 QPushButton[role="day"]:checked { background:#7de5bf; color:#10291f; border-color:#7de5bf; }
@@ -52,7 +72,6 @@ QAbstractSpinBox[hideStepButtons="true"]::up-button, QAbstractSpinBox[hideStepBu
 QComboBox { padding-right: 28px; combobox-popup: 0; }
 QComboBox::drop-down { border: none; width: 24px; }
 QComboBox QAbstractItemView { background: #1c282d; border: 1px solid #3c504e; selection-background-color: #315343; padding: 5px; outline: none; }
-QComboBox QAbstractItemView::item { min-height: 32px; padding: 2px 8px; }
 QScrollArea, QStackedWidget { border: none; background: transparent; }
 QScrollArea > QWidget > QWidget { background: transparent; }
 QScrollBar:vertical { background: transparent; width: 13px; margin: 2px; }
@@ -99,6 +118,37 @@ def button(text, callback, role=None):
     widget.setCursor(Qt.PointingHandCursor)
     widget.clicked.connect(callback)
     return widget
+
+
+def back_button(t,callback,*,discard=True):
+    description=t('Back without saving' if discard else 'Back')
+    widget=button('' if discard else description,callback,'quiet')
+    widget.setAccessibleName(description); widget.setToolTip(description)
+    if discard:
+        widget.setIcon(glyph('back',MUTED,20)); widget.setFixedSize(42,40)
+    widget.setAutoDefault(False)
+    return widget
+
+
+class Disclosure(QWidget):
+    """Keep optional controls alive while revealing them only on request."""
+    def __init__(self,title):
+        super().__init__()
+        layout=QVBoxLayout(self); layout.setContentsMargins(0,0,0,0); layout.setSpacing(4)
+        self.toggle=QToolButton(); self.toggle.setText(title); self.toggle.setCheckable(True)
+        self.toggle.setProperty('role','disclosure'); self.toggle.setCursor(Qt.PointingHandCursor)
+        self.toggle.setToolButtonStyle(Qt.ToolButtonTextBesideIcon); self.toggle.setArrowType(Qt.RightArrow)
+        self.toggle.setSizePolicy(QSizePolicy.Expanding,QSizePolicy.Fixed); layout.addWidget(self.toggle)
+        self.content=QWidget(); self.body=QVBoxLayout(self.content)
+        self.body.setContentsMargins(4,4,4,16); self.body.setSpacing(12)
+        layout.addWidget(self.content); self.content.hide()
+        self.toggle.toggled.connect(self._expand)
+
+    def _expand(self,expanded):
+        self.content.setVisible(expanded)
+        self.toggle.setArrowType(Qt.DownArrow if expanded else Qt.RightArrow)
+
+    def setExpanded(self,expanded): self.toggle.setChecked(expanded)
 
 def panel(name='Panel'):
     widget=QFrame(); widget.setObjectName(name)
@@ -161,6 +211,8 @@ def glyph(name, color=ACCENT, size=20):
     elif name=='stats':
         p.drawLine(4,20,21,20)
         for x,y in ((7,11),(13,6),(19,3)): p.drawLine(x,16,x,y)
+    elif name=='clock':
+        p.drawEllipse(QRectF(3,3,18,18)); p.drawLine(12,7,12,12); p.drawLine(12,12,16,14)
     elif name=='focus':
         p.drawEllipse(QRectF(5,5,14,14)); p.drawEllipse(QRectF(9,9,6,6))
         for x1,y1,x2,y2 in ((12,2,12,5),(12,19,12,22),(2,12,5,12),(19,12,22,12)): p.drawLine(x1,y1,x2,y2)
@@ -169,6 +221,7 @@ def glyph(name, color=ACCENT, size=20):
     elif name=='settings':
         p.drawEllipse(QRectF(5,5,14,14)); p.drawEllipse(QRectF(9,9,6,6))
         for x1,y1,x2,y2 in ((12,2,12,5),(12,19,12,22),(2,12,5,12),(19,12,22,12),(5,5,7,7),(17,17,19,19),(5,19,7,17),(17,7,19,5)): p.drawLine(x1,y1,x2,y2)
+    elif name=='back': p.drawLine(19,12,5,12); p.drawLine(5,12,11,6); p.drawLine(5,12,11,18)
     elif name=='plus': p.drawLine(12,5,12,19); p.drawLine(5,12,19,12)
     elif name=='hide': p.drawRoundedRect(QRectF(4,4,16,16),3,3); p.drawLine(8,15,16,15)
     elif name=='bell':

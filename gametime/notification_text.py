@@ -9,6 +9,13 @@ KINDS=('warning','limit','session','bedtime')
 MAX_MESSAGE_LENGTH=1000
 
 
+def notification_presentation(alert,t):
+    """One title/icon choice for desktop and fullscreen rendering."""
+    caption=alert.title or t('Bedtime reminder' if alert.kind=='bedtime' else 'Time budget reminder' if alert.kind=='wellbeing' else 'Game time alert')
+    heading=alert.title or t('Get ready for bed' if alert.kind=='bedtime' else 'Time for a break' if alert.kind=='wellbeing' else 'Time to stop playing' if alert.kind in ('limit','session') else 'Game time reminder')
+    return caption,heading,'moon' if alert.kind=='bedtime' else 'bell'
+
+
 def default_notification_template(settings,kind,test=False):
     """Editable, localized defaults with live time tokens left intact."""
     if kind not in KINDS: raise ValueError('Unknown notification kind.')

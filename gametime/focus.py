@@ -1,7 +1,7 @@
 """Local foreground activity and Pomodoro state, independent of game budgets/sync."""
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field
-from datetime import date
+from datetime import date,datetime
 import ipaddress
 import json
 import math
@@ -10,9 +10,12 @@ import re
 from urllib.parse import urlsplit
 
 from .tracker import day_slices
+from .activity_identity import is_idle_app
+from .quota import period_day
 
 BROWSERS = {'brave.exe': 'brave', 'chrome.exe': 'chrome', 'msedge.exe': 'edge',
             'firefox.exe': 'firefox', 'vivaldi.exe': 'vivaldi', 'opera.exe': 'opera'}
+BROWSER_IDLE = '__brave_newtab_idle__'
 SHELLS = {'explorer.exe', 'shellexperiencehost.exe', 'startmenuexperiencehost.exe',
           'searchhost.exe', 'lockapp.exe', 'applicationframehost.exe'}
 
@@ -113,8 +116,10 @@ class Focus:
         # Retire allowlists without changing existing blacklist entries or timer preferences.
         for key in ('mode', 'allow_apps', 'allow_sites'): config.pop(key, None)
         self.settings = FocusSettings(**config).validate()
+        self.day_start_minute=store.settings().budget_reset_minute
         earliest = store.db.execute('SELECT MIN(day) FROM activity_usage').fetchone()[0]
-        self.started_on = self._load('activity_started_on', earliest or date.today().isoformat())
+        self.started_on = self._load('activity_started_on', earliest or self.day(datetime.now().astimezone()).isoformat())
+        self._started_dirty=False
         with store.db: self._save('activity_started_on', self.started_on)
         state = self._load('focus_timer', {})
         self.phase = state.get('phase', 'focus')
@@ -139,6 +144,12 @@ class Focus:
 
     def _save(self, key, value):
         self.store.db.execute('INSERT OR REPLACE INTO settings VALUES (?,?)', (key, json.dumps(value)))
+
+    def day(self,wall): return period_day(wall,(self.day_start_minute,)*7)
+
+    def configure_day_start(self,minute):
+        if minute==self.day_start_minute: return
+        self.flush(); self.previous=None; self.day_start_minute=minute
 
     @property
     def restricting(self):
@@ -190,7 +201,7 @@ class Focus:
         if self.remaining > 0: return
         if self.phase == 'focus':
             self.round += 1
-            day = str(wall.date() if wall else date.today())
+            day = str(self.day(wall or datetime.now().astimezone()))
             with self.store.db:
                 self.store.db.execute('INSERT INTO focus_completions VALUES (?,1) '
                                       'ON CONFLICT(day) DO UPDATE SET rounds=rounds+1', (day,))
@@ -215,7 +226,8 @@ class Focus:
             if (0 < delta <= 3 and wall > 0 and abs(wall - delta) <= 1.5 and prev.interactive
                     and sample.interactive and prev.path and prev.identity):
                 key = app_key(prev.path)
-                if not self.settings.app_excluded(key):
+                if (not is_idle_app(key) and not self.settings.app_excluded(key)
+                        and not (prev_site==BROWSER_IDLE and ntpath.basename(key) in BROWSERS)):
                     self._credit('app', key, ntpath.basename(prev.path), prev.wall, sample.wall, delta)
                     # Website totals are a breakdown of browser time, not additional screen time.
                     if prev_site and ntpath.basename(key) in BROWSERS:
@@ -227,8 +239,9 @@ class Focus:
 
     def _credit(self, kind, key, name, start, end, seconds):
         self.items[(kind, key)] = name
-        for day, amount in day_slices(start, end, seconds):
+        for day, amount in day_slices(start, end, seconds,self.day_start_minute):
             self.pending[(day, kind, key)] += amount
+            if day<self.started_on: self.started_on=day; self._started_dirty=True
         self.revision += 1
 
     def flush(self):
@@ -240,6 +253,8 @@ class Focus:
                                      'DO UPDATE SET seconds=seconds+excluded.seconds',
                                      [(*key, value) for key, value in self.pending.items()])
             self._save('focus_timer', {'phase': self.phase, 'remaining': self.remaining, 'round': self.round})
+            if self._started_dirty: self._save('activity_started_on',self.started_on)
+        self._started_dirty=False
         self.pending.clear()
         self.items.clear()
         self._dirty = False
@@ -247,9 +262,10 @@ class Focus:
     def usage(self, day):
         rows = {(kind, key): [name, seconds] for kind, key, name, seconds in self.store.db.execute(
             'SELECT u.kind,u.key,i.name,u.seconds FROM activity_usage u '
-            'JOIN activity_items i ON i.kind=u.kind AND i.key=u.key WHERE u.day=?', (str(day),))}
+            'JOIN activity_items i ON i.kind=u.kind AND i.key=u.key WHERE u.day=?', (str(day),))
+                if kind!='app' or not is_idle_app(key)}
         for (pending_day, kind, key), seconds in self.pending.items():
-            if pending_day != str(day): continue
+            if pending_day != str(day) or kind=='app' and is_idle_app(key): continue
             row = rows.setdefault((kind, key), [self.items.get((kind, key), key), 0])
             row[1] += seconds
         return [(kind, key, name, seconds) for (kind, key), (name, seconds) in rows.items()]
@@ -280,6 +296,7 @@ class Focus:
         rows = list(self.store.db.execute(
             'SELECT u.day,u.kind,u.key,i.name,u.seconds FROM activity_usage u '
             'JOIN activity_items i ON i.kind=u.kind AND i.key=u.key WHERE u.day>=? AND u.day<=?', (str(start), str(end))))
+        rows=[row for row in rows if row[1]!='app' or not is_idle_app(row[2])]
         game_paths = {key for key in {row[2] for row in rows if row[1]=='app'} if is_game(key)}
         apps = [(day, 'activity:app:' + key, name, 'Application', seconds)
                 for day, kind, key, name, seconds in rows if kind == 'app' and key not in game_paths

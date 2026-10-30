@@ -116,6 +116,24 @@ class CountdownTransitionTests(unittest.TestCase):
         for _ in range(10): self.frame(current)
         self.assertEqual(self.app._overlay_backend,'rtss'); self.assertEqual(self.events,[])
 
+    def test_retry_hides_desktop_and_observes_compositor_guard_before_publication(self):
+        current=self.sample(); self.backend.present.return_value=False
+        self.backend.fallback_for.return_value=True
+        self.frame(current,tracked=True); self.assertTrue(self.app.overlay.isVisible())
+        self.backend.present.reset_mock(); self.backend.retry_due.return_value=True
+        self.frame(current); self.assertFalse(self.app.overlay.isVisible())
+        self.backend.present.assert_not_called()
+        deadline=self.app._overlay_desktop_until
+        with patch('gametime.qt_ui.time.monotonic',return_value=deadline-.01): self.frame(current)
+        self.backend.present.assert_not_called()
+        self.backend.desktop_ready=False
+        with patch('gametime.qt_ui.time.monotonic',return_value=deadline+.01): self.frame(current)
+        self.assertTrue(self.backend.present.call_args.kwargs['retry'])
+        self.assertFalse(self.app.overlay.isVisible())
+        self.backend.present.return_value=True; self.backend.fallback_for.return_value=False
+        with patch('gametime.qt_ui.time.monotonic',return_value=deadline+.1): self.frame(current)
+        self.assertEqual(self.app._overlay_backend,'rtss')
+
     def test_rapid_callbacks_cannot_skip_the_compositor_guard(self):
         current=self.sample(); self.app._rtss_available=False; self.frame(current,tracked=True)
         self.app._rtss_available=True; self.frame(current)

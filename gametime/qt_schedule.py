@@ -1,11 +1,11 @@
 """Seven selectable days, safe group edits and one save with all settings."""
 from dataclasses import replace
-from datetime import date
 from PySide6.QtCore import Qt,QTime
 from PySide6.QtWidgets import QFrame,QWidget,QVBoxLayout,QHBoxLayout,QAbstractSpinBox
 from .qt_translation import QLabel,QCheckBox
-from .qt_widgets import label,button,separator,NoWheelDoubleSpinBox,NoWheelTimeEdit
-from .schedule import SCHEDULE_FIELDS,week_plans,DAY_NAMES
+from .qt_widgets import label,button,NoWheelDoubleSpinBox,NoWheelTimeEdit,Disclosure
+from .schedule import week_plans,DAY_NAMES
+from .quota import current_day
 
 DAY_SHORT=('Mon','Tue','Wed','Thu','Fri','Sat','Sun')
 
@@ -18,44 +18,45 @@ class DayCheckBox(QCheckBox):
 class WeeklyScheduleEditor(QFrame):
     def __init__(self,settings,t):
         super().__init__(); self.setObjectName('Panel'); self.t=t
-        self._plans=week_plans(settings); self._edits={}; self._loading=False; self._selected=set(); self._fields={}; self._mixed={}; self._section_days=[]
-        layout=QVBoxLayout(self); layout.setContentsMargins(22,20,22,22); layout.setSpacing(12)
-        layout.addWidget(label(t('Weekly schedule'),'section'))
-        note=label(t('Select one or more days. Changes apply to the selected days and take effect after Save.'),'muted'); note.setWordWrap(True); layout.addWidget(note)
-        days=QHBoxLayout(); days.setSpacing(9); self.day_buttons=[]
-        for day in range(7):
-            item=button(t(DAY_SHORT[day]),lambda checked=False:self.select_checked(),'day'); item.setCheckable(True); item.setFixedSize(56,44)
-            item.setAccessibleName(t(DAY_NAMES[day])); self.day_buttons.append(item); days.addWidget(item)
-        days.addStretch(); layout.addLayout(days)
-        presets=QHBoxLayout()
-        for title,indices in (('Every day',range(7)),('Weekdays',range(5)),('Weekend',(5,6)),('Clear selection',())):
-            presets.addWidget(button(t(title),lambda checked=False,values=tuple(indices):self.select_days(values),'quiet'))
-        presets.addStretch(); layout.addLayout(presets)
+        self._plans=week_plans(settings); self._edits={}; self._loading=False; self._selected=set(); self._fields={}; self._mixed={}
+        layout=QVBoxLayout(self); layout.setContentsMargins(22,18,22,18); layout.setSpacing(12)
+        layout.addWidget(label(t('Daily game time'),'section'))
         owner=self
         class SelectionLabel(QLabel):
             def _retranslate_extra(self,language): owner.update_summary()
         self.selection_label=SelectionLabel(); self.selection_label.setWordWrap(True); layout.addWidget(self.selection_label)
         self.difference=label('','muted'); self.difference.setWordWrap(True); layout.addWidget(self.difference)
-        self.unify=button(t('Use these values for all selected days'),self.unify_selected); layout.addWidget(self.unify,0,Qt.AlignLeft)
         self.controls=QWidget(); form=QVBoxLayout(self.controls); form.setContentsMargins(0,0,0,0); form.setSpacing(12)
-        self.section(form,'Daily game time','The warning and the limit below belong to the selected days.')
         row=QHBoxLayout(); row.setSpacing(18)
         self.limit=self.number_field(row,'limit_seconds','Daily limit (minutes)')
         self.warning=self.number_field(row,'warning_seconds','Warn after (minutes)'); form.addLayout(row)
-        row=QHBoxLayout(); self.budget_reset=NoWheelTimeEdit(); self.budget_reset.setDisplayFormat('HH:mm')
-        self.budget_reset.setButtonSymbols(QAbstractSpinBox.NoButtons); self.budget_reset.setMinimumHeight(44)
-        self.budget_reset.setAccessibleName(t('Daily budget resets at')); self._fields['budget_reset_minute']=self.budget_reset
-        self.field_group(row,'budget_reset_minute','Daily budget resets at',self.budget_reset); form.addLayout(row)
-        self.budget_reset.timeChanged.connect(lambda value:self.change('budget_reset_minute',value.hour()*60+value.minute()))
-        self.track_typing(self.budget_reset,'budget_reset_minute',lambda value:value.time().hour()*60+value.time().minute())
-        note=label(t('The selected days receive a fresh budget at this local time. Until then, the previous day’s budget applies. Changing the time keeps already used time; statistics still use calendar days.'),'muted')
-        note.setWordWrap(True); form.addWidget(note)
-        self.section(form,'Play restriction','10 seconds to save and quit before each minimization.')
-        note=label(t('Protected games require separate minimization consent under Per-game countdowns. Without it, reminders remain available without interrupting the match.'),'muted'); note.setWordWrap(True); form.addWidget(note)
-        self.restriction_enabled=self.check_field(form,'restriction_enabled','Enable play restriction')
-        row=QHBoxLayout(); self.restriction_minutes=self.number_field(row,'restriction_seconds','Daily threshold (minutes)'); row.addStretch(); form.addLayout(row)
-        self.section(form,'Bedtime reminder','Local time. Overnight rules belong to the selected start day and continue until Resume at, including the next morning.')
-        self.bedtime_enabled=self.check_field(form,'bedtime_enabled','Enable bedtime reminder')
+        self.day_details=Disclosure(t('Change days'))
+        days=QHBoxLayout(); days.setSpacing(9); self.day_buttons=[]
+        for day in range(7):
+            item=button(t(DAY_SHORT[day]),lambda checked=False:self.select_checked(),'day'); item.setCheckable(True); item.setFixedSize(56,44)
+            item.setAccessibleName(t(DAY_NAMES[day])); self.day_buttons.append(item); days.addWidget(item)
+        days.addStretch(); self.day_details.body.addLayout(days)
+        presets=QHBoxLayout()
+        for title,indices in (('Every day',range(7)),('Weekdays',range(5)),('Weekend',(5,6)),('Clear selection',())):
+            presets.addWidget(button(t(title),lambda checked=False,values=tuple(indices):self.select_days(values),'quiet'))
+        presets.addStretch(); self.day_details.body.addLayout(presets)
+        self.unify=button(t('Use these values for all selected days'),self.unify_selected); self.day_details.body.addWidget(self.unify,0,Qt.AlignLeft)
+        # Day selection stays enabled even when all days have been deselected.
+        layout.addWidget(self.controls); layout.addWidget(self.day_details)
+        self.options=QWidget(); form=QVBoxLayout(self.options); form.setContentsMargins(0,0,0,0); form.setSpacing(12)
+        layout.addWidget(self.options)
+        self.details={}
+        def detail(key,title):
+            item=Disclosure(t(title)); self.details[key]=item; form.addWidget(item); return item.body
+        restriction=detail('restriction','Play restriction')
+        self.restriction_enabled=self.check_field(restriction,'restriction_enabled','Enable play restriction')
+        self.restriction_controls=QWidget(); restriction_body=QVBoxLayout(self.restriction_controls); restriction_body.setContentsMargins(0,0,0,0)
+        row=QHBoxLayout(); self.restriction_minutes=self.number_field(row,'restriction_seconds','Daily threshold (minutes)'); restriction_body.addLayout(row)
+        note=label(t('10 seconds to save and quit before each minimization.'),'muted'); note.setWordWrap(True); restriction_body.addWidget(note)
+        note.setToolTip(t('Protected games require separate minimization consent under Per-game countdowns. Without it, reminders remain available without interrupting the match.'))
+        restriction.addWidget(self.restriction_controls)
+        bedtime_section=detail('bedtime','Bedtime reminder')
+        self.bedtime_enabled=self.check_field(bedtime_section,'bedtime_enabled','Enable bedtime reminder')
         self.bedtime_controls=QWidget(); bedtime=QVBoxLayout(self.bedtime_controls); bedtime.setContentsMargins(0,0,0,0); bedtime.setSpacing(10)
         row=QHBoxLayout(); self.bedtime_times={}
         for key,title in (('bedtime_warning_minute','Remind at'),('bedtime_minute','Bedtime'),('bedtime_resume_minute','Resume at')):
@@ -65,17 +66,13 @@ class WeeklyScheduleEditor(QFrame):
             self.track_typing(edit,key,lambda value:value.time().hour()*60+value.time().minute())
         bedtime.addLayout(row)
         self.bedtime_caps_budget=self.check_field(bedtime,'bedtime_caps_budget','Cap remaining game time at bedtime')
-        note=label(t('Show the smaller of the unused daily budget and the time until bedtime. During the bedtime window, remaining time stays at zero until Resume at.'),'muted'); note.setWordWrap(True); bedtime.addWidget(note)
+        self.bedtime_caps_budget.setToolTip(t('Show the smaller of the unused daily budget and the time until bedtime. During the bedtime window, remaining time stays at zero until Resume at.'))
         self.bedtime_minimize=self.check_field(bedtime,'bedtime_minimize','Minimize the foreground window every 10 seconds after bedtime')
-        note=label(t('Bedtime minimization also applies to browsers and other apps until the resume time.'),'muted'); note.setWordWrap(True); bedtime.addWidget(note)
-        form.addWidget(self.bedtime_controls); layout.addWidget(self.controls)
+        note=label(t('Bedtime minimization also applies to browsers and other apps until the resume time.'),'muted'); note.setWordWrap(True)
+        bedtime.addWidget(note); self.bedtime_minimize_note=note
+        bedtime_section.addWidget(self.bedtime_controls)
         identical=all(value==self._plans[0] for value in self._plans.values())
-        self.select_days(range(7) if identical else (date.today().weekday(),))
-
-    def section(self,layout,title,note):
-        layout.addWidget(separator()); heading=QHBoxLayout(); heading.addWidget(label(self.t(title),'section'),1)
-        days=label('','muted'); days.setAccessibleName(self.t('Selected days')); self._section_days.append(days); heading.addWidget(days); layout.addLayout(heading)
-        text=label(self.t(note),'muted'); text.setWordWrap(True); layout.addWidget(text)
+        self.select_days(range(7) if identical else (current_day(settings).weekday(),))
 
     def field_group(self,row,key,title,edit):
         group=QVBoxLayout(); heading=QHBoxLayout(); heading.addWidget(label(self.t(title),'muted'))
@@ -124,18 +121,24 @@ class WeeklyScheduleEditor(QFrame):
     def update_summary(self):
         if not hasattr(self,'selection_label'): return
         names=', '.join(str(self.t(DAY_NAMES[day])) for day in sorted(self._selected))
-        self.selection_label.setText(self.t('Editing: {days}',days=names) if names else self.t('Select at least one day to edit its schedule.'))
-        mixed=self._selected and any(len({self._plans[day][key] for day in self._selected})>1 for key in SCHEDULE_FIELDS)
+        self.selection_label.setText(self.t('Applies every day.') if self._selected==set(range(7)) else self.t('Editing: {days}',days=names) if names else self.t('Select at least one day to edit its schedule.'))
+        mixed=self._selected and any(len({self._plans[day][key] for day in self._selected})>1 for key in self._fields)
         self.difference.setText(self.t('The selected days differ. Values shown are from {day}; only edited fields change on all selected days.',day=self.t(DAY_NAMES[min(self._selected)])) if mixed else self.t('The selected days use the same schedule.') if names else '')
+        self.difference.setVisible(bool(mixed))
         self.unify.setVisible(bool(mixed))
         if self._selected: self.unify.setText(self.t("Use {day}'s schedule for selected days",day=self.t(DAY_NAMES[min(self._selected)])))
-        short=', '.join(str(self.t(DAY_SHORT[day])) for day in sorted(self._selected)) or '—'
-        for caption in self._section_days: caption.setText(self.t('Days: {days}',days=short))
 
     def update_enabled(self):
         self.controls.setEnabled(bool(self._selected))
+        self.options.setEnabled(bool(self._selected))
         self.restriction_minutes.setEnabled(self.restriction_enabled.checkState()!=Qt.Unchecked)
+        self.restriction_controls.setVisible(self.restriction_enabled.checkState()!=Qt.Unchecked)
         self.bedtime_controls.setEnabled(self.bedtime_enabled.checkState()!=Qt.Unchecked)
+        self.bedtime_controls.setVisible(self.bedtime_enabled.checkState()!=Qt.Unchecked)
+        self.bedtime_minimize_note.setVisible(self.bedtime_minimize.checkState()!=Qt.Unchecked)
+        for key,title,field in (('restriction','Play restriction',self.restriction_enabled),('bedtime','Bedtime reminder',self.bedtime_enabled)):
+            state=self.t('On') if field.checkState()==Qt.Checked else self.t('Off') if field.checkState()==Qt.Unchecked else self.t('Varies')
+            self.details[key].toggle.setText(self.t('{setting} · {state}',setting=self.t(title),state=state))
 
     def change(self,key,value):
         if self._loading or not self._selected: return

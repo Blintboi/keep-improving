@@ -60,11 +60,12 @@ class PreferenceSyncTests(unittest.TestCase):
         self.assertNotIn('steam:42',self.stores[0].hidden_ids())
 
     def test_invalid_preferences_do_not_replace_local_values(self):
+        before=read(self.stores[1],key(GROUP))
         snapshot=self.data[0].snapshot(GROUP,'Example computer')
         snapshot['preferences']={'settings.language':{'clock':1,'device':'0'*32,'value':'bad'},'unknown':{}}
         with self.assertRaises(ValueError): validate_snapshot(snapshot,GROUP)
         self.assertEqual(self.stores[1].settings().language,'en')
-        self.assertEqual(read(self.stores[1],key(GROUP)),{})
+        self.assertEqual(read(self.stores[1],key(GROUP)),before)
 
     def test_invalid_remote_combination_is_rejected_without_changing_settings(self):
         from gametime.preferences_sync import stage

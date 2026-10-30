@@ -56,10 +56,12 @@ class GameWindow:
         return (sample.interactive and sample.identity==self.identity and norm(sample.path)==norm(self.path)
                 and u.GetForegroundWindow()==self.hwnd and self.valid())
 
-    def activate(self):
+    def activate(self,*,display=False):
         # Called only from the user's Preview action. No input synthesis or
         # repeated focus attempts: Alt+Tab immediately ends a live preview.
-        if self.blocked() or not win32.interactive_desktop() or not self.valid(): return False
+        blocked=(safety.overlay_reason(self.path,self.game,consented=bool(self.game and isinstance(self.consent,Consents) and self.consent.display_enabled))
+                 if display else self.blocked())
+        if blocked or not win32.interactive_desktop() or not self.valid(): return False
         if u.IsIconic(self.hwnd): u.ShowWindowAsync(self.hwnd,9)
         return bool(self.valid() and u.SetForegroundWindow(self.hwnd))
 

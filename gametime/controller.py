@@ -29,12 +29,14 @@ class MonitorActions:
             if not current.interactive: return 'defer'
             if safety.reason(current.path,self.catalog.resolve(current.path)):
                 return 'passive' if win32.desktop_overlay_available() else 'audio'
-            return 'normal'
+            # Never mark an invisible desktop window as delivered in exclusive fullscreen.
+            return 'normal' if win32.desktop_overlay_available() else 'defer'
         except Exception:
             log.exception('Notification context unavailable; visual notification deferred')
             return 'defer'
 
     def audio_notification(self,alert):
+        if not alert.sound: return False
         from .sound import play_notification
         if self.settings.notification_sound=='silent': return False
         now=time.monotonic(); prior=getattr(self,'_audio_retry',None)
@@ -264,24 +266,8 @@ class MonitorActions:
         return True
 
     def notify(self, alert):
-        """Let the current game process Escape before mapping the alert window."""
-        if self.consume_silent_alert(alert):
-            return
-        escaped = False
-        self.escape_attempts = {prior for prior in self.escape_attempts if prior.day == alert.day}
-        if self.tracker.active and alert not in self.escape_attempts:
-            self.escape_attempts.add(alert)
-            try:
-                current = win32.sample()
-                game=self.catalog.resolve(current.path)
-                if game and not safety.reason(current.path,game) and current.interactive and current.identity == self.tracker.identity:
-                    escaped = win32.escape_game(current.path, current.identity)
-            except Exception:
-                log.exception("Escape before notification failed")
-        if escaped:
-            log.info("Escape sent to tracked game; notification in 200 ms")
-            self.notification_timer = self.call_later(200, lambda: self.finish_notification(alert))
-        else:
+        """Present reminders without injecting input into the foreground app."""
+        if not self.consume_silent_alert(alert):
             self.finish_notification(alert)
 
 
@@ -345,12 +331,23 @@ class MonitorActions:
         day=period_day(wall,reset_clock(self.settings)) if day is None or isinstance(day,datetime) else day
         settings=day_settings(self.settings,day)
         totals=self.tracker.quota_day_totals(day)
-        shared=settings.restriction_enabled and sum(totals.values())>=settings.restriction_seconds
-        cap=self.settings.game_limits.get(game.id) if game and self.catalog.enabled(game) else None
+        shared=settings.game_budget_enabled and 'shared-games' not in settings.restriction_plans and settings.restriction_enabled and sum(totals.values())>=settings.restriction_seconds
+        cap=self.settings.game_limits.get(game.id) if game and self.catalog.enabled(game) and 'game:'+game.id not in settings.restriction_plans else None
         return shared or (cap is not None and totals.get(game.id,0)>=cap)
 
     def launch_restricted(self, game):
-        return self.catalog.enabled(game) and self.restriction_reached(game=game)
+        if not self.catalog.enabled(game): return False
+        if self.restriction_reached(game=game): return True
+        wellbeing=getattr(self,'wellbeing',None)
+        if wellbeing:
+            from .focus import app_key
+            atom=(game.id,app_key(self.store.launch_executable(game.id)),'')
+            if any(state.rule['id'] not in self.settings.restriction_plans and state.rule['enforce'] and not state.remaining for state in wellbeing.states(datetime.now().astimezone(),atom)): return True
+            runtime=getattr(self,'restrictions',None)
+            if runtime:
+                runtime.prepare(datetime.now().astimezone())
+                return any(runtime.state.action(key,'app:'+atom[1]) for key in runtime.matching(atom))
+        return False
 
     def restriction_notice(self):
         self.open_games()
@@ -429,7 +426,8 @@ class MonitorActions:
         if '{remaining}' in settings.notification_messages.get('bedtime',''):
             now=wall or datetime.now().astimezone()
             total=sum(self.tracker.quota_totals(now).values())
-            remaining=math.ceil(remaining_budget(self.settings,now,total).remaining/60)
+            value=remaining_budget(self.settings,now,total).remaining
+            remaining=math.ceil(value/60) if math.isfinite(value) else self.t('No shared limit')
         return notification_text(settings,'bedtime',remaining,day=day)
 
     def bedtime_tick(self, current):
@@ -439,7 +437,7 @@ class MonitorActions:
         state, marker, minimize = self.bedtime.update(self.settings, current)
         if marker:
             if self.popup_window: self.dismiss_popup()
-            alert = Alert(str(current.wall.date()), (), 'bedtime',
+            alert = Alert(period_day(current.wall,reset_clock(self.settings)).isoformat(), (), 'bedtime',
                           self.bedtime_message(marker[0],current.wall),
                           self.t('OK, I’ll finish'))
             # Bedtime is independent of game budgets, exclusions and Escape.
@@ -456,8 +454,9 @@ class MonitorActions:
         return active
 
     def test_bedtime_popup(self):
-        self.popup(Alert(str(datetime.now().date()), (), 'bedtime',
-                   self.bedtime_message(datetime.now().date().isoformat()),
+        day=period_day(datetime.now().astimezone(),reset_clock(self.settings)).isoformat()
+        self.popup(Alert(day, (), 'bedtime',
+                   self.bedtime_message(day),
                    self.t('OK, I’ll finish')))
 
     def tick(self):
@@ -487,13 +486,18 @@ class MonitorActions:
             update_overlay = getattr(self, 'update_overlay', None)
             if update_overlay: update_overlay()
             bedtime_restricting = self.bedtime_tick(current)
+            runtime=getattr(self,'restrictions',None)
+            planned_restricting=runtime.tick(current,bedtime_restricting) if runtime else False
+            if runtime: self.update_focus_policy()
             if bedtime_restricting:
                 self._restriction_grace = None
                 if getattr(self, 'restriction_timer', None) is not None:
                     self.restriction_timer.stop(); self.restriction_timer = None
-            restricting = bedtime_restricting or self.enforce_gameplay(current)
+            wellbeing_tick=getattr(self,'wellbeing_tick',None)
+            wellbeing_restricting=wellbeing_tick(current,bedtime_restricting) if wellbeing_tick else False
+            restricting = bedtime_restricting or planned_restricting or self.enforce_gameplay(current) or wellbeing_restricting
             today = period_day(current.wall,reset_clock(self.settings)).isoformat()
-            popup_day = current.wall.date().isoformat() if getattr(self,'popup_kind',None)=='bedtime' else today
+            popup_day = today
             if self.popup_window and self.popup_day != popup_day:
                 self.dismiss_popup()
                 self.popup_window = self.popup_day = None
@@ -504,6 +508,8 @@ class MonitorActions:
                 elif alert.day != today:
                     self.tracker.alerts.popleft()
                     self.tracker.queued.difference_update((alert.day, key) for key in alert.keys)
+            scheduled_tick=getattr(self,'scheduled_notification_tick',None)
+            if scheduled_tick: scheduled_tick(current)
             self.render_tick()
         except Exception as exc:
             log.exception("Game time measurement failed")

@@ -1,10 +1,16 @@
 # Windows-megbízhatóság és kódaláírás
 
-Áttekintés: 2026-10-23. A jelenlegi telepítő és fő program Authenticode-aláírása
+Áttekintés: 2026-10-30. A jelenlegi telepítő és fő program Authenticode-aláírása
 hiányzik. A fájlok helyi `Get-AuthenticodeSignature` ellenőrzése `NotSigned`
 eredményt adott. A Windows-verzióadatok és az ikon azonosítják az alkalmazást,
 de nem tanúsítják a kiadót. A SHA-256 az egyezést ellenőrzi egy megbízhatóan
 megszerzett referenciaértékhez; önmagában nem jelent Windows-jóváhagyást.
+
+**Állapot:** a 2026-10-30-i SignPath-jelentkezés után az alkalmazás ismertsége
+egyelőre nem bizonyult elegendőnek a felvételhez. Az aláírás bevezetése szünetel;
+a projekt jelenleg aláíratlan kiadásokat készít, ellenőrzött telepítőkkel. Új verziónál
+hiteles aláírás mellett is megjelenhet SmartScreen-figyelmeztetés. Egy konkrét
+Defender-vírusriasztást az aláírás önmagában nem rendez.
 
 ## Mitől függ, hogy futtatható-e?
 
@@ -56,3 +62,26 @@ Controlt. Nem adható garancia arra, hogy minden gép és vállalati házirend
 engedélyezi a futást. A Microsoft Store terjesztése további út lehet, de külön
 csomagolást, jogosultságot és ellenőrzést igényel; a projekt elsődleges
 terjesztési útja továbbra is a README közvetlen GitHub-letöltése.
+
+## Code signing policy
+
+**Status: deferred, not active.** Keep Improving is not currently signed through
+SignPath. Following the 2026-10-30 application, the maintainer reported that the
+project's adoption was not yet sufficient for acceptance. No certificate has
+been granted. The following policy remains a proposal for future onboarding.
+
+- Proposed author, reviewer and signing approver: [Blintboi](https://github.com/Blintboi),
+  the project maintainer. The maintainer must confirm these roles during onboarding.
+- Only this project's own executables and scripts would be signed. Bundled
+  third-party libraries retain their upstream signatures or unsigned status.
+- Signing would require a traceable build from reviewed source, passing security
+  checks and manual release approval. MFA is required for repository and signing
+  access before activation.
+- A Defender-blocked build is withheld from signing and distribution pending
+  investigation. Signing does not replace malware review.
+- Data handling is described in the [privacy policy](../PRIVACY.md), including
+  update checks, local tracking and optional synchronization.
+
+After provider acceptance and successful integration, this status will be updated
+with the actual provider attribution and verified signing process. The applicable
+[SignPath conditions](https://signpath.org/terms.html) govern eligibility.

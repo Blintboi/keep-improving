@@ -1,5 +1,43 @@
 # Testing
 
+## 2.35.0 staged restrictions and current screenshots — 2026-10-30
+
+- 832 Python tests across 62 modules pass. Modules run in isolated processes to
+  avoid accumulating native Qt objects between suites. Existing preview,
+  notification and wheel fixtures now exercise the current dialogs and the
+  non-injecting notification behavior; asynchronous capture uses a bounded wait.
+- 15 Node tests pass, including the real browser background script with mocked
+  Chrome APIs: scoped return grants, denied grants, navigations racing a block,
+  background tabs, block-page recovery and later tab close.
+- 11 Defender-gate regression checks pass, including single-file enumeration
+  under PowerShell strict mode. Missing scan receipts, altered files, disabled
+  protection and matching detections all stop delivery.
+- A Defender-scanned disposable WinForms process verifies exact-target muting,
+  EOF/crash audio restoration, rejected process identity reuse and forced close.
+  The packaged windowed audio helper passes the same pipe/mute/restore probe.
+- A separate native screen probe shows the opaque cover, requests its one-time
+  allowance, checks that the countdown leaves focus with the target, and confirms
+  closure after the deadline. No real user application is closed by the probes.
+- The four README screenshots use the current English interface and the
+  maintainer's authorized, actually recorded game history. A separate profile
+  copy disables synchronization; no usage values are invented, and no account
+  session, pairing code or private browsing list appears in the images.
+
+Reports remain in ignored `test-reports/` and `build/restrictions-235/` folders.
+Platform checks do not establish compatibility with every game, exclusive audio
+mode or anti-cheat implementation. Exclusive fullscreen uses the documented
+minimize fallback for interactive restrictions.
+
+## Defender release preflight
+
+Run `tests/defender_scan_checks.ps1` for the release gate. It covers completed
+clean scans, detected and remediated threats, removed/changed files, absent or
+unrelated completion records, interrupted scans and disabled protection.
+The gate also receives a real Defender scan of a benign fixture. Do not create
+or execute a malicious fixture: a previously blocked release may be inspected
+as data, but must not be launched to test the gate. Build and bundled-install
+preflight failures preserve the user's existing installation and profile.
+
 ## 2.31.2 activity, synchronization and statistics
 
 Temporary profiles cover application and website measurement, exclusions,

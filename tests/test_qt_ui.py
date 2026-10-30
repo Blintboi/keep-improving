@@ -43,13 +43,16 @@ class QtInterfaceTests(unittest.TestCase):
             def request(me,*args): pass
             def close(me): pass
         self.sound=patch('gametime.qt_ui.winsound.PlaySound'); self.sound.start()
+        # UI fixtures must not contact the real websites in synthetic history.
+        icon_network=patch('gametime.qt_activity_icons.ActivityIcons.fetch',autospec=True)
+        icon_network.start(); self.addCleanup(icon_network.stop)
         # Exercise native message windows without adding/removing hundreds of
         # real notification icons or starting the user's optional RTSS server.
         for target in ('gametime.win32.s.Shell_NotifyIconW','gametime.rtss.installation','gametime.qt_ui.rtss_installation'):
             isolated=patch(target,return_value=True if target.endswith('Shell_NotifyIconW') else None)
             isolated.start(); self.addCleanup(isolated.stop)
         self.app=App(self.store,self.base,background=True,service=Service(),hub=Hub())
-        self.app.tick_timer.stop(); self.pump(.03)
+        self.app.tick_timer.stop(); self.app.switch_page(0); self.pump(.03)
 
     def tearDown(self):
         self.app.close(); self.pump(.02); self.sound.stop(); self.store.close()
@@ -108,7 +111,8 @@ class QtInterfaceTests(unittest.TestCase):
         code='e'*32
         self.app.settings=replace(self.app.settings,statistics_sync_enabled=True,statistics_sync_group=code)
         start=datetime.now().astimezone()
-        with patch.object(self.app,'schedule_statistics_event') as schedule:
+        # Activity tracking has its own event test; isolate game start/stop here.
+        with patch.object(self.app,'schedule_statistics_event') as schedule,patch.object(self.app,'focus_tick'):
             with patch('gametime.controller.win32.sample',return_value=Sample(start,100,str(self.exe),'fixture:1')):
                 self.app.tick()
             with patch('gametime.controller.win32.sample',return_value=Sample(start+timedelta(seconds=1),101)):
@@ -215,7 +219,7 @@ class QtInterfaceTests(unittest.TestCase):
         self.assertEqual(self.app.search.text(),'Beta'); self.assertEqual(self.app.selected_id,self.games[1].id)
         self.assertEqual(self.app.pages.currentIndex(),1); self.assertEqual(self.store.settings().language,'en')
         self.assertEqual((self.app.statistics.start.text(),self.app.statistics.end.text(),self.app.statistics.selected_day),original)
-        self.app.set_language('hu'); self.pump(); self.assertEqual(self.app.nav[0].text(),'Játéktár')
+        self.app.set_language('hu'); self.pump(); self.assertEqual(self.app.nav[0].text(),'Tevékenységek')
 
     def test_language_changes_keep_live_cards_images_focus_and_pending_art(self):
         from PySide6.QtCore import Qt
@@ -251,7 +255,8 @@ class QtInterfaceTests(unittest.TestCase):
         self.app.games_path.setText('Settings'); self.app.paths['steam'].setText('Beállítások')
         self.app.overlay_enabled.setChecked(True); self.app.overlay_opacity.setValue(44)
         self.app.overlay_picker.set_position(.25,.75)
-        advanced=next(w for w in self.app.settings_page.findChildren(QToolButton) if w.isCheckable())
+        self.app.show_settings_section('games')
+        advanced=next(w for w in self.app.settings_page.findChildren(QToolButton) if w.text()==self.app.t('Advanced'))
         advanced.setChecked(True); self.pump(.03)
         scroll=self.app.settings_page.findChild(QScrollArea); bar=scroll.verticalScrollBar(); bar.setValue(bar.maximum()//2); position=bar.value()
         self.app.set_language('en'); self.pump(.02)
@@ -320,21 +325,26 @@ class QtInterfaceTests(unittest.TestCase):
         from PySide6.QtCore import Qt,QPoint
         from PySide6.QtTest import QTest
         from PySide6.QtWidgets import QScrollArea,QDateTimeEdit
-        self.app.show(); self.app.switch_page(2)
+        self.app.show(); self.app.open_budget(); self.app.budget_editor.show_editor('shared-games')
         self.app.restriction_enabled.setChecked(True); self.app.bedtime_enabled.setChecked(True)
+        for details in self.app.schedule_editor.details.values(): details.setExpanded(True)
+        self.app.overlay_details.setExpanded(True)
         self.app.overlay_enabled.setChecked(True); self.pump(.03)
-        scroll=self.app.pages.widget(2).findChild(QScrollArea); bar=scroll.verticalScrollBar()
-        controls=[self.app.limit,self.app.warning,self.app.restriction_minutes,*self.app.bedtime_times.values(),
-                  self.app.overlay_screen,*self.app.overlay_coordinates,self.app.overlay_font_size,self.app.overlay_opacity]
+        scroll=self.app.budget_scroll; scroll.setFixedHeight(350); self.pump(.03)
+        bar=scroll.verticalScrollBar(); self.assertGreater(bar.maximum(),0)
+        controls=[self.app.limit,self.app.warning,self.app.restriction_minutes,*self.app.bedtime_times.values()]
         def value(widget):
             if widget in self.app.bedtime_times.values(): return widget.time()
             if widget is self.app.overlay_screen: return widget.currentIndex()
             return widget.value()
         for widget in controls:
+            if widget in controls[:6]: self.app.budget_editor.show_editor('shared-games')
+            else: self.app.budget_editor.show_shared_appearance()
+            self.pump(.03)
             for focused in (False,True):
                 with self.subTest(control=type(widget).__name__,focused=focused):
                     scroll.ensureWidgetVisible(widget); self.pump(.02)
-                    (widget if focused else self.app.nav[2]).setFocus(); self.pump(.01)
+                    (widget if focused else self.app.nav[5]).setFocus(); self.pump(.01)
                     position=bar.value(); original=value(widget)
                     point=widget.mapTo(self.app,widget.rect().center())
                     direction=-1 if bar.value()<bar.maximum()-80 else 1
@@ -347,13 +357,19 @@ class QtInterfaceTests(unittest.TestCase):
                     QTest.wheelEvent(self.app.windowHandle(),point,QPoint(),pixelDelta=QPoint(0,40*direction),phase=Qt.ScrollUpdate)
                     self.pump(.02); self.assertEqual(value(widget),original)
         # The same form controls still accept deliberate keyboard input.
+        self.app.budget_editor.show_editor('shared-games'); self.pump(.03)
         scroll.ensureWidgetVisible(self.app.limit); self.app.limit.setFocus()
         original=self.app.limit.value(); QTest.keyClick(self.app.limit,Qt.Key_Up)
         self.assertGreater(self.app.limit.value(),original)
         edit=self.app.bedtime_times['bedtime_minute']; scroll.ensureWidgetVisible(edit)
         edit.setFocus(); edit.setSelectedSection(QDateTimeEdit.Section.MinuteSection); original=edit.time()
         QTest.keyClick(edit,Qt.Key_Up); self.assertNotEqual(edit.time(),original)
-        combo=self.app.overlay_screen; combo.addItem('Synthetic second monitor','fixture:2')
+        from PySide6.QtWidgets import QWidget
+        self.app.game_countdown_dialog(self.games[0].id); window=self.app._dialogs[-1]
+        fields={w.accessibleName():w for w in window.findChildren(QWidget) if w.accessibleName()}
+        fields[self.app.t('Hide this countdown')].setChecked(False)
+        combo=fields[self.app.t('Monitor')]; combo.addItem('Synthetic second monitor','fixture:2')
+        scroll=window.findChild(QScrollArea); self.pump(.03)
         scroll.ensureWidgetVisible(combo); combo.setFocus(); combo.setCurrentIndex(0)
         QTest.keyClick(combo,Qt.Key_Down); self.assertEqual(combo.currentIndex(),1)
 
@@ -361,9 +377,11 @@ class QtInterfaceTests(unittest.TestCase):
         from PySide6.QtCore import Qt,QPoint
         from PySide6.QtTest import QTest
         from PySide6.QtWidgets import QScrollArea,QStyle,QStyleOptionSlider
-        self.app.show(); self.app.switch_page(2); self.app.overlay_enabled.setChecked(True)
-        scroll=self.app.pages.widget(2).findChild(QScrollArea)
-        combo=self.app.overlay_screen
+        from PySide6.QtWidgets import QWidget
+        self.app.show(); self.app.game_countdown_dialog(self.games[0].id); window=self.app._dialogs[-1]
+        fields={w.accessibleName():w for w in window.findChildren(QWidget) if w.accessibleName()}
+        fields[self.app.t('Hide this countdown')].setChecked(False)
+        scroll=window.findChild(QScrollArea); combo=fields[self.app.t('Monitor')]
         for i in range(50): combo.addItem('Synthetic monitor '+str(i),'fixture:'+str(i))
         scroll.ensureWidgetVisible(combo); self.pump(.03)
         combo.showPopup(); self.pump(.03)
@@ -372,13 +390,26 @@ class QtInterfaceTests(unittest.TestCase):
         QTest.wheelEvent(popup.windowHandle(),point,QPoint(0,-120)); self.pump(.03)
         self.assertGreater(bar.value(),original)
         combo.hidePopup()
-        slider=self.app.overlay_opacity; scroll.ensureWidgetVisible(slider); self.pump(.03)
+        slider=fields[self.app.t('Text opacity')]; scroll.ensureWidgetVisible(slider); self.pump(.03)
         option=QStyleOptionSlider(); slider.initStyleOption(option)
         handle=slider.style().subControlRect(QStyle.CC_Slider,option,QStyle.SC_SliderHandle,slider).center()
         original=slider.value(); target=QPoint(slider.width()-12,handle.y())
         QTest.mousePress(slider,Qt.LeftButton,pos=handle); QTest.mouseMove(slider,target,20)
         QTest.mouseRelease(slider,Qt.LeftButton,pos=target)
         self.assertGreater(slider.value(),original)
+
+    def test_combo_popup_rows_do_not_overlap(self):
+        from PySide6.QtWidgets import QComboBox
+        self.app.game_countdown_dialog(self.games[0].id); self.pump(.03)
+        window=self.app._dialogs[-1]
+        combo=next(item for item in window.findChildren(QComboBox) if item.accessibleName()==self.app.t('Countdown target'))
+        combo.showPopup(); self.pump(.03)
+        view=combo.view()
+        rows=[view.visualRect(combo.model().index(i,0)) for i in range(combo.count())]
+        self.assertEqual(len(rows),3)
+        for first,second in zip(rows,rows[1:]):
+            self.assertLess(first.bottom(),second.top())
+        combo.hidePopup()
 
     def test_guarded_connection_save_keeps_sync_enabled_and_reports_last_success(self):
         from PySide6.QtWidgets import QPushButton
@@ -887,13 +918,13 @@ class QtInterfaceTests(unittest.TestCase):
             self.assertTrue(popup.windowFlags() & Qt.WindowStaysOnTopHint)
             popup.accept(); self.pump(); self.assertIsNone(self.app.popup_window)
 
-    def test_threshold_escape_delay_then_visible_delivery_and_failure_retry(self):
+    def test_threshold_without_input_injection_then_visible_delivery_and_failure_retry(self):
         from gametime.tracker import Alert,Sample
         alert=Alert(date.today().isoformat(),('limit:7200',),'limit','Fixture limit','OK')
         tracker=self.app.tracker; tracker.active=self.games[0]; tracker.identity='fixture:1'; tracker.alerts.append(alert)
         with patch('gametime.controller.win32.sample',return_value=Sample(datetime.now().astimezone(),1,str(self.exe),'fixture:1')), patch('gametime.controller.win32.escape_game',return_value=True) as escape:
-            self.app.notify(alert); escape.assert_called_once(); self.assertIsNone(self.app.popup_window)
-            self.pump(.3); self.assertTrue(self.app.popup_window.isVisible()); self.assertFalse(tracker.alerts)
+            self.app.notify(alert); escape.assert_not_called()
+            self.assertTrue(self.app.popup_window.isVisible()); self.assertFalse(tracker.alerts)
         self.assertIn((alert.keys[0],),list(self.store.db.execute('SELECT key FROM alerts WHERE day=?',(alert.day,))))
         self.app.dismiss_popup(); tracker.alerts.append(alert)
         with patch('gametime.qt_ui.win32.present_notification',side_effect=OSError('fixture')):
@@ -965,11 +996,13 @@ class QtInterfaceTests(unittest.TestCase):
         self.app.show(); self.app.resize(1000,700); self.pump()
         self.assertLessEqual(self.app.width(),1000); self.assertLessEqual(self.app.height(),700)
         self.assertGreaterEqual(self.app.grid.columns,2)
-        for page in (1,2,0): self.app.switch_page(page); self.pump(); self.assertLessEqual(self.app.width(),1000)
+        for page in (1,2,5,0): self.app.switch_page(page); self.pump(); self.assertLessEqual(self.app.width(),1000)
 
     def test_buttonless_numbers_and_times_have_visible_text_after_resize(self):
         from PySide6.QtWidgets import QAbstractSpinBox
-        self.app.show(); self.app.switch_page(2)
+        self.app.show(); self.app.open_budget(); self.app.budget_editor.show_editor('shared-games')
+        self.app.restriction_enabled.setChecked(True); self.app.bedtime_enabled.setChecked(True)
+        for details in self.app.schedule_editor.details.values(): details.setExpanded(True)
         editors=[edit for edit in self.app.schedule_editor._fields.values() if isinstance(edit,QAbstractSpinBox)]
         self.assertGreaterEqual(len(editors),5)
         for width in (1000,1380):

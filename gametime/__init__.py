@@ -1,2 +1,2 @@
-"""Offline, per-user Windows game time monitor with a Qt Gaming Hub."""
-__version__ = "2.31.2"
+"""Local digital wellbeing, activity history, focus and shared time budgets."""
+__version__ = "2.35.0"

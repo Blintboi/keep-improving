@@ -7,7 +7,7 @@ import secrets
 import threading
 import time
 
-from .focus import BROWSERS, domain
+from .focus import BROWSERS, BROWSER_IDLE, domain
 from .secrets import protect, unprotect
 
 
@@ -21,6 +21,7 @@ class BrowserBridge:
             with store.db:
                 store.db.execute("INSERT OR REPLACE INTO settings VALUES ('browser_pairing',?)", (protect(self.token),))
         self.lock = threading.Lock()
+        self.requests = []
         self.observation = {}
         self.last_seen = 0
         self.current_policy = {'active': False, 'tracking': True, 'mode': 'blocklist', 'allow': [], 'block': [], 'remaining': 0}
@@ -62,23 +63,35 @@ class BrowserBridge:
                     return self.reply(403, {})
                 if not hmac.compare_digest(self.headers.get('Authorization', ''), 'Bearer ' + bridge.token):
                     return self.reply(401, {})
-                if self.path != '/activity': return self.reply(404, {})
+                if self.path not in ('/activity','/restriction-extension'): return self.reply(404, {})
                 try:
                     length = int(self.headers.get('Content-Length', '0'))
                     if not 0 < length <= 2048: raise ValueError()
                     data = json.loads(self.rfile.read(length))
-                    if set(data) - {'browser', 'domain', 'focused', 'private'}: raise ValueError()
+                    if self.path == '/restriction-extension':
+                        if not isinstance(data,dict) or set(data)!={'domain','token'}: raise ValueError()
+                        domain(data['domain'])
+                        if not isinstance(data['token'],str) or not re.fullmatch('[a-zA-Z0-9_-]{16,100}',data['token']): raise ValueError()
+                        event=threading.Event(); answer={}
+                        with bridge.lock:
+                            if len(bridge.requests)>=16: return self.reply(429,{})
+                            bridge.requests.append((data,answer,event))
+                        event.wait(2.5)
+                        return self.reply(200,answer or {'ok':False})
+                    if set(data) - {'browser', 'domain', 'focused', 'private', 'idle'}: raise ValueError()
                     if data.get('browser') not in set(BROWSERS.values()): raise ValueError()
                     if type(data.get('focused')) is not bool or type(data.get('private')) is not bool: raise ValueError()
                     host = domain(data['domain']) if data.get('domain') else ''
-                    if data['private']: host = ''
+                    idle=data.get('idle',False)
+                    if type(idle) is not bool or idle and (data['browser']!='brave' or host): raise ValueError()
+                    if data['private']: host = ''; idle=False
                 except (ValueError, TypeError, KeyError, AttributeError): return self.reply(400, {})
                 with bridge.lock:
                     now = time.monotonic()
                     bridge.last_seen = now
                     # A background browser must not overwrite the foreground browser's observation.
                     if data['focused'] or data['browser'] == bridge.observation.get('browser'):
-                        bridge.observation = {'browser': data['browser'], 'domain': host,
+                        bridge.observation = {'browser': data['browser'], 'domain': host, 'idle':idle,
                                               'focused': data['focused'] and not data['private'], 'at': now}
                     policy = dict(bridge.current_policy)
                 self.reply(200, policy)
@@ -102,13 +115,18 @@ class BrowserBridge:
     def update(self, policy):
         with self.lock: self.current_policy = policy
 
+    def take_requests(self):
+        with self.lock:
+            requests,self.requests=self.requests,[]
+            return requests
+
     def website(self, path):
         import ntpath
         with self.lock:
             item = self.observation
             if (item.get('focused') and time.monotonic() - item['at'] < 20
                     and BROWSERS.get(ntpath.basename(path).lower()) == item['browser']):
-                return item['domain']
+                return BROWSER_IDLE if item.get('idle',False) else item['domain']
         return ''
 
     @property

@@ -50,24 +50,19 @@ Az automatikus besorolás játékonkénti: ugyanazon EXE rangsorolt és offline
 módját nem próbálja játékadatok olvasásával megkülönböztetni. Az ismert védett
 játékoknál emiatt óvatos, a nem védett casual játékoknál megmarad a működés.
 
-A 2.23.0-ban a korábbi automatikus tiltás külön kockázatelfogadással oldható fel
-az adott játékhoz: **Játékonkénti számlálók → Overlaykockázatok áttekintése**.
-A felhasználó elolvassa a szankciókról és a fejlesztő felelősségvállalásáról szóló
-szöveget, bejelöli az alapból üres négyzetet, majd külön engedélyező gombot nyom.
-A megszakítás vagy az Enter önmagában nem jelent beleegyezést.
+A 2.34.1-től az **Értesítések → Megjelenítés anticheates játékokban is**
+kapcsoló szabályozza a védett játékok számlálóját és értesítéseit. Alapból
+kikapcsolt. Bekapcsoláskor rövid tájékoztató, egy üres elfogadó négyzet és külön
+engedélyező gomb jelenik meg. Az X, a Mégse és az Enter önmagában nem fogadja el.
 
-A 2.23.1-ben beleegyezés nélkül a számláló módja, színei, mérete, elhelyezése,
-játékképe és előnézete rejtve marad. A tiltást magyarázó szöveg és a
-kockázatelfogadás gombja látható; az engedély visszavonásakor a vezérlők ismét
-eltűnnek. A korábbi beállítások megmaradnak.
+A kapcsoló minden védett játékra vonatkozik, a helyi játék-kizárásokat megtartva.
+A beleegyezés verziója és UTC-időpontja csak ezen a gépen mentődik, nem
+szinkronizálódik. Kikapcsoláskor a megjelenítés és az RTSS-előkészítés leáll,
+a korábbi megjelenési beállítások és játékonkénti engedélyrekordok megmaradnak.
+A játékkép-előnézet továbbra is külön, játékonkénti engedélyt igényel.
 
-Az engedély azonnal, a számláló beállításaitól külön mentődik. A tájékoztató
-verziója és UTC-időpontja a játék ID-jéhez/telepítési helyéhez kötött helyi
-rekordba kerül; a szinkronizálás nem továbbítja. Ugyanott visszavonható.
-Visszavonáskor leáll az előnézet és az RTSS-előkészítés, a profil újra tiltást
-kap. Ismert, azonos EXE-nevű védett játékokhoz külön-külön kell engedély az RTSS
-használatához. Az automatikus Escape és az anticheat-segédfolyamatok tiltása
-beleegyezés után is megmarad. A tájékoztató technikai kockázatelfogadás,
+Az ismeretlen telepítések, az anticheat-segédfolyamatok és az automatikus Escape
+beleegyezés után is tiltottak. A tájékoztató technikai kockázatelfogadás,
 önmagában nem jelent kiadói jóváhagyást vagy jogi garanciát.
 
 A kiadók eltérően kezelik az overlayeket. Nem áll rendelkezésre a Game Time

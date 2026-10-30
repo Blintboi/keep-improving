@@ -28,20 +28,14 @@ class Alert:
     text: str
     button: str
     game_id: str = ""
+    title: str = ""
+    icon: str = ""
+    sound: bool = True
 
 
-def day_slices(start, end, duration):
-    """Split a verified short interval at local midnight, conserving measured time."""
-    cursor = start
-    span = end.timestamp() - start.timestamp()
-    if span <= 0:
-        return
-    while cursor < end:
-        midnight = datetime.combine(cursor.date() + timedelta(days=1), time.min, tzinfo=cursor.tzinfo)
-        stop = min(end, midnight)
-        seconds = duration * (stop.timestamp() - cursor.timestamp()) / span
-        yield cursor.date().isoformat(), seconds
-        cursor = stop
+def day_slices(start, end, duration, minute=0):
+    """Split a verified interval at the chosen local boundary, conserving time."""
+    yield from period_slices(start,end,duration,(minute,)*7)
 
 
 class Tracker:
@@ -136,7 +130,7 @@ class Tracker:
 
     def _credit(self, game, start, end, seconds):
         self.configure_budget(start)
-        for day, amount in day_slices(start, end, seconds):
+        for day, amount in day_slices(start, end, seconds,self.catalog.settings.budget_reset_minute):
             self.pending[(day, game.id)] += amount
             totals = self.totals(day)
             totals[game.id] = totals.get(game.id, 0) + amount
@@ -163,6 +157,8 @@ class Tracker:
 
     def reconcile(self, games, scope):
         self.flush()
+        before=getattr(self,'before_reconcile',None)
+        if before: before()
         aliases = self.store.reconcile(games, scope)
         self.catalog.apply(games, scope)
         for old_id in aliases:
@@ -175,6 +171,11 @@ class Tracker:
                 value=limits.pop(old_id); limits[aliases[old_id]]=min(value,limits.get(aliases[old_id],value))
         self.catalog.overrides = self.store.overrides()
         self.catalog.rules = self.store.rules()
+        if aliases:
+            from .wellbeing import remap_rules
+            self.catalog.settings.wellbeing_rules=remap_rules(self.catalog.settings.wellbeing_rules,aliases)
+            callback=getattr(self,'on_aliases',None)
+            if callback: callback(aliases)
         self.cache.clear()
         self.budget_cache.clear()
         if self.previous:
@@ -184,7 +185,7 @@ class Tracker:
         totals = self.quota_totals(now)
         total = sum(totals.values())
         for alert in tuple(self.alerts):
-            if alert.game_id and not self.alert_current(alert, now):
+            if not self.alert_current(alert, now):
                 self.alerts.remove(alert)
                 self.queued.difference_update((alert.day, key) for key in alert.keys)
         day = period_day(now, reset_clock(self.catalog.settings)).isoformat()
@@ -194,7 +195,7 @@ class Tracker:
         warning = prefix + f"warning:{settings.warning_seconds:g}"
         limit = prefix + f"limit:{settings.limit_seconds:g}"
         session = prefix + f"session:{settings.limit_seconds:g}:" + self.identity
-        if total >= settings.limit_seconds:
+        if settings.game_budget_enabled and 'shared-games' not in settings.restriction_plans and total >= settings.limit_seconds:
             if limit not in delivered:
                 keys = (limit, warning, session) if self.identity else (limit, warning)
                 text=notification_text(settings,'limit',day=day)
@@ -202,12 +203,12 @@ class Tracker:
             elif self.identity and session not in delivered:
                 self._queue(Alert(day, (session,), "session",
                                   notification_text(settings,'session',day=day), tr("OK, I’ll stop", settings.language)))
-        elif total >= settings.warning_seconds and warning not in delivered:
+        elif settings.game_budget_enabled and 'shared-games' not in settings.restriction_plans and total >= settings.warning_seconds and warning not in delivered:
             remaining = math.ceil(remaining_budget(self.catalog.settings,now,total).remaining / 60)
             self._queue(Alert(day, (warning,), "warning", notification_text(settings,'warning',remaining,day=day), tr("OK", settings.language)))
         game = self.active
-        cap = self.catalog.settings.game_limits.get(game.id) if game and self.catalog.enabled(game) else None
-        if cap is not None and totals.get(game.id, 0) >= cap and total < settings.limit_seconds:
+        cap = self.catalog.settings.game_limits.get(game.id) if game and self.catalog.enabled(game) and 'game:'+game.id not in settings.restriction_plans else None
+        if cap is not None and totals.get(game.id, 0) >= cap and (not settings.game_budget_enabled or total < settings.limit_seconds):
             key = prefix + f'game-limit:{len(game.id)}:{game.id}:{cap:g}:{self.identity}'
             if key not in delivered:
                 self._queue(Alert(day, (key,), 'limit',
@@ -216,7 +217,8 @@ class Tracker:
                     tr('OK, I’ll stop', settings.language), game.id))
 
     def alert_current(self, alert, now):
-        if not alert.game_id: return True
+        if not alert.game_id: return self.catalog.settings.game_budget_enabled and 'shared-games' not in self.catalog.settings.restriction_plans
+        if 'game:'+alert.game_id in self.catalog.settings.restriction_plans: return False
         game = self.active
         cap = self.catalog.settings.game_limits.get(alert.game_id)
         return bool(game and game.id == alert.game_id and self.catalog.enabled(game)

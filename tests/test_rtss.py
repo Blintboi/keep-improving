@@ -60,6 +60,19 @@ class RTSSTests(unittest.TestCase):
         self.assertFalse(backend.present('C:/fixture/other.exe','88:9','timer'))
         self.assertFalse(backend.present('C:/fixture/game.exe','77:8','timer'))
 
+    def test_strict_receipt_does_not_reuse_countdown_for_new_image(self):
+        backend=Backend('C:/isolated/strict-receipt'); backend.thread=Mock()
+        old=('C:/fixture/game.exe','77:8','old countdown',None)
+        backend.identity='77:8'; backend.state=old; backend.result=('77:8',True,time.monotonic(),''); backend._result_state=old
+        self.assertFalse(backend.present(old[0],old[1],'new image',require_current=True))
+        backend._result_state=backend.state
+        self.assertTrue(backend.present(old[0],old[1],'new image',require_current=True))
+        self.assertFalse(backend.present(old[0],old[1],'another image',require_current=True))
+        self.assertFalse(backend.present(old[0],old[1],'new image',require_current=True))
+        backend._result_state=backend.state
+        self.assertTrue(backend.present(old[0],old[1],'new image',require_current=True))
+        backend.hide(); self.assertIsNone(backend._result_state)
+
     def test_resume_during_removal_cannot_authorize_desktop_over_new_publication(self):
         backend=Backend('C:/isolated/resume-during-clear'); backend.process=Mock(); backend.process.poll.return_value=None
         clearing=threading.Event(); removed=threading.Event(); publishing=threading.Event(); finish=threading.Event()
@@ -140,6 +153,31 @@ class RTSSTests(unittest.TestCase):
                 recover.set(); self.wait_for(lambda: backend.desktop_ready)
             finally: recover.set(); backend.close()
 
+    def test_delayed_hook_recovers_in_same_game_only_after_explicit_guarded_retry(self):
+        backend=Backend('C:/isolated/delayed-hook'); hooked=threading.Event()
+        backend.process=Mock(); backend.process.poll.return_value=None
+        def exchange(**request):
+            return {'available':True,'cleared':True,'healthy':hooked.is_set()}
+        with patch('gametime.rtss.installation',return_value=Path('C:/fixture/RTSS.exe')),patch('gametime.rtss.configure_profile'),patch.object(backend,'exchange',side_effect=exchange) as calls:
+            try:
+                backend.present('C:/fixture/game.exe','77:8','timer')
+                self.wait_for(lambda: backend._unhealthy_since is not None)
+                with backend.condition: backend._unhealthy_since=time.monotonic()-2
+                self.wait_for(lambda: backend.fallback_for('77:8'))
+                count=calls.call_count; hooked.set()
+                self.assertFalse(backend.retry_due('77:8'))
+                backend.present('C:/fixture/game.exe','77:8','timer',retry=True)
+                time.sleep(.1); self.assertEqual(calls.call_count,count)
+                with backend.condition: backend._retry_at=time.monotonic()-1
+                self.assertTrue(backend.retry_due('77:8'))
+                backend.present('C:/fixture/game.exe','77:8','timer')
+                time.sleep(.1); self.assertEqual(calls.call_count,count)
+                backend.present('C:/fixture/game.exe','77:8','timer',retry=True)
+                self.wait_for(lambda: backend.result[1])
+                self.assertTrue(backend.present('C:/fixture/game.exe','77:8','timer'))
+                self.assertFalse(backend.fallback_for('77:8')); self.assertEqual(backend._retry_count,0)
+            finally: backend.close()
+
     def test_backend_clears_once_then_sleeps_until_resumed_or_closed(self):
         backend=Backend('C:/isolated/idle-rtss'); cleared=threading.Event()
         backend.process=Mock(); backend.process.poll.return_value=None
@@ -214,13 +252,14 @@ class RTSSTests(unittest.TestCase):
     def test_profile_changes_preserve_global_and_performance_settings(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp); (root/'Profiles').mkdir(); server=root/'RTSS.exe'; executable=root/'game.exe'; executable.touch()
-            global_profile=root/'Profiles/Global'; global_profile.write_text('[Hooking]\nEnableHooking=0\n')
-            target=root/'Profiles/game.exe.cfg'; target.write_text('[Framerate]\nLimit=144\n[Hooking]\nEnableHooking=0\n[OSD]\nEnableStat=1\nPositionX=-16\nPositionY=16\n')
+            global_profile=root/'Profiles/Global'; global_profile.write_text('[Hooking]\nEnableHooking=0\nInjectionDelay=15000\n')
+            target=root/'Profiles/game.exe.cfg'; target.write_text('[Framerate]\nLimit=144\n[Hooking]\nEnableHooking=0\nInjectionDelay=15000\n[OSD]\nEnableStat=1\nPositionX=-16\nPositionY=16\n')
             with patch('gametime.rtss.C.CDLL') as load: configure_profile(server,executable); load.return_value.UpdateProfiles.assert_called_once()
             text=target.read_text(); self.assertIn('Limit=144',text); self.assertIn('EnableHooking=1',text); self.assertIn('EnableStat=0',text)
             self.assertIn('CoordinateSpace=1',text)  # Whole framebuffer, never the game's last HUD viewport.
             self.assertIn('PositionX=-16',text); self.assertIn('PositionY=16',text)
-            self.assertEqual(global_profile.read_text(),'[Hooking]\nEnableHooking=0\n')
+            self.assertIn('InjectionDelay=0',text)
+            self.assertEqual(global_profile.read_text(),'[Hooking]\nEnableHooking=0\nInjectionDelay=15000\n')
             before=target.read_bytes(); modified=target.stat().st_mtime_ns
             with patch('gametime.rtss.C.CDLL') as load: configure_profile(server,executable); load.assert_not_called()
             self.assertEqual(target.read_bytes(),before); self.assertEqual(target.stat().st_mtime_ns,modified)

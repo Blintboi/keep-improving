@@ -6,10 +6,12 @@ from pathlib import Path
 from sqlite3 import Error as SQLiteError
 import hashlib
 import time
+import unicodedata
 from PySide6.QtCore import Qt,QDate,QLocale,QEvent,QTimer,QPoint,QRect,QSize
 from PySide6.QtGui import QColor,QIcon,QPainter,QPixmap,QTextCharFormat,QPalette
 from PySide6.QtWidgets import QWidget,QScrollArea,QVBoxLayout,QHBoxLayout,QGridLayout,QHeaderView,QAbstractItemView,QDateEdit,QCalendarWidget,QToolButton,QListWidget,QListWidgetItem,QListView
 from .statistics import date_range,summarize
+from .quota import current_day
 from .qt_widgets import label,button,panel,duration,DailyChart
 from .qt_widgets import NoWheelComboBox as QComboBox
 from .statistics_sync import computer_name
@@ -237,13 +239,13 @@ class StatisticsPage(QWidget):
         shell=QVBoxLayout(self); shell.setContentsMargins(0,0,0,0)
         self.scroll=QScrollArea(); self.scroll.setWidgetResizable(True); shell.addWidget(self.scroll)
         content=QWidget(); self.scroll.setWidget(content)
-        layout=QVBoxLayout(content); layout.setContentsMargins(28,24,28,24); layout.setSpacing(16)
+        layout=QVBoxLayout(content); layout.setContentsMargins(28,24,28,24); layout.setSpacing(16); layout.setAlignment(Qt.AlignTop)
         header=QHBoxLayout(); heading=QVBoxLayout(); heading.setSpacing(5)
         heading.addWidget(label(t('Statistics'),'title'))
         heading.addWidget(label(t('See where your time goes.'),'muted')); header.addLayout(heading,1)
         self.computers_button=button(t('Computers & sync'),self.toggle_computers,'quiet')
         self.computers_button.setCheckable(True); header.addWidget(self.computers_button)
-        header.addWidget(button(t('What is measured?'),self.explain,'quiet')); layout.addLayout(header)
+        header.addWidget(button(t('What is measured?'),self.explain,'quiet')); header.addWidget(app.page_settings_button('overview')); layout.addLayout(header)
         self.computer_panel=panel(); computer_box=QVBoxLayout(self.computer_panel); computer_box.setContentsMargins(18,14,18,14)
         self.sync_label=label(app.statistics_sync_status(),'muted'); self.sync_label.setWordWrap(True); computer_box.addWidget(self.sync_label)
         actions=QHBoxLayout(); actions.addWidget(button(t('Link computers'),app.statistics_sync_dialog))
@@ -265,9 +267,9 @@ class StatisticsPage(QWidget):
             grid.addWidget(label(t(name),'muted'),0,column); grid.addWidget(widget,1,column); grid.setColumnStretch(column,1)
         filter_box.addLayout(grid)
         self.custom_range=QWidget(); dates=QHBoxLayout(self.custom_range); dates.setContentsMargins(0,4,0,0); dates.setSpacing(10)
-        self.start=StatisticsDate((date.today()-timedelta(days=6)).isoformat()); self.end=StatisticsDate(date.today().isoformat())
+        self.start=StatisticsDate((current_day(self.app.settings)-timedelta(days=6)).isoformat()); self.end=StatisticsDate(current_day(self.app.settings).isoformat())
         self._range=(self.start.text(),self.end.text())
-        self._relative_day=date.today()
+        self._relative_day=current_day(self.app.settings)
         for name,widget in (('From',self.start),('To',self.end)):
             widget.setAccessibleName(t(name)); widget.setMinimumWidth(140)
             widget.setLocale(QLocale('hu_HU' if app.settings.language=='hu' else 'en_GB'))
@@ -312,6 +314,15 @@ class StatisticsPage(QWidget):
         self.search.textChanged.connect(self.show_breakdown); details_heading.addWidget(self.search)
         self.whole_period_button=button(t('All days'),self.show_period,'quiet'); details_heading.addWidget(self.whole_period_button)
         details_box.addLayout(details_heading)
+        detail_filters=QHBoxLayout()
+        detail_filters.addWidget(label(t('List computer'),'muted'))
+        self.detail_devices=QComboBox(); self.detail_devices.setAccessibleName(t('List computer'))
+        self.detail_devices.setMinimumWidth(190); self.detail_devices.setMaximumWidth(280)
+        self.detail_devices.currentIndexChanged.connect(self.show_breakdown); detail_filters.addWidget(self.detail_devices)
+        self.merge_duplicates=QCheckBox(t('Combine matching names'))
+        self.merge_duplicates.setToolTip(t('Combine entries with the same name and activity type in this list.'))
+        self.merge_duplicates.toggled.connect(self.show_breakdown); detail_filters.addWidget(self.merge_duplicates)
+        detail_filters.addStretch(); details_box.addLayout(detail_filters)
         self.breakdown_note=label('','muted'); details_box.addWidget(self.breakdown_note)
         self.details_panel=details
         self.games_table=QTableWidget(0,5); self.games_table.verticalHeader().hide(); self.games_table.setShowGrid(False)
@@ -325,6 +336,13 @@ class StatisticsPage(QWidget):
         self.games_table.setStyleSheet('QTableWidget::item {padding:9px 6px;}'); self.games_table.setWordWrap(False)
         details_box.addWidget(self.games_table)
         self.games_table.itemSelectionChanged.connect(self.update_exclusion_action)
+        budget_actions=QHBoxLayout()
+        self.budget_button=button(t('Set time budget…'),self.set_selected_budget)
+        self.group_budget_button=button(t('Shared budget for selection…'),lambda:self.set_selected_budget(shared=True))
+        self.budget_button.setToolTip(t('Select an activity available on this computer to set its daily limit.'))
+        self.group_budget_button.setToolTip(t('Select multiple rows with Ctrl or Shift to share one daily budget on this computer.'))
+        budget_actions.addWidget(self.budget_button); budget_actions.addWidget(self.group_budget_button); budget_actions.addStretch()
+        details_box.addLayout(budget_actions)
         exclusion_actions=QHBoxLayout()
         self.exclude_app_button=button(t('Exclude selected application'),self.exclude_selected_application)
         self.exclude_app_button.setEnabled(False); exclusion_actions.addWidget(self.exclude_app_button)
@@ -339,14 +357,52 @@ class StatisticsPage(QWidget):
         rows=self.games_table.selectionModel().selectedRows()
         keys=getattr(self,'_breakdown_keys',[])
         self.exclude_app_button.setEnabled(len(rows)==1 and rows[0].row()<len(keys)
-                                           and keys[rows[0].row()][0].startswith('activity:app:'))
+                                           and keys[rows[0].row()][0].startswith('activity:app:')
+                                           and len(self._breakdown_item_ids[rows[0].row()])==1)
+        if hasattr(self,'budget_button'):
+            members=self.selected_budget_members()
+            self.budget_button.setEnabled(bool(members) and len(members)==1)
+            self.group_budget_button.setEnabled(bool(members))
+
+    def selected_budget_members(self,refresh=False):
+        from .wellbeing import target
+        from .activity_identity import canonical_member
+        from .statistics_sync import game_key
+        if refresh: self._budget_games={game.id:game for game in self.app.store.games()}
+        keys=getattr(self,'_breakdown_item_ids',[]); games=getattr(self,'_budget_games',self.app.catalog.games)
+        mapped={}
+        for game in games.values(): mapped.setdefault(game_key(game.id,game.name,game.source),[]).append(game.id)
+        members=[]
+        for index in self.games_table.selectionModel().selectedRows():
+            if index.row()>=len(keys): return []
+            for key in keys[index.row()]:
+                try:
+                    if key in mapped:
+                        for gid in mapped[key]:
+                            member=target('game',gid)
+                            if member not in members: members.append(member)
+                        continue
+                    elif key in games: member=target('game',key)
+                    elif key.startswith('activity:app:'): member=target('app',key[len('activity:app:'):])
+                    elif key.startswith('activity:site:'): member=target('site',key[len('activity:site:'):])
+                    else: return []
+                except ValueError: return []
+                member=canonical_member(member)
+                if member not in members: members.append(member)
+        return members
+
+    def set_selected_budget(self,checked=False,shared=False):
+        members=self.selected_budget_members(refresh=True)
+        if not members: return
+        if shared: self.app.open_budget(members=members)
+        elif len(members)==1: self.app.open_budget(member=members[0])
 
     def exclude_selected_application(self):
         rows=self.games_table.selectionModel().selectedRows()
         keys=getattr(self,'_breakdown_keys',[])
         if len(rows)!=1 or rows[0].row()>=len(keys): return
         key=keys[rows[0].row()][0]
-        if key.startswith('activity:app:'):
+        if key.startswith('activity:app:') and len(self._breakdown_item_ids[rows[0].row()])==1:
             self.app.focus_page.exclude_application(key[len('activity:app:'):])
 
     def friendly_time(self,seconds):
@@ -377,10 +433,10 @@ class StatisticsPage(QWidget):
         value=self.period.currentData(); self.custom_range.setVisible(value=='custom')
         if value=='custom': return
         start,end=self.period_dates(value)
-        self.start.setText(start); self.end.setText(end); self.selected_day=None; self._relative_day=date.today(); self.refresh()
+        self.start.setText(start); self.end.setText(end); self.selected_day=None; self._relative_day=current_day(self.app.settings); self.refresh()
 
     def period_dates(self,value):
-        today=date.today(); end=today
+        today=current_day(self.app.settings); end=today
         start=(today if value=='today' else today-timedelta(days=1) if value=='yesterday' else
                today-timedelta(days=6) if value=='week' else today-timedelta(days=29) if value=='month' else today.replace(day=1))
         if value=='yesterday': end=start
@@ -396,8 +452,8 @@ class StatisticsPage(QWidget):
 
     def refresh(self,live=False):
         self.last_refresh=time.monotonic()
-        if live and self.period.currentData()!='custom' and self._relative_day!=date.today():
-            self._relative_day=date.today(); self._range=self.period_dates(self.period.currentData())
+        if live and self.period.currentData()!='custom' and self._relative_day!=current_day(self.app.settings):
+            self._relative_day=current_day(self.app.settings); self._range=self.period_dates(self.period.currentData())
             self.start.setText(self._range[0]); self.end.setText(self._range[1])
         selected_range=self._range if live else (self.start.text(),self.end.text())
         try: date_range(*selected_range)
@@ -421,7 +477,7 @@ class StatisticsPage(QWidget):
             self.computer_history += self.app.statistics_data.activity_history_by_computer(
                 *self._range,group,self.scope,category,self.app.settings.statistics_device_name)
         self.refresh_category_text()
-        self.report=summarize((row[:5] for row in self.computer_history),*self._range,started_on=started,as_of=date.today().isoformat())
+        self.report=summarize((row[:5] for row in self.computer_history),*self._range,started_on=started,as_of=current_day(self.app.settings).isoformat())
         self.total_label.setText(self.friendly_time(self.report.total)); self.average_label.setText(self.friendly_time(self.report.average))
         self.top_label.setText(self.item_name(self.report.games[0][0],self.report.games[0][1]) if self.report.games else '—')
         self.top_detail.setText(self.friendly_time(self.report.games[0][3])+' · '+self.share(self.report.games[0][3],self.report.total) if self.report.games else self.app.t('No activity yet'))
@@ -433,6 +489,7 @@ class StatisticsPage(QWidget):
         self.average_note.setText(self.app.t('Average: {days} days · since {date}',date=average_started,days=self.report.average_days))
         self.average_label.setToolTip(explanation); self.average_note.setToolTip(explanation)
         if self.selected_day not in self.report.days: self.selected_day=None
+        self._budget_games={game.id:game for game in self.app.store.games()}
         self.refresh_day_selector(); self.update_chart(); self.show_breakdown()
 
     def refresh_day_selector(self):
@@ -537,6 +594,17 @@ class StatisticsPage(QWidget):
         self.devices.view().setRowHidden(self.devices.findData('local'),not bool(remote))
         self.devices.setEnabled(bool(remote))
         self.devices.setToolTip(self.app.t('Choose a computer, or include all linked computers.'))
+        selected=self.detail_devices.currentData() or 'all'
+        blocked=self.detail_devices.blockSignals(True)
+        if [self.detail_devices.itemData(i) for i in range(self.detail_devices.count())]!=[identity for identity,name in choices]:
+            self.detail_devices.clear()
+            for identity,name in choices: self.detail_devices.addItem(name,identity)
+            for i in range(1,self.detail_devices.count()): self.detail_devices.setItemIcon(i,self.colors.icon(self.detail_devices.itemData(i),'computer'))
+        else:
+            for i,(identity,name) in enumerate(choices): self.detail_devices.setItemText(i,name)
+        self.detail_devices.setCurrentIndex(max(0,self.detail_devices.findData(selected)))
+        self.detail_devices.view().setRowHidden(self.detail_devices.findData('local'),not bool(remote))
+        self.detail_devices.setEnabled(bool(remote)); self.detail_devices.blockSignals(blocked)
         self.sync_label.setText(self.app.statistics_sync_status())
         self.app.update_statistics_sync_controls()
 
@@ -558,24 +626,34 @@ class StatisticsPage(QWidget):
 
     def show_breakdown(self,*_):
         if not self.report: return
-        rows=self.report.by_day.get(self.selected_day,[]) if self.selected_day else self.report.games
-        total=sum(row[3] for row in rows)
-        order={row[0]:index for index,row in enumerate(rows)}
+        scope=self.detail_devices.currentData() or 'all'
+        combine=self.merge_duplicates.isChecked()
         grouped={}
         for day,gid,name,source,seconds,identity,device_name in self.computer_history:
             if self.selected_day and day!=self.selected_day: continue
-            if seconds<=0: continue
-            grouped.setdefault((gid,identity),[gid,name,source,0,identity,device_name])[3]+=seconds
-        rows=sorted(grouped.values(),key=lambda row:(order[row[0]],-row[3],row[5].casefold(),row[4]))
+            if seconds<=0 or (scope!='all' and scope!=identity): continue
+            kind=source if source in ('Application','Website','Browser') else 'Game'
+            normalized=' '.join(unicodedata.normalize('NFKC',name).casefold().split())
+            group=(kind,normalized) if combine else (gid,identity)
+            row=grouped.setdefault(group,[gid,name,source,0,identity,device_name,set(),set()])
+            row[3]+=seconds; row[6].add(identity); row[7].add(gid)
+        rows=sorted(grouped.values(),key=lambda row:(-row[3],row[1].casefold(),row[0],row[4]))
+        total=sum(row[3] for row in rows)
         query=self.search.text().strip().casefold(); count=len(rows)
         if query:
-            rows=[row for row in rows if query in (self.item_name(row[0],row[1])+' '+self.computer_names.get(row[4],row[5])).casefold()]
+            rows=[row for row in rows if query in (self.item_name(row[0],row[1])+' '+' '.join(self.computer_names.get(i,i) for i in row[6])).casefold()]
         self.breakdown_title.setText(self.app.t('Where did the time go?')); self.whole_period_button.setVisible(self.selected_day is not None)
         self.breakdown_note.setText(self.app.t('Matches: {count} of {total}',count=len(rows),total=count) if query else
                                     self.app.t('{period} · {time}',period=self.selected_day,time=self.friendly_time(total)) if self.selected_day else
                                     self.app.t('Items: {count} · largest first',count=count))
         self.empty_details.setText(self.app.t('No matching entries. Try another name.' if query else 'No activity here yet. Try a different period or activity type.'))
-        identities={row[4] for row in rows}
+        if combine:
+            self.chart_hint.setText(self.app.t('Combined list entries may include several chart colors.'))
+        else:
+            multi=len(self.computer_names)>1
+            self.chart_hint.setText(self.app.t('The side color identifies the computer. Spaces separate computers; activity colors match the list below.' if multi else
+                                              'Each color is one activity. Click a day to see its details.'))
+        identities={identity for row in rows for identity in row[6]}
         self.games_table.setColumnHidden(1,len(identities)<=1 and len(self.chart.device_colors)<=1)
         self.games_table.setColumnHidden(2,self.category.currentData()!='all')
         self.games_table.setVisible(bool(rows)); self.empty_details.setVisible(not rows)
@@ -585,24 +663,27 @@ class StatisticsPage(QWidget):
         selected={previous[index.row()] for index in self.games_table.selectionModel().selectedRows() if index.row()<len(previous)}
         self.games_table.setRowCount(len(rows))
         if keys!=previous: self.games_table.clearSelection()
-        for i,(gid,name,source,seconds,identity,device_name) in enumerate(rows):
+        for i,(gid,name,source,seconds,identity,device_name,identities,item_ids) in enumerate(rows):
             share=self.share(seconds,total)
             source=self.app.t(source) if source in ('Application','Website','Browser') else self.app.t('Game')
             name=self.item_name(gid,name)
-            computer=self.computer_names.get(identity,device_name)
+            computer=self.computer_names.get(identity,device_name) if len(identities)==1 else self.app.t('Multiple computers')
             for col,value in enumerate((name,computer,source,duration(seconds),share)):
                 item=self.games_table.item(i,col)
                 if item is None:
                     item=QTableWidgetItem(); self.games_table.setItem(i,col,item)
                 item.setText(value)
                 item.setToolTip(value)
-                if col in (0,1):
+                if (col==0 and len(item_ids)==1) or (col==1 and len(identities)==1):
                     kind='game' if col==0 else 'computer'; key=gid if col==0 else identity
                     item.setIcon(self.colors.icon(key,kind)); item.setForeground(QColor(self.colors.color(key,kind)))
-                if col==1: item.setData(Qt.UserRole,identity)
+                elif col in (0,1):
+                    item.setIcon(QIcon()); item.setForeground(QColor('#edf4f2'))
+                if col==1: item.setData(Qt.UserRole,identity if len(identities)==1 else None)
                 if col>=3: item.setTextAlignment(Qt.AlignRight|Qt.AlignVCenter)
             if self.games_table.rowHeight(i)!=44: self.games_table.setRowHeight(i,44)
-            if keys!=previous and (gid,identity) in selected: self.games_table.selectRow(i)
+            if keys!=previous and keys[i] in selected: self.games_table.selectRow(i)
         self._breakdown_keys=keys
+        self._breakdown_item_ids=[row[7] for row in rows]
         self.update_exclusion_action()
         self.chart.selected=self.selected_day; self.chart.update()

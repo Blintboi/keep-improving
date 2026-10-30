@@ -17,15 +17,28 @@ class BackgroundController(QObject):
         picker.installEventFilter(self); app.game_snapshots.ready.connect(self.receive)
 
     def eventFilter(self,watched,event):
-        if event.type()==QEvent.Show: self.show_timer.start(0)
+        if event.type()==QEvent.Show:
+            self.refresh_screen()
+            self.show_timer.start(0)
         elif event.type()==QEvent.Hide:
             self.show_timer.stop()
             self.target=None; self.picker.game_background=None
         return False
 
+    def refresh_screen(self):
+        # A display change can replace QScreen while this editor is hidden.
+        # Resolve it again even without a running game: the position diagram
+        # must not depend on either a capture or changing the monitor selector.
+        screen=self.app.screen()
+        self.picker.screen=choose_screen(self.picker._screen_choice() or '',screen.name() if screen else '')
+        self.picker._coordinates_changed()
+        self.picker.update()
+
     def refresh(self):
         self.target=None; self.picker.game_background=None; self.picker.update()
         if not self.picker.isVisible() or self.app.closed: return
+        self.refresh_screen()
+        if (self.game_id() or '').startswith('counter:'): return
         target=running_window(self.app.catalog,self.game_id())
         if not target:
             self.status.setText(self.app.t('Open a game to show its image here.')); return

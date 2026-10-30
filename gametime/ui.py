@@ -18,6 +18,7 @@ from .tracker import Tracker, Alert
 from . import win32
 from .i18n import tr, LANGUAGES
 from .controller import MonitorActions
+from .quota import current_day
 from .budget import remaining_budget
 
 log = logging.getLogger(__name__)
@@ -549,7 +550,7 @@ class App(MonitorActions):
     def render(self):
         self.sync_hub()
         now = datetime.now().astimezone()
-        day = now.date().isoformat()
+        day = current_day(self.settings,now).isoformat()
         totals = self.tracker.totals(day)
         total = sum(totals.values())
         budget = remaining_budget(self.settings, now, sum(self.tracker.quota_totals(now).values()))

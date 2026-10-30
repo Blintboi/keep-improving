@@ -34,7 +34,11 @@ stores daily aggregates, not a chronological activity timeline.
 Website tracking requires manually loading and pairing the included browser
 extension. It sends only the focused tab's HTTP(S) domain and browser family
 to an authenticated server bound to `127.0.0.1` on this computer. URL paths,
-queries, fragments, page titles and contents are not sent or stored. Private
+queries, fragments, page titles and contents are not sent to the desktop app or
+recorded in activity history. For a blocked page, the extension can temporarily
+keep its original HTTP(S) URL in browser-session storage so an explicitly requested
+one-time allowance can return to it. That return address stays in the extension,
+is removed when the tab closes and is never synchronized. Private
 tabs and local/numeric hosts are excluded. Website time is a breakdown of browser
 time. Application/site aggregates are stored in the local SQLite profile and, when computer linking is enabled, synchronize in encrypted snapshots. Completed-round counts and timer state remain local. Focus preferences
 and blacklists also synchronize in encrypted snapshots; application rules can contain
@@ -49,16 +53,18 @@ game minimization retains the existing permission gate.
 
 When a countdown position editor opens, or you choose to refresh its game image, the app can capture a still image of a recognized running game's client window to help position the countdown. This is not continuous screen recording. The image is held only in memory for the preview, is not saved to disk by the app, and is never included in statistics sync or uploaded to the service. Closing or hiding the editor clears the displayed image.
 
-Automatic anti-cheat compatibility checks inspect game identifiers, executable names and the presence of specific files/folders in game installations. These checks stay local and do not read game memory, account data, process command lines or driver contents. Without explicit per-game risk consent, detected protected games do not provide game-image previews or countdown overlays. No anti-cheat service or game security setting is disabled.
+Automatic anti-cheat compatibility checks inspect game identifiers, executable names and the presence of specific files/folders in game installations. These checks stay local and do not read game memory, account data, process command lines or driver contents. No anti-cheat service or game security setting is disabled.
 
-For a detected protected game, you can separately accept the overlay risk notice.
-The app stores the notice version, UTC acceptance time and a hash binding the
-permission to that game's ID and installation location in the local profile.
-These records are not uploaded or included in statistics synchronization.
-Permission is saved immediately, can be revoked in Per-game countdowns and must
-be accepted again if the notice version or game/install location changes.
-Without consent, protected overlays/previews remain blocked. Automatic Escape
-remains disabled for protected games even after consent.
+Protected-game countdowns and notifications are off by default. The Notifications
+page has one switch covering all protected games, requiring a separate unchecked
+risk acknowledgement before enabling. The notice version and UTC acceptance time
+are stored only in this computer's profile. Disabling the switch withdraws active
+displays and RTSS preparation; previous game preferences are preserved.
+
+Game-image previews retain their separate per-game permission, bound to the
+game ID and installation location. Neither this permission nor the new display
+consent is synchronized. Unknown installations, anti-cheat helpers and automatic
+Escape remain blocked even after display consent.
 
 Automatic minimization of detected protected games requires an independent,
 local risk acknowledgement. Its notice version, UTC acceptance time and
@@ -70,6 +76,18 @@ the app uses the selected sound without creating a popup; muted or unavailable
 sound leaves delivery pending until a visual reminder can be shown.
 
 The standard profile is in the Windows Documents folder under `GameTimeMonitor\data`. Local artwork is read from installed files and caches and is not uploaded. Application paths in focus blocklists and exclusions are included in encrypted settings synchronization. Upgrade backups stay beside the profile. Local history is not an encrypted database.
+
+Multi-stage restriction plans, delivery markers, one-time allowance usage and
+deadlines remain local. Closing applications is separately enabled in each plan;
+it first requests a normal close, then may terminate that exact process instance.
+Covering uses a separate Windows surface; it does not capture or blur application
+pixels. Its short-lived audio helper controls only verified shared-mode audio
+sessions of the target process and restores the mute state when released or when
+the monitor exits. It does not change system volume or record audio. Protected
+processes, Windows components and launchers are not forcibly closed. Website
+restrictions navigate or close matching tabs rather than terminating the browser.
+
+The Activities list combines installations of the same executable across versions and linked computers into one entry, including named installers for that application. Website hosts with and without `www.` share an entry; other subdomains remain separate. Historical paths, device attribution and measured time are retained. The list reads application icons from existing local executable files or their Windows application-package logos, and retains a local copy across upgrades. While the Websites list is open, it preloads icons for all listed websites and requests the site's public favicon over HTTPS; if needed, it reads the site's home page to locate its declared icon. The site or its icon host receives a normal asset request, including your IP address, without browser cookies, login credentials or usage totals. No third-party favicon lookup service receives your website list. Scrolling keeps the already loaded icons. Icon requests stop when the list is hidden or the window is minimized. Small icon images and retry timestamps are cached locally, are not synchronized, and can be removed by deleting `cache/activity-icons` inside the profile while the app is closed.
 
 If daily quota reset times differ from midnight, recent quota-period totals are stored separately from calendar-day history. These local per-game totals preserve the current allowance across midnight and restarts, are limited to recent periods, and are not included in statistics synchronization. Alert markers remain local; reset schedules can synchronize.
 

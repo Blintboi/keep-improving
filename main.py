@@ -30,6 +30,9 @@ def default_data():
 
 
 def main():
+    if sys.argv[1:] == ['--restriction-audio-guard']:
+        from gametime.restriction_audio import run_guard
+        run_guard(); return
     parser = argparse.ArgumentParser(description="Windows 11 Keep Improving")
     parser.add_argument("--data-dir", type=Path, default=default_data())
     parser.add_argument("--background", action="store_true")
@@ -125,6 +128,7 @@ def main():
                               "overlay_enabled": store.settings().overlay_enabled,
                               "overlay_rtss_auto": store.settings().overlay_rtss_auto,
                               "overlay_risk_consent_count": len(Consents(store).accepted),
+                              "protected_game_display_enabled": Consents(store).display_enabled,
                               "minimize_risk_consent_count": len(MinimizeConsents(store).accepted),
                               "overlay_font_size": store.settings().overlay_font_size,
                               "overlay_color_normal": store.settings().overlay_color_normal,

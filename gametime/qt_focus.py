@@ -8,7 +8,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QTabWidget,
     QAbstractItemView, QPlainTextEdit, QScrollArea,QListWidget,QListWidgetItem)
 from .qt_translation import QLineEdit
-from .qt_widgets import label, button, panel, NoWheelDoubleSpinBox
+from .qt_widgets import label, button, back_button, panel, NoWheelDoubleSpinBox
 from .focus import FocusSettings, domain
 
 
@@ -27,7 +27,7 @@ class FocusPage(QWidget):
         t = owner.t
         outer=QVBoxLayout(self); outer.setContentsMargins(28,24,28,20); outer.setSpacing(12)
         heading=QHBoxLayout(); heading.addWidget(label(t('Focus mode'),'title'),1)
-        heading.addWidget(button(t('How does focus work?'),self.explain,'quiet')); outer.addLayout(heading)
+        heading.addWidget(button(t('How does focus work?'),self.explain,'quiet')); heading.addWidget(owner.page_settings_button('focus')); outer.addLayout(heading)
         focus_scroll=QScrollArea(); focus_scroll.setWidgetResizable(True); outer.addWidget(focus_scroll,1)
         focus_content=QWidget(); focus_scroll.setWidget(focus_content)
         focus_box=QVBoxLayout(focus_content); focus_box.setContentsMargins(0,0,5,0); focus_box.setSpacing(14)
@@ -51,7 +51,7 @@ class FocusPage(QWidget):
         status.addWidget(button(t('Browser connection'),self.browser_dialog,'quiet')); rules_box.addLayout(status)
         self.rule_tabs=QTabWidget(); self.block_lists={}
         for kind,name in (('site','Websites'),('app','Applications')):
-            container=QWidget(); container_box=QVBoxLayout(container); container_box.setContentsMargins(12,12,12,12); container_box.setSpacing(8)
+            container=QWidget(); container_box=QVBoxLayout(container); container_box.setContentsMargins(12,12,12,12); container_box.setSpacing(8); container_box.setAlignment(Qt.AlignTop)
             if kind=='site':
                 url_row=QHBoxLayout(); self.url_input=QLineEdit()
                 self.url_input.setPlaceholderText(t('Paste a URL or domain, e.g. https://youtube.com'))
@@ -99,7 +99,9 @@ class FocusPage(QWidget):
         note=label(t('Select one or more previously detected applications. The full executable path is shown when you hover over an entry.'),'muted')
         note.setWordWrap(True); box.addWidget(note)
         listing=QListWidget(); listing.setMinimumHeight(200); listing.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        from .activity_identity import is_idle_app
         for path,name in self.focus.store.db.execute("SELECT key,name FROM activity_items WHERE kind='app' ORDER BY lower(name),key"):
+            if is_idle_app(path): continue
             item=QListWidgetItem(name); item.setData(Qt.UserRole,path); item.setToolTip(path); listing.addItem(item)
         box.addWidget(listing)
         empty=label(t('No applications detected yet. Use the computer with activity tracking enabled, or choose an executable.'),'muted')
@@ -225,7 +227,7 @@ class FocusPage(QWidget):
 
     def timer_settings(self):
         owner, t = self.owner, self.owner.t
-        dialog, box = self.dialog(t('Timer settings'), 510)
+        dialog, box = self.dialog(t('Timer settings'), 510,discard=True)
         fields = {}
         for key, name, maximum in (('work', 'Focus minutes', 240), ('short_break', 'Short break minutes', 60),
                                     ('long_break', 'Long break minutes', 120), ('rounds', 'Rounds before long break', 12)):
@@ -244,7 +246,7 @@ class FocusPage(QWidget):
 
     def rules_dialog(self):
         owner, t = self.owner, self.owner.t
-        dialog, box = self.dialog(t('Blacklist'), 760)
+        dialog, box = self.dialog(t('Blacklist'), 760,discard=True)
         dialog.resize(760, 430)
         help_label = label(t('One entry per line. Paste website URLs or domains; the whole domain and its subdomains are blocked during focus. For applications, choose the .exe file. Remove a line to stop blocking it.'), 'muted')
         help_label.setWordWrap(True); box.addWidget(help_label)
@@ -294,9 +296,10 @@ class FocusPage(QWidget):
             error.setWordWrap(True); box.addWidget(error)
         dialog.show()
 
-    def dialog(self, title, width):
+    def dialog(self, title, width,discard=False):
         dialog = self.owner._dialog(title, width)
         box = QVBoxLayout(dialog); box.setContentsMargins(24, 22, 24, 22); box.setSpacing(14)
+        box.addWidget(back_button(self.owner.t,dialog.reject,discard=discard),0,Qt.AlignLeft)
         from .qt_ui import dark_window
         dark_window(dialog)
         return dialog, box

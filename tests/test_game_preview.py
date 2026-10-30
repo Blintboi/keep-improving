@@ -33,6 +33,13 @@ class GamePreviewTests(unittest.TestCase):
         return Mock(hwnd=123,pid=456,path=str(self.exe),identity='fixture:1',game_id=self.games[0].id,
                     **{'activate.return_value':True,'valid.return_value':True,'matches.return_value':True})
 
+    def countdown_fields(self):
+        from PySide6.QtWidgets import QWidget
+        self.app.show(); self.app.game_countdown_dialog(self.games[0].id); window=self.app._dialogs[-1]
+        fields={w.accessibleName():w for w in window.findChildren(QWidget) if w.accessibleName()}
+        fields[self.app.t('Hide this countdown')].setChecked(False)
+        return window,fields
+
     def test_explicit_preview_uses_live_rtss_draft_palette_and_alt_tab_clears_it(self):
         target=self.target(); current=Sample(datetime.now().astimezone(),100,str(self.exe),target.identity)
         self.app._overlay_preview_game_id=self.games[0].id; self.app._overlay_game_preview_state='normal'
@@ -86,16 +93,17 @@ class GamePreviewTests(unittest.TestCase):
         from PySide6.QtGui import QImage,QColor
         from gametime.overlay import screen_device
         target=self.target(); image=QImage(200,100,QImage.Format_RGB32); image.fill(QColor('#dc8430'))
-        self.app.overlay_enabled.setChecked(True)
         with patch('gametime.qt_game_preview.running_window',return_value=target),patch('gametime.game_preview.capture_window',return_value=(image,screen_device(self.qt.primaryScreen()),(0,0,1,1))) as capture:
-            self.app.show(); self.app.switch_page(2); self.pump(.2)
-            self.assertIsNotNone(self.app.overlay_picker.game_background); self.assertEqual(capture.call_count,1)
-            self.assert_background_painted(self.app.overlay_picker)
-            before=self.app.overlay_picker.game_background[0].cacheKey(); self.app.set_language('en'); self.pump(.03)
-            self.assertEqual(self.app.overlay_picker.game_background[0].cacheKey(),before); self.assertEqual(capture.call_count,1)
-            self.app.hide()
+            window,fields=self.countdown_fields(); picker=fields[self.app.t('Countdown position')]
+            deadline=time.monotonic()+3
+            while picker.game_background is None and time.monotonic()<deadline: self.pump(.03)
+            self.assertIsNotNone(picker.game_background); self.assertEqual(capture.call_count,1)
+            self.assert_background_painted(picker)
+            before=picker.game_background[0].cacheKey(); self.app.set_language('en'); self.pump(.03)
+            self.assertEqual(picker.game_background[0].cacheKey(),before); self.assertEqual(capture.call_count,1)
+            window.hide(); self.app.hide()
             for _ in range(5): self.app.render_tick(); self.app.update_overlay()
-            self.assertIsNone(self.app.overlay_picker.game_background); self.assertEqual(capture.call_count,1)
+            self.assertIsNone(picker.game_background); self.assertEqual(capture.call_count,1)
 
     def assert_background_painted(self,picker):
         # Storing a successful capture is insufficient: the monitor-name bug
@@ -107,9 +115,40 @@ class GamePreviewTests(unittest.TestCase):
         finally: picker.game_background=background
         self.assertGreater(painted.red()-empty.red(),40)
 
+    def test_position_diagram_recovers_replaced_screen_without_running_game(self):
+        from PySide6.QtGui import QColor
+        saved=self.store.settings()
+        obsolete=Mock(); obsolete.geometry.side_effect=RuntimeError('Internal C++ object (QScreen) already deleted.')
+        with patch('gametime.qt_game_preview.running_window',return_value=None),patch.object(self.app.game_snapshots,'request') as capture:
+            window,fields=self.countdown_fields(); picker=fields[self.app.t('Countdown position')]; self.pump(.05)
+            picker.set_position(.4,.6); picker.screen=obsolete; picker._background_controller.refresh()
+            self.assertIs(picker.screen,self.app.screen())
+            monitor,hud=picker.rectangles()
+            self.assertTrue(monitor.contains(hud))
+            point=(round(monitor.x()+monitor.width()*.25),round(monitor.y()+monitor.height()*.3))
+            self.assertEqual(picker.grab().toImage().pixelColor(*point),QColor('#101c23'))
+            self.assertEqual(tuple(int(fields[self.app.t(name)].value()) for name in ('Horizontal (px)','Vertical (px)')),picker.pixel_position())
+            self.assertEqual((picker.x_ratio,picker.y_ratio),(.4,.6))
+            self.assertEqual(self.store.settings(),saved)
+            capture.assert_not_called()
+
+    def test_refresh_rebinds_selected_monitor_and_does_no_work_while_hidden(self):
+        with patch('gametime.qt_game_preview.running_window',return_value=None):
+            window,fields=self.countdown_fields(); picker=fields[self.app.t('Countdown position')]; controller=picker._background_controller; self.pump(.05)
+            fields[self.app.t('Monitor')].setCurrentIndex(1)
+            wanted=fields[self.app.t('Monitor')].currentData()
+            with patch('gametime.qt_game_preview.choose_screen',return_value=self.qt.primaryScreen()) as choose:
+                picker.screen=None
+                controller.refresh()
+                choose.assert_called_once_with(wanted,self.app.screen().name())
+                self.assertIs(picker.screen,self.qt.primaryScreen())
+                window.hide(); self.app.hide(); choose.reset_mock()
+                controller.refresh(); choose.assert_not_called()
+
     def test_per_game_editor_paints_native_monitor_capture_after_refresh(self):
         from PySide6.QtGui import QImage,QColor
         from gametime.overlay import PositionPicker,screen_device
+        self.app.settings=self.app.catalog.settings=replace(self.app.settings,overlay_enabled=True)
         target=self.target(); image=QImage(200,100,QImage.Format_RGB32); image.fill(QColor('#dc8430'))
         with patch('gametime.qt_game_preview.running_window',return_value=target),patch('gametime.game_preview.capture_window',return_value=(image,screen_device(self.qt.primaryScreen()),(0,0,1,1))) as capture:
             self.app.game_countdown_dialog(self.games[0].id); window=self.app._dialogs[-1]; self.pump(.2)
@@ -148,7 +187,7 @@ class GamePreviewTests(unittest.TestCase):
         controller.target=None
         controller.receive(controller,target,(QImage(10,10,QImage.Format_RGB32),'',(0,0,1,1)))
         self.assertIsNone(picker.game_background)
-        combos=[item for item in window.findChildren(QComboBox) if item.accessibleName()==self.app.t('Game')]
+        combos=[item for item in window.findChildren(QComboBox) if item.accessibleName()==self.app.t('Countdown target')]
         combos[0].setCurrentIndex(1); self.assertIsNone(picker.game_background)
 
     def test_per_game_color_drafts_switch_cancel_save_reset_and_local_only_sync(self):
@@ -157,23 +196,24 @@ class GamePreviewTests(unittest.TestCase):
         def field(window,key): return next(item for item in window.findChildren(QWidget) if item.accessibleName()==self.app.t(key))
         def click(window,key): next(item for item in window.findChildren(QPushButton) if item.text()==self.app.t(key)).click()
         self.app.game_countdown_dialog(self.games[0].id); window=self.app._dialogs[-1]
-        mode=field(window,'Countdown mode'); mode.setCurrentIndex(mode.findData('custom'))
+        field(window,'Hide this countdown').setChecked(False)
         with patch('gametime.qt_personalization.QColorDialog.getColor',return_value=QColor('#12ab34')): field(window,'Normal color').click()
-        games=field(window,'Game'); games.setCurrentIndex(1); mode.setCurrentIndex(mode.findData('custom'))
+        games=field(window,'Countdown target'); games.setCurrentIndex(1)
+        field(window,'Hide this countdown').setChecked(False)
         with patch('gametime.qt_personalization.QColorDialog.getColor',return_value=QColor('#bc56ef')): field(window,'Warning color').click()
         games.setCurrentIndex(0); self.assertEqual(field(window,'Normal color').text(),'#12AB34')
         self.app.set_language('en'); self.assertEqual(field(window,'Normal color').text(),'#12AB34')
         self.assertEqual(self.store.settings().game_overlays,{}); click(window,'Save')
         saved=self.store.settings(); self.assertEqual(saved.game_overlays[self.games[0].id]['overlay_color_normal'],'#12ab34')
-        self.assertNotIn('overlay_color_warning',saved.game_overlays[self.games[0].id])
+        self.assertEqual(saved.game_overlays[self.games[0].id]['overlay_color_warning'],saved.overlay_color_warning)
         self.assertEqual(saved.game_overlays[self.games[1].id]['overlay_color_warning'],'#bc56ef')
         from gametime.statistics_sync import StatisticsData
         import json
         self.assertNotIn('#12ab34',json.dumps(StatisticsData(self.store).snapshot('a'*32,'Fixture')))
-        self.app.game_countdown_dialog(self.games[0].id); window=self.app._dialogs[-1]; click(window,'Use global colors'); click(window,'Cancel')
+        self.app.game_countdown_dialog(self.games[0].id); window=self.app._dialogs[-1]; click(window,'Default colors'); click(window,'Cancel')
         self.assertEqual(self.store.settings(),saved)
-        self.app.game_countdown_dialog(self.games[0].id); window=self.app._dialogs[-1]; click(window,'Use global colors'); click(window,'Save')
-        self.assertNotIn('overlay_color_normal',self.store.settings().game_overlays[self.games[0].id])
+        self.app.game_countdown_dialog(self.games[0].id); window=self.app._dialogs[-1]; click(window,'Default colors'); click(window,'Save')
+        self.assertEqual(self.store.settings().game_overlays[self.games[0].id]['overlay_color_normal'],saved.overlay_color_normal)
         self.assertEqual(self.store.settings().game_overlays[self.games[1].id]['overlay_color_warning'],'#bc56ef')
 
     def test_window_identity_reuse_and_foreground_handle_are_guarded(self):

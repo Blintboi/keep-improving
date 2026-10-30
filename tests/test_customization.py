@@ -150,17 +150,42 @@ class CustomizationInterfaceTests(unittest.TestCase):
     def test_per_game_drafts_preview_cancel_save_reset_and_translation(self):
         from PySide6.QtWidgets import QComboBox
         self.app.game_countdown_dialog(self.games[0].id); window=self.app._dialogs[-1]
-        mode=self.field(window,'Countdown mode',QComboBox); mode.setCurrentIndex(mode.findData('custom'))
+        self.field(window,'Hide this countdown').setChecked(False)
         self.field(window,'Text size').setValue(42); self.field(window,'Horizontal (px)').setValue(137); self.field(window,'Vertical (px)').setValue(219)
         self.click(window,'Preview (10s)'); self.pump(.03)
         self.assertEqual(self.app._overlay_preview_settings.overlay_font_size,42); self.assertEqual(self.store.settings().game_overlays,{})
         self.app.set_language('en'); self.assertEqual(self.field(window,'Horizontal (px)').value(),137)
         self.click(window,'Cancel'); self.assertEqual(self.store.settings().game_overlays,{}); self.assertIsNone(self.app._overlay_preview_settings)
-        self.app.game_countdown_dialog(self.games[0].id); window=self.app._dialogs[-1]; mode=self.field(window,'Countdown mode',QComboBox); mode.setCurrentIndex(mode.findData('custom'))
+        self.app.game_countdown_dialog(self.games[0].id); window=self.app._dialogs[-1]
+        self.field(window,'Hide this countdown').setChecked(False)
         self.field(window,'Text size').setValue(42); self.click(window,'Save')
         saved=self.store.settings(); self.assertFalse(saved.overlay_enabled); self.assertTrue(saved.game_overlays[self.games[0].id]['overlay_enabled'])
         self.assertEqual(game_settings(saved,self.games[0].id).overlay_font_size,42); self.assertFalse(game_settings(saved,self.games[1].id).overlay_enabled)
-        self.app.game_countdown_dialog(self.games[0].id); window=self.app._dialogs[-1]; self.click(window,'Use global settings'); self.click(window,'Save'); self.assertEqual(self.store.settings().game_overlays,{})
+
+    def test_hidden_game_starts_without_position_controls_and_only_explicitly_enabled_game_changes(self):
+        from PySide6.QtWidgets import QComboBox,QCheckBox
+        self.app.game_countdown_dialog(self.games[0].id); window=self.app._dialogs[-1]
+        hidden=self.field(window,'Hide this countdown',QCheckBox); games=self.field(window,'Countdown target',QComboBox)
+        self.assertTrue(hidden.isChecked())
+        self.assertFalse(self.field(window,'Text size').isVisible())
+        self.assertEqual(self.store.settings().game_overlays,{})
+        games.setCurrentIndex(games.findData(self.games[1].id))
+        self.assertTrue(hidden.isChecked())
+        games.setCurrentIndex(games.findData(self.games[0].id))
+        hidden.setChecked(False)
+        self.click(window,'Save')
+        self.assertEqual(set(self.store.settings().game_overlays),{self.games[0].id})
+        self.app.game_countdown_dialog(self.games[0].id); window=self.app._dialogs[-1]
+        hidden=self.field(window,'Hide this countdown',QCheckBox); hidden.setChecked(True)
+        self.assertFalse(self.field(window,'Text size').isVisible())
+        self.click(window,'Save'); self.assertFalse(self.store.settings().game_overlays[self.games[0].id]['overlay_enabled'])
+
+    def test_existing_hidden_game_remains_hidden_in_editor(self):
+        from PySide6.QtWidgets import QCheckBox
+        self.app.settings=self.app.catalog.settings=replace(self.app.settings,game_overlays={self.games[0].id:{'overlay_enabled':False}})
+        self.app.game_countdown_dialog(self.games[0].id); window=self.app._dialogs[-1]
+        self.assertTrue(self.field(window,'Hide this countdown',QCheckBox).isChecked())
+        self.assertFalse(self.field(window,'Text size').isVisible())
 
     def test_game_hidden_countdown_keeps_tracker_and_warning_popup(self):
         settings=replace(self.app.settings,overlay_enabled=True,game_overlays={self.games[0].id:{'overlay_enabled':False}})
@@ -183,7 +208,7 @@ class CustomizationInterfaceTests(unittest.TestCase):
         with patch.object(self.app,'overlay_warning_visible',return_value=True): self.assertTrue(self.app.consume_silent_alert(alert))
 
     def test_sound_drafts_are_saved_only_by_save_and_silent_popup_is_visible(self):
-        from PySide6.QtWidgets import QComboBox
+        from PySide6.QtWidgets import QComboBox,QCheckBox
         mode=self.field(self.app,'Notification sound',QComboBox); mode.setCurrentIndex(mode.findData('silent'))
         self.assertEqual(self.store.settings().notification_sound,'default'); self.app.set_language('en'); self.assertEqual(mode.currentData(),'silent')
         self.app.save_settings(); self.assertEqual(self.store.settings().notification_sound,'silent')
@@ -191,11 +216,11 @@ class CustomizationInterfaceTests(unittest.TestCase):
             self.app.test_popup(); self.pump(.03); self.assertTrue(self.app.popup_window.isVisible()); sound.assert_not_called()
 
     def test_two_game_drafts_and_failed_save_preserve_other_preferences(self):
-        from PySide6.QtWidgets import QComboBox
+        from PySide6.QtWidgets import QComboBox,QCheckBox
         self.app.game_countdown_dialog(self.games[0].id); window=self.app._dialogs[-1]
-        mode=self.field(window,'Countdown mode',QComboBox); games=self.field(window,'Game',QComboBox)
-        mode.setCurrentIndex(mode.findData('custom')); self.field(window,'Text size').setValue(38)
-        games.setCurrentIndex(games.findData(self.games[1].id)); mode.setCurrentIndex(mode.findData('hidden'))
+        hidden=self.field(window,'Hide this countdown',QCheckBox); games=self.field(window,'Countdown target',QComboBox)
+        self.field(window,'Text size').setValue(38)
+        games.setCurrentIndex(games.findData(self.games[1].id)); hidden.setChecked(False); hidden.setChecked(True)
         games.setCurrentIndex(games.findData(self.games[0].id)); self.assertEqual(self.field(window,'Text size').value(),38)
         with patch.object(self.store,'save_settings',side_effect=OperationalError('fixture')): self.click(window,'Save')
         self.assertTrue(window.isVisible()); self.assertEqual(self.app.settings.game_overlays,{})

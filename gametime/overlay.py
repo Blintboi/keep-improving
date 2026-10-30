@@ -172,6 +172,7 @@ class PositionPicker(QWidget):
         self.setMaximumHeight(240)
         self.setMinimumWidth(320)
         self.setCursor(Qt.ArrowCursor)
+        self.setProperty('dynamicCursor',True)
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.StrongFocus)
         self.setAccessibleName("Countdown position")

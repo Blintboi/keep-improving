@@ -148,23 +148,21 @@ class GameLimitInterfaceTests(unittest.TestCase):
             self.app.settings=self.app.catalog.settings=replace(self.app.settings,game_limits={})
             self.pump(.3); minimize.assert_not_called()
 
-    def test_dialog_save_cancel_failed_save_language_and_main_drafts(self):
-        from PySide6.QtWidgets import QCheckBox, QPushButton
-        from gametime.qt_widgets import NoWheelDoubleSpinBox
+    def test_central_editor_failed_save_language_and_main_drafts(self):
         self.app.limit.setValue(150)
-        self.app.game_limits_dialog(self.games[0].id); window=self.app._dialogs[-1]
-        enabled=window.findChild(QCheckBox,'game_limit_enabled'); minutes=window.findChild(NoWheelDoubleSpinBox,'game_limit_minutes')
+        self.app.game_limits_dialog(self.games[0].id); editor=self.app.budget_editor
+        self.assertEqual(self.app.pages.currentIndex(),5); self.assertFalse(self.app._dialogs)
+        enabled=editor.enabled; minutes=editor.minutes
         enabled.setChecked(True); minutes.setValue(30); self.app.set_language('en')
-        self.assertEqual(minutes.value(),30); self.assertEqual(enabled.text(),'Limit this game')
+        self.assertEqual(minutes.value(),30); self.assertEqual(enabled.text(),'Use a daily limit')
         with patch.object(self.store,'save_settings',side_effect=OSError('fixture')):
-            window.findChild(QPushButton,'save_game_limits').click()
-        self.assertEqual(self.store.settings().game_limits,{}); self.assertTrue(window.isVisible())
-        window.findChild(QPushButton,'save_game_limits').click(); self.pump(.03)
+            self.app.save_settings()
+        self.assertEqual(self.store.settings().game_limits,{})
+        self.app.save_settings(); self.pump(.03)
         self.assertEqual(self.store.settings().game_limits,{self.games[0].id:1800})
         self.assertEqual(self.app.limit.value(),150)
         self.app.save_settings(); self.assertEqual(self.store.settings().game_limits,{self.games[0].id:1800})
-        self.app.game_limits_dialog(self.games[0].id); window=self.app._dialogs[-1]
-        window.findChild(QCheckBox,'game_limit_enabled').setChecked(False); window.reject(); self.pump(.03)
+        editor.enabled.setChecked(False); self.app.switch_page(1); self.pump(.03)
         self.assertEqual(self.store.settings().game_limits,{self.games[0].id:1800})
 
     def test_excluded_game_keeps_saved_cap_but_can_launch(self):
@@ -205,22 +203,19 @@ class GameLimitInterfaceTests(unittest.TestCase):
             self.pump(.3); minimize.assert_called_once_with(str(self.exe),'fixture:1'); notice.assert_called_once()
 
     def test_multiple_game_drafts_save_and_inventory_refresh_preserve_unedited_caps(self):
-        from PySide6.QtWidgets import QCheckBox,QPushButton
-        from gametime.qt_widgets import NoWheelDoubleSpinBox,NoWheelComboBox
-        self.configure(); self.app.game_limits_dialog(self.game.id); window=self.app._dialogs[-1]
-        selector=window.findChild(NoWheelComboBox,'limit_game'); minutes=window.findChild(NoWheelDoubleSpinBox,'game_limit_minutes')
-        minutes.setValue(15); selector.setCurrentIndex(selector.findData(self.games[1].id))
-        window.findChild(QCheckBox,'game_limit_enabled').setChecked(True); minutes.setValue(45)
+        self.configure(); editor=self.app.budget_editor; editor.saved(self.app.settings)
+        self.app.game_limits_dialog(self.game.id)
+        editor.minutes.setValue(15); self.app.game_limits_dialog(self.games[1].id)
+        editor.enabled.setChecked(True); editor.minutes.setValue(45)
         self.app.settings=self.app.catalog.settings=replace(self.app.settings,game_limits={self.game.id:1800,self.games[2].id:3600})
-        self.app.refresh_game_dialogs(); window.findChild(QPushButton,'save_game_limits').click(); self.pump(.03)
+        self.app.save_settings(); self.pump(.03)
         self.assertEqual(self.store.settings().game_limits,{self.game.id:900,self.games[1].id:2700,self.games[2].id:3600})
 
-    def test_empty_inventory_disables_editor_without_losing_saved_limits(self):
-        from PySide6.QtWidgets import QPushButton
+    def test_empty_inventory_keeps_category_editor_and_saved_limits(self):
         self.configure(); self.app.catalog.games={}
-        self.app.game_limits_dialog(); window=self.app._dialogs[-1]
-        self.assertFalse(window.findChild(QPushButton,'save_game_limits').isEnabled())
-        self.assertEqual(self.app.settings.game_limits,{self.game.id:1800})
+        self.app.game_limits_dialog(); self.app.save_settings()
+        self.assertEqual(self.app.budget_editor.current,'shared-games')
+        self.assertEqual(self.store.settings().game_limits,{self.game.id:1800})
 
 
 if __name__=='__main__': unittest.main()

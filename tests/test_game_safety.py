@@ -156,9 +156,12 @@ class ProtectedGameInterfaceTests(unittest.TestCase):
         with patch('gametime.qt_ui.win32.sample',return_value=current),patch.object(self.app.rtss,'present') as rtss,patch.object(self.app.overlay,'present') as desktop,patch('gametime.qt_ui.running_window',return_value=target),patch('gametime.qt_game_preview.running_window',return_value=target),patch.object(self.app.game_snapshots,'request') as snapshot:
             self.app.update_overlay(); self.assertFalse(self.app.overlay_timer.isActive())
             self.app.preview_overlay(); target.activate.assert_not_called()
-            self.app.show(); self.app.switch_page(2); self.pump(.05)
-            self.assertIsNone(self.app.overlay_picker.game_background)
-            self.assertIn('Anticheat',self.app.overlay_picker._background_controller.status.text())
+            from PySide6.QtWidgets import QWidget
+            self.app.show(); self.app.game_countdown_dialog(game.id); self.pump(.05)
+            fields={w.accessibleName():w for w in self.app._dialogs[-1].findChildren(QWidget) if w.accessibleName()}
+            picker=fields[self.app.t('Countdown position')]
+            self.assertIsNone(picker.game_background)
+            self.assertIn('Anticheat',picker._background_controller.status.text())
             rtss.assert_not_called(); desktop.assert_not_called(); snapshot.assert_not_called()
         self.assertEqual(self.store.settings().game_overlays,{})
 

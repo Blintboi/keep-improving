@@ -67,7 +67,7 @@ class Store:
     def settings(self):
         row = self.db.execute("SELECT value FROM settings WHERE key='config'").fetchone()
         if not row:
-            return Settings()
+            return Settings(game_budget_enabled=False,budget_setup_completed=False)
         config = json.loads(row[0])
         # Accept old profiles without retaining the retired category-wide filter.
         config.pop("exclude_chess", None)
@@ -201,11 +201,25 @@ class Store:
                     if field == 'game_limits': values[new_id]=min(value,values.get(new_id,value))
                     else: values.setdefault(new_id,value)
                     changed=True
+            if config.get('wellbeing_rules'):
+                from .wellbeing import remap_rules
+                config['wellbeing_rules']=remap_rules(config['wellbeing_rules'],{old_id:new_id}); changed=True
+            plans=config.get('restriction_plans',{})
+            if 'game:'+old_id in plans:
+                plans.setdefault('game:'+new_id,plans.pop('game:'+old_id)); changed=True
             if changed: self.db.execute("UPDATE settings SET value=? WHERE key='config'",(json.dumps(config,ensure_ascii=False),))
+        if self.db.execute("SELECT 1 FROM sqlite_master WHERE name='restriction_state'").fetchone():
+            from .restriction_policy import remap_state
+            remap_state(self.db,'game:'+old_id,'game:'+new_id)
         preferred = self.launch_executable(old_id)
         if preferred and not self.launch_executable(new_id):
             self.db.execute("INSERT INTO settings VALUES (?,?)", ('launch_exe:' + new_id, preferred))
         self.db.execute("DELETE FROM settings WHERE key=?", ('launch_exe:' + old_id,))
+        if self.db.execute("SELECT 1 FROM sqlite_master WHERE name='wellbeing_usage'").fetchone():
+            rows=list(self.db.execute('SELECT day,app,site,seconds FROM wellbeing_usage WHERE game_id=?',(old_id,)))
+            self.db.executemany('INSERT INTO wellbeing_usage VALUES (?,?,?,?,?) ON CONFLICT(day,game_id,app,site) '
+                                'DO UPDATE SET seconds=seconds+excluded.seconds',[(day,new_id,app,site,seconds) for day,app,site,seconds in rows])
+            self.db.execute('DELETE FROM wellbeing_usage WHERE game_id=?',(old_id,))
         for table in ('usage', 'budget_usage'):
             rows = list(self.db.execute(f"SELECT day,seconds FROM {table} WHERE game_id=?", (old_id,)))
             self.db.executemany(f"INSERT INTO {table} VALUES (?,?,?) ON CONFLICT(day,game_id) "

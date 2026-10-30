@@ -1,11 +1,15 @@
-"""Local quota boundaries; calendar-day statistics remain independent."""
+"""One local day boundary for statistics, budgets and daily reminders."""
 from datetime import datetime, time, timedelta
 
 
 def reset_clock(settings):
-    fallback = settings.budget_reset_minute
-    weekend = settings.weekend_schedule.get('budget_reset_minute', fallback) if settings.weekend_enabled else fallback
-    return tuple(settings.daily_schedules.get(str(day), {}).get('budget_reset_minute', weekend if day >= 5 else fallback) for day in range(7))
+    # Keep the existing persisted/synchronized field for upgrade compatibility.
+    # Legacy per-weekday values no longer override the universal clock.
+    return (settings.budget_reset_minute,) * 7
+
+
+def current_day(settings,wall=None):
+    return period_day(wall or datetime.now().astimezone(),reset_clock(settings))
 
 
 def _minute(clock, day):

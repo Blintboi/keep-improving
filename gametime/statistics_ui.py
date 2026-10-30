@@ -4,6 +4,7 @@ import time
 import tkinter as tk
 from tkinter import ttk
 from .statistics import date_range, summarize
+from .quota import current_day
 
 
 def duration(seconds):
@@ -20,8 +21,8 @@ class StatisticsView(ttk.Frame):
         self.last_refresh = 0
         self.bars = []
         t = app.t
-        self.start = tk.StringVar(value=(date.today()-timedelta(days=29)).isoformat())
-        self.end = tk.StringVar(value=date.today().isoformat())
+        self.start = tk.StringVar(value=(current_day(self.app.settings)-timedelta(days=29)).isoformat())
+        self.end = tk.StringVar(value=current_day(self.app.settings).isoformat())
         self.summary = tk.StringVar()
         self.top_game = tk.StringVar()
         self.error = tk.StringVar()
@@ -82,7 +83,7 @@ class StatisticsView(ttk.Frame):
                   style="Muted.TLabel", wraplength=950).pack(anchor="w")
 
     def preset(self, count):
-        today = date.today()
+        today = current_day(self.app.settings)
         self.start.set((today-timedelta(days=count-1) if count else today.replace(day=1)).isoformat())
         self.end.set(today.isoformat())
         self.selected_day = None
@@ -99,7 +100,7 @@ class StatisticsView(ttk.Frame):
         self.app.tracker.flush()
         started_on = self.app.store.tracking_started_on()
         self.report = summarize(self.app.store.history(self.start.get(), self.end.get()), self.start.get(), self.end.get(),
-                                started_on=started_on, as_of=date.today().isoformat())
+                                started_on=started_on, as_of=current_day(self.app.settings).isoformat())
         self.average_note.set(self.app.t("Average uses {days} elapsed days in the selected period, no earlier than installation ({date}).",
                                          days=self.report.average_days, date=started_on))
         self.last_refresh = time.monotonic()

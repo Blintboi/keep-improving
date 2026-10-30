@@ -95,20 +95,20 @@ class ConsentInterfaceTests(unittest.TestCase):
         game=self.protected(); self.app.game_countdown_dialog(game.id); window=self.app._dialogs[-1]
         def button(key):return next(b for b in window.findChildren(QPushButton) if b.text()==self.app.t(key))
         fields={key:next(w for w in window.findChildren(QWidget) if w.accessibleName()==self.app.t(key))
-                for key in ('Countdown mode','Normal color','Warning color','Monitor','Countdown position','Horizontal (px)','Vertical (px)','Text size','Preview state')}
+                for key in ('Hide this countdown','Normal color','Warning color','Monitor','Countdown position','Horizontal (px)','Vertical (px)','Text size','Preview state')}
         def visibility(visible):
             for key,field in fields.items():
                 self.assertEqual(field.isVisible(),visible,key)
-            for key in ('Preview (10s)','Refresh game image','Use global colors','Use global settings','Save'):
+            for key in ('Preview (10s)','Refresh game image','Default colors','Save'):
                 self.assertEqual(button(key).isVisible(),visible,key)
             self.assertTrue(button('Cancel').isVisible())
-        visibility(False); self.assertTrue(button('Review overlay risks…').isVisible())
-        with patch('gametime.qt_overlay_consent.request_consent',return_value=False): button('Review overlay risks…').click()
-        self.assertFalse(self.app.overlay_consents.allows(game)); visibility(False)
-        with patch('gametime.qt_overlay_consent.request_consent',return_value=True): button('Review overlay risks…').click()
+        visibility(True); self.assertFalse(button('Preview (10s)').isEnabled()); self.assertTrue(button('Allow game image preview…').isVisible())
+        with patch('gametime.qt_overlay_consent.request_consent',return_value=False): button('Allow game image preview…').click()
+        self.assertFalse(self.app.overlay_consents.allows(game)); visibility(True)
+        with patch('gametime.qt_overlay_consent.request_consent',return_value=True): button('Allow game image preview…').click()
         self.assertTrue(self.app.overlay_consents.allows(game)); self.assertEqual(self.store.settings().game_overlays,{}); visibility(True)
-        self.app.set_language('en'); button('Revoke overlay permission').click()
-        self.assertFalse(self.app.overlay_consents.allows(game)); self.assertFalse(Consents(self.store).allows(game)); visibility(False)
+        self.app.set_language('en'); button('Revoke game image preview permission').click()
+        self.assertFalse(self.app.overlay_consents.allows(game)); self.assertFalse(Consents(self.store).allows(game)); visibility(True)
 
     def test_switching_between_blocked_and_allowed_games_preserves_drafts_and_saved_preferences(self):
         from PySide6.QtWidgets import QPushButton,QWidget
@@ -119,12 +119,12 @@ class ConsentInterfaceTests(unittest.TestCase):
         self.app.game_countdown_dialog(allowed.id); window=self.app._dialogs[-1]
         def field(key):return next(w for w in window.findChildren(QWidget) if w.accessibleName()==self.app.t(key))
         def button(key):return next(b for b in window.findChildren(QPushButton) if b.text()==self.app.t(key))
-        mode=field('Countdown mode'); mode.setCurrentIndex(mode.findData('custom')); field('Text size').setValue(42)
-        games=field('Game'); games.setCurrentIndex(games.findData(game.id))
-        self.assertFalse(mode.isVisible()); self.assertFalse(button('Save').isVisible())
-        self.app.set_language('en'); self.assertFalse(field('Text size').isVisible())
+        hidden=field('Hide this countdown'); field('Text size').setValue(42)
+        games=field('Countdown target'); games.setCurrentIndex(games.findData(game.id))
+        self.assertTrue(hidden.isVisible()); self.assertTrue(button('Save').isVisible()); self.assertFalse(button('Preview (10s)').isEnabled())
+        self.app.set_language('en'); self.assertTrue(field('Text size').isVisible())
         games.setCurrentIndex(games.findData(allowed.id))
-        self.assertTrue(mode.isVisible()); self.assertEqual(field('Text size').value(),42)
+        self.assertTrue(hidden.isVisible()); self.assertEqual(field('Text size').value(),42)
         button('Save').click(); saved=self.store.settings()
         self.assertEqual(saved.game_overlays[game.id],original[game.id])
         self.assertEqual(saved.game_overlays[allowed.id]['overlay_font_size'],42)
@@ -133,7 +133,7 @@ class ConsentInterfaceTests(unittest.TestCase):
         import sqlite3
         from PySide6.QtWidgets import QPushButton
         game=self.protected(); self.app.game_countdown_dialog(game.id); window=self.app._dialogs[-1]
-        button=next(b for b in window.findChildren(QPushButton) if b.text()==self.app.t('Review overlay risks…'))
+        button=next(b for b in window.findChildren(QPushButton) if b.text()==self.app.t('Allow game image preview…'))
         with patch('gametime.qt_overlay_consent.request_consent',return_value=True),patch.object(self.app.overlay_consents,'set',side_effect=sqlite3.OperationalError('fixture')):
             button.click()
         self.assertFalse(self.app.overlay_consents.allows(game))
@@ -149,10 +149,10 @@ class ConsentInterfaceTests(unittest.TestCase):
         def button(key):return next(b for b in window.findChildren(QPushButton) if b.text()==self.app.t(key))
         self.assertFalse(button('Preview (10s)').isVisible()); self.assertFalse(button('Save').isVisible())
         self.assertTrue(any(w.isVisible() and w.text()==self.app.t(UNCHECKED) for w in window.findChildren(QLabel)))
-        button('Revoke overlay permission').click()
-        self.assertFalse(button('Review overlay risks…').isVisible()); self.assertFalse(self.app.overlay_consents.allows(game))
+        button('Revoke game image preview permission').click()
+        self.assertFalse(button('Allow game image preview…').isVisible()); self.assertFalse(self.app.overlay_consents.allows(game))
 
-    def test_native_popups_keep_casual_features_but_never_send_escape_to_protected_games(self):
+    def test_native_popups_never_send_escape_to_games(self):
         from gametime.tracker import Alert,Sample
         for index,protected in enumerate((False,True,True)):
             game=self.protected() if protected else self.games[0]
@@ -163,8 +163,7 @@ class ConsentInterfaceTests(unittest.TestCase):
             self.app.tracker.alerts.append(alert)
             with self.subTest(protected=protected,consented=index==2),patch('gametime.controller.win32.sample',return_value=current),patch('gametime.win32.desktop_overlay_available',return_value=True),patch('gametime.controller.win32.escape_game',return_value=False) as escape,patch.object(self.app.rtss,'present') as rtss,patch.object(self.app.overlay,'present') as desktop,patch.object(self.app.game_snapshots,'request') as capture:
                 self.app.notify(alert)
-                if protected: escape.assert_not_called()
-                else: escape.assert_called_once_with(current.path,current.identity)
+                escape.assert_not_called()
                 self.assertTrue(self.app.popup_window.isVisible()); self.assertFalse(self.app.tracker.alerts)
                 rtss.assert_not_called(); desktop.assert_not_called(); capture.assert_not_called()
             self.app.dismiss_popup()
@@ -188,29 +187,33 @@ class ConsentInterfaceTests(unittest.TestCase):
         from gametime.tracker import Sample,Alert
         from PySide6.QtGui import QImage,QColor
         from gametime.overlay import screen_device
-        game=self.protected(); self.app.overlay_consents.set(game,True)
+        game=self.protected(); self.app.overlay_consents.set(game,True); self.app.overlay_consents.set_display_enabled(True)
         current=Sample(datetime.now().astimezone(),100,str(self.exe),'12:34'); self.app.tracker.tick(current)
         target=Mock(path=str(self.exe),game_id=game.id,**{'valid.return_value':True})
         image=QImage(100,100,QImage.Format_RGB32);image.fill(QColor('red'))
         with patch('gametime.qt_ui.win32.sample',return_value=current),patch.object(self.app,'rtss_available',return_value=False),patch.object(self.app.overlay,'present') as present:
             self.app.update_overlay(); present.assert_called_once()
-            self.app.overlay_consents.set(game,False); self.app.refresh_rtss_consent(); self.app.update_overlay()
+            self.app.overlay_consents.set_display_enabled(False); self.app.refresh_rtss_consent(); self.app.update_overlay()
             self.assertEqual(present.call_count,1);self.assertEqual(self.app._overlay_backend,'none')
         self.app.overlay_consents.set(game,True);self.app.overlay_enabled.setChecked(True)
         with patch('gametime.qt_game_preview.running_window',return_value=target),patch('gametime.game_preview.capture_window',return_value=(image,screen_device(self.qt.primaryScreen()),(0,0,1,1))):
-            self.app.show();self.app.switch_page(2);self.pump(.2);self.assertIsNotNone(self.app.overlay_picker.game_background)
+            from PySide6.QtWidgets import QWidget
+            self.app.show(); self.app.game_countdown_dialog(game.id); window=self.app._dialogs[-1]
+            fields={w.accessibleName():w for w in window.findChildren(QWidget) if w.accessibleName()}
+            fields[self.app.t('Hide this countdown')].setChecked(False)
+            self.pump(.2);self.assertIsNotNone(fields[self.app.t('Countdown position')].game_background)
         alert=Alert(date.today().isoformat(),('warning:6000',),'warning','Warning','OK');self.app.tracker._queue(alert)
         with patch('gametime.controller.win32.sample',return_value=current),patch('gametime.controller.win32.escape_game') as escape,patch.object(self.app,'popup',return_value=True):
             self.app.notify(alert);escape.assert_not_called()
 
     def test_rtss_authorization_is_exact_and_known_basename_collisions_fail_closed(self):
-        game=self.protected(); self.app.overlay_consents.set(game,True); self.app.refresh_rtss_consent()
+        game=self.protected(); self.app.overlay_consents.set_display_enabled(True); self.app.refresh_rtss_consent()
         self.assertIn(norm(self.exe),self.app.rtss.approved)
         other_root=self.base/'Other';other_root.mkdir();other=replace(game,id='other:730',root=str(other_root),name='VALORANT')
         other_exe=other_root/self.exe.name;other_exe.touch();self.app.catalog.games[other.id]=other;self.app.catalog.rules[norm(other_exe)]=other.id
         self.app.catalog.overrides[other.id]=False
         self.app.refresh_rtss_consent();self.assertEqual(self.app.rtss.approved,frozenset())
-        self.app.overlay_consents.set(other,True);self.app.refresh_rtss_consent()
+        self.app.catalog.overrides[other.id]=True;self.app.refresh_rtss_consent()
         self.assertEqual(self.app.rtss.approved,frozenset((norm(self.exe),norm(other_exe))))
 
     def test_window_permission_is_rechecked_after_revocation(self):

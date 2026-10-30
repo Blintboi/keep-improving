@@ -9,6 +9,9 @@ from .game_safety import policy
 NOTICE_VERSION=1
 PREFIX='overlay_risk_consent:'
 MINIMIZE_PREFIX='minimize_risk_consent:'
+DISPLAY_KEY='protected_game_display_consent'
+DISPLAY_NOTICE_VERSION=1
+DISPLAY_NOTICE='Anti-cheat may block the display or restrict your game account. Enable countdowns and notifications in all protected games at your own risk.'
 MINIMIZE_NOTICE='Automatic minimization can interrupt an online match without pausing or closing the game. Inactivity, disconnection or abandoning a match may cause penalties, cooldowns or account restrictions. Fullscreen transitions may also cause compatibility problems, freezes or crashes in some games. You allow automatic minimization for this game at your own risk. The developer does not accept responsibility for resulting penalties, lost progress or other damage. This permission is separate from overlay consent and never permits automatic Escape or anti-cheat bypasses.'
 NOTICE='An anti-cheat system or the game publisher may block overlays, disconnect you, or suspend or permanently ban your account. Keep Improving and RTSS are not approved by every publisher, and compatibility cannot be guaranteed. You use the overlay and game-image preview at your own risk. The developer does not accept responsibility for resulting sanctions, account loss or other damage. Consent does not disable or bypass anti-cheat protection. Automatic Escape remains disabled for protected games.'
 
@@ -23,6 +26,16 @@ class Consents:
         self.accepted=frozenset(); self.reload()
 
     def reload(self):
+        self.display_enabled=False
+        if self.prefix==PREFIX:
+            row=self.store.db.execute('SELECT value FROM settings WHERE key=?',(DISPLAY_KEY,)).fetchone()
+            try:
+                record=json.loads(row[0]) if row else {}
+                self.display_enabled=bool(isinstance(record,dict) and type(record.get('notice_version')) is int
+                    and record['notice_version']==DISPLAY_NOTICE_VERSION and record.get('accepted') is True
+                    and isinstance(record.get('accepted_at'),str)
+                    and datetime.fromisoformat(record['accepted_at']).tzinfo is not None)
+            except (ValueError,TypeError): pass
         accepted=set()
         for key,value in self.store.db.execute('SELECT key,value FROM settings WHERE key GLOB ?', (self.prefix+'*',)):
             try:
@@ -52,6 +65,15 @@ class Consents:
     def reason(self,path='',game=None):
         return policy.overlay_reason(path,game,consented=self.allows(game))
 
+    def set_display_enabled(self,enabled):
+        if self.prefix!=PREFIX or type(enabled) is not bool: raise ValueError('Display consent must be on or off.')
+        with self.store.db:
+            if enabled:
+                record={'notice_version':DISPLAY_NOTICE_VERSION,'accepted':True,'accepted_at':datetime.now(timezone.utc).isoformat()}
+                self.store.db.execute('INSERT OR REPLACE INTO settings VALUES (?,?)',(DISPLAY_KEY,json.dumps(record)))
+            else: self.store.db.execute('DELETE FROM settings WHERE key=?',(DISPLAY_KEY,))
+        self.reload()
+
 
 class MinimizeConsents(Consents):
     def __init__(self,store): super().__init__(store,prefix=MINIMIZE_PREFIX,notice_version=1)
@@ -60,3 +82,13 @@ class MinimizeConsents(Consents):
 def overlay_reason(catalog,path='',game=None):
     consent=getattr(catalog,'overlay_consents',None)
     return consent.reason(path,game) if isinstance(consent,Consents) else policy.reason(path,game)
+
+
+def display_reason(catalog,path='',game=None):
+    """The page switch controls every protected-game countdown and notification.
+
+    Legacy per-game image-preview consent stays separate and is preserved.
+    Unknown installations and anti-cheat helper processes remain blocked.
+    """
+    consent=getattr(catalog,'overlay_consents',None)
+    return policy.overlay_reason(path,game,consented=bool(game and isinstance(consent,Consents) and consent.display_enabled))

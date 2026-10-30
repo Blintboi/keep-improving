@@ -38,6 +38,8 @@ if (-not $SkipFreeze) {
 }
 $bundle = Join-Path $BuildDir 'frozen\GameTimeMonitor'
 if (Test-Path -LiteralPath (Join-Path $bundle '_internal\icuuc.dll')) { throw 'Unexpected app-local ICU: Qt on Windows 11 must use the Windows ICU runtime.' }
+. (Join-Path $PSScriptRoot 'defender_scan.ps1')
+Assert-DefenderReleaseScan $bundle (Join-Path $BuildDir 'bundle-defender-scan.json')
 if ($FreezeOnly) {
     & $PythonPath -B (Join-Path $PSScriptRoot 'audit_payload.py') --bundle $bundle --gitleaks $secretScanner --report (Join-Path $BuildDir 'bundle-secrets-audit.json')
     if ($LASTEXITCODE -ne 0) { throw 'Frozen payload secret audit failed. Do not distribute this build.' }
@@ -48,7 +50,7 @@ Copy-Item -LiteralPath (Join-Path $repo 'gametime\browser_extension') -Destinati
 foreach ($name in @('README.md','README.hu.md','TESTING.md','ARCHITECTURE.md','THIRD-PARTY-NOTICES.md','SECURITY.md','LICENSE','PRIVACY.md')) {
     Copy-Item -LiteralPath (Join-Path $repo $name) -Destination $bundle
 }
-foreach ($name in @('docs\DEVELOPMENT.md','docs\ANTICHEAT.hu.md','docs\WINDOWS-TRUST.hu.md','docs\images\library-en.png','docs\images\statistics-en.png','docs\images\bedtime-en.png','docs\images\focus-en.png','docs\images\library-hu.png','docs\images\statistics-hu.png','docs\images\bedtime-hu.png','docs\images\focus-hu.png')) {
+foreach ($name in @('docs\DEVELOPMENT.md','docs\ANTICHEAT.hu.md','docs\WINDOWS-TRUST.hu.md','docs\RESTRICTION-PLAN.hu.md','docs\images\library-en.png','docs\images\statistics-en.png','docs\images\bedtime-en.png','docs\images\focus-en.png')) {
     $target = Join-Path $bundle $name
     New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $repo $name) -Destination $target
@@ -151,6 +153,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Installer icon update failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'Installer version resource update failed.' }
 & $PythonPath -B (Join-Path $PSScriptRoot 'audit_payload.py') --installer $setup --gitleaks $secretScanner --report (Join-Path $BuildDir 'installer-secrets-audit.json')
 if ($LASTEXITCODE -ne 0) { throw 'Installer secret audit failed. Do not distribute this installer.' }
+Assert-DefenderReleaseScan $setup (Join-Path $BuildDir 'installer-defender-scan.json')
 $hash = (Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLowerInvariant()
 ($hash + '  ' + [IO.Path]::GetFileName($setup)) | Set-Content -LiteralPath ($setup + '.sha256') -Encoding ASCII
 & $PythonPath -B (Join-Path $PSScriptRoot 'release_manifest.py') --installer $setup --version $version --output (Join-Path $repo 'downloads\latest.json')
