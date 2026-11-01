@@ -123,7 +123,8 @@ in [Privacy](PRIVACY.md).
   stores a hash of the authorization key, random device IDs, revisions, ciphertext,
   byte/request counters and timestamps. It cannot decrypt game/computer names or
   daily times. Encrypted payloads bind the device ID and revision as authenticated
-  data. Imported totals never become a local daily budget or a new local export.
+  data. Imported game totals contribute to linked game budgets but never become
+  local history or a new local export.
 - RLS and explicit grants deny `anon` and `authenticated` all statistics tables
   and RPCs. Only the server credential may exchange data. Admission is checked
   before storage allocation; caller-supplied group IDs are not accepted. Server

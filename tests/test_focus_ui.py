@@ -111,7 +111,7 @@ class FocusInterfaceTests(unittest.TestCase):
             remote_region=next(rect for rect,d,identity in stats.chart.computer_regions if d==day and identity==snapshot['device'])
             local_region=next(rect for rect,d,identity in stats.chart.computer_regions if d==day and identity=='local')
             self.assertFalse(remote_region.intersects(local_region))
-            self.assertIn('Laptop',stats.chart.tooltip_at(remote_region.center()))
+            self.assertEqual(stats.chart.toolTip(),'')
             for row,(key,identity) in enumerate(stats._breakdown_keys):
                 self.assertEqual(stats.games_table.item(row,0).foreground().color().name(),stats.chart.series[key][1])
                 self.assertEqual(stats.games_table.item(row,1).foreground().color().name(),stats.chart.device_colors[identity])

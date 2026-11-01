@@ -2,7 +2,6 @@
 import configparser
 import hashlib
 import json
-from html import escape
 from math import ceil
 from pathlib import Path
 from queue import Empty
@@ -42,6 +41,8 @@ QLabel[role="metric"] { font-size: 30px; font-weight: 650; letter-spacing: -0.7p
 QLabel[role="section"] { font-size: 16px; font-weight: 600; }
 QLabel[role="danger"] { color: #f3a7a7; }
 QFrame#Panel { background: #192126; border: 1px solid #273238; border-radius: 16px; }
+QWidget#StepCard { background: #1d2b2d; border: 1px solid #365049; border-radius: 12px; }
+QWidget#StepCard QLabel, QWidget#StepCard QCheckBox { background: transparent; border: none; }
 QFrame#Budget { background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #1a332e,stop:0.7 #19282a,stop:1 #192126); border: 1px solid #2b4840; border-radius: 18px; }
 QPushButton, QToolButton { background: #202c31; border: 1px solid #304047; border-radius: 10px; padding: 9px 14px; font-weight: 550; }
 QPushButton:hover, QToolButton:hover { background: #2b3b40; border-color: #506562; }
@@ -50,6 +51,9 @@ QPushButton:disabled, QToolButton:disabled { color: #657779; background: #1a2429
 QPushButton[role="primary"] { background: #7de5bf; border: none; color: #10291f; font-weight: 700; padding: 11px 22px; }
 QPushButton[role="primary"]:hover { background: #a1f3d5; }
 QPushButton[role="primary"]:disabled { background: #293c35; color: #78958a; }
+QPushButton[role="danger-action"] { background: #633b40; border: 1px solid #a36167; color: #ffe5e4; font-weight: 600; padding: 9px 18px; }
+QPushButton[role="danger-action"]:hover { background: #79474c; }
+QPushButton[role="danger-action"]:pressed { background: #4c2d32; }
 QPushButton[role="nav"] { background: transparent; border: none; text-align: left; padding: 12px 14px; color: #9eafb2; }
 QPushButton[role="nav"]:hover { background: #152125; color: #edf4f2; }
 QPushButton[role="nav"]:checked { background: #1d352d; color: #a0f0d1; }
@@ -68,7 +72,6 @@ QFrame#SectionRule { background:#33434a; border:none; }
 QLineEdit, QPlainTextEdit, QComboBox, QDoubleSpinBox, QTimeEdit { background: #182126; border: 1px solid #2e3b42; border-radius: 10px; padding: 10px 12px; selection-background-color: #315e4e; }
 QLineEdit:focus, QPlainTextEdit:focus, QComboBox:focus, QDoubleSpinBox:focus, QTimeEdit:focus { border-color: #7de5bf; }
 QLineEdit { color: #e5eeec; }
-QAbstractSpinBox[hideStepButtons="true"]::up-button, QAbstractSpinBox[hideStepButtons="true"]::down-button { width:0; height:0; border:none; }
 QComboBox { padding-right: 28px; combobox-popup: 0; }
 QComboBox::drop-down { border: none; width: 24px; }
 QComboBox QAbstractItemView { background: #1c282d; border: 1px solid #3c504e; selection-background-color: #315343; padding: 5px; outline: none; }
@@ -178,16 +181,32 @@ class NoWheelComboBox(_IgnoreWheel,QComboBox):
     pass  # The open popup's item view retains its own scrolling.
 
 
-class _SpinButtons:
+class _PlainSpinEditor:
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs)
+        self.setButtonSymbols(QAbstractSpinBox.NoButtons)
+        self.lineEdit().setStyleSheet('QLineEdit { background:transparent; border:none; border-radius:0; padding:0; }')
+        self.setMinimumHeight(42)
+        self._plain_editor_ready=True
+        self._layout_editor()
+
     def setButtonSymbols(self,symbols):
-        # Qt 6.12's styled NoButtons layout collapses the text editor to one
-        # pixel. Keep its normal layout and hide just the step button controls.
-        hidden=symbols==QAbstractSpinBox.NoButtons
-        self.setProperty('hideStepButtons',hidden)
-        super().setButtonSymbols(QAbstractSpinBox.UpDownArrows if hidden else symbols)
+        super().setButtonSymbols(QAbstractSpinBox.NoButtons)
+
+    def _layout_editor(self):
+        # Qt 6.12 can collapse the styled NoButtons editor to one pixel.
+        # Keep native editing/validation and explicitly lay out its text area.
+        self.lineEdit().setGeometry(13,8,max(1,self.width()-26),max(1,self.height()-16))
+
+    def event(self,event):
+        result=super().event(event)
+        if getattr(self,'_plain_editor_ready',False) and event.type() in (
+                QEvent.Resize,QEvent.Show,QEvent.StyleChange,QEvent.FontChange,QEvent.Polish,QEvent.LayoutRequest):
+            self._layout_editor()
+        return result
 
 
-class NoWheelDoubleSpinBox(_SpinButtons,_IgnoreWheel,QDoubleSpinBox):
+class NoWheelDoubleSpinBox(_PlainSpinEditor,_IgnoreWheel,QDoubleSpinBox):
     pass
 
 
@@ -195,7 +214,7 @@ class NoWheelDateEdit(_IgnoreWheel,QDateEdit):
     pass
 
 
-class NoWheelTimeEdit(_SpinButtons,_IgnoreWheel,QTimeEdit):
+class NoWheelTimeEdit(_PlainSpinEditor,_IgnoreWheel,QTimeEdit):
     pass
 
 
@@ -223,6 +242,9 @@ def glyph(name, color=ACCENT, size=20):
         for x1,y1,x2,y2 in ((12,2,12,5),(12,19,12,22),(2,12,5,12),(19,12,22,12),(5,5,7,7),(17,17,19,19),(5,19,7,17),(17,7,19,5)): p.drawLine(x1,y1,x2,y2)
     elif name=='back': p.drawLine(19,12,5,12); p.drawLine(5,12,11,6); p.drawLine(5,12,11,18)
     elif name=='plus': p.drawLine(12,5,12,19); p.drawLine(5,12,19,12)
+    elif name=='trash':
+        p.drawLine(5,7,19,7); p.drawLine(9,4,15,4); p.drawLine(7,7,8,20); p.drawLine(17,7,16,20)
+        p.drawLine(8,20,16,20); p.drawLine(10,10,10,17); p.drawLine(14,10,14,17)
     elif name=='hide': p.drawRoundedRect(QRectF(4,4,16,16),3,3); p.drawLine(8,15,16,15)
     elif name=='bell':
         p.drawArc(QRectF(6,4,12,14),0,180*16); p.drawLine(6,11,5,18); p.drawLine(18,11,19,18); p.drawLine(5,18,19,18); p.drawArc(QRectF(9,17,6,5),180*16,180*16)
@@ -498,12 +520,11 @@ class CardGrid(QWidget):
 
 class DailyChart(QWidget):
     day_clicked=Signal(str)
-    def __init__(self,t=lambda text,**values:text.format(**values),format_share=lambda value,total:f'{value/total:.1%}' if total else '0%'):
+    def __init__(self,t=lambda text,**values:text.format(**values)):
         super().__init__(); self.t=t; self.days={}; self.selected=None; self.regions=[]; self.segment_regions=[]
-        self.format_share=format_share
         self.segments={}; self.series={}; self.computer_segments={}; self.computer_names={}; self.device_colors={}; self.computer_regions=[]
         self.show_computer_markers=False
-        self.setMinimumHeight(220); self.setMouseTracking(True)
+        self.setMinimumHeight(220)
         self.setAccessibleName(t('Daily play time'))
     def set_days(self,days,selected=None,segments=None,series=None,computers=None,computer_names=None,device_colors=None,show_computer_markers=None):
         self.days=days; self.selected=selected; self.segments=segments or {}; self.series=series or {}
@@ -566,25 +587,3 @@ class DailyChart(QWidget):
         if event.button()!=Qt.LeftButton: return
         for rect,day,seconds in self.regions:
             if rect.contains(event.position()): self.day_clicked.emit(day); break
-    def tooltip_at(self,position):
-        for rect,day,identity in self.computer_regions:
-            if not rect.contains(position): continue
-            values=self.computer_segments[day][identity]; seconds=sum(values.values())
-            lines=['<b>'+escape(day)+' · '+escape(str(self.computer_names.get(identity,identity)))+' · '+duration(seconds)+'</b>']
-            for key,value in values.items():
-                if value<=0: continue
-                name,color=self.series[key]; share=self.format_share(value,seconds)
-                lines.append('<span style="color:'+color+'">●</span> '+escape(name)+' · '+duration(value)+' · '+share)
-            return '<br>'.join(lines)
-        for rect,day,seconds in self.regions:
-            if not rect.contains(position): continue
-            lines=['<b>'+escape(day)+' · '+duration(seconds)+'</b>']
-            for key,value in self.segments.get(day,{}).items():
-                if value<=0: continue
-                name,color=self.series[key]; share=self.format_share(value,seconds)
-                text=escape(name)+' · '+duration(value)+' · '+share
-                lines.append('<span style="color:'+color+'">●</span> '+text)
-            return '<br>'.join(lines)
-        return ''
-    def mouseMoveEvent(self,event):
-        self.setToolTip(self.tooltip_at(event.position()))

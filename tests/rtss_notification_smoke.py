@@ -68,7 +68,8 @@ def run(fullscreen=False):
             app.rtss=backend=Backend(base); backend.server=server
             app.popup_window=None; app.notification_mode=lambda:'defer'
             app.fullscreen_scheduled_notification=lambda alert,sample:present(app,alert,sample)
-            timer_text=countdown(120,False,1)
+            timer_text=(countdown(1800,False,1,caption='Szünetig',detail='Napi keretből: 01:00:00')
+                        if '--timer-labels' in sys.argv else countdown(120,False,1))
             def restore_countdown():
                 backend.present(current.path,current.identity,timer_text,(0,0,1920,1080,25),retry=backend.retry_due(current.identity))
             app.update_overlay=restore_countdown
@@ -108,6 +109,9 @@ def run(fullscreen=False):
             checks['countdown_visible']=bool(timer_frame and visible_before and any(
                 timer_frame.pixelColor(x,y)!=visible_before.pixelColor(x,y)
                 for x in range(8,300,3) for y in range(8,100,3)))
+            if '--timer-labels' in sys.argv:
+                if timer_frame: timer_frame.save(str(root/'test-reports/timers-23920/rtss-caption-fixture.png'))
+                return checks
             icon=QImage(32,32,QImage.Format_ARGB32); icon.fill(0xffee3344); icon_path=base/'test-icon.png'; icon.save(str(icon_path))
             alert=Alert(str(datetime.now().date()),('fixture',),'limit','Árvíztűrő tükörfúrógép 🍎\nLejárt a játékidő.','',title='Játékidő emlékeztető',icon=str(icon_path))
             with patch('gametime.qt_fullscreen_notifications.win32.sample',return_value=current),patch('gametime.win32.u.SendInput') as keys,patch('gametime.win32.u.SetForegroundWindow') as focus:

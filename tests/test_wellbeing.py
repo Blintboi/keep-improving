@@ -107,7 +107,7 @@ class WellbeingTests(unittest.TestCase):
 
     def test_invalid_members_limits_duplicates_and_nonfinite_values_are_rejected(self):
         base=rule('valid',[target('site','example.com')])
-        for change in ({'seconds':float('nan')},{'seconds':0},{'seconds':True},{'members':[]},
+        for change in ({'seconds':float('nan')},{'seconds':-1},{'seconds':True},{'members':[]},
                        {'members':[target('site','example.com')]*2},{'members':[{'kind':'category','value':'everything'}]},
                        {'enabled':'yes'},{'name':''}):
             with self.subTest(change=change),self.assertRaises(ValueError): validate_rules([base|change])

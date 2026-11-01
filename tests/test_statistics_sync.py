@@ -56,6 +56,93 @@ class StatisticsSyncTests(unittest.TestCase):
         self.exchange(1); self.exchange(0)
         self.assertEqual(self.total(0), 210)
 
+    def test_game_budget_uses_linked_computers_without_changing_local_history(self):
+        from datetime import datetime
+        from gametime.budget import gameplay_budget
+        from gametime.model import Catalog
+        from gametime.tracker import Tracker
+        settings=replace(Settings(), statistics_sync_enabled=True, statistics_sync_group=GROUP,
+                         game_budget_enabled=True, limit_seconds=200, warning_seconds=150)
+        catalog=Catalog(settings,self.stores[0].games())
+        tracker=Tracker(self.stores[0],catalog)
+        self.stores[0].add_usage({(DAY,'steam:42'):60})
+        self.stores[1].add_usage({(DAY,'steam:42'):120})
+        self.assertEqual(tracker.quota_day_totals(DAY),{'steam:42':60})
+
+        snapshot=self.snapshot(1)
+        self.assertTrue(self.data[0].ingest(snapshot,GROUP))
+        self.assertEqual(tracker.quota_day_totals(DAY),{'steam:42':180})
+        budget=gameplay_budget(settings,datetime.now(),tracker.quota_day_totals(DAY),'steam:42')
+        self.assertEqual(budget.remaining,20)
+        self.assertTrue(budget.warning)
+        self.assertFalse(self.data[0].ingest(snapshot,GROUP))
+        self.assertEqual(tracker.quota_day_totals(DAY),{'steam:42':180})
+        self.stores[1].add_usage({(DAY,'steam:42'):30})
+        self.data[0].ingest(self.snapshot(1),GROUP)
+        self.assertEqual(tracker.quota_day_totals(DAY),{'steam:42':210})
+        self.assertEqual(gameplay_budget(settings,datetime.now(),tracker.quota_day_totals(DAY),'steam:42').remaining,0)
+        self.assertEqual(self.stores[0].totals(DAY),{'steam:42':60})
+        self.assertEqual(sum(row[4] for row in self.snapshot(0)['rows']),60)
+        catalog.settings=replace(settings,statistics_sync_group=OTHER)
+        self.assertEqual(tracker.quota_day_totals(DAY),{'steam:42':60})
+        catalog.settings=replace(settings,statistics_sync_enabled=False)
+        self.assertEqual(tracker.quota_day_totals(DAY),{'steam:42':60})
+
+    def test_independent_game_periods_sync_without_adding_imports_to_history(self):
+        from datetime import datetime,timedelta,time
+        from gametime.model import Catalog
+        from gametime.tracker import Tracker
+        group='0123456789abcdef0123456789abcdef'
+        settings=replace(Settings(),statistics_sync_enabled=True,statistics_sync_group=group,
+                         game_limits={'steam:42':600},budget_reset_overrides={'shared-games':360,'game:steam:42':480})
+        trackers=[]
+        for store in self.stores[:2]:
+            store.save_settings(settings)
+            tracker=Tracker(store,Catalog(settings,store.games())); trackers.append(tracker)
+            start=datetime.combine(date.today(),time(5,59,59)); end=start+timedelta(seconds=2)
+            tracker._credit(store.games()[0],start,end,2); tracker.flush()
+        snapshot=self.snapshot(1,group)
+        self.assertTrue(self.data[0].ingest(snapshot,group))
+        self.assertEqual(trackers[0].quota_totals(end)['steam:42'],2)
+        self.assertEqual(trackers[0].game_quota_total(end,'steam:42'),4)
+        self.assertEqual(self.stores[0].totals(DAY),{'steam:42':2})
+        self.assertEqual(sum(row[4] for row in self.snapshot(0,group)['rows']),2)
+
+    def test_legacy_peer_counts_all_overlapping_daily_totals_conservatively(self):
+        from datetime import datetime,timedelta,time
+        from gametime.model import Catalog
+        from gametime.tracker import Tracker
+        self.stores[1].add_usage({(DAY,'steam:42'):30,((date.today()-timedelta(days=1)).isoformat(),'steam:42'):40})
+        self.data[0].ingest(self.snapshot(1),GROUP)
+        settings=replace(Settings(),statistics_sync_enabled=True,statistics_sync_group=GROUP,
+                         budget_reset_overrides={'shared-games':600})
+        tracker=Tracker(self.stores[0],Catalog(settings,self.stores[0].games()))
+        wall=datetime.combine(date.today(),time(8))
+        self.assertEqual(tracker.quota_totals(wall)['steam:42'],70)
+
+    def test_invalid_independent_period_payload_is_rejected(self):
+        snapshot=self.snapshot(0)
+        for clocks,usage in (([['shared-games',1440]],[]),
+                             ([['shared-games',60],['shared-games',60]],[]),
+                             ([['shared-games',60]],[['game:missing',DAY,'steam:42',1]]),
+                             ([['shared-games',60]],[['shared-games',DAY,'steam:42',float('nan')]])):
+            broken=deepcopy(snapshot); broken['budget_clocks']=clocks; broken['budget_usage']=usage
+            with self.assertRaises(ValueError): validate_snapshot(broken,GROUP)
+
+    def test_remote_game_budget_maps_portable_manual_ids_and_other_days(self):
+        from gametime.model import Catalog
+        from gametime.tracker import Tracker
+        local=Game('manual:local','Same Game','Kézi','C:/Local')
+        remote=Game('manual:remote','SAME GAME','Kézi','D:/Remote')
+        self.stores[0].upsert([local]); self.stores[1].upsert([remote])
+        self.stores[0].add_usage({(DAY,local.id):50})
+        self.stores[1].add_usage({(DAY,remote.id):70,('2026-01-01',remote.id):900})
+        self.data[0].ingest(self.snapshot(1),GROUP)
+        settings=replace(Settings(),statistics_sync_enabled=True,statistics_sync_group=GROUP)
+        tracker=Tracker(self.stores[0],Catalog(settings,self.stores[0].games()))
+        self.assertEqual(tracker.quota_day_totals(DAY),{local.id:120})
+        self.assertEqual(tracker.quota_day_totals('2026-01-01'),{local.id:900})
+
     def test_same_parent_folder_keeps_different_users_groups_separate(self):
         self.stores[0].add_usage({(DAY, 'steam:42'): 60}); self.exchange(0)
         self.stores[1].add_usage({(DAY, 'steam:42'): 120}); self.exchange(1, OTHER)

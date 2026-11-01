@@ -7,7 +7,8 @@ from .i18n import tr
 from .notification_text import notification_text
 from .schedule import day_settings
 from .budget import remaining_budget
-from .quota import period_day, period_slices, reset_clock
+from .quota import period_day, period_slices, reset_clock, budget_day
+from .restriction_policy import legacy_warning_active
 
 
 @dataclass(frozen=True)
@@ -50,6 +51,14 @@ class Tracker:
         self.cache = {}
         self.budget_cache = {}
         self.budget_pending = defaultdict(float)
+        self.remote_budget_cache = None
+        self.custom_remote_cache = {}
+        from .budget_periods import BudgetPeriods
+        self.periods = BudgetPeriods(store)
+        for key in tuple(self.periods.clocks):
+            if key.startswith('quota:') and key[6:] not in catalog.settings.budget_reset_overrides:
+                self.periods.forget_clock(key)
+        self.period_pruned_day = None
         budget_state = store.budget_clock()
         self.budget_clock = tuple(budget_state['minutes']) if budget_state else None
         self.budget_revision = budget_state['revision'] if budget_state else 0
@@ -66,6 +75,9 @@ class Tracker:
         return self.cache[day]
 
     def configure_budget(self, now):
+        today=now.date().isoformat()
+        if self.catalog.settings.budget_reset_overrides and today!=self.period_pruned_day:
+            self.periods.prune(now); self.period_pruned_day=today
         clock = reset_clock(self.catalog.settings)
         if clock == (self.budget_clock or (0,) * 7):
             return
@@ -81,8 +93,28 @@ class Tracker:
         for key in self.store.alert_keys(old_day):
             if not key.startswith(old_prefix): continue
             suffix = key[len(old_prefix):]
+            if suffix.startswith(('warning:','limit:','session:')) and 'shared-games' in self.catalog.settings.budget_reset_overrides: continue
+            if suffix.startswith('game-limit:'):
+                rest=suffix[len('game-limit:'):]
+                try:
+                    size_text,rest=rest.split(':',1); gid=rest[:int(size_text)]
+                except (ValueError,TypeError): gid=''
+                if 'game:'+gid in self.catalog.settings.budget_reset_overrides: continue
             if suffix.startswith(('warning:', 'limit:', 'session:', 'game-limit:')): keys.append(prefix + suffix)
         self.store.reset_budget_clock(clock, revision, day, totals, keys)
+        for budget in self.catalog.settings.budget_reset_overrides:
+            if budget!='shared-games' and not budget.startswith('game:'): continue
+            custom_day=budget_day(self.catalog.settings,budget,now).isoformat()
+            copied=[]
+            for key in self.store.alert_keys(custom_day):
+                if not key.startswith(old_prefix): continue
+                suffix=key[len(old_prefix):]
+                if budget=='shared-games' and suffix.startswith(('warning:','limit:','session:')):
+                    copied.append(prefix+suffix)
+                elif budget.startswith('game:'):
+                    gid=budget[5:]
+                    if suffix.startswith(f'game-limit:{len(gid)}:{gid}:'): copied.append(prefix+suffix)
+            if copied: self.store.mark_alert(custom_day,copied)
         self.budget_clock = clock; self.budget_revision = revision
         self.budget_cache = {day: totals}
         self.alerts.clear(); self.queued.clear()
@@ -93,12 +125,87 @@ class Tracker:
             self.budget_cache[day] = self.store.budget_totals(day)
         return self.budget_cache[day]
 
-    def quota_totals(self, wall):
+    def quota_totals(self, wall, key='shared-games'):
         self.configure_budget(wall)
+        minute=self.catalog.settings.budget_reset_overrides.get(key)
+        if minute is not None:
+            day=period_day(wall,reset_clock(self.catalog.settings))
+            def seed():
+                source=self.totals(day) if self.budget_clock is None else self._budget_totals(day)
+                return dict(source) if key=='shared-games' else {key[5:]:source.get(key[5:],0)}
+            local=self.periods.totals('quota:'+key,minute,wall,seed,marker_key=key,previous_day=day.isoformat())
+            remote=self.custom_remote_totals(key,minute,wall)
+            result=dict(local)
+            for gid,seconds in remote.items(): result[gid]=result.get(gid,0)+seconds
+            return result
         return self.quota_day_totals(period_day(wall, reset_clock(self.catalog.settings)))
 
+    def game_quota_total(self, wall, gid):
+        return self.quota_totals(wall,'game:'+gid).get(gid,0)
+
+    def custom_remote_totals(self,key,minute,wall):
+        # Custom-period remote snapshots are installed by StatisticsData. Old
+        # devices have only daily aggregates, so count both overlapping daily
+        # records until that device has been updated rather than grant time.
+        settings=self.catalog.settings
+        if not settings.statistics_sync_enabled or not settings.statistics_sync_group: return {}
+        from .statistics_sync import game_key,local_group
+        from .quota import reset_at
+        group=local_group(settings.statistics_sync_group)
+        day=period_day(wall,(minute,)*7)
+        cache_key=('custom',group,key,minute,str(day),getattr(self.store,'statistics_revision',0))
+        cached=self.custom_remote_cache.get(key)
+        if cached is not None and cached[0]==cache_key: return cached[1]
+        tables={row[0] for row in self.store.db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('statistics_devices','statistics_remote','statistics_remote_budget_clock','statistics_remote_budget_usage')")}
+        if not {'statistics_devices','statistics_remote'}<=tables: return {}
+        mapping={}
+        for game in self.store.games(): mapping[game_key(game.id,game.name,game.source)]=game.id
+        portable='shared-games' if key=='shared-games' else 'game:'+next((p for p,g in mapping.items() if g==key[5:]),'')
+        beginning=reset_at(day,minute,wall)
+        first=period_day(beginning,reset_clock(settings)).isoformat()
+        last=period_day(wall,reset_clock(settings)).isoformat()
+        remote=defaultdict(float)
+        devices=[row[0] for row in self.store.db.execute('SELECT device_id FROM statistics_devices WHERE group_id=?',(group,))]
+        for device in devices:
+            covered=False
+            if {'statistics_remote_budget_clock','statistics_remote_budget_usage'}<=tables:
+                covered=bool(self.store.db.execute('SELECT 1 FROM statistics_remote_budget_clock WHERE group_id=? AND device_id=? AND budget=? AND minute=?',(group,device,portable,minute)).fetchone())
+            if covered:
+                rows=self.store.db.execute('SELECT game_id,seconds FROM statistics_remote_budget_usage WHERE group_id=? AND device_id=? AND budget=? AND day=?',(group,device,portable,str(day)))
+            else:
+                rows=self.store.db.execute('SELECT game_id,SUM(seconds) FROM statistics_remote WHERE group_id=? AND device_id=? AND day>=? AND day<=? GROUP BY game_id',(group,device,first,last))
+            for gid,seconds in rows:
+                local=mapping.get(gid,'remote:'+gid)
+                if key=='shared-games' or local==key[5:]: remote[local]+=seconds
+        self.custom_remote_cache[key]=(cache_key,dict(remote))
+        return self.custom_remote_cache[key][1]
+
     def quota_day_totals(self, day):
-        return self.totals(day) if self.budget_clock is None else self._budget_totals(day)
+        local = self.totals(day) if self.budget_clock is None else self._budget_totals(day)
+        settings = self.catalog.settings
+        if not settings.statistics_sync_enabled or not settings.statistics_sync_group:
+            return local
+        from .statistics_sync import game_key, local_group
+        group = local_group(settings.statistics_sync_group)
+        key = (group, str(day), getattr(self.store, 'statistics_revision', 0))
+        if self.remote_budget_cache is None or self.remote_budget_cache[0] != key:
+            remote = defaultdict(float)
+            exists = self.store.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='statistics_remote'").fetchone()
+            if exists:
+                mapping = {}
+                for game in self.store.games():
+                    portable = game_key(game.id, game.name, game.source)
+                    if portable not in mapping or game.id in local or game.id in settings.game_limits:
+                        mapping[portable] = game.id
+                for gid, seconds in self.store.db.execute(
+                        'SELECT game_id,SUM(seconds) FROM statistics_remote WHERE group_id=? AND day=? GROUP BY game_id',
+                        (group, str(day))):
+                    remote[mapping.get(gid, 'remote:' + gid)] += seconds
+            self.remote_budget_cache = (key, dict(remote))
+        totals = dict(local)
+        for gid, seconds in self.remote_budget_cache[1].items():
+            totals[gid] = totals.get(gid, 0) + seconds
+        return totals
 
     def tick(self, sample):
         prev = self.previous
@@ -130,6 +237,16 @@ class Tracker:
 
     def _credit(self, game, start, end, seconds):
         self.configure_budget(start)
+        overrides=self.catalog.settings.budget_reset_overrides
+        for key in ('shared-games','game:'+game.id):
+            if key not in overrides: continue
+            minute=overrides[key]
+            day=period_day(start,reset_clock(self.catalog.settings))
+            def seed():
+                source=self.totals(day) if self.budget_clock is None else self._budget_totals(day)
+                return dict(source) if key=='shared-games' else {game.id:source.get(game.id,0)}
+            self.periods.totals('quota:'+key,minute,start,seed,marker_key=key,previous_day=day.isoformat())
+            self.periods.credit('quota:'+key,minute,game.id,start,end,seconds,seed)
         for day, amount in day_slices(start, end, seconds,self.catalog.settings.budget_reset_minute):
             self.pending[(day, game.id)] += amount
             totals = self.totals(day)
@@ -169,6 +286,9 @@ class Tracker:
             limits=self.catalog.settings.game_limits
             if old_id in limits:
                 value=limits.pop(old_id); limits[aliases[old_id]]=min(value,limits.get(aliases[old_id],value))
+            resets=self.catalog.settings.budget_reset_overrides
+            if 'game:'+old_id in resets:
+                resets.setdefault('game:'+aliases[old_id],resets.pop('game:'+old_id))
         self.catalog.overrides = self.store.overrides()
         self.catalog.rules = self.store.rules()
         if aliases:
@@ -178,6 +298,10 @@ class Tracker:
             if callback: callback(aliases)
         self.cache.clear()
         self.budget_cache.clear()
+        self.remote_budget_cache = None
+        self.custom_remote_cache.clear()
+        self.periods.cache.clear()
+        self.periods.clocks=dict(self.store.db.execute('SELECT budget,minute FROM independent_budget_clock'))
         if self.previous:
             self.replay(self.previous.wall)
 
@@ -188,14 +312,16 @@ class Tracker:
             if not self.alert_current(alert, now):
                 self.alerts.remove(alert)
                 self.queued.difference_update((alert.day, key) for key in alert.keys)
-        day = period_day(now, reset_clock(self.catalog.settings)).isoformat()
+        day = budget_day(self.catalog.settings,'shared-games',now).isoformat()
         settings = day_settings(self.catalog.settings,day)
         delivered = self.store.alert_keys(day) | {key for d, key in self.queued if d == day}
         prefix = f'budget:{self.budget_revision}:' if self.budget_clock is not None else ''
         warning = prefix + f"warning:{settings.warning_seconds:g}"
         limit = prefix + f"limit:{settings.limit_seconds:g}"
         session = prefix + f"session:{settings.limit_seconds:g}:" + self.identity
-        if settings.game_budget_enabled and 'shared-games' not in settings.restriction_plans and total >= settings.limit_seconds:
+        from . import budget_access
+        shared=settings.game_budget_enabled and budget_access.active(settings,'shared-games',now) and budget_access.usage_enabled(settings,'shared-games')
+        if shared and settings.limit_seconds>0 and 'shared-games' not in settings.restriction_plans and total >= settings.limit_seconds:
             if limit not in delivered:
                 keys = (limit, warning, session) if self.identity else (limit, warning)
                 text=notification_text(settings,'limit',day=day)
@@ -203,26 +329,34 @@ class Tracker:
             elif self.identity and session not in delivered:
                 self._queue(Alert(day, (session,), "session",
                                   notification_text(settings,'session',day=day), tr("OK, I’ll stop", settings.language)))
-        elif settings.game_budget_enabled and 'shared-games' not in settings.restriction_plans and total >= settings.warning_seconds and warning not in delivered:
+        elif shared and settings.limit_seconds>0 and legacy_warning_active(settings.restriction_plans,'shared-games') and total >= settings.warning_seconds and warning not in delivered:
             remaining = math.ceil(remaining_budget(self.catalog.settings,now,total).remaining / 60)
             self._queue(Alert(day, (warning,), "warning", notification_text(settings,'warning',remaining,day=day), tr("OK", settings.language)))
         game = self.active
         cap = self.catalog.settings.game_limits.get(game.id) if game and self.catalog.enabled(game) and 'game:'+game.id not in settings.restriction_plans else None
-        if cap is not None and totals.get(game.id, 0) >= cap and (not settings.game_budget_enabled or total < settings.limit_seconds):
+        game_day=budget_day(self.catalog.settings,'game:'+game.id,now).isoformat() if game else day
+        game_delivered=self.store.alert_keys(game_day) | {key for d,key in self.queued if d==game_day}
+        if cap is not None and cap>0 and budget_access.active(settings,'game:'+game.id,now) and budget_access.usage_enabled(settings,'game:'+game.id) and self.game_quota_total(now,game.id) >= cap and (not shared or total < settings.limit_seconds):
             key = prefix + f'game-limit:{len(game.id)}:{game.id}:{cap:g}:{self.identity}'
-            if key not in delivered:
-                self._queue(Alert(day, (key,), 'limit',
+            if key not in game_delivered:
+                self._queue(Alert(game_day, (key,), 'limit',
                     tr('{name}: the {minutes:g}-minute game limit has been reached. Time to finish playing.',
                        settings.language, name=game.name, minutes=cap/60),
                     tr('OK, I’ll stop', settings.language), game.id))
 
     def alert_current(self, alert, now):
-        if not alert.game_id: return self.catalog.settings.game_budget_enabled and 'shared-games' not in self.catalog.settings.restriction_plans
+        from . import budget_access
+        key='game:'+alert.game_id if alert.game_id else 'shared-games'
+        if not budget_access.active(self.catalog.settings,key,now) or not budget_access.usage_enabled(self.catalog.settings,key): return False
+        if not alert.game_id:
+            day=budget_day(self.catalog.settings,'shared-games',now).isoformat()
+            return alert.day==day and self.catalog.settings.game_budget_enabled and day_settings(self.catalog.settings,day).limit_seconds>0 and (legacy_warning_active(self.catalog.settings.restriction_plans,'shared-games') if alert.kind=='warning' else 'shared-games' not in self.catalog.settings.restriction_plans)
+        if alert.day!=budget_day(self.catalog.settings,'game:'+alert.game_id,now).isoformat(): return False
         if 'game:'+alert.game_id in self.catalog.settings.restriction_plans: return False
         game = self.active
         cap = self.catalog.settings.game_limits.get(alert.game_id)
         return bool(game and game.id == alert.game_id and self.catalog.enabled(game)
-                    and cap is not None and self.quota_totals(now).get(game.id, 0) >= cap
+                    and cap is not None and cap>0 and self.game_quota_total(now,game.id) >= cap
                     and any(key.endswith(f':{cap:g}:{self.identity}') for key in alert.keys))
 
     def _queue(self, alert):
@@ -236,11 +370,12 @@ class Tracker:
         self.queued.difference_update((alert.day, key) for key in alert.keys)
 
     def flush(self):
-        if self.pending or self.budget_pending:
+        if self.pending or self.budget_pending or self.periods.pending:
             self.store.upsert(self.catalog.games.values())
-            self.store.add_usage(self.pending, self.budget_pending)
+            self.store.add_usage(self.pending, self.budget_pending,self.periods.pending)
             self.pending.clear()
             self.budget_pending.clear()
+            self.periods.pending.clear()
 
     def close(self):
         self.flush()

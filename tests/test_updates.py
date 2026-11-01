@@ -138,7 +138,11 @@ class UpdateInterfaceTests(unittest.TestCase):
             self.fake.results.put((release(),False)); updates.poll()
         browser.assert_not_called(); popup.assert_not_called(); foreground.assert_not_called()
         self.assertFalse(self.app.isVisible()); self.assertFalse(updates.notice.isHidden())
-        self.assertIn('999.1.0',updates.notice_text.text()); self.assertIn('999.1.0',self.app.tray.data.szTip)
+        self.assertIn('999.1.0',updates.notice_text.text())
+        with patch.object(self.app.tray,'popup_menu',return_value=0) as menu: self.app.tray_menu()
+        update_caption=next(item[1] for item in menu.call_args.args[0] if item and item[0]==6)
+        self.assertIn('999.1.0',update_caption)
+        self.assertIn(self.app.t('No active timers'),self.app.tray.data.szTip)
 
     def test_download_requires_click_and_uses_the_fixed_browser_url(self):
         updates=self.worker(); updates.state.release=release(); updates.refresh()

@@ -91,7 +91,7 @@ The Activities list combines installations of the same executable across version
 
 If daily quota reset times differ from midnight, recent quota-period totals are stored separately from calendar-day history. These local per-game totals preserve the current allowance across midnight and restarts, are limited to recent periods, and are not included in statistics synchronization. Alert markers remain local; reset schedules can synchronize.
 
-Optional per-game time limits can synchronize with linked computers. They reuse each computer's locally measured foreground time and quota periods.
+Optional per-game time limits can synchronize with linked computers. When linking is enabled, the shared game budget and per-game limits also include the other computers' last synchronized daily game statistics. Activity budgets and restriction plans remain local. The last synchronized totals may be stale while offline or rate-limited; all computers need an updated client to count each other's time.
 
 ## Optional computer linking
 
@@ -116,3 +116,5 @@ The GitHub account, hosting providers and any GitHub Issues you submit are also 
 - **Account and abuse records:** Auth identities, retired code hashes and quota/accounting records have separate retention and are not erased by uninstalling or replacing a code. Full service-account erasure requires a maintainer operation that first revokes the group and sessions. Request a private contact through the project if you need this; do not post credentials or account details publicly.
 
 Cloud quotas or outages do not erase local history. For the protocol, operator controls and known limitations, see [Security](SECURITY.md). The hosted service's concise [data-handling page](https://jtvdbqwmejrckjejjrdl.supabase.co/functions/v1/statistics-sync/about) is also available without signing in.
+
+The Overview remembers view choices and list-search text locally in the profile database. These view preferences are not included in synchronized snapshots.

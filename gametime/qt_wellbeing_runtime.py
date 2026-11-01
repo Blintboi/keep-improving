@@ -2,13 +2,14 @@
 from dataclasses import replace
 import logging
 import time
+import math
 from . import win32
 from .overlay import choose_screen,foreground_screen_name
 from .overlay_consent import display_reason as overlay_reason
-from .tracker import Alert
-from .quota import current_day
+from .quota import current_day,budget_day
 from .wellbeing import applies,counter_settings
 from .activities import activity_settings,foreground_target
+from .restriction_policy import legacy_active
 
 log=logging.getLogger(__name__)
 
@@ -17,27 +18,23 @@ class WellbeingActions:
     def wellbeing_states(self,current):
         website=self.browser_bridge.website(current.path) if self.browser_bridge else ''
         atom=self.wellbeing.atom(current,website)
-        return self.wellbeing.states(current.wall,atom) if atom else []
+        redirect=getattr(self.browser_bridge,'redirect_budget',lambda path:'')(current.path) if self.browser_bridge else ''
+        if not isinstance(redirect,str): redirect=''
+        return self.wellbeing.states(current.wall,atom,exclude=redirect) if atom else []
 
     def wellbeing_tick(self,current,bedtime=False):
         states=self.wellbeing_states(current)
-        exhausted=[state for state in states if state.remaining<=0 and state.rule['id'] not in self.settings.restriction_plans]
+        from .focus import app_key
+        def granted(key):
+            runtime=getattr(self,'restrictions',None)
+            grant=runtime.state.grant(key,'app:'+app_key(current.path),current.identity) if runtime and current.path and current.identity else None
+            return bool(grant and runtime.state.now<grant['until'])
+        exhausted=[state for state in states if state.usage_limit and state.rule['seconds']>0 and state.used>=state.rule['seconds'] and legacy_active(self.settings.restriction_plans,state.rule['id']) and not granted(state.rule['id'])]
         if not exhausted or bedtime:
             self._wellbeing_grace=None; return False
         day=current_day(self.settings,current.wall).isoformat()
-        # One delivery per budget, threshold and day, durable across restart.
-        if not self.popup_window:
-            if getattr(self,'_wellbeing_alert_day',None)!=day:
-                self._wellbeing_alert_day=day; self._wellbeing_delivered=self.store.alert_keys(day)
-            delivered=self._wellbeing_delivered
-            for state in exhausted:
-                key=f'wellbeing:{state.rule["id"]}:{state.rule["seconds"]:g}'
-                if key in delivered: continue
-                alert=Alert(day,(key,),'wellbeing',self.t('{name}: your {minutes:g}-minute budget is used up.',
-                    name=self.t(state.rule['name']) if state.rule['id'].startswith('category-') else state.rule['name'],minutes=state.rule['seconds']/60),self.t('OK'))
-                if self.popup(alert):
-                    self.wellbeing.flush(); self.store.mark_alert(day,(key,)); delivered.add(key)
-                break
+        # Expiry enforces the configured action. Only explicit notify steps
+        # create notifications; a budget value itself is not a warning action.
         website=self.browser_bridge.website(current.path) if self.browser_bridge else ''
         atom=self.wellbeing.atom(current,website)
         enforced=[state for state in exhausted if state.rule['enforce'] and applies(
@@ -82,13 +79,21 @@ class WellbeingActions:
             if current.identity!=sample.identity or self.wellbeing.atom(current,website)!=atom:
                 self.hide_countdown(); return
             elapsed=current.awake-sample.awake
-            if 0<elapsed<=1.5 and current_day(self.settings,current.wall)==current_day(self.settings,sample.wall) and abs((current.wall-sample.wall).total_seconds()-elapsed)<1.5:
-                remaining=max(0,remaining-elapsed)
+            if 0<elapsed<=1.5 and budget_day(self.settings,state.rule['id'],current.wall)==budget_day(self.settings,state.rule['id'],sample.wall) and abs((current.wall-sample.wall).total_seconds()-elapsed)<1.5:
+                usage=max(0,state.rule['seconds']-state.used-elapsed) if state.usage_limit else math.inf
+                remaining=min(usage,state.clock_remaining)
+            timer_view=self.overlay_timer_view(current)
+            if timer_view:
+                if timer_view.event=='break_active': self.hide_countdown(); self.overlay_timer.stop(); return
+                remaining=timer_view.seconds
+                state=next((value for value in states if value.rule['id']==timer_view.key),state)
+            if not math.isfinite(remaining): self.hide_countdown(); self.overlay_timer.stop(); return
             if not self.overlay: return
             if self._rtss_publishing or self.rtss.identity: self.rtss.hide(); self._rtss_publishing=False
             if not self.rtss.desktop_ready: self.overlay.hide(); return
             settings=activity_settings(self.settings,member,state.rule)
-            self.overlay.present(remaining,state.used,settings,choose_screen(settings.overlay_screen,foreground_screen_name()),warning=state.warning)
+            self.overlay.present(remaining,state.used,settings,choose_screen(settings.overlay_screen,foreground_screen_name()),
+                                 warning=state.warning,timer=timer_view)
             self._overlay_backend='desktop'; self._overlay_identity=current.identity; self._overlay_updated=time.monotonic()
             self.overlay_failed=False
             if not self.overlay_timer.isActive(): self.overlay_timer.start()

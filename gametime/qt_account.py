@@ -46,7 +46,7 @@ def statistics_dialog(app):
     new=button(t('New code'),regenerate); code_row.addWidget(new)
     code_row.addWidget(button(t('Copy'),lambda:QApplication.clipboard().setText(code.text()))); layout.addLayout(code_row)
     secret=label(t('Keep your code private: anyone with it can link a computer. Replacing your managed code disconnects its other computers.'),'muted'); secret.setWordWrap(True); layout.addWidget(secret)
-    help_text=label(t('Game, application and website statistics and supported settings synchronize automatically. Game budget consumption stays local. Account credentials, protected-game consent, computer names and machine-specific folders remain on this computer.'),'muted'); help_text.setWordWrap(True); layout.addWidget(help_text)
+    help_text=label(t('Linked computers share game budget consumption after synchronization. Update every computer; synchronization can be delayed or unavailable offline. Other activity budgets and restriction plans stay local.'),'muted'); help_text.setWordWrap(True); layout.addWidget(help_text)
     error=label('','danger'); error.setWordWrap(True); layout.addWidget(error)
     def update():
         if not isValid(window): return
@@ -63,6 +63,7 @@ def statistics_dialog(app):
         if isValid(window): error.setText(t(warning)); update()
     def commit(settings):
         # Other settings can change while the account request runs in background.
+        previous_group=app.settings.statistics_sync_group
         settings=replace(app.settings,statistics_sync_enabled=settings.statistics_sync_enabled,
             statistics_sync_group=settings.statistics_sync_group,statistics_device_name=settings.statistics_device_name).validate()
         app.store.save_settings(settings); app.settings=app.catalog.settings=settings
@@ -70,7 +71,9 @@ def statistics_dialog(app):
         app.statistics_sync.cancel(); app._sync_busy=False; app._sync_startup_pending=False
         app._sync_event_pending=False; app.statistics_event_timer.stop()
         app._sync_status='Sync enabled.' if settings.statistics_sync_enabled else 'Statistics sync is off.'
-        app._sync_success_at=''; app.statistics.scope='all'; app.statistics.refresh()
+        app._sync_success_at=''
+        if previous_group!=settings.statistics_sync_group: app.statistics.reset_computer_filters()
+        app.statistics.refresh()
         app.request_statistics_sync(); app.update_statistics_sync_status(); window.accept()
     def provision(settings,action='activate'):
         if app._auth_busy: return

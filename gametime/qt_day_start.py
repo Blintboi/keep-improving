@@ -13,7 +13,7 @@ def apply_day_start(app,previous,wall=None):
     if previous.budget_reset_minute==app.settings.budget_reset_minute: return
     wall=wall or datetime.now().astimezone()
     old_day=current_day(previous,wall).isoformat(); new_day=current_day(app.settings,wall).isoformat()
-    if hasattr(app,'restrictions'): app.restrictions.state.move_day(old_day,new_day)
+    if hasattr(app,'restrictions'): app.restrictions.state.move_day(old_day,new_day,exclude=app.settings.budget_reset_overrides)
     keys=[key for key in app.store.alert_keys(old_day) if key.startswith('scheduled:')]
     if keys: app.store.mark_alert(new_day,keys)
     old_state,old_night,_=bedtime_occurrence(previous,wall)
@@ -25,7 +25,7 @@ def apply_day_start(app,previous,wall=None):
     app.focus.configure_day_start(app.settings.budget_reset_minute)
     app.tracker.configure_budget(wall); app.tracker.previous=None
     app.wellbeing.configure(wall)
-    app._scheduled_day=None; app._wellbeing_alert_day=None
+    app._scheduled_day=None; app._wellbeing_alert_day=None; app._wellbeing_delivered_by_day={}
     app._wellbeing_grace=None; app._restriction_grace=None
 
 
@@ -33,7 +33,7 @@ def day_start_dialog(app):
     from .qt_ui import dark_window
     t=app.t; window=app._dialog(t('Day starts at'),500)
     layout=QVBoxLayout(window); layout.setContentsMargins(26,24,26,24); layout.setSpacing(14)
-    note=label(t('Statistics and all daily budgets start a new day at this time.'))
+    note=label(t('Statistics and budgets without a separate renewal time start a new day at this time.'))
     note.setWordWrap(True); layout.addWidget(note)
     edit=NoWheelTimeEdit(); edit.setObjectName('DayStartTime'); edit.setDisplayFormat('HH:mm')
     edit.setAccessibleName(t('Day starts at')); edit.setButtonSymbols(QAbstractSpinBox.NoButtons)

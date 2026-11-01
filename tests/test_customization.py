@@ -154,7 +154,11 @@ class CustomizationInterfaceTests(unittest.TestCase):
         self.field(window,'Text size').setValue(42); self.field(window,'Horizontal (px)').setValue(137); self.field(window,'Vertical (px)').setValue(219)
         self.click(window,'Preview (10s)'); self.pump(.03)
         self.assertEqual(self.app._overlay_preview_settings.overlay_font_size,42); self.assertEqual(self.store.settings().game_overlays,{})
-        self.app.set_language('en'); self.assertEqual(self.field(window,'Horizontal (px)').value(),137)
+        from gametime.overlay import PositionPicker
+        picker=window.findChild(PositionPicker); anchor=(picker.x_ratio,picker.y_ratio)
+        self.app.set_language('en')
+        self.assertEqual((picker.x_ratio,picker.y_ratio),anchor)
+        self.assertEqual(self.field(window,'Horizontal (px)').value(),picker.pixel_position()[0])
         self.click(window,'Cancel'); self.assertEqual(self.store.settings().game_overlays,{}); self.assertIsNone(self.app._overlay_preview_settings)
         self.app.game_countdown_dialog(self.games[0].id); window=self.app._dialogs[-1]
         self.field(window,'Hide this countdown').setChecked(False)
@@ -203,7 +207,7 @@ class CustomizationInterfaceTests(unittest.TestCase):
         with patch('gametime.qt_ui.win32.sample',return_value=current),patch.object(self.app,'rtss_available',return_value=False),patch.object(self.app.overlay,'present') as present:
             self.app.update_overlay(); self.assertEqual(present.call_args.args[2].overlay_font_size,42)
         with patch('gametime.qt_ui.win32.sample',return_value=current),patch.object(self.app,'rtss_available',return_value=True),patch.object(self.app.rtss,'present',return_value=True) as present:
-            self.app.update_overlay(); self.assertEqual(present.call_args.args[3][-1],42); self.assertIn('<FNT=Consolas,-56',present.call_args.args[2])
+            self.app.update_overlay(); self.assertEqual(present.call_args.args[3][4],42); self.assertEqual(self.rtss_renderer.call_args.args[1],42)
         alert=Alert(str(date.today()),('warning:6000',),'warning','Warning','OK'); self.app.tracker.alerts.append(alert)
         with patch.object(self.app,'overlay_warning_visible',return_value=True): self.assertTrue(self.app.consume_silent_alert(alert))
 
@@ -242,7 +246,7 @@ class CustomizationInterfaceTests(unittest.TestCase):
             with patch.object(self.app,'rtss_available',return_value=False),patch.object(self.app.overlay,'present') as present:
                 self.app.update_overlay(); self.assertEqual(present.call_args.args[:2],(1800,9000)); self.assertEqual(present.call_args.args[2].limit_seconds,10800)
             with patch.object(self.app,'rtss_available',return_value=True),patch.object(self.app.rtss,'present',return_value=True) as present:
-                self.app.update_overlay(); self.assertIn('00:30:00',present.call_args.args[2])
+                self.app.update_overlay(); self.assertEqual(self.rtss_renderer.call_args.args[0],1800); self.assertIn('<LI=',present.call_args.args[2])
             self.app.tracker.cache['2026-10-24'][self.games[0].id]=11400; self.assertTrue(self.app.restriction_reached())
 
     def test_only_enabled_game_profiles_are_prepared_for_rtss_when_global_countdown_is_off(self):

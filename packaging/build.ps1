@@ -3,7 +3,8 @@
     [string]$OutputDir = (Join-Path $PSScriptRoot '..\dist'),
     [string]$BuildDir = (Join-Path $PSScriptRoot '..\build'),
     [switch]$SkipFreeze,
-    [switch]$FreezeOnly
+    [switch]$FreezeOnly,
+    [switch]$LocalOnly
 )
 $ErrorActionPreference = 'Stop'
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
@@ -156,6 +157,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Installer secret audit failed. Do not distribu
 Assert-DefenderReleaseScan $setup (Join-Path $BuildDir 'installer-defender-scan.json')
 $hash = (Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLowerInvariant()
 ($hash + '  ' + [IO.Path]::GetFileName($setup)) | Set-Content -LiteralPath ($setup + '.sha256') -Encoding ASCII
-& $PythonPath -B (Join-Path $PSScriptRoot 'release_manifest.py') --installer $setup --version $version --output (Join-Path $repo 'downloads\latest.json')
-if ($LASTEXITCODE -ne 0) { throw 'Public release manifest generation failed.' }
+if (-not $LocalOnly) {
+    & $PythonPath -B (Join-Path $PSScriptRoot 'release_manifest.py') --installer $setup --version $version --output (Join-Path $repo 'downloads\latest.json')
+    if ($LASTEXITCODE -ne 0) { throw 'Public release manifest generation failed.' }
+}
 Write-Output $setup

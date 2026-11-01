@@ -53,6 +53,9 @@ class OverlayInterfaceTests(unittest.TestCase):
         cls.qt=setup_application()
 
     def setUp(self):
+        from gametime import rtss_timer
+        timer_render=patch('gametime.rtss_timer.countdown',wraps=rtss_timer.countdown)
+        self.rtss_renderer=timer_render.start(); self.addCleanup(timer_render.stop)
         from gametime.qt_ui import App
         from gametime.discovery import Discovery
         from gametime.model import Game
@@ -100,7 +103,8 @@ class OverlayInterfaceTests(unittest.TestCase):
         return self.app.overlay
 
     def test_countdown_normal_warning_and_expired_states(self):
-        overlay=self.display(5999); self.assertTrue(overlay.isVisible()); self.assertEqual(overlay.seconds,1201); self.assertFalse(overlay.warning)
+        overlay=self.display(5999); self.assertTrue(overlay.isVisible()); self.assertEqual(overlay.seconds,1); self.assertFalse(overlay.warning)
+        self.assertEqual(overlay.caption,self.app.t('Warning in')); self.assertIn('20:01',overlay.detail)
         overlay=self.display(6000); self.assertEqual(overlay.seconds,1200); self.assertTrue(overlay.warning)
         overlay=self.display(7205); self.assertEqual(overlay.seconds,0); self.assertTrue(overlay.warning)
 
@@ -242,7 +246,7 @@ class OverlayInterfaceTests(unittest.TestCase):
         self.app.overlay_font_size.setValue(48)
         self.assertEqual(picker.pixel_position(),(137,219))
         self.assertGreater(overlay.width(),original.width()); self.assertGreater(overlay.height(),original.height())
-        self.assertEqual(overlay.size(),countdown_size(48,overlay))
+        self.assertEqual(overlay.size(),countdown_size(48,overlay,overlay.caption,overlay.detail))
         self.assertEqual(overlay.pos(),QPoint(area.x()+int(x.value()),area.y()+int(y.value())))
         self.assertEqual(overlay.size(),picker.hud_size())
         for a,b in ((0,0),(1,1),(.3456,.6789)):
@@ -342,7 +346,7 @@ class OverlayInterfaceTests(unittest.TestCase):
         with patch.object(self.app.rtss,'present',return_value=True) as present:
             self.display(6000)
             args=present.call_args.args
-            self.assertIn('<FNT=Consolas,-64,700,1>',args[2]); self.assertEqual(args[3][4],48)
+            self.assertEqual(self.rtss_renderer.call_args.args[1],48); self.assertEqual(args[3][4],48); self.assertIn('<LI=',args[2])
             self.assertEqual(self.app._overlay_backend,'rtss')
             self.app.overlay_font_size.setValue(36); self.assertEqual(present.call_args.args[3][4],48)
             present.reset_mock(); self.app.preview_overlay(); present.assert_not_called(); self.assertEqual(self.app.overlay.font_size,36)

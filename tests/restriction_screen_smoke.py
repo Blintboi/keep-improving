@@ -12,7 +12,6 @@ from gametime.restriction_policy import Budget,new_plan,step
 from gametime import restriction_native as native
 from gametime.tracker import Sample
 from gametime.wellbeing import target as member
-from gametime.qt_restriction_steps import edit_steps
 
 parser=argparse.ArgumentParser(); parser.add_argument('fixture',type=Path); args=parser.parse_args()
 fixture=args.fixture.resolve(); assert fixture.name=='FixtureRestriction.exe' and fixture.is_file()
@@ -60,9 +59,9 @@ try:
     assert process.poll() is not None, 'fixture did not close after allowance'
     report.append('allowance expiry closes only the fixture')
     app.open_budget(); app.budget_editor.show_editor('shared-games')
-    window=edit_steps(app.budget_editor); case.pump(.15)
-    window.grab().save(str(Path('test-reports/restriction-editor.png').resolve()))
-    window.reject()
+    app.budget_editor.steps.add_step.click(); case.pump(.15)
+    app.budget_scroll.ensureWidgetVisible(app.budget_editor.steps); case.pump(.15)
+    app.grab().save(str(Path('test-reports/restriction-editor.png').resolve()))
     print(json.dumps({'passed':report},ensure_ascii=False))
 finally:
     if process and process.poll() is None: process.terminate(); process.wait(timeout=8)

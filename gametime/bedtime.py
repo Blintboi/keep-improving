@@ -24,7 +24,8 @@ class Bedtime:
     def update(self, settings, current, popup_available=True):
         state,day,settings=bedtime_occurrence(settings,current.wall)
         schedule = (settings.bedtime_enabled, settings.bedtime_warning_minute,
-                    settings.bedtime_minute, settings.bedtime_resume_minute, settings.bedtime_minimize)
+                    settings.bedtime_minute, settings.bedtime_resume_minute, settings.bedtime_minimize,
+                    settings.bedtime_warning_enabled)
         ledger = (day, schedule)
         if ledger != self.ledger:
             if self.ledger is not None and self.ledger[1] != schedule:
@@ -44,7 +45,7 @@ class Bedtime:
         key = 'bedtime:'+':'.join(map(str, schedule[1:4]))
         if state == 'warning' and (not current.interactive or previous is not None and not continuous):
             self.warning_suppressed = True
-        warning = (state == 'warning' and current.interactive and popup_available
+        warning = (settings.bedtime_warning_enabled and state == 'warning' and current.interactive and popup_available
                    and current.wall.hour*60+current.wall.minute == settings.bedtime_warning_minute
                    and not self.warning_suppressed and key not in self.keys)
         active = state == 'bedtime' and settings.bedtime_minimize

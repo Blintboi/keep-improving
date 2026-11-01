@@ -70,6 +70,13 @@ class BedtimeTests(unittest.TestCase):
         self.assertIsNone(self.schedule.update(self.settings,self.sample('2026-10-21T23:55'),False)[1])
         self.assertIsNotNone(self.schedule.update(self.settings,self.sample('2026-10-21T23:55:01',1))[1])
 
+    def test_warning_can_be_removed_without_disabling_the_scheduled_restriction(self):
+        settings=replace(self.settings,bedtime_warning_enabled=False).validate()
+        self.assertIsNone(self.schedule.update(settings,self.sample('2026-10-21T23:55'))[1])
+        current=self.sample('2026-10-22T00:00',300)
+        self.assertFalse(self.schedule.update(settings,current)[2])
+        self.assertTrue(self.advance(current,10,settings)[-1][2])
+
     def test_minimizes_at_ten_second_cadence_across_windows(self):
         current=self.sample('2026-10-22T00:00')
         self.assertFalse(self.schedule.update(self.settings,current)[2])

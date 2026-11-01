@@ -96,7 +96,7 @@ class ActivityCountdownTests(unittest.TestCase):
     def test_activity_library_opens_its_countdown_and_keeps_unsaved_budget_changes(self):
         self.app.open_budget(member=target('site','example.com')); editor=self.app.budget_editor
         self.app.save_budgets(); editor.show_editor(editor.rules[0]['id']); editor.minutes.setValue(25)
-        self.assertFalse(editor.appearance.isVisible()); self.assertFalse(editor.overlay.isVisible())
+        self.assertTrue(editor.appearance.isVisible()); self.assertFalse(editor.overlay.isVisible())
         self.app.open_activities('site'); self.app.activity_lists['site'].countdown.click()
         window=self.app._dialogs[-1]; self.assertEqual(self.field(window,'Countdown target').currentData(),'site:example.com')
         self.field(window,'Text size').setValue(36); self.click(window,'Save')

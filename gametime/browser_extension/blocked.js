@@ -1,9 +1,9 @@
-const hu = {title:'Elfogyott az időkereted.', extra:n=>`Még ${n} perc`, back:'Visszatérés az oldalra',
-  once:'Ez a hosszabbítás keretenként naponta egyszer kérhető.', error:'Most nem oldható fel. Ellenőrizd a figyelőben.',
-  generic:'Ezt az oldalt aktív fókusztiltás vagy egy elfogyott időkeret korlátozza.'};
-const en = {title:'Your time budget has run out.', extra:n=>`Another ${n} minutes`, back:'Return to the website',
-  once:'This allowance is available once per budget per day.', error:'Cannot unlock now. Check the monitor.',
-  generic:'A focus rule or exhausted time budget restricts this website.'};
+const hu = {title:'Korlátozás aktív.', extra:n=>`Még ${n} perc`, back:'Visszatérés az oldalra',
+  pause:t=>`Szünetből hátra: ${t}`, once:'Ez a hosszabbítás keretenként naponta egyszer kérhető.', error:'Most nem oldható fel. Ellenőrizd a figyelőben.',
+  generic:'Ezt az oldalt aktív fókusztiltás vagy időkerethez tartozó szabály korlátozza.'};
+const en = {title:'Restriction active.', extra:n=>`Another ${n} minutes`, back:'Return to the website',
+  pause:t=>`Break remaining: ${t}`, once:'This allowance is available once per budget per day.', error:'Cannot unlock now. Check the monitor.',
+  generic:'A focus rule or time-budget action restricts this website.'};
 let text = hu;
 async function refresh() {
   const state = await chrome.runtime.sendMessage({action:'status'}).catch(()=>({ok:false}));
@@ -12,6 +12,10 @@ async function refresh() {
   document.getElementById('heading').textContent = text.title;
   document.getElementById('reason').textContent = state?.names?.join(' · ') || text.generic;
   document.getElementById('once').textContent = text.once;
+  const status = document.getElementById('status');
+  const remaining = Math.max(0, Math.ceil((state?.break_until || 0) - Date.now()/1000));
+  if (remaining) { status.textContent = text.pause(`${Math.floor(remaining/60)}:${String(remaining%60).padStart(2,'0')}`); status.dataset.breakCountdown = 'true'; }
+  else if (status.dataset.breakCountdown === 'true') { status.textContent = ''; status.dataset.breakCountdown = 'false'; }
   const extra = document.getElementById('extra'); extra.hidden = !state?.minutes;
   extra.textContent = text.extra(state?.minutes || 0);
   const back = document.getElementById('return'); back.hidden = !state?.ok || !!state.kind; back.textContent = text.back;

@@ -17,9 +17,12 @@ def budget_setup(app):
     games=QCheckBox(app.t('Create a shared budget for all games')); games.setAccessibleName(app.t('Create a shared budget for all games')); layout.addWidget(games)
     fields=QWidget(); row=QHBoxLayout(fields); row.setContentsMargins(0,0,0,0)
     row.addWidget(label(app.t('Daily limit (minutes)')))
-    minutes=NoWheelDoubleSpinBox(); minutes.setRange(1,1440); minutes.setDecimals(0); minutes.setValue(120)
+    minutes=NoWheelDoubleSpinBox(); minutes.setRange(0,1440); minutes.setDecimals(0); minutes.setValue(120)
     minutes.setAccessibleName(app.t('Daily limit (minutes)')); row.addWidget(minutes,1); layout.addWidget(fields)
     fields.hide(); games.toggled.connect(fields.setVisible)
+    zero_note=label(app.t('0 minutes: access is blocked.'),'muted'); zero_note.setWordWrap(True); layout.addWidget(zero_note); zero_note.hide()
+    def show_zero(*args): zero_note.setVisible(games.isChecked() and minutes.value()==0)
+    games.toggled.connect(show_zero); minutes.valueChanged.connect(show_zero)
     hint=label(app.t('Without this group, games have no automatic limit. You can create a budget for anything later.'),'muted'); hint.setWordWrap(True); layout.addWidget(hint)
     error=label('','danger'); error.setWordWrap(True); layout.addWidget(error)
     def finish():

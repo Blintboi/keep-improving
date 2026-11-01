@@ -1,10 +1,10 @@
 """Per-computer statistics snapshots and the separate local import cache.
 
 SQLite stays local. Only each computer's own cumulative daily measurements are
-published; imported snapshots are never republished or added to local budgets.
+published; imported snapshots are never republished or added to local history.
 The retained folder worker also supplies the cancellable queue used by HTTPS.
 """
-from datetime import date
+from datetime import date,timedelta
 import hashlib
 import json
 import math
@@ -86,6 +86,25 @@ def validate_snapshot(value, group):
         if 'preferences' in value:
             from .preferences_sync import validate
             validate(value['preferences'])
+        if 'budget_clocks' in value or 'budget_usage' in value:
+            clocks=value['budget_clocks']; usage=value['budget_usage']
+            if not isinstance(clocks,list) or len(clocks)>2200 or not isinstance(usage,list) or len(usage)>MAX_ROWS: raise ValueError()
+            seen_clocks=set(); seen_rows=set()
+            for row in clocks:
+                if not isinstance(row,(list,tuple)) or len(row)!=2: raise ValueError()
+                budget,minute=row
+                if (not isinstance(budget,str) or not 1<=len(budget)<=530 or '\0' in budget
+                        or not (budget=='shared-games' or budget.startswith('game:'))
+                        or type(minute) is not int or not 0<=minute<1440 or budget in seen_clocks): raise ValueError()
+                seen_clocks.add(budget)
+            for row in usage:
+                if not isinstance(row,(list,tuple)) or len(row)!=4: raise ValueError()
+                budget,day,gid,seconds=row
+                if (budget not in seen_clocks or date.fromisoformat(day).isoformat()!=day
+                        or not isinstance(gid,str) or not 1<=len(gid)<=512 or '\0' in gid
+                        or type(seconds) not in (int,float) or not math.isfinite(seconds) or not 0<seconds<=172800
+                        or (budget,day,gid) in seen_rows): raise ValueError()
+                seen_rows.add((budget,day,gid))
         if 'activity' in value:
             if date.fromisoformat(value['activity_started']).isoformat() != value['activity_started']:
                 raise ValueError()
@@ -131,6 +150,13 @@ class StatisticsData:
             CREATE TABLE IF NOT EXISTS statistics_activity_devices (
               group_id TEXT NOT NULL, device_id TEXT NOT NULL, started TEXT NOT NULL,
               PRIMARY KEY(group_id, device_id));
+            CREATE TABLE IF NOT EXISTS statistics_remote_budget_clock (
+              group_id TEXT NOT NULL, device_id TEXT NOT NULL, budget TEXT NOT NULL, minute INTEGER NOT NULL,
+              PRIMARY KEY(group_id,device_id,budget));
+            CREATE TABLE IF NOT EXISTS statistics_remote_budget_usage (
+              group_id TEXT NOT NULL, device_id TEXT NOT NULL, budget TEXT NOT NULL, day TEXT NOT NULL,
+              game_id TEXT NOT NULL, seconds REAL NOT NULL,
+              PRIMARY KEY(group_id,device_id,budget,day,game_id));
         ''')
         self._migrate_group_labels()
         store.checkpoint_credentials()
@@ -195,6 +221,26 @@ class StatisticsData:
                      name=name or computer_name(), started=self.store.tracking_started_on(), rows=self.local_rows())
         settings=self.store.settings()
         if settings.statistics_sync_enabled and settings.statistics_sync_group==group:
+            exists=self.store.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='independent_budget_clock'").fetchone()
+            if exists:
+                games={game.id:game_key(game.id,game.name,game.source) for game in self.store.games()}
+                selected={}; clocks=[]; grouped={}; portable_clocks={}
+                for local,minute in self.store.db.execute("SELECT budget,minute FROM independent_budget_clock WHERE budget LIKE 'quota:%'"):
+                    key=local[6:]
+                    if settings.budget_reset_overrides.get(key)!=minute: continue
+                    if key=='shared-games': portable=key
+                    elif key.startswith('game:') and key[5:] in games: portable='game:'+games[key[5:]]
+                    else: continue
+                    if portable in portable_clocks and portable_clocks[portable]!=minute: continue
+                    selected[local]=portable
+                    if portable not in portable_clocks:
+                        portable_clocks[portable]=minute; clocks.append([portable,minute])
+                since=(date.today()-timedelta(days=8)).isoformat()
+                for local,day,gid,seconds in self.store.db.execute("SELECT budget,day,item,seconds FROM independent_budget_usage WHERE budget LIKE 'quota:%' AND day>=?",(since,)):
+                    if local not in selected or gid not in games or seconds<=0: continue
+                    identity=(selected[local],day,games[gid]); grouped[identity]=grouped.get(identity,0)+seconds
+                value['budget_clocks']=sorted(clocks)
+                value['budget_usage']=[[*key,seconds] for key,seconds in sorted(grouped.items())]
             if self.focus:
                 self.focus.flush()
                 value['activity_started'] = self.focus.started_on
@@ -234,6 +280,13 @@ class StatisticsData:
             self.store.db.execute('DELETE FROM statistics_remote WHERE group_id=? AND device_id=?', key)
             self.store.db.executemany('INSERT INTO statistics_remote VALUES (?,?,?,?,?,?,?)',
                                      [(*key, *row) for row in value['rows']])
+            self.store.db.execute('DELETE FROM statistics_remote_budget_clock WHERE group_id=? AND device_id=?',key)
+            self.store.db.execute('DELETE FROM statistics_remote_budget_usage WHERE group_id=? AND device_id=?',key)
+            if 'budget_clocks' in value:
+                self.store.db.executemany('INSERT INTO statistics_remote_budget_clock VALUES (?,?,?,?)',
+                                          [(*key,*row) for row in value['budget_clocks']])
+                self.store.db.executemany('INSERT INTO statistics_remote_budget_usage VALUES (?,?,?,?,?,?)',
+                                          [(*key,*row) for row in value['budget_usage']])
             if 'activity' in value:
                 self.store.db.execute('INSERT OR REPLACE INTO statistics_activity_devices VALUES (?,?,?)', (*key, value['activity_started']))
                 self.store.db.execute('DELETE FROM statistics_activity WHERE group_id=? AND device_id=?', key)
@@ -242,6 +295,7 @@ class StatisticsData:
         if 'preferences' in value:
             from .preferences_sync import stage
             stage(self.store,group,value['preferences'])
+        self.store.statistics_revision = getattr(self.store, 'statistics_revision', 0) + 1
         return True
 
     def devices(self, group):
@@ -285,7 +339,7 @@ class StatisticsData:
         return rows
 
     def history_by_computer(self, start, end, group, scope='all', local_name=''):
-        """Retain each row's origin for display without changing exports or budgets."""
+        """Retain each row's origin for display without changing exports."""
         rows = [(*row, 'local', local_name or computer_name()) for row in self.local_rows(start, end)] if scope in ('all', 'local') else []
         if group and scope != 'local':
             sql = '''SELECT r.day,r.game_id,r.name,r.source,r.seconds,r.device_id,d.name

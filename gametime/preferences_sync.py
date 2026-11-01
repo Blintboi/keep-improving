@@ -11,13 +11,15 @@ from .model import Settings
 
 LOCAL_FIELDS={'games_root','steam_roots','epic_manifest_dirs','ubisoft_roots',
               'overlay_screen','overlay_rtss_paths','notification_sound_path',
-              'scheduled_notifications','statistics_sync_enabled','statistics_sync_group','statistics_device_name','wellbeing_rules','counter_overlays','activity_overlays','budget_setup_completed','restriction_plans'}
+              'scheduled_notifications','statistics_sync_enabled','statistics_sync_group','statistics_device_name','wellbeing_rules','counter_overlays','activity_overlays','budget_setup_completed','restriction_plans','budget_reset_overrides','budget_active_days','budget_usage_limits'}
 CONFIG_FIELDS={item.name for item in fields(Settings)}-LOCAL_FIELDS
 CONFIG_FIELDS-={'game_limits','game_overlays','limit_seconds','warning_seconds',
                 'bedtime_warning_minute','bedtime_minute','bedtime_resume_minute'}
 PAIRED_FIELDS={'settings.play_window':('limit_seconds','warning_seconds'),
                'settings.bedtime_window':('bedtime_warning_minute','bedtime_minute','bedtime_resume_minute')}
 FOCUS_FIELDS={'tracking','work','short_break','long_break','rounds','block_sites','block_apps','excluded_apps'}
+WARNING_DAYS='settings.bedtime_warning_days'
+SHARED_RESET='settings.shared_budget_reset_minute'
 MAX_FIELDS=4000
 MAX_REGISTER_BYTES=128*1024
 IDENTITY=re.compile(r'[0-9a-f]{32}')
@@ -54,10 +56,25 @@ def identity(store):
     return value
 
 
+def warning_days(config):
+    return {'daily':{day:plan['bedtime_warning_enabled'] for day,plan in config['daily_schedules'].items()
+                     if 'bedtime_warning_enabled' in plan},
+            'weekend':config['weekend_schedule'].get('bedtime_warning_enabled')}
+
+
+def portable_config(config):
+    # Keep the old weekly register readable by clients which do not know the
+    # optional warning switch. Its day-specific values travel separately.
+    config['daily_schedules']={day:{k:v for k,v in plan.items() if k!='bedtime_warning_enabled'}
+                               for day,plan in config['daily_schedules'].items()}
+    config['weekend_schedule']={k:v for k,v in config['weekend_schedule'].items() if k!='bedtime_warning_enabled'}
+    return config
+
+
 def values(store, settings=None):
     from .focus import FocusSettings
     settings=settings or store.settings()
-    config=asdict(settings)
+    config=asdict(settings); warnings=warning_days(config); portable_config(config)
     row=store.db.execute("SELECT value FROM settings WHERE key='focus_config'").fetchone()
     try:
         focus=json.loads(row[0]) if row else {}
@@ -67,29 +84,34 @@ def values(store, settings=None):
     result={**{'settings.'+name:config[name] for name in CONFIG_FIELDS},
             **{'focus.'+name:focus[name] for name in FOCUS_FIELDS}}
     result.update({key:{name:config[name] for name in names} for key,names in PAIRED_FIELDS.items()})
+    result[WARNING_DAYS]=warnings
+    result[SHARED_RESET]=settings.budget_reset_overrides.get('shared-games')
     from .statistics_sync import game_key
     overrides=store.overrides(); hidden=store.hidden_ids()
     for game in store.games():
         identity=game_key(game.id,game.name,game.source)
         overlay=dict(settings.game_overlays.get(game.id,{})); overlay.pop('overlay_screen',None)
         for kind,value in (('enabled',overrides.get(game.id,True)),('hidden',game.id in hidden),
-                           ('limit',settings.game_limits.get(game.id)),('overlay',overlay)):
+                           ('limit',settings.game_limits.get(game.id)),('overlay',overlay),
+                           ('reset',settings.budget_reset_overrides.get('game:'+game.id))):
             result[f'game.{kind}.{identity}']=value
     return result
 
 
 def defaults():
     from .focus import FocusSettings
-    config=asdict(Settings()); focus=asdict(FocusSettings())
+    config=asdict(Settings()); warnings=warning_days(config); portable_config(config); focus=asdict(FocusSettings())
     result={**{'settings.'+name:config[name] for name in CONFIG_FIELDS},
             **{'focus.'+name:focus[name] for name in FOCUS_FIELDS}}
     result.update({key:{name:config[name] for name in names} for key,names in PAIRED_FIELDS.items()})
+    result[WARNING_DAYS]=warnings
+    result[SHARED_RESET]=None
     return result
 
 
-ALLOWED={'settings.'+name for name in CONFIG_FIELDS}|{'focus.'+name for name in FOCUS_FIELDS}|set(PAIRED_FIELDS)
-GAME_FIELD=re.compile(r'game\.(enabled|hidden|limit|overlay)\.(.{1,512})')
-GAME_DEFAULTS={'enabled':True,'hidden':False,'limit':None,'overlay':{}}
+ALLOWED={'settings.'+name for name in CONFIG_FIELDS}|{'focus.'+name for name in FOCUS_FIELDS}|set(PAIRED_FIELDS)|{WARNING_DAYS,SHARED_RESET}
+GAME_FIELD=re.compile(r'game\.(enabled|hidden|limit|overlay|reset)\.(.{1,512})')
+GAME_DEFAULTS={'enabled':True,'hidden':False,'limit':None,'overlay':{},'reset':None}
 
 
 def validate(value):
@@ -108,6 +130,13 @@ def validate(value):
             if game and game[1] in ('enabled','hidden') and type(entry['value']) is not bool: raise ValueError()
             if game and game[1]=='limit' and entry['value'] is not None and type(entry['value']) not in (int,float): raise ValueError()
             if game and game[1]=='overlay' and (not isinstance(entry['value'],dict) or 'overlay_screen' in entry['value']): raise ValueError()
+            if (name==SHARED_RESET or game and game[1]=='reset') and entry['value'] is not None and (type(entry['value']) is not int or not 0<=entry['value']<1440): raise ValueError()
+            if name==WARNING_DAYS:
+                value=entry['value']
+                if (not isinstance(value,dict) or set(value)!={'daily','weekend'} or
+                        not isinstance(value['daily'],dict) or
+                        any(day not in tuple(map(str,range(7))) or type(enabled) is not bool for day,enabled in value['daily'].items()) or
+                        value['weekend'] is not None and type(value['weekend']) is not bool): raise ValueError()
             if name in PAIRED_FIELDS and (not isinstance(entry['value'],dict) or set(entry['value'])!=set(PAIRED_FIELDS[name])): raise ValueError()
             accepted[name]=entry
     except (TypeError,ValueError,OverflowError,RecursionError):
@@ -155,9 +184,16 @@ def apply(store, group, identity, focus):
     for field,entry in pending.items():
         old=merged.get(field)
         if old is None or (entry['clock'],entry['device'])>(old['clock'],old['device']): merged[field]=entry
-    settings=store.settings(); config={field[9:]:entry['value'] for field,entry in merged.items() if field.startswith('settings.') and field not in PAIRED_FIELDS}
+    settings=store.settings(); config={field[9:]:entry['value'] for field,entry in merged.items() if field.startswith('settings.') and field not in PAIRED_FIELDS and field not in (WARNING_DAYS,SHARED_RESET)}
     for field in PAIRED_FIELDS:
         if field in merged: config.update(merged[field]['value'])
+    warning=merged.get(WARNING_DAYS,{}).get('value',warning_days(asdict(settings)))
+    daily={day:{k:v for k,v in plan.items() if k!='bedtime_warning_enabled'}
+           for day,plan in config.get('daily_schedules',settings.daily_schedules).items()}
+    for day,enabled in warning['daily'].items(): daily.setdefault(day,{})['bedtime_warning_enabled']=enabled
+    weekend={k:v for k,v in config.get('weekend_schedule',settings.weekend_schedule).items() if k!='bedtime_warning_enabled'}
+    if warning['weekend'] is not None: weekend['bedtime_warning_enabled']=warning['weekend']
+    config.update(daily_schedules=daily,weekend_schedule=weekend)
     # A WAV path is machine-specific. Do not switch to a custom sound that
     # cannot be played on this computer or reject unrelated preferences.
     if config.get('notification_sound')=='custom' and not Path(settings.notification_sound_path).is_file():
@@ -166,13 +202,21 @@ def apply(store, group, identity, focus):
         else: merged.pop('settings.notification_sound',None)
     from .statistics_sync import game_key
     limits=dict(settings.game_limits); overlays=dict(settings.game_overlays); game_changes=[]
+    resets=dict(settings.budget_reset_overrides)
+    if SHARED_RESET in merged:
+        value=merged[SHARED_RESET]['value']
+        if value is None: resets.pop('shared-games',None)
+        else: resets['shared-games']=value
     for game in store.games():
         gid=game_key(game.id,game.name,game.source)
-        for kind in ('enabled','hidden','limit','overlay'):
+        for kind in ('enabled','hidden','limit','overlay','reset'):
             item=merged.get(f'game.{kind}.{gid}')
             if item is None: continue
             value=item['value']
-            if kind=='limit':
+            if kind=='reset':
+                if value is None: resets.pop('game:'+game.id,None)
+                else: resets['game:'+game.id]=value
+            elif kind=='limit':
                 if value is None: limits.pop(game.id,None)
                 else: limits[game.id]=value
             elif kind=='overlay':
@@ -182,7 +226,7 @@ def apply(store, group, identity, focus):
                 if not combined: overlays.pop(game.id,None)
                 else: overlays[game.id]=combined
             else: game_changes.append((kind,game.id,value))
-    config.update(game_limits=limits,game_overlays=overlays)
+    config.update(game_limits=limits,game_overlays=overlays,budget_reset_overrides=resets)
     from .focus import FocusSettings
     focus_values=asdict(focus.settings)
     focus_values.update({field[6:]:entry['value'] for field,entry in merged.items() if field.startswith('focus.')})

@@ -512,7 +512,7 @@ class Tray:
         try:
             for item in items:
                 command, caption = item if item is not None else (0, None)
-                if not u.AppendMenuW(menu, 0 if caption else 0x800, command, caption):
+                if not u.AppendMenuW(menu, (0 if command else 0x1) if caption else 0x800, command, caption):
                     raise C.WinError(C.get_last_error())
             u.SetMenuDefaultItem(menu, 1, False)
             point = W.POINT()

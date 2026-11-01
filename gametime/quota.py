@@ -1,4 +1,4 @@
-"""One local day boundary for statistics, budgets and daily reminders."""
+"""Local day boundaries for statistics, reminders and individual budgets."""
 from datetime import datetime, time, timedelta
 
 
@@ -10,6 +10,15 @@ def reset_clock(settings):
 
 def current_day(settings,wall=None):
     return period_day(wall or datetime.now().astimezone(),reset_clock(settings))
+
+
+def budget_minute(settings, key):
+    return settings.budget_reset_overrides.get(key, settings.budget_reset_minute)
+
+
+def budget_day(settings, key, wall=None):
+    minute = budget_minute(settings, key)
+    return period_day(wall or datetime.now().astimezone(), (minute,) * 7)
 
 
 def _minute(clock, day):

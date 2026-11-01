@@ -60,20 +60,22 @@ def sound_panel(app):
     return card
 
 
-def game_overlay_dialog(app,gid=None):
+def game_overlay_dialog(app,gid=None,*,targets=None):
     from .qt_ui import dark_window
     from .qt_countdown_targets import CountdownTargets
+    budget=targets is not None
     for existing in app._dialogs:
-        if getattr(existing,'_personalization_kind',None)=='game':
+        if not budget and getattr(existing,'_personalization_kind',None)=='game':
             existing._refresh_games()
             if gid: existing._select_game(gid)
             existing.show(); existing.raise_(); existing.activateWindow(); return
     t=app.t; window=app._dialog(t('Custom countdowns'),780); window.resize(780,min(900,QApplication.primaryScreen().availableGeometry().height()-80))
-    window._personalization_kind='game'
+    window._personalization_kind='budget-countdown' if budget else 'game'
     layout=QVBoxLayout(window); layout.setContentsMargins(26,24,26,24); layout.setSpacing(12)
     layout.addWidget(back_button(t,window.reject),0,Qt.AlignLeft)
-    note=label(t('This appearance belongs to the activity. Activities sharing a time budget can have different countdowns.'),'muted'); note.setWordWrap(True); layout.addWidget(note)
-    targets=CountdownTargets(app)
+    note=label(t('Choose the budget default or a member to customize its countdown.' if budget else
+                 'This appearance belongs to the activity. Activities sharing a time budget can have different countdowns.'),'muted'); note.setWordWrap(True); layout.addWidget(note)
+    targets=targets or CountdownTargets(app)
     games=NoWheelComboBox(); games.setAccessibleName(t('Countdown target'))
     games.setSizePolicy(QSizePolicy.Expanding,QSizePolicy.Fixed)
     games.setSizeAdjustPolicy(NoWheelComboBox.AdjustToMinimumContentsLengthWithIcon); games.setMinimumContentsLength(24)
@@ -102,8 +104,8 @@ def game_overlay_dialog(app,gid=None):
     monitor=NoWheelComboBox(); monitor.setAccessibleName(t('Monitor')); monitor.addItem(t('Automatic'),'')
     for screen in QApplication.screens(): monitor.addItem(screen.name(),screen.name())
     screen_row=QHBoxLayout(); screen_row.addWidget(label(t('Monitor'),'muted')); screen_row.addWidget(monitor,1); form.addLayout(screen_row)
-    picker=PositionPicker(1,0,QApplication.primaryScreen()); picker.setAccessibleName(t('Countdown position')); form.addWidget(picker)
-    background_row=background_controls(app,picker,lambda:games.currentData(),lambda:monitor.currentData(),lambda:update_coordinates())
+    picker=PositionPicker(1,0,QApplication.primaryScreen(),translate=t); picker.setAccessibleName(t('Countdown position')); form.addWidget(picker)
+    background_row=background_controls(app,picker,lambda:'counter:'+str(games.currentData()) if budget else games.currentData(),lambda:monitor.currentData(),lambda:update_coordinates())
     form.addWidget(background_row)
     hint=label(t('Drag the timer or enter its position from the display’s top-left corner. Arrow keys move 1 px; Shift + arrow moves 10 px. Preview shows changes before saving.'),'muted'); hint.setWordWrap(True); form.addWidget(hint)
     row=QHBoxLayout(); coordinates=[]
@@ -118,13 +120,17 @@ def game_overlay_dialog(app,gid=None):
     def open_display():
         window.reject(); app.rtss_dialog()
     rtss_button=button(t('In-game display…'),open_display,'quiet'); layout.addWidget(rtss_button,0,Qt.AlignLeft)
+    rtss=QCheckBox(t('Use RTSS in games')); rtss.setAccessibleName(t('Use RTSS in games'))
+    rtss.setVisible(budget and targets.supports_rtss()); layout.addWidget(rtss)
     form.addStretch()
     scroll=QScrollArea(); scroll.setWidgetResizable(True); scroll.setFrameShape(QScrollArea.NoFrame); scroll.setWidget(controls); layout.addWidget(scroll,1)
     blocked_space=QWidget(); layout.addWidget(blocked_space,1)
     drafts=targets.profiles; current=[None]; loading=[False]
     initializing=[False]
     def draft():
-        return dict(overlay_enabled=not hide_countdown.isChecked(),overlay_x=picker.x_ratio,overlay_y=picker.y_ratio,overlay_font_size=int(size.value()),overlay_screen=monitor.currentData() or '',overlay_opacity=opacity.value()/100,**colors)
+        value=dict(overlay_enabled=not hide_countdown.isChecked(),overlay_x=picker.x_ratio,overlay_y=picker.y_ratio,overlay_font_size=int(size.value()),overlay_screen=monitor.currentData() or '',overlay_opacity=opacity.value()/100,**colors)
+        if budget and targets.supports_rtss(current[0]): value['overlay_rtss_auto']=rtss.isChecked()
+        return value
     def candidate():
         return targets.candidate(current[0],draft())
     def update_coordinates():
@@ -132,11 +138,12 @@ def game_overlay_dialog(app,gid=None):
             blocked=edit.blockSignals(True); edit.setRange(*bounds); edit.setValue(value); edit.blockSignals(blocked)
     def changed(*args):
         if loading[0]: return
-        game=app.catalog.games.get(current[0]); counter=targets.rule(current[0])
+        game=app.catalog.games.get(targets.game_id(current[0]) if budget else current[0]); counter=targets.rule(current[0])
         raw=safety.reason(game=game) if game else None
         reason=display_reason(app.catalog,game=game) if game else None
-        opacity_value.setText(str(opacity.value())+'%'); rtss_button.setVisible(bool(game))
-        background_row.setVisible(bool(game))
+        opacity_value.setText(str(opacity.value())+'%'); rtss_button.setVisible(bool(game) or budget and targets.supports_rtss(current[0]))
+        rtss.setVisible(budget and targets.supports_rtss(current[0]))
+        background_row.setVisible(bool(game) and not budget)
         if counter:
             picker._background_controller.show_timer.stop(); picker._background_controller.target=None; picker.game_background=None
         status.setText(t('Preview shows this countdown on the desktop for 10 seconds.') if counter else t('Preview brings a running game to the foreground. Alt+Tab ends the preview.'))
@@ -176,6 +183,7 @@ def game_overlay_dialog(app,gid=None):
         effective=replace(app.settings,**value)
         colors.clear(); colors.update((key,value[key]) for key in ('overlay_color_normal','overlay_color_warning') if key in value)
         hide_countdown.setChecked(not value.get('overlay_enabled',app.settings.overlay_enabled))
+        rtss.setChecked(value.get('overlay_rtss_auto',app.settings.overlay_rtss_auto))
         wanted=effective.overlay_screen
         if wanted and monitor.findData(wanted)<0: monitor.addItem(t('{name} (not connected)',name=wanted),wanted)
         monitor.setCurrentIndex(max(0,monitor.findData(wanted))); picker.screen=choose_screen(wanted)
@@ -200,6 +208,7 @@ def game_overlay_dialog(app,gid=None):
         picker.screen=choose_screen(monitor.currentData() or '',background[1] if background else ''); picker.update(); changed()
     monitor.currentIndexChanged.connect(screen_changed); picker.positionChanged.connect(changed); hide_countdown.toggled.connect(changed)
     opacity.valueChanged.connect(changed)
+    rtss.toggled.connect(changed)
     error=label('','danger'); error.setWordWrap(True); error.hide(); layout.addWidget(error)
     def update_colors():
         for kind,item in color_buttons.items():
@@ -212,7 +221,7 @@ def game_overlay_dialog(app,gid=None):
     def reset_colors():
         colors.update({key:getattr(app.settings,key) for key in ('overlay_color_normal','overlay_color_warning')}); changed()
     def change_consent():
-        game=app.catalog.games.get(current[0])
+        game=app.catalog.games.get(targets.game_id(current[0]) if budget else current[0])
         if not game: return
         try:
             accepted=app.overlay_consents.allows(game)
@@ -234,7 +243,7 @@ def game_overlay_dialog(app,gid=None):
         status.setText(app.preview_counter_overlay(settings) if targets.rule(current[0]) else app.preview_game_overlay(settings))
     def change_minimize_consent():
         from .game_safety import PROTECTED,UNCHECKED
-        game=app.catalog.games.get(current[0])
+        game=app.catalog.games.get(targets.game_id(current[0]) if budget else current[0])
         if not game: return
         accepted=app.minimize_consents.allows(game)
         try:
@@ -248,9 +257,12 @@ def game_overlay_dialog(app,gid=None):
             error.setText(t('Could not save settings. Try again.')); error.show()
     def save():
         try:
-            value=candidate(); app.store.save_settings(value); app.settings=app.catalog.settings=value
+            value=candidate()
+            if not budget:
+                app.store.save_settings(value); app.settings=app.catalog.settings=value
             targets.saved(value)
-            app.prepare_rtss_profiles(); app.set_status('Countdown settings saved.'); window.accept()
+            if not budget: app.prepare_rtss_profiles()
+            app.set_status('Save the budget changes to apply this countdown.' if budget else 'Countdown settings saved.'); window.accept()
             return True
         except (ValueError,OSError,SQLiteError) as exc:
             error.setText(t(str(exc)) if isinstance(exc,ValueError) else t('Could not save settings. Try again.')); error.show()

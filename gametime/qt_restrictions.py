@@ -9,15 +9,16 @@ import time
 from PySide6.QtCore import Qt, QRect
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QApplication
 from .qt_widgets import label, button
-from .restriction_policy import Budget, RestrictionState, RANK
+from .restriction_policy import Budget, RestrictionState, RANK, legacy_active
 from .restriction_audio import AudioGuard
 from . import restriction_native as native
 from . import win32
 from .focus import app_key, matches
-from .quota import current_day
-from .budget import quota_plan
+from .quota import current_day,budget_day
+from .budget import quota_plan,remaining_budget
 from .wellbeing import applies
-from .tracker import Alert
+from . import budget_access
+from .tracker import Alert,Sample
 from .sound import play_notification
 
 
@@ -25,10 +26,10 @@ class RestrictionScreen(QDialog):
     def __init__(self, runtime):
         super().__init__(None, Qt.Window | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.runtime = runtime; self.target = None; self.keys = []; self.subject = ''
-        self.setWindowTitle(runtime.app.t('Time budget reached'))
+        self.setWindowTitle(runtime.app.t('Restriction active'))
         self.setStyleSheet('QDialog {background:#10191b;color:#edf4f2;} QLabel {color:#edf4f2;}')
         layout = QVBoxLayout(self); layout.setContentsMargins(40, 35, 40, 35); layout.addStretch()
-        self.heading = label(runtime.app.t('Time budget reached'), 'title'); self.heading.setWordWrap(True)
+        self.heading = label(runtime.app.t('Restriction active'), 'title'); self.heading.setWordWrap(True)
         layout.addWidget(self.heading)
         self.note = label(); self.note.setWordWrap(True); layout.addWidget(self.note)
         self.status = label(); self.status.setWordWrap(True); layout.addWidget(self.status)
@@ -61,16 +62,23 @@ class RestrictionRuntime:
 
     def budgets(self, wall):
         app = self.app; totals = app.tracker.quota_totals(wall); result = []
-        if app.settings.game_budget_enabled:
-            result.append(Budget('shared-games', str(app.t('Games · shared budget')), quota_plan(app.settings, wall).limit_seconds,
-                                 sum(totals.values()), ({'kind': 'category', 'value': 'games'},)))
+        if app.settings.game_budget_enabled and budget_access.active(app.settings,'shared-games',wall):
+            used=sum(totals.values())
+            has_break=any(item['kind']=='break' for item in app.settings.restriction_plans.get('shared-games',{}).get('steps',()))
+            allowed=not has_break or remaining_budget(app.settings,wall,used).remaining>0
+            result.append(Budget('shared-games', str(app.t('Games · shared budget')), budget_access.limit(app.settings,'shared-games',quota_plan(app.settings, wall).limit_seconds,wall),
+                                 used, ({'kind': 'category', 'value': 'games'},),
+                                 breaks_allowed=allowed,day=budget_day(app.settings,'shared-games',wall).isoformat()))
         for gid, limit in app.settings.game_limits.items():
             game = app.catalog.games.get(gid)
-            if game and app.catalog.enabled(game):
-                result.append(Budget('game:' + gid, game.name, limit, totals.get(gid, 0), ({'kind': 'game', 'value': gid},)))
+            if game and app.catalog.enabled(game) and budget_access.active(app.settings,'game:'+gid,wall):
+                result.append(Budget('game:' + gid, game.name, budget_access.limit(app.settings,'game:'+gid,limit,wall), app.tracker.game_quota_total(wall,gid), ({'kind': 'game', 'value': gid},),
+                                     day=budget_day(app.settings,'game:'+gid,wall).isoformat()))
         for value in app.wellbeing.states(wall):
-            result.append(Budget(value.rule['id'], value.rule['name'], value.rule['seconds'], value.used, tuple(value.rule['members'])))
-        return result
+            result.append(Budget(value.rule['id'], value.rule['name'], budget_access.limit(app.settings,value.rule['id'],value.rule['seconds'],wall), value.used, tuple(value.rule['members']),
+                                 day=budget_day(app.settings,value.rule['id'],wall).isoformat()))
+        return [replace(budget,clock_deadlines=budget_access.clock_deadlines(app.settings,budget.key,wall),
+                        breaks_allowed=budget.breaks_allowed and budget_access.clock_remaining(app.settings,budget.key,wall)>0) for budget in result]
 
     def prepare(self, wall):
         # A clock correction during a run cannot lengthen a granted countdown.
@@ -78,36 +86,62 @@ class RestrictionRuntime:
         if self._clock is None: self._clock = (stamp, mono)
         now = max(stamp, self._clock[0] + mono - self._clock[1], self._max_now)
         self._max_now = now
+        budgets=self.budgets(wall)
+        self.timer_wall=wall
+        self.app._timer_budget_key=getattr(self.app,'timer_budget_key',lambda wall:None)(wall); self.app._timer_budgets=budgets
         self.state.update(current_day(self.app.settings, wall).isoformat(), now,
-                          self.budgets(wall), self.app.settings.restriction_plans)
+                          budgets, self.app.settings.restriction_plans)
+        for key,row in self.state.rows.items():
+            grant=row.get('grant') or {}; identity=grant.get('identity',''); subject=grant.get('subject','')
+            if (key not in self.state.budgets or not identity or not subject.startswith('app:')
+                    or identity in self.targets or mono<self.failed.get(identity,0)): continue
+            path=subject[4:]; sample=Sample(wall,mono,path,identity)
+            atom=self.app.wellbeing.atom(sample,'')
+            if atom and applies(self.state.budgets[key].members,atom):
+                self.targets[identity]=(sample,atom)
         self.prepared_at=mono
 
     def save_remaining(self, path):
         now=self.state.now+max(0,time.monotonic()-getattr(self,'prepared_at',time.monotonic()))
-        grants=[self.state.grant(key,'app:'+app_key(path)) for key in self.state.budgets]
+        identity=self.current.identity if self.current and app_key(self.current.path)==app_key(path) else None
+        grants=[self.state.grant(key,'app:'+app_key(path),identity) for key in self.state.budgets]
         deadlines=[g['until'] for g in grants if g and g['until']>now]
         return max(0,min(deadlines)-now) if deadlines else None
 
     def matching(self, atom):
         return [key for key, budget in self.state.budgets.items() if applies(budget.members, atom)]
 
-    def legacy_block(self, atom):
+    def legacy_block(self, atom, permitted=()):
         app = self.app
         if app.focus.restricting and (app.focus.settings.app_blocked(atom[1]) or atom[2] and any(
                 matches(atom[2], host) for host in app.focus.settings.block_sites)):
             return True
-        if atom[0] and app.restriction_reached(game=app.catalog.resolve(atom[1])): return True
-        return any(s.rule['id'] not in app.settings.restriction_plans and s.rule['enforce'] and not s.remaining
+        if atom[0]:
+            from .restriction_policy import legacy_restriction_active
+            wall=datetime.now().astimezone(); plan=quota_plan(app.settings,wall); game=app.catalog.resolve(atom[1])
+            if ('shared-games' not in permitted and plan.game_budget_enabled and plan.restriction_enabled
+                    and budget_access.active(plan,'shared-games',wall) and budget_access.usage_enabled(plan,'shared-games')
+                    and legacy_active(plan.restriction_plans,'shared-games')
+                    and sum(app.tracker.quota_totals(wall).values())>=plan.restriction_seconds): return True
+            key='game:'+atom[0]; cap=app.settings.game_limits.get(atom[0])
+            if (key not in permitted and game and app.catalog.enabled(game) and cap is not None
+                    and budget_access.active(plan,key,wall) and budget_access.usage_enabled(plan,key) and legacy_restriction_active(plan.restriction_plans,key)
+                    and app.tracker.game_quota_total(wall,atom[0])>=cap): return True
+        return any(s.rule['id'] not in permitted and budget_access.usage_enabled(app.settings,s.rule['id']) and legacy_active(app.settings.restriction_plans,s.rule['id']) and s.rule['enforce'] and s.used>=s.rule['seconds']
                    for s in app.wellbeing.states(datetime.now().astimezone(), atom))
 
     def extend(self, keys, subject):
         self.prepare(datetime.now().astimezone())
+        identity=''
         if subject.startswith('app:'):
             path = subject[4:]; game = self.app.catalog.resolve(path)
             atom = (game.id if game else '', path, '')
-            active = [k for k in self.matching(atom) if self.state.action(k, subject)]
-            if set(active) != set(keys) or self.legacy_block(atom): return None
-        until = self.state.extend(keys, subject)
+            if self.screen and self.screen.target and self.screen.subject==subject: identity=self.screen.target.identity
+            elif self.current and app_key(self.current.path)==app_key(path): identity=self.current.identity
+            dominant=self.state.dominant(self.matching(atom),subject,identity or None)
+            active = [k for k in dominant if self.state.action(k, subject,identity or None)]
+            if set(active) != set(keys) or self.legacy_block(atom,keys): return None
+        until = self.state.extend(keys, subject,identity)
         if until:
             self.audio.close()
             self.app.update_focus_policy()
@@ -129,11 +163,29 @@ class RestrictionRuntime:
         if atom and current.identity:
             keys = self.matching(atom)
             if keys: self.targets[current.identity] = (current, atom)
-            pending=[(key,warning) for key in keys for warning in self.state.warnings(key)]
+            pending=[]
+            for key in keys:
+                members=self.state.budgets[key].members
+                scopes=[]
+                if applies([m for m in members if m['kind']!='site' and m!={'kind':'category','value':'sites'}],atom): scopes.append(subject)
+                if atom[2] and applies([m for m in members if m['kind']=='site' or m=={'kind':'category','value':'sites'}],atom): scopes.append('site:'+atom[2])
+                seen=set()
+                for scope in scopes:
+                    for warning in self.state.warnings(key,scope):
+                        if warning['id'] not in seen: pending.append((key,warning)); seen.add(warning['id'])
             if pending and not app.popup_window:
-                messages=[app.t('{name}: {minutes:g} minutes remaining.',name=self.state.budgets[key].name,
-                    minutes=max(0,math.ceil((self.state.budgets[key].limit-self.state.budgets[key].used)/60)))
-                    for key in dict.fromkeys(key for key,_ in pending)]
+                messages=[]
+                for key in dict.fromkeys(key for key,_ in pending):
+                    budget=self.state.budgets[key]
+                    clock_warning=next((warning for k,warning in pending if k==key and warning.get('time_mode')=='clock'),None)
+                    if clock_warning:
+                        minute=clock_warning['clock_minute']
+                        messages.append(app.t('{name}: the daily time {time} has been reached.',name=budget.name,time=f'{minute//60:02d}:{minute%60:02d}'))
+                    elif any(k==key and warning.get('time_mode')=='usage' for k,warning in pending):
+                        messages.append(app.t('{name}: {minutes:g} minutes of use.',name=budget.name,minutes=round(budget.used/60,2)))
+                    else:
+                        messages.append(app.t('{name}: {minutes:g} minutes remaining.',name=budget.name,
+                            minutes=max(0,math.ceil((budget.limit-budget.used)/60))))
                 alert=Alert(self.state.day,(),'wellbeing','\n'.join(messages),app.t('OK'),
                             title=app.t('Time budget reminder'),sound=any(w['sound'] for _,w in pending))
                 delivered=app.popup(alert) if any(w['popup'] for _,w in pending) else play_notification(app.settings)
@@ -146,18 +198,36 @@ class RestrictionRuntime:
             # Site-only actions never minimize or close the browser process.
             native_keys = [key for key in keys if applies([m for m in self.state.budgets[key].members
                 if m['kind'] != 'site' and m != {'kind': 'category', 'value': 'sites'}], target_atom)]
-            actions = {key: self.state.action(key, target_subject) for key in native_keys}
+            native_keys=self.state.dominant(native_keys,target_subject,identity)
+            actions = {key: self.state.action(key, target_subject,identity) for key in native_keys}
             active = [key for key, action in actions.items() if action]
-            grant = [self.state.grant(key, target_subject) for key in native_keys]
+            grant = [self.state.grant(key, target_subject,identity) for key in native_keys]
             if not active and not any(grant): self.targets.pop(identity, None); continue
             if any(actions[k] == 'minimize' for k in active) and all(actions[k] == 'minimize' for k in active):
-                if current.identity == identity and self.app.minimization_allowed(target.path, identity):
-                    win32.minimize_game(target.path, identity, consented=True); self.blocked = True
+                foreground=current.identity==identity
+                screen_owned=owned and self.screen.target and self.screen.target.identity==identity
+                if (foreground or screen_owned) and self.app.minimization_allowed(target.path, identity):
+                    if (self.state.allowance(active,target_subject)>0 and not self.legacy_block(target_atom,active)
+                            and native.permitted(target.path,identity)):
+                        display=(target,active,target_subject,target_atom)
+                    elif foreground:
+                        win32.minimize_game(target.path, identity, consented=True)
+                    self.blocked = True
                 continue
             handle = native.open_target(target.path, identity)
             if not handle:
                 self.targets.pop(identity,None)
-                if active and current.identity==identity and time.monotonic()>=self.failed.get(identity,0):
+                notify=bool(active and current.identity==identity and time.monotonic()>=self.failed.get(identity,0))
+                if any(grant):
+                    # An access failure need not mean the process has exited.
+                    # Keep the promise and retry; only discard it if the PID
+                    # is known to have been reused for a different process.
+                    try: observed=win32.process_image(int(identity.split(':',1)[0]))[1]
+                    except (ValueError,TypeError,OSError): observed=''
+                    if observed and observed!=identity:
+                        for key in native_keys: self.state.finish_grant(key,target_subject,identity)
+                    else: self.failed[identity]=time.monotonic()+5
+                if notify:
                     app.set_status('Could not apply this restriction to the application.')
                     self.failed[identity]=time.monotonic()+30
                 continue
@@ -178,14 +248,16 @@ class RestrictionRuntime:
             elif mode == 'minimize' and foreground:
                 native.minimize_target(target.path, identity); self.blocked = True
         for identity, (future, cancel, target, keys) in list(self.jobs.items()):
-            if not any(self.app.settings.restriction_plans.get(k, {}).get('close_confirmed') and
-                       self.state.action(k, 'app:' + app_key(target.path)) in ('close', 'cover') for k in keys): cancel.set()
+            if not any(not self.state.zero_budget(k) and self.app.settings.restriction_plans.get(k, {}).get('close_confirmed') and
+                       self.state.action(k, 'app:' + app_key(target.path),identity) in ('close', 'cover', 'minimize') for k in keys): cancel.set()
             if future.done():
                 try: success = future.result()
                 except Exception: success = False
                 if not success and not cancel.is_set():
                     app.set_status('Could not close the application. Close it manually.')
                     self.failed[identity] = time.monotonic() + 30
+                if success:
+                    for key in keys: self.state.finish_grant(key,'app:'+app_key(target.path),identity)
                 self.jobs.pop(identity)
         try: self.audio.update(mute)
         except (OSError, ValueError): self.audio.close(); app.set_status('Application audio could not be muted.')
@@ -219,12 +291,19 @@ class RestrictionRuntime:
         screen = self.screen
         same = screen.isVisible() and screen.target and screen.target.identity == target.identity
         screen.target, screen.keys, screen.subject = target, keys, subject
-        minutes = 0 if self.legacy_block(atom) else self.state.allowance(keys, subject)
+        minutes = 0 if self.legacy_block(atom,keys) else self.state.allowance(keys, subject)
         screen.extra.setText(app.t('Another {minutes:g} minutes to save', minutes=minutes)); screen.extra.setVisible(minutes > 0)
-        screen.quit.setVisible(any(app.settings.restriction_plans[k]['close_confirmed'] for k in keys))
-        screen.heading.setText(app.t('Time budget reached'))
+        screen.quit.setVisible(any(not self.state.zero_budget(k) and app.settings.restriction_plans.get(k,{}).get('close_confirmed') for k in keys))
+        screen.heading.setText(app.t('Restriction active'))
         screen.note.setText('\n'.join(self.state.budgets[k].name for k in keys))
-        screen.status.setText(app.t('Applications close when the save allowance ends.') if minutes else app.t('This budget is blocked until it renews.'))
+        remaining=max((self.state.break_remaining(k,subject) for k in keys if not self.state.has_restriction(k,subject,target.identity)),default=0)
+        if any(self.state.zero_budget(k) for k in keys):
+            screen.status.setText(app.t('Access is blocked because the daily budget is 0.'))
+        elif remaining:
+            seconds=math.ceil(remaining)
+            screen.status.setText(app.t('Break remaining: {time}',time=f'{seconds//60}:{seconds%60:02d}'))
+        else:
+            screen.status.setText(app.t('Applications close when the save allowance ends.') if minutes else app.t('This budget is blocked until it renews.'))
         if self.audio.status.get('ok') is False: screen.status.setText(app.t('Application audio could not be muted.'))
         if same and getattr(screen,'fullscreen',False): return
         rectangle = native.target_rect(target.path, target.identity, background=same)
@@ -251,19 +330,48 @@ class RestrictionRuntime:
         win32.u.SetForegroundWindow(int(screen.winId()))
 
     def browser_policy(self, base):
-        policy = dict(base); entries = []
+        policy = dict(base); entries = []; zero_domains = []; zero_all = False
         for key, budget in self.state.budgets.items():
             domains = [m['value'] for m in budget.members if m['kind'] == 'site']
             all_sites = {'kind': 'category', 'value': 'sites'} in budget.members
             if not domains and not all_sites: continue
+            if self.state.zero_budget(key):
+                zero_domains.extend(domains); zero_all |= all_sites
+            row = self.state.rows[key]
+            grant=row['grant'] if row['grant'] and row['grant']['subject'].startswith('site:') else None
+            if (grant and grant.get('carried') and grant['until']>self.state.now
+                    and not self.state.has_restriction(key,'site:')):
+                entries.append(dict(key=key,name=budget.name,domains=domains,all=all_sites,kind='cover',
+                                    minutes=0,grant=grant,is_break=False,grant_only=True))
             action = self.state.action(key, 'site:')
             if not action: continue
-            row = self.state.rows[key]
-            entries.append(dict(key=key, name=budget.name, domains=domains, all=all_sites, kind=action,
-                                minutes=self.state.plans[key]['extension_minutes'] if not row['used_extension'] else 0,
-                                grant=row['grant']))
+            is_break=not self.state.has_restriction(key,'site:')
+            entry=dict(key=key, name=budget.name, domains=domains, all=all_sites, kind='cover' if action=='minimize' else action,
+                       minutes=self.state.allowance([key],'site:'), grant=grant, is_break=is_break)
+            if action=='redirect':
+                redirect=next((step.get('redirect_url','') for step in self.state.due(key,'site:')
+                               if step['kind']=='redirect' or step['kind']=='break' and step['break_mode']=='redirect'),None)
+                if redirect is not None: entry['redirect_url']=redirect
+            remaining=self.state.break_remaining(key,'site:')
+            if remaining and is_break: entry['break_until']=self.state.now+remaining
+            entries.append(entry)
         policy.update(restriction_version=1, restrictions=entries, language=self.app.settings.language, lease_seconds=30)
+        # An unpacked extension can keep its old worker after a desktop upgrade.
+        # Zero budgets have no exceptions, so the original blocking protocol can
+        # enforce them too, including on an already-open tab. Never activate
+        # dormant focus lists when adding this unconditional block.
+        if zero_domains or zero_all:
+            active = base.get('active', False)
+            policy.update(active=True,
+                          mode='allowlist' if zero_all else base.get('mode','blocklist') if active else 'blocklist',
+                          allow=list(base.get('allow',())) if active and not zero_all else [],
+                          block=list(dict.fromkeys([*(base.get('block',()) if active else ()), *zero_domains])),
+                          remaining=max(base.get('remaining',0) if active else 0,30))
         return policy
+
+    def delegated_website_rules(self):
+        return {key for key,budget in self.state.budgets.items() if self.state.has_restriction(key,'site:')
+                and self.state.action(key,'site:') and any(member['kind']=='site' or member=={'kind':'category','value':'sites'} for member in budget.members)}
 
     def process_browser_requests(self):
         bridge = self.app.browser_bridge
@@ -274,8 +382,8 @@ class RestrictionRuntime:
                 host = domain(data['domain']); token = data['token']
                 if not isinstance(token, str) or not __import__('re').fullmatch('[a-zA-Z0-9_-]{16,100}', token): raise ValueError()
                 atom = ('', '', host); subject = 'site:' + host + ':' + token
-                keys = self.matching(atom); active = [k for k in keys if self.state.action(k, subject)]
-                base = self.app.wellbeing.policy(self.app.focus.policy(), datetime.now().astimezone())
+                keys = self.state.dominant(self.matching(atom),subject); active = [k for k in keys if self.state.action(k, subject)]
+                base = self.app.wellbeing.policy(self.app.focus.policy(), datetime.now().astimezone(),self.delegated_website_rules())
                 from .focus import matches
                 legacy = base['active'] and (any(matches(host, h) for h in base['block']) or base['mode'] == 'allowlist')
                 until = None if legacy else self.extend(active, subject)

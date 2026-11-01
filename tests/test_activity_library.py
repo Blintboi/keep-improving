@@ -55,7 +55,41 @@ class ActivityLibraryTests(unittest.TestCase):
         self.app.open_activities('app'); self.assertEqual(self.app.activity_lists['app'].list.count(),1)
         self.assertEqual(self.store.settings(),before)
         self.app.open_budget(); self.app.budget_editor.show_editor('shared')
-        self.assertFalse(self.app.budget_editor.overlay.isVisible()); self.assertFalse(self.app.budget_editor.appearance.isVisible())
+        self.assertFalse(self.app.budget_editor.overlay.isVisible()); self.assertTrue(self.app.budget_editor.appearance.isVisible())
+
+    def test_browser_connection_is_available_on_the_websites_page_even_when_empty(self):
+        from PySide6.QtWidgets import QPushButton
+        self.app.open_activities('site'); listing=self.app.activity_lists['site']; self.pump(.04)
+        self.assertTrue(listing.browser_connection.isVisible())
+        self.assertEqual(listing.list.count(),0)
+        before=self.store.settings()
+        with patch.object(self.app.focus_page,'browser_dialog') as connection:
+            listing.browser_connection.click(); connection.assert_called_once_with()
+        self.assertEqual(self.store.settings(),before)
+        with patch.object(self.app,'enable_browser_bridge',return_value=None):
+            listing.browser_connection.click()
+        dialog=self.app._dialogs[-1]; self.assertEqual(dialog.windowTitle(),self.app.t('Connect Brave / browser')); dialog.reject()
+        self.app.set_language('en'); self.assertEqual(listing.browser_connection.text(),'Browser connection')
+        self.app.open_activities('app'); self.assertTrue(listing.browser_connection.isHidden() or not listing.browser_connection.isVisible())
+        self.app.switch_page(4)
+        self.assertFalse(any(b.isVisible() and b.text()==self.app.t('Browser connection') for b in self.app.focus_page.findChildren(QPushButton)))
+
+    def test_budget_shows_usage_and_actual_reset_time_without_extra_options(self):
+        from PySide6.QtCore import QTime
+        from PySide6.QtWidgets import QToolButton,QPushButton
+        settings=replace(self.app.settings,budget_reset_minute=390)
+        self.store.save_settings(settings); self.app.settings=self.app.catalog.settings=settings
+        self.app.budget_editor.saved(settings)
+        self.app.open_budget(member=target('site','example.com')); self.app.show(); self.pump(.04)
+        editor=self.app.budget_editor
+        self.assertTrue(editor.usage.isVisible()); self.assertTrue(editor.reset_time.isVisible())
+        self.assertEqual(editor.reset_time.time(),QTime(6,30))
+        self.assertFalse(any(b.isVisible() and b.text()==self.app.t('More options') for b in editor.findChildren(QToolButton)))
+        self.assertFalse(any(b.isVisible() and b.text()==self.app.t('Browser connection') for b in editor.findChildren(QPushButton)))
+        self.app.set_language('en'); self.assertEqual(editor.reset_time.time(),QTime(6,30))
+        self.assertEqual(editor.reset_time.accessibleName(),'Renews daily at')
+        key=editor.current; editor.reset_time.setTime(QTime(8,15)); self.app.save_budgets()
+        self.assertEqual(self.store.settings().budget_reset_overrides[key],495)
 
     def test_add_website_then_budget_then_appearance(self):
         self.app.open_activities('site'); listing=self.app.activity_lists['site']
@@ -66,6 +100,19 @@ class ActivityLibraryTests(unittest.TestCase):
         self.app.open_activities('site'); listing.countdown.click()
         window=self.app._dialogs[-1]; self.assertEqual(window.windowTitle(),self.app.t('Custom countdowns'))
         self.assertEqual(self.store.settings().wellbeing_rules[0]['seconds'],1200); window.reject()
+
+    def test_each_budget_keeps_its_own_reset_and_cancel_discards_the_draft(self):
+        from PySide6.QtCore import QTime
+        rule=self.configure([target('site','example.com')])
+        self.app.open_budget(); editor=self.app.budget_editor
+        editor.show_editor('shared'); editor.reset_time.setTime(QTime(7,15)); self.app.save_budgets()
+        editor.show_editor('shared-games'); editor.shared_reset.setTime(QTime(4,30)); self.app.save_budgets()
+        saved=self.store.settings().budget_reset_overrides
+        self.assertEqual(saved['shared'],435); self.assertEqual(saved['shared-games'],270)
+        editor.show_editor('shared'); self.assertEqual(editor.reset_time.time(),QTime(7,15))
+        editor.reset_time.setTime(QTime(9,0)); editor.cancel_edit()
+        editor.show_editor('shared'); self.assertEqual(editor.reset_time.time(),QTime(7,15))
+        self.assertEqual(self.store.settings().budget_reset_overrides,saved)
 
     def test_targets_are_activities_even_when_only_a_mixed_group_budget_exists(self):
         members=[target('game',self.games[0].id),target('site','example.com'),target('app',r'C:\Apps\editor.exe')]

@@ -210,7 +210,13 @@ class QuotaResetInterfaceTests(unittest.TestCase):
             self.app.render()
         self.assertEqual(self.app.remaining_label.text(),'00:10:00')
         self.assertIn('06:00',self.app.remaining_label.toolTip())
-        self.assertIn('00:10:00',tray.call_args[0][0])
+        self.assertIn(self.app.t('No active timers'),tray.call_args[0][0])
+        from gametime.tracker import Sample
+        self.app.restrictions.current=Sample(wall,100,str(self.exe),'fixture:1')
+        with patch('gametime.qt_ui.datetime',Clock),patch.object(self.app.tray,'update') as tray:
+            self.app.update_tray()
+        self.assertIn('10:00',tray.call_args.args[0])
+        self.assertIn(self.app.t('Restriction in'),tray.call_args.args[0])
         self.assertTrue(self.app.restriction_reached(wall))
         self.assertFalse(self.app.restriction_reached(wall.replace(hour=6)))
 
@@ -230,7 +236,7 @@ class QuotaResetInterfaceTests(unittest.TestCase):
             with patch.object(self.app,'rtss_available',return_value=True),patch.object(self.app.rtss,'present',return_value=True) as present:
                 self.app.update_overlay()
                 self.pump(.25); self.app.update_overlay()
-            self.assertIn('00:20:00',present.call_args[0][2])
+            self.assertEqual(self.rtss_renderer.call_args.args[0],1200); self.assertIn('<LI=',present.call_args.args[2])
 
     def test_delayed_alert_can_finish_after_midnight_until_the_actual_reset(self):
         wall=datetime(2026,10,23,23,59)

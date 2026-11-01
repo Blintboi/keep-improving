@@ -4,7 +4,7 @@ from datetime import date,datetime,timedelta
 from .quota import current_day
 
 SCHEDULE_FIELDS=('warning_seconds','limit_seconds','budget_reset_minute','restriction_enabled','restriction_seconds',
-                 'bedtime_enabled','bedtime_warning_minute','bedtime_minute','bedtime_resume_minute','bedtime_minimize','bedtime_caps_budget')
+                 'bedtime_enabled','bedtime_warning_enabled','bedtime_warning_minute','bedtime_minute','bedtime_resume_minute','bedtime_minimize','bedtime_caps_budget')
 DAY_NAMES=('Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday')
 
 
@@ -44,7 +44,7 @@ def bedtime_occurrence(settings,wall):
         elapsed=(wall.date()-warning_day).days*1440+minute-plan.bedtime_warning_minute
         warning=(plan.bedtime_minute-plan.bedtime_warning_minute)%1440
         end=warning+(plan.bedtime_resume_minute-plan.bedtime_minute)%1440
-        if plan.bedtime_enabled and 0<=elapsed<end:
+        if plan.bedtime_enabled and day.weekday() in settings.budget_active_days.get('computer-window',range(7)) and 0<=elapsed<end:
             return ('warning' if elapsed<warning else 'bedtime'),day.isoformat(),plan
     plan=day_settings(settings,today)
     day=today-timedelta(days=(minute-settings.budget_reset_minute)%1440<(plan.bedtime_warning_minute-settings.budget_reset_minute)%1440)
@@ -57,4 +57,10 @@ def game_settings(settings,gid):
 
 
 def any_countdown(settings):
-    return settings.overlay_enabled or any(value.get('overlay_enabled',False) for value in settings.game_overlays.values())
+    return (settings.overlay_enabled or any(value.get('overlay_enabled',False) for value in settings.game_overlays.values())
+            or any(rule['enabled'] and rule['overlay'] for rule in settings.wellbeing_rules))
+
+
+def any_rtss_countdown(settings):
+    return settings.overlay_rtss_auto or any(value.get('overlay_rtss_auto',False)
+        for value in (*settings.game_overlays.values(),*settings.counter_overlays.values()))

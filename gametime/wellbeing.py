@@ -2,7 +2,7 @@
 
 One row describes one foreground interval (game, executable and optional host).
 Matching a browser and its website therefore never charges a group twice.
-History and budget ledgers are independent, with one shared day boundary.
+History uses the statistics day; each budget can use its own day boundary.
 """
 from collections import defaultdict
 from dataclasses import dataclass
@@ -17,6 +17,7 @@ from .focus import app_key, domain, matches, BROWSERS, SHELLS, BROWSER_IDLE
 from .activity_identity import app_identity,site_identity,is_idle_app
 from .tracker import day_slices
 from .quota import current_day,period_day
+from . import budget_access
 
 CATEGORIES=('games','apps','sites')
 
@@ -50,7 +51,7 @@ def validate_rules(rules):
         if not isinstance(rule['name'],str) or not rule['name'].strip() or len(rule['name'])>80 or '\0' in rule['name']:
             raise ValueError('Give the budget a name (up to 80 characters).')
         value=rule['seconds']
-        if type(value) not in (int,float) or not math.isfinite(value) or not 0<value<=86400:
+        if type(value) not in (int,float) or not math.isfinite(value) or not 0<=value<=86400:
             raise ValueError('Choose a daily limit between 0 and 1440 minutes.')
         if any(type(rule[key]) is not bool for key in ('enabled','enforce','overlay')): raise ValueError('Invalid time budget.')
         if not isinstance(rule['members'],list) or not 1<=len(rule['members'])<=200:
@@ -65,9 +66,12 @@ def validate_rules(rules):
     return rules
 
 
-def applies(members,atom):
+def applies(members,atom,*,budget=''):
     if atom is None: return False
     game,app,site=atom
+    if '\0' in site:
+        site,excluded=site.split('\0',1)
+        if budget and budget==excluded: return False
     for member in members:
         kind,value=member['kind'],member['value']
         if kind=='game' and game==value: return True
@@ -99,11 +103,13 @@ def counter_settings(settings,rule):
 class BudgetState:
     rule: dict
     used: float
+    usage_limit: bool = True
+    clock_remaining: float = math.inf
 
     @property
-    def remaining(self): return max(0,self.rule['seconds']-self.used)
+    def remaining(self): return min(max(0,self.rule['seconds']-self.used) if self.usage_limit else math.inf,self.clock_remaining)
     @property
-    def warning(self): return self.remaining<=min(600,self.rule['seconds']/5)
+    def warning(self): return self.remaining<=(min(600,self.rule['seconds']/5) if self.usage_limit else 600)
 
 
 class Wellbeing:
@@ -113,8 +119,14 @@ class Wellbeing:
             day TEXT NOT NULL, game_id TEXT NOT NULL, app TEXT NOT NULL, site TEXT NOT NULL,
             seconds REAL NOT NULL, PRIMARY KEY(day,game_id,app,site))''')
         self.previous=None; self.current=None; self.pending=defaultdict(float)
+        self.current_redirect=''
         self.day=None; self.atoms={}; self.totals={}; self.source=None; self.rules=[]
         self.last_flush=None; self.revision=0
+        from .budget_periods import BudgetPeriods
+        self.periods=BudgetPeriods(store); self.custom_markers={}
+        for key in tuple(self.periods.clocks):
+            if not key.startswith('quota:') and key not in catalog.settings.budget_reset_overrides:
+                self.periods.forget_clock(key)
         row=store.db.execute("SELECT value FROM settings WHERE key='wellbeing_day_start'").fetchone()
         self.day_start_minute=json.loads(row[0]) if row else 0
 
@@ -123,7 +135,8 @@ class Wellbeing:
         old_day=period_day(wall,(self.day_start_minute,)*7).isoformat()
         new_day=period_day(wall,(minute,)*7).isoformat()
         rows=list(self.store.db.execute('SELECT game_id,app,site,seconds FROM wellbeing_usage WHERE day=?',(old_day,)))
-        keys=[key for key in self.store.alert_keys(old_day) if key.startswith('wellbeing:')]
+        overrides=self.catalog.settings.budget_reset_overrides
+        keys=[key for key in self.store.alert_keys(old_day) if key.startswith('wellbeing:') and key.split(':',2)[1] not in overrides]
         with self.store.db:
             self.store.db.execute('DELETE FROM wellbeing_usage')
             self.store.db.executemany('INSERT INTO wellbeing_usage VALUES (?,?,?,?,?)',[(new_day,*row) for row in rows])
@@ -145,8 +158,25 @@ class Wellbeing:
             self.source=None
         if source is not self.source:
             self.source=source; self.rules=[rule for rule in source if rule['enabled']]
-            self.totals={rule['id']:sum(seconds for atom,seconds in self.atoms.items() if applies(rule['members'],atom)) for rule in self.rules}
+            self.totals={rule['id']:sum(seconds for atom,seconds in self.atoms.items() if applies(rule['members'],atom,budget=rule['id'])) for rule in source}
+            self.custom_markers.clear()
             self.revision+=1
+        overrides=self.catalog.settings.budget_reset_overrides
+        for rule in source:
+            key=rule['id']
+            if key not in overrides:
+                if key in self.custom_markers:
+                    self.totals[key]=sum(seconds for atom,seconds in self.atoms.items() if applies(rule['members'],atom,budget=key))
+                    self.custom_markers.pop(key,None)
+                continue
+            minute=overrides[key]; day=self.periods.day(wall,minute); marker=(minute,day)
+            if self.custom_markers.get(key)!=marker:
+                def seed(): return {json.dumps(atom,ensure_ascii=False):seconds for atom,seconds in self.atoms.items()}
+                values=self.periods.totals(key,minute,wall,seed,marker_key=key,
+                                           previous_day=current_day(self.catalog.settings,wall).isoformat())
+                self.totals[key]=sum(seconds for item,seconds in values.items() if applies(rule['members'],json.loads(item),budget=key))
+                self.custom_markers[key]=marker
+                self.revision+=1
 
     def atom(self,sample,website=''):
         if not sample.interactive or not sample.path or not sample.identity or sample.identity.startswith(str(os.getpid())+':'): return None
@@ -159,33 +189,50 @@ class Wellbeing:
         if not game and not self.focus.settings.tracking: return None
         return (game.id if game else '',app,website if filename in BROWSERS and self.focus.settings.tracking else '')
 
-    def tick(self,sample,website=''):
+    def tick(self,sample,website='',redirect_budget=''):
         if self.day_start_minute!=self.catalog.settings.budget_reset_minute: self.configure(sample.wall)
         atom=self.atom(sample,website); previous=self.previous
-        self.previous=(sample,atom); self.current=(sample,atom)
+        tagged=atom
+        if atom and isinstance(redirect_budget,str) and redirect_budget and '\0' not in redirect_budget:
+            tagged=(atom[0],atom[1],atom[2]+'\0'+redirect_budget)
+        self.previous=(sample,tagged); self.current=(sample,atom); self.current_redirect=redirect_budget
         if previous:
             prev,old=previous; delta=sample.awake-prev.awake; wall=sample.wall.timestamp()-prev.wall.timestamp()
-            if old and self.atom(prev,old[2]) and sample.interactive and 0<delta<=3 and wall>0 and abs(wall-delta)<=1.5:
+            if old and self.atom(prev,old[2].split('\0',1)[0]) and sample.interactive and 0<delta<=3 and wall>0 and abs(wall-delta)<=1.5:
+                self.configure(prev.wall)
+                overrides=self.catalog.settings.budget_reset_overrides
+                item=json.dumps(old,ensure_ascii=False)
+                for rule in self.source:
+                    key=rule['id']
+                    if key not in overrides: continue
+                    minute=overrides[key]; marker=self.custom_markers[key]
+                    seed=lambda: {json.dumps(atom,ensure_ascii=False):seconds for atom,seconds in self.atoms.items()}
+                    self.periods.credit(key,minute,item,prev.wall,sample.wall,delta,seed)
+                    if applies(rule['members'],old,budget=key):
+                        for day,seconds in day_slices(prev.wall,sample.wall,delta,minute):
+                            if day==marker[1]: self.totals[key]+=seconds
                 for day,seconds in day_slices(prev.wall,sample.wall,delta,self.day_start_minute):
                     instant=prev.wall if day==current_day(self.catalog.settings,prev.wall).isoformat() else sample.wall
                     self.configure(instant)
                     self.atoms[old]=self.atoms.get(old,0)+seconds
                     self.pending[(day,*old)]+=seconds
                     for rule in self.rules:
-                        if applies(rule['members'],old): self.totals[rule['id']]+=seconds
+                        if rule['id'] not in overrides and applies(rule['members'],old,budget=rule['id']): self.totals[rule['id']]+=seconds
                     self.revision+=1
         self.configure(sample.wall)
         if self.last_flush is None: self.last_flush=sample.awake
         if sample.awake-self.last_flush>=10: self.flush(); self.last_flush=sample.awake
 
-    def states(self,wall,atom=None):
+    def states(self,wall,atom=None,exclude=''):
         self.configure(wall)
-        return [BudgetState(rule,self.totals.get(rule['id'],0)) for rule in self.rules if atom is None or applies(rule['members'],atom)]
+        return [BudgetState(rule,self.totals.get(rule['id'],0),budget_access.usage_enabled(self.catalog.settings,rule['id']),
+                            budget_access.clock_remaining(self.catalog.settings,rule['id'],wall)) for rule in self.rules
+                if rule['id']!=exclude and budget_access.active(self.catalog.settings,rule['id'],wall) and (atom is None or applies(rule['members'],atom))]
 
     def active(self):
         if not self.current or not self.current[1]: return []
         sample,atom=self.current
-        return self.states(sample.wall,atom)
+        return self.states(sample.wall,atom,exclude=self.current_redirect)
 
     def remap(self,aliases):
         # The caller flushes before Store migrates the ledger atomically.
@@ -196,12 +243,16 @@ class Wellbeing:
                 sample,(game,app,site)=value
                 setattr(self,name,(sample,(aliases.get(game,game),app,site)))
         self.day=None; self.source=None
+        self.periods.cache.clear(); self.custom_markers.clear()
+        self.periods.clocks=dict(self.store.db.execute('SELECT budget,minute FROM independent_budget_clock'))
 
-    def policy(self,base,wall):
+    def policy(self,base,wall,delegated=()):
+        from .restriction_policy import legacy_active
         policy=dict(base); blocked=list(base['block']) if base['active'] else []; all_sites=False
         for state in self.states(wall):
-            if state.rule['id'] in self.catalog.settings.restriction_plans: continue
-            if state.remaining or not state.rule['enforce']: continue
+            if state.rule['id'] in delegated: continue
+            if not legacy_active(self.catalog.settings.restriction_plans,state.rule['id']): continue
+            if not state.usage_limit or state.used<state.rule['seconds'] or not state.rule['enforce']: continue
             for member in state.rule['members']:
                 if member['kind']=='site': blocked.append(member['value'])
                 if member=={'kind':'category','value':'sites'}: all_sites=True
@@ -211,9 +262,11 @@ class Wellbeing:
         return policy
 
     def flush(self):
-        if not self.pending: return
+        if not self.pending and not self.periods.pending: return
         with self.store.db:
+            self.periods.write_pending()
             self.store.db.executemany('''INSERT INTO wellbeing_usage VALUES (?,?,?,?,?)
                 ON CONFLICT(day,game_id,app,site) DO UPDATE SET seconds=seconds+excluded.seconds''',
                 [(*key,value) for key,value in self.pending.items()])
         self.pending.clear()
+        self.periods.pending.clear()

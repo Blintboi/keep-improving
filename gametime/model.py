@@ -59,6 +59,7 @@ class Settings:
     warning_seconds: float = 6000
     limit_seconds: float = 7200
     budget_reset_minute: int = 0
+    budget_reset_overrides: dict = field(default_factory=dict)
     steam_roots: list = field(default_factory=list)
     epic_manifest_dirs: list = field(default_factory=list)
     ubisoft_roots: list = field(default_factory=list)
@@ -81,6 +82,7 @@ class Settings:
     restriction_enabled: bool = False
     restriction_seconds: float = 7500
     bedtime_enabled: bool = False
+    bedtime_warning_enabled: bool = True
     bedtime_warning_minute: int = 1435
     bedtime_minute: int = 0
     bedtime_resume_minute: int = 360
@@ -102,6 +104,8 @@ class Settings:
     daily_schedules: dict = field(default_factory=dict)
     wellbeing_rules: list = field(default_factory=list)
     restriction_plans: dict = field(default_factory=dict)
+    budget_active_days: dict = field(default_factory=dict)
+    budget_usage_limits: dict = field(default_factory=dict)
     game_budget_enabled: bool = True
     # Legacy/configured profiles retain their game budget; Store supplies the
     # opt-in defaults for a genuinely new profile.
@@ -114,16 +118,23 @@ class Settings:
         validate_notifications(self.scheduled_notifications)
         from .wellbeing import validate_rules
         validate_rules(self.wellbeing_rules)
+        from .budget_access import validate as validate_access
+        validate_access(self)
         if type(self.game_budget_enabled) is not bool: raise ValueError('Invalid time budget.')
         if type(self.budget_setup_completed) is not bool: raise ValueError('Invalid time budget.')
         from .schedule import SCHEDULE_FIELDS,DayScheduleError
         if (not isinstance(self.game_limits, dict) or any(
                 not isinstance(gid, str) or not gid or '\0' in gid
                 or isinstance(value, bool) or not isinstance(value, (int, float))
-                or not math.isfinite(value) or not 0 < value <= 86400
+                or not math.isfinite(value) or not 0 <= value <= 86400
                 for gid, value in self.game_limits.items())):
             raise ValueError('Choose per-game limits between 0 and 1440 minutes.')
         if type(self.budget_reset_minute) is not int or not 0 <= self.budget_reset_minute < 1440:
+            raise ValueError('Choose a valid daily budget reset time.')
+        if (not isinstance(self.budget_reset_overrides, dict) or len(self.budget_reset_overrides)>2200 or any(
+                not isinstance(key,str) or not key or len(key)>2053 or '\0' in key
+                or type(value) is not int or not 0 <= value < 1440
+                for key,value in self.budget_reset_overrides.items())):
             raise ValueError('Choose a valid daily budget reset time.')
         if not isinstance(self.check_updates, bool):
             raise ValueError('Automatic update checks must be on or off.')
@@ -140,11 +151,11 @@ class Settings:
             raise ValueError('Choose a WAV sound file.')
         overlay_fields=('overlay_enabled','overlay_x','overlay_y','overlay_font_size','overlay_screen','overlay_color_normal','overlay_color_warning','overlay_opacity')
         if (not isinstance(self.game_overlays,dict) or any(not isinstance(gid,str) or not gid or '\0' in gid
-                or not isinstance(value,dict) or any(key not in overlay_fields for key in value) for gid,value in self.game_overlays.items())):
+                or not isinstance(value,dict) or any(key not in (*overlay_fields,'overlay_rtss_auto') for key in value) for gid,value in self.game_overlays.items())):
             raise ValueError('Choose valid per-game countdown settings.')
         if (not isinstance(self.counter_overlays,dict) or len(self.counter_overlays)>100 or any(
                 not isinstance(key,str) or not re.fullmatch(r'[a-zA-Z0-9_-]{1,64}',key) or not isinstance(value,dict)
-                or any(field not in overlay_fields or field=='overlay_enabled' for field in value)
+                or any(field not in (*overlay_fields,'overlay_rtss_auto') or field=='overlay_enabled' for field in value)
                 for key,value in self.counter_overlays.items())):
             raise ValueError('Choose valid countdown settings.')
         from .wellbeing import target
@@ -166,7 +177,7 @@ class Settings:
                 or any(not isinstance(value,str) or len(value)>MAX_MESSAGE_LENGTH or '\0' in value for value in self.notification_messages.values())):
             raise ValueError('Each reminder message must be text of at most 1000 characters.')
         for color in (self.overlay_color_normal,self.overlay_color_warning): hex_color(color)
-        if any(not isinstance(value, bool) for value in (self.bedtime_enabled, self.bedtime_minimize, self.bedtime_caps_budget)):
+        if any(not isinstance(value, bool) for value in (self.bedtime_enabled, self.bedtime_warning_enabled, self.bedtime_minimize, self.bedtime_caps_budget)):
             raise ValueError('Bedtime switches must be on or off.')
         for value in (self.bedtime_warning_minute, self.bedtime_minute, self.bedtime_resume_minute):
             if type(value) is not int or not 0 <= value < 1440:
@@ -185,8 +196,9 @@ class Settings:
         if self.language not in ("en", "hu"):
             raise ValueError("Unsupported language")
         if (any(isinstance(value,bool) or not isinstance(value,(int,float)) or not math.isfinite(value) for value in (self.warning_seconds,self.limit_seconds))
-                or not (0 < self.warning_seconds < self.limit_seconds <= 86400)):
-            raise ValueError("Thresholds must be: 0 < warning < daily limit ≤ 1440 minutes.")
+                or not (0<=self.limit_seconds<=86400 and
+                        (0<=self.warning_seconds<=86400 if self.limit_seconds==0 else 0<self.warning_seconds<self.limit_seconds))):
+            raise ValueError("Use 0 to block access, or choose 0 < warning < daily limit ≤ 1440 minutes.")
         for value in (self.overlay_enabled, self.overlay_replace_warning, self.limit_popup_enabled, self.overlay_rtss_auto):
             if not isinstance(value, bool):
                 raise ValueError("Overlay switches must be on or off.")

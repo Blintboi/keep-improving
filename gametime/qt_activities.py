@@ -15,7 +15,11 @@ class ActivityList(QWidget):
         super().__init__(); self.app=app; self.kind=kind; self.entries=[]; self.signature=None
         box=QVBoxLayout(self); box.setContentsMargins(0,0,0,0); box.setSpacing(12)
         search=QHBoxLayout(); self.search=QLineEdit(); self.search.setPlaceholderText(app.t('Search activities…'))
-        search.addWidget(self.search,1); search.addWidget(button(app.t('Refresh'),self.refresh)); box.addLayout(search)
+        search.addWidget(self.search,1); search.addWidget(button(app.t('Refresh'),self.refresh))
+        if kind=='site':
+            self.browser_connection=button(app.t('Browser connection'),lambda:app.focus_page.browser_dialog())
+            search.addWidget(self.browser_connection)
+        box.addLayout(search)
         self.note=label(app.t('Measured activities appear here automatically. You can also add one with the Add button.'),'muted'); self.note.setWordWrap(True); box.addWidget(self.note)
         self.list=QListWidget(); self.list.setAccessibleName(app.t('Applications' if kind=='app' else 'Websites')); self.list.setIconSize(QSize(42,42))
         self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)

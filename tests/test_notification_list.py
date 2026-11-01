@@ -78,3 +78,11 @@ class NotificationListTests(TestCase):
         self.assertIn(self.app.t('Disabled'),entries['builtin:limit'][2])
         self.assertIn(self.app.t('Enabled'),entries['builtin:bedtime'][2])
         self.assertIn(self.app.t('Varies by day'),entries['builtin:bedtime'][2])
+
+    def test_explicit_budget_plan_does_not_advertise_implicit_expiry_reminders(self):
+        from gametime.restriction_policy import new_plan,step
+        plan=new_plan(legacy=True); plan['legacy_warning']=False; plan['steps']=[step('cover',3600,usage=True)]
+        self.app.settings=self.app.catalog.settings=replace(self.app.settings,restriction_plans={'shared-games':plan})
+        entries={row[0]:row for row in self.app.notifications_page.entries()}
+        for kind in ('warning','limit','session'):
+            self.assertIn(self.app.t('Disabled'),entries['builtin:'+kind][2])

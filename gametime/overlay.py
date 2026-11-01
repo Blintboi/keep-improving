@@ -2,6 +2,7 @@
 import ctypes as C
 import logging
 import math
+import re
 import time
 from PySide6.QtCore import Qt, QRectF, QPointF, QSize, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen
@@ -78,9 +79,24 @@ def countdown_font(point_size):
     return font
 
 
-def countdown_size(point_size,device=None):
+def countdown_size(point_size,device=None,caption='',detail=''):
     metrics=QFontMetrics(countdown_font(point_size),device)
-    return QSize(metrics.horizontalAdvance('00:00:00')+4,metrics.height()+4)
+    small=QFontMetrics(countdown_font(max(8,point_size*.55)),device)
+    reserved=re.sub(r'\d{2,}:\d{2}(?::\d{2})?$','00:00:00',detail)
+    return QSize(max(metrics.horizontalAdvance('00:00:00'),small.horizontalAdvance(caption),small.horizontalAdvance(reserved))+8,
+                 metrics.height()+8+(small.height()+2)*bool(caption)+(small.height()+2)*bool(detail))
+
+
+def draw_countdown(painter,rect,point_size,text,caption='',detail='',scale=1,device=None):
+    small=countdown_font(max(1,max(8,point_size*.55)*scale)); height=QFontMetrics(small,device).height()+2*scale
+    area=QRectF(rect).adjusted(4*scale,4*scale,-4*scale,-4*scale)
+    if caption:
+        painter.setFont(small); painter.drawText(area.adjusted(0,0,0,-area.height()+height),Qt.AlignCenter,caption)
+        area.adjust(0,height,0,0)
+    if detail:
+        painter.setFont(small); painter.drawText(area.adjusted(0,area.height()-height,0,0),Qt.AlignCenter,detail)
+        area.adjust(0,0,0,-height)
+    painter.setFont(countdown_font(max(1,point_size*scale))); painter.drawText(area,Qt.AlignCenter,text)
 
 
 class CountdownOverlay(QWidget):
@@ -90,7 +106,7 @@ class CountdownOverlay(QWidget):
                          Qt.WindowDoesNotAcceptFocus)
         self.owner = owner  # Deliberately not a Qt parent: a hidden Hub must not hide the HUD.
         self.setObjectName("CountdownOverlay")
-        self.setWindowTitle("Gaming Hub countdown")
+        self.setWindowTitle("Keep Improving countdown")
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
         self.setAttribute(Qt.WA_TransparentForMouseEvents)
@@ -103,6 +119,7 @@ class CountdownOverlay(QWidget):
         self.preview = False
         self.opacity = .72
         self.color='#ffffff'
+        self.caption=''; self.detail=''
         self._raised_at = 0
         self._native_styles()
 
@@ -116,12 +133,17 @@ class CountdownOverlay(QWidget):
                 raise OSError("Could not make the countdown non-interactive")
         return hwnd
 
-    def present(self, remaining, total, settings, screen, preview=False, warning=None):
-        font_state=(settings.overlay_font_size,self.logicalDpiY())
+    def present(self, remaining, total, settings, screen, preview=False, warning=None,timer=None):
+        caption=str(timer.label(self.owner.t)) if timer else ''
+        detail=str(timer.secondary(self.owner.t)) if timer else ''
+        reserved=re.sub(r'\d{2,}:\d{2}(?::\d{2})?$','00:00:00',detail)
+        font_state=(settings.overlay_font_size,self.logicalDpiY(),caption,reserved)
         if getattr(self,'_font_state',None)!=font_state:
             self._font_state=font_state; self.font_size=settings.overlay_font_size
             self.timer_font=countdown_font(self.font_size)
-            self.setFixedSize(countdown_size(self.font_size,self)); self.update()
+            self.setFixedSize(countdown_size(self.font_size,self,caption,detail)); self.update()
+        if (self.caption,self.detail)!=(caption,detail):
+            self.caption=caption; self.detail=detail; self.update()
         if warning is None: warning=total>=settings.warning_seconds
         color=hex_color(settings.overlay_color_warning if warning else settings.overlay_color_normal)
         state = (max(0, math.ceil(remaining)), warning, preview, settings.overlay_opacity,color)
@@ -152,18 +174,18 @@ class CountdownOverlay(QWidget):
         painter.setPen(color)
         seconds = self.seconds
         text = f"{seconds//3600:02d}:{seconds%3600//60:02d}:{seconds%60:02d}"
-        painter.setFont(self.timer_font)
-        painter.drawText(self.rect(), Qt.AlignCenter, text)
+        draw_countdown(painter,self.rect(),self.font_size,text,self.caption,self.detail,device=self)
 
 
 class PositionPicker(QWidget):
     positionChanged = Signal(float, float)
 
-    def __init__(self, x, y, screen, font_size=25):
+    def __init__(self, x, y, screen, font_size=25,translate=None):
         super().__init__()
         self.x_ratio, self.y_ratio = x, y
         self.screen = screen
         self.font_size=font_size
+        self.translate=translate
         self.text_color='#ffffff'
         self.game_background=None
         self.dragging = False
@@ -184,10 +206,13 @@ class PositionPicker(QWidget):
         return monitor.adjusted(margin_x, margin_y, -margin_x, -margin_y)
 
     def hud_size(self):
-        key=(self.font_size,self.logicalDpiY())
+        caption,detail=self.hud_labels(); key=(self.font_size,self.logicalDpiY(),caption,detail)
         if getattr(self,'_size_key',None)!=key:
-            self._size_key=key; self._hud_size=countdown_size(self.font_size,self)
+            self._size_key=key; self._hud_size=countdown_size(self.font_size,self,caption,detail)
         return self._hud_size
+
+    def hud_labels(self):
+        return (str(self.translate('Break in')),str(self.translate('Daily budget left: {time}',time='01:00:00'))) if self.translate else ('','')
 
     def pixel_limits(self):
         geometry=self.screen.geometry(); size=self.hud_size()
@@ -249,9 +274,8 @@ class PositionPicker(QWidget):
         painter.drawRect(hud)
         painter.setPen(QColor(self.text_color))
         scale=monitor.width()/max(1,self.screen.geometry().width())
-        painter.setFont(countdown_font(max(1,self.font_size*scale)))
         painter.setClipRect(hud)
-        painter.drawText(hud, Qt.AlignCenter, '00:20:00')
+        draw_countdown(painter,hud,self.font_size,'00:20:00',*self.hud_labels(),scale=scale,device=self)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:

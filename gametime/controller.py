@@ -162,7 +162,10 @@ class MonitorActions:
         updates=getattr(self,'updates',None)
         if updates:
             items.insert(3,(6,self.t('Update {version} available',version=updates.available.version) if updates.available else 'Check for updates'))
+        timers=getattr(self,'timer_menu_items',None)
+        if timers: items=timers()+[None]+items
         choice = self.tray.popup_menu([(item[0], self.t(item[1])) if item else None for item in items])
+        if choice>=1000 and getattr(self,'open_timer',lambda choice:False)(choice): return
         if choice==6 and updates:
             updates.open(); return
         action = {1: self.show, 2: self.open_games, 3: self.settings_dialog,
@@ -325,15 +328,24 @@ class MonitorActions:
                 self.catalog_changed()
 
 
-    def restriction_reached(self, day=None, game=None):
+    def restriction_reached(self, day=None, game=None, path='', identity=None):
+        from .restriction_policy import legacy_active,legacy_restriction_active
+        from . import budget_access
         wall=day if isinstance(day,datetime) else datetime.now().astimezone()
         self.tracker.configure_budget(wall)
         day=period_day(wall,reset_clock(self.settings)) if day is None or isinstance(day,datetime) else day
-        settings=day_settings(self.settings,day)
-        totals=self.tracker.quota_day_totals(day)
-        shared=settings.game_budget_enabled and 'shared-games' not in settings.restriction_plans and settings.restriction_enabled and sum(totals.values())>=settings.restriction_seconds
-        cap=self.settings.game_limits.get(game.id) if game and self.catalog.enabled(game) and 'game:'+game.id not in settings.restriction_plans else None
-        return shared or (cap is not None and totals.get(game.id,0)>=cap)
+        from .quota import budget_day
+        settings=day_settings(self.settings,budget_day(self.settings,'shared-games',wall) if day==period_day(wall,reset_clock(self.settings)) else day)
+        totals=self.tracker.quota_totals(wall) if day==period_day(wall,reset_clock(self.settings)) else self.tracker.quota_day_totals(day)
+        runtime=getattr(self,'restrictions',None)
+        def granted(key):
+            if not runtime or not path or not identity: return False
+            from .focus import app_key
+            value=runtime.state.grant(key,'app:'+app_key(path),identity)
+            return bool(value and runtime.state.now<value['until'])
+        shared=settings.game_budget_enabled and budget_access.active(settings,'shared-games',wall) and budget_access.usage_enabled(settings,'shared-games') and legacy_active(settings.restriction_plans,'shared-games') and settings.restriction_enabled and sum(totals.values())>=settings.restriction_seconds and not granted('shared-games')
+        cap=self.settings.game_limits.get(game.id) if game and self.catalog.enabled(game) and legacy_restriction_active(settings.restriction_plans,'game:'+game.id) else None
+        return shared or (cap is not None and budget_access.active(settings,'game:'+game.id,wall) and budget_access.usage_enabled(settings,'game:'+game.id) and self.tracker.game_quota_total(wall,game.id)>=cap and not granted('game:'+game.id))
 
     def launch_restricted(self, game):
         if not self.catalog.enabled(game): return False
@@ -342,11 +354,14 @@ class MonitorActions:
         if wellbeing:
             from .focus import app_key
             atom=(game.id,app_key(self.store.launch_executable(game.id)),'')
-            if any(state.rule['id'] not in self.settings.restriction_plans and state.rule['enforce'] and not state.remaining for state in wellbeing.states(datetime.now().astimezone(),atom)): return True
+            from .restriction_policy import legacy_active
+            if any(state.usage_limit and legacy_active(self.settings.restriction_plans,state.rule['id']) and state.rule['enforce'] and state.used>=state.rule['seconds'] for state in wellbeing.states(datetime.now().astimezone(),atom)): return True
             runtime=getattr(self,'restrictions',None)
             if runtime:
                 runtime.prepare(datetime.now().astimezone())
-                return any(runtime.state.action(key,'app:'+atom[1]) for key in runtime.matching(atom))
+                # A save grant belongs to an already-running process; it must
+                # not authorize a new launch of the same executable.
+                return any(runtime.state.action(key,'app:'+atom[1],'') for key in runtime.matching(atom))
         return False
 
     def restriction_notice(self):
@@ -357,7 +372,7 @@ class MonitorActions:
     def enforce_gameplay(self, current):
         self._restriction_reminder_only=False
         game = self.catalog.resolve(current.path)
-        if not current.interactive or not self.restriction_reached(current.wall, game):
+        if not current.interactive or not self.restriction_reached(current.wall, game, current.path, current.identity):
             self._restriction_grace = None
             return False
         if not game or not current.identity or current.identity != self.tracker.identity:

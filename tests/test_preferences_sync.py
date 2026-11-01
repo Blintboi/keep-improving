@@ -42,6 +42,27 @@ class PreferenceSyncTests(unittest.TestCase):
         self.assertEqual(one,two); self.assertEqual(self.stores[0].db.total_changes,before)
         self.assertNotIn(GROUP,str(one.get('preferences',{})))
 
+    def test_computer_warning_days_sync_separately_from_legacy_schedules(self):
+        from gametime.preferences_sync import values,WARNING_DAYS
+        settings=replace(self.stores[0].settings(),bedtime_enabled=True,
+            daily_schedules={'0':{'bedtime_warning_enabled':False,'bedtime_minute':30},
+                             '1':{'bedtime_warning_enabled':True}},
+            weekend_schedule={'bedtime_warning_enabled':False},weekend_enabled=True).validate()
+        self.stores[0].save_settings(settings)
+        wire=values(self.stores[0]); self.assertEqual(wire[WARNING_DAYS]['daily'],{'0':False,'1':True})
+        self.assertNotIn('bedtime_warning_enabled',wire['settings.daily_schedules']['0'])
+        self.assertNotIn('bedtime_warning_enabled',wire['settings.weekend_schedule'])
+        self.transfer(0,1); saved=self.stores[1].settings()
+        self.assertEqual(saved.daily_schedules,settings.daily_schedules)
+        self.assertEqual(saved.weekend_schedule,settings.weekend_schedule)
+        self.assertTrue(saved.weekend_enabled)
+        self.transfer(1,0)
+        self.stores[0].save_settings(replace(self.stores[0].settings(),
+            daily_schedules={'0':{'bedtime_minute':30}},weekend_schedule={}))
+        self.transfer(0,1); saved=self.stores[1].settings()
+        self.assertEqual(saved.daily_schedules,{'0':{'bedtime_minute':30}})
+        self.assertEqual(saved.weekend_schedule,{})
+
     def test_focus_and_per_game_preferences_follow_the_game_not_usage(self):
         self.focus[0].configure(replace(self.focus[0].settings,work=40,block_sites=['example.com']))
         self.stores[0].set_enabled('steam:42',False); self.stores[0].set_hidden('steam:42',True)
@@ -58,6 +79,17 @@ class PreferenceSyncTests(unittest.TestCase):
         self.transfer(1,0)
         self.assertTrue(self.stores[0].overrides()['steam:42'])
         self.assertNotIn('steam:42',self.stores[0].hidden_ids())
+
+    def test_game_reset_times_follow_portable_game_preferences(self):
+        settings=replace(self.stores[0].settings(),budget_reset_overrides={
+            'shared-games':360,'game:steam:42':480,'local-activity':540})
+        self.stores[0].save_settings(settings)
+        self.transfer(0,1)
+        self.assertEqual(self.stores[1].settings().budget_reset_overrides,
+                         {'shared-games':360,'game:steam:42':480})
+        self.stores[0].save_settings(replace(settings,budget_reset_overrides={'local-activity':540}))
+        self.transfer(0,1)
+        self.assertEqual(self.stores[1].settings().budget_reset_overrides,{})
 
     def test_invalid_preferences_do_not_replace_local_values(self):
         before=read(self.stores[1],key(GROUP))

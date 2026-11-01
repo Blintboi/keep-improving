@@ -106,6 +106,42 @@ class Store:
                             (json.dumps(config, ensure_ascii=False),))
         self.observe_preferences(settings)
 
+    def overview_view(self):
+        """Local view choices; independent of editable and synchronized settings."""
+        defaults={'combine':False,'category':'all','period':'week','scope':'all',
+                  'detail_scope':'all','custom_start':'','custom_end':'','selected_day':'','search':''}
+        row=self.db.execute("SELECT value FROM settings WHERE key='overview_view'").fetchone()
+        try: value=json.loads(row[0]) if row else {}
+        except (TypeError,ValueError): value={}
+        if not isinstance(value,dict): value={}
+        if type(value.get('combine')) is bool: defaults['combine']=value['combine']
+        if value.get('category') in ('all','games','apps','websites'): defaults['category']=value['category']
+        if value.get('period') in ('today','yesterday','week','month','calendar','custom'): defaults['period']=value['period']
+        for name in ('scope','detail_scope'):
+            item=value.get(name)
+            if isinstance(item,str) and 0<len(item)<=128 and '\0' not in item: defaults[name]=item
+        search=value.get('search')
+        if isinstance(search,str) and len(search)<=32767 and '\0' not in search: defaults['search']=search
+        day=value.get('selected_day')
+        try:
+            if isinstance(day,str) and day and date.fromisoformat(day).isoformat()==day: defaults['selected_day']=day
+        except ValueError: pass
+        try:
+            start,end=value.get('custom_start',''),value.get('custom_end','')
+            from .statistics import date_range
+            date_range(start,end)
+            defaults.update(custom_start=start,custom_end=end)
+        except (ValueError,TypeError):
+            if defaults['period']=='custom': defaults['period']='week'
+        return defaults
+
+    def save_overview_view(self,**changes):
+        value=self.overview_view(); value.update(changes)
+        raw=json.dumps(value,ensure_ascii=False,separators=(',',':'))
+        with self.db:
+            self.db.execute("INSERT INTO settings (key,value) VALUES ('overview_view',?) "
+                            "ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE value!=excluded.value",(raw,))
+
     def observe_preferences(self,settings=None):
         """Only active linked profiles maintain a local preference revision."""
         settings=settings or self.settings()
@@ -207,6 +243,13 @@ class Store:
             plans=config.get('restriction_plans',{})
             if 'game:'+old_id in plans:
                 plans.setdefault('game:'+new_id,plans.pop('game:'+old_id)); changed=True
+            resets=config.get('budget_reset_overrides',{})
+            if 'game:'+old_id in resets:
+                resets.setdefault('game:'+new_id,resets.pop('game:'+old_id)); changed=True
+            for field in ('budget_active_days','budget_usage_limits'):
+                values=config.get(field,{})
+                if 'game:'+old_id in values:
+                    values.setdefault('game:'+new_id,values.pop('game:'+old_id)); changed=True
             if changed: self.db.execute("UPDATE settings SET value=? WHERE key='config'",(json.dumps(config,ensure_ascii=False),))
         if self.db.execute("SELECT 1 FROM sqlite_master WHERE name='restriction_state'").fetchone():
             from .restriction_policy import remap_state
@@ -220,6 +263,26 @@ class Store:
             self.db.executemany('INSERT INTO wellbeing_usage VALUES (?,?,?,?,?) ON CONFLICT(day,game_id,app,site) '
                                 'DO UPDATE SET seconds=seconds+excluded.seconds',[(day,new_id,app,site,seconds) for day,app,site,seconds in rows])
             self.db.execute('DELETE FROM wellbeing_usage WHERE game_id=?',(old_id,))
+        if self.db.execute("SELECT 1 FROM sqlite_master WHERE name='independent_budget_usage'").fetchone():
+            old_key='quota:game:'+old_id; new_key='quota:game:'+new_id
+            clock=self.db.execute('SELECT minute FROM independent_budget_clock WHERE budget=?',(old_key,)).fetchone()
+            if clock:
+                self.db.execute('INSERT OR IGNORE INTO independent_budget_clock VALUES (?,?)',(new_key,clock[0]))
+                self.db.execute('DELETE FROM independent_budget_clock WHERE budget=?',(old_key,))
+            rows=list(self.db.execute('SELECT budget,day,item,seconds FROM independent_budget_usage'))
+            for budget,day,item,seconds in rows:
+                new_budget=new_key if budget==old_key else budget
+                if budget.startswith('quota:'): new_item=new_id if item==old_id else item
+                else:
+                    try:
+                        atom=json.loads(item)
+                        if isinstance(atom,list) and len(atom)==3 and atom[0]==old_id:
+                            atom[0]=new_id; new_item=json.dumps(atom,ensure_ascii=False)
+                        else: new_item=item
+                    except (ValueError,TypeError): new_item=item
+                if (new_budget,new_item)==(budget,item): continue
+                self.db.execute('DELETE FROM independent_budget_usage WHERE budget=? AND day=? AND item=?',(budget,day,item))
+                self.db.execute('INSERT INTO independent_budget_usage VALUES (?,?,?,?) ON CONFLICT(budget,day,item) DO UPDATE SET seconds=seconds+excluded.seconds',(new_budget,day,new_item,seconds))
         for table in ('usage', 'budget_usage'):
             rows = list(self.db.execute(f"SELECT day,seconds FROM {table} WHERE game_id=?", (old_id,)))
             self.db.executemany(f"INSERT INTO {table} VALUES (?,?,?) ON CONFLICT(day,game_id) "
@@ -251,8 +314,12 @@ class Store:
         with self.db:
             self.db.execute("INSERT OR REPLACE INTO settings VALUES (?,?)", ('launch_exe:' + game_id, str(path)))
 
-    def add_usage(self, entries, budget_entries=None):
+    def add_usage(self, entries, budget_entries=None, independent_entries=None):
         with self.db:
+            if independent_entries:
+                self.db.executemany('''INSERT INTO independent_budget_usage VALUES (?,?,?,?)
+                    ON CONFLICT(budget,day,item) DO UPDATE SET seconds=seconds+excluded.seconds''',
+                    [(*key,seconds) for key,seconds in independent_entries.items()])
             self.db.executemany("INSERT INTO usage VALUES (?,?,?) ON CONFLICT(day,game_id) "
                                 "DO UPDATE SET seconds=seconds+excluded.seconds",
                                 [(day, gid, seconds) for (day, gid), seconds in entries.items()])

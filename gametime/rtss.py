@@ -121,21 +121,25 @@ def start_server(server):
         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,env=environment)
 
 
-def countdown(remaining, warning, opacity, font_size=25,normal_color='#ffffff',warning_color='#ff5c65'):
+def countdown(remaining, warning, opacity, font_size=25,normal_color='#ffffff',warning_color='#ff5c65',*,caption='',detail=''):
     seconds = max(0, math.ceil(remaining))
     alpha = round(max(.25, min(1, opacity)) * 255)
     color=hex_color(warning_color if warning else normal_color)[1:].upper()
     # RTSS 7.3.7 FNT font override and ARGB color, per its installed SDK.
     height=round(font_size*96/72)
-    return (f"<FNT=Consolas,-{height},700,1><C={alpha:02X}{color}>"
-            f"{seconds // 3600:02d}:{seconds % 3600 // 60:02d}:{seconds % 60:02d}<C>")
+    if caption or detail:
+        from .rtss_timer import countdown as timer_countdown
+        return timer_countdown(remaining,font_size,'#'+color,opacity,caption,detail)
+    return (f'<C={alpha:02X}{color}><FNT=Consolas,-{height},700,1>'
+            f'{seconds // 3600:02d}:{seconds % 3600 // 60:02d}:{seconds % 60:02d}<C>')
 
 
-def native_position(x, y, width, height, font_size=25):
+
+def native_position(x, y, width, height, font_size=25,size=None):
     # RTSS negative coordinates anchor the corresponding edge of the entire OSD.
     return tuple(round(16 + max(0, length - padding) * ratio) if ratio <= .5 else
                  -round(16 + max(0, length - padding) * (1-ratio))
-                 for ratio,length,padding in ((x,width,32+168*font_size/25),(y,height,32+42*font_size/25)))
+                 for ratio,length,padding in ((x,width,32+(size[0] if size else 168*font_size/25)),(y,height,32+(size[1] if size else 42*font_size/25))))
 
 
 def position_profile(server, executable, x, y, *, consented=False):
@@ -379,7 +383,7 @@ class Backend:
                         if self.stopping or self._generation!=generation or self.state != state: continue
                     if position is not None:
                         dimensions=self.resolutions.get(identity,position[2:4])
-                        coordinates_native=native_position(position[0],position[1],*dimensions,position[4] if len(position)>4 else 25)
+                        coordinates_native=native_position(position[0],position[1],*dimensions,position[4] if len(position)>4 else 25,position[5] if len(position)>5 else None)
                         if self.positions.get(key)!=coordinates_native:
                             if key in self.approved: position_profile(server,executable,*coordinates_native,consented=True)
                             else: position_profile(server,executable,*coordinates_native)

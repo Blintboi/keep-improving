@@ -48,7 +48,7 @@ class FocusPage(QWidget):
         title.addWidget(button(t('Edit list'),self.rules_dialog,'quiet')); rules_box.addLayout(title)
         status=QHBoxLayout(); self.mode_label=label('','muted'); status.addWidget(self.mode_label,1)
         self.connection=label('','muted'); status.addWidget(self.connection)
-        status.addWidget(button(t('Browser connection'),self.browser_dialog,'quiet')); rules_box.addLayout(status)
+        rules_box.addLayout(status)
         self.rule_tabs=QTabWidget(); self.block_lists={}
         for kind,name in (('site','Websites'),('app','Applications')):
             container=QWidget(); container_box=QVBoxLayout(container); container_box.setContentsMargins(12,12,12,12); container_box.setSpacing(8); container_box.setAlignment(Qt.AlignTop)

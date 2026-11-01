@@ -47,9 +47,9 @@ class GamePreviewTests(unittest.TestCase):
         with patch('gametime.qt_ui.running_window',return_value=target) as find,patch('gametime.qt_ui.win32.sample',return_value=current),patch.object(self.app,'rtss_available',return_value=True),patch.object(self.app.rtss,'present',return_value=True) as present:
             self.app.preview_game_overlay(settings)
             find.assert_called_once_with(self.app.catalog,self.games[0].id); target.activate.assert_called_once()
-            self.assertIn('12AB34',present.call_args.args[2]); self.assertEqual(self.app._overlay_backend,'rtss')
+            self.assertEqual(self.rtss_renderer.call_args.args[2],'#12AB34'); self.assertEqual(self.app._overlay_backend,'rtss')
             self.assertEqual(self.app._overlay_identity,''); self.assertFalse(self.app.overlay.isVisible())
-            self.app._overlay_game_preview_state='warning'; self.app.update_overlay(); self.assertIn('BC56EF',present.call_args.args[2])
+            self.app._overlay_game_preview_state='warning'; self.app.update_overlay(); self.assertEqual(self.rtss_renderer.call_args.args[2],'#BC56EF')
             target.matches.return_value=False
             with patch.object(self.app.rtss,'hide') as hide:
                 self.app.update_overlay(); hide.assert_called_once(); self.assertEqual(self.app._overlay_preview_until,0)
@@ -74,7 +74,7 @@ class GamePreviewTests(unittest.TestCase):
             self.app.preview_game_overlay(replace(self.app.settings,overlay_color_normal='#aabbcc'))
             self.assertEqual(present.call_args.args[2].overlay_color_normal,'#aabbcc')
             self.app._overlay_preview_until=0; self.app.update_overlay()
-            self.assertEqual(present.call_args.args[:2],(7077,123)); self.assertEqual(present.call_args.args[2].overlay_color_normal,'#112233')
+            self.assertEqual(present.call_args.args[:2],(5877,123)); self.assertEqual(present.call_args.kwargs['timer'].total,7077); self.assertEqual(present.call_args.args[2].overlay_color_normal,'#112233')
             self.assertIsNone(self.app._overlay_preview_target)
 
     def test_hung_capture_has_one_worker_and_bounded_shutdown(self):

@@ -46,7 +46,9 @@ the explicit detected-application chooser queries the local item index on demand
 from countdown appearance. It uses the existing quota-period per-game totals,
 including prior consumption, with the same reset schedule and no extra ledger or
 polling. Caps can be exchanged through the encrypted preferences snapshot;
-consumption remains local. `gameplay_budget` bounds the overlay by the
+the shared game budget and per-game caps add the active group's last imported
+daily game totals to local consumption without changing local history or exports.
+Other activity budgets and restriction plans remain local. `gameplay_budget` bounds the overlay by the
 shared allowance, game allowance and opted-in bedtime cap. Hub/tray shared time
 retains its existing meaning; game cards add an independent remaining-time line.
 The game menu and Settings open `qt_game_limits`, which saves only edited games
@@ -309,9 +311,9 @@ Popup alerts are marked delivered only after they become visible. Its independen
 
 Only during interactive account sign-in, an ephemeral loopback callback listens on 127.0.0.1. There is no persistent local server, administrator service or kernel hook. Optional multi-PC statistics exchange uses the encrypted relay. The default desktop overlay does not inject into games. The optional, separately installed RTSS component provides its own in-game rendering for tracked foreground games. Unknown standalone games outside known roots require explicit assignment rather than a whole-drive EXE scan.
 
-`statistics_sync.py` keeps imported daily measurements in separate SQLite tables keyed by connection group and computer UUID. Tracking, alert thresholds, restrictions and overlay totals continue to read only `usage`. Each computer exports only its local history as a complete versioned snapshot, never imported data. A newer snapshot transactionally replaces that computer's prior rows; repeated or stale revisions are ignored. Launcher IDs remain stable across computers, and manual/standalone titles use a normalized source/title key. The statistics page can select local, all linked or one remote computer and uses the selected computers' earliest monitoring date for averages.
+`statistics_sync.py` keeps imported daily measurements in separate SQLite tables keyed by connection group and computer UUID. The game budget combines the local quota totals with cached remote daily game totals from the active group; warnings, restrictions and overlays share that calculation. Each computer exports only its local history as a complete versioned snapshot, never imported data. A newer snapshot transactionally replaces that computer's prior rows; repeated or stale revisions are ignored. Launcher IDs remain stable across computers, and manual/standalone titles use a normalized source/title key. The statistics page can select local, all linked or one remote computer and uses the selected computers' earliest monitoring date for averages.
 
-`statistics_cloud.py` exchanges compressed AES-256-GCM snapshots over HTTPS with the Supabase Edge Function in `sync_backend`. A random 128-bit connection code derives separate encryption and authorization keys with domain-separated HMAC-SHA-256; only the authorization key is transmitted. The server selects a group using its SHA-256 hash, stores opaque ciphertext, and has no code/encryption key. Per-device revisions are decimal strings on the wire to retain 64-bit precision in JavaScript. Unchanged snapshots are not reuploaded and known remote revisions are omitted. Only the GUI thread prepares snapshots or applies queue results to SQLite; network I/O and authenticated bounded decompression run in a daemon worker. Invalid responses retain the cache, redirects are refused, configuration generations discard retired results, and shutdown has a bounded join. Protocol v2 runs once at startup and on tracked foreground game, application or website transitions, plus manual requests. A one-shot timer combines nearby transitions after 60 quiet seconds and waits out a shared ten-minute per-computer guard or server Retry-After. The guard is cached in memory and persisted in SQLite across restarts/code changes; there is no periodic network timer or automatic error retry. Ciphertext format and associated data remain v1 so existing codes/caches remain compatible. Daily application and website aggregates and supported preference registers are optional fields in the encrypted snapshot; older clients ignore them. Imports stay separate from local usage and are not republished. Browser time is allocated per computer when aggregating activities. Application block/exclusion paths can be included, but account credentials, per-game consent, local folders, launch metadata and monitor names remain local. Legacy folder codes remain usable only for cached history and require a new opt-in internet code. SQLite is always local.
+`statistics_cloud.py` exchanges compressed AES-256-GCM snapshots over HTTPS with the Supabase Edge Function in `sync_backend`. A random 128-bit connection code derives separate encryption and authorization keys with domain-separated HMAC-SHA-256; only the authorization key is transmitted. The server selects a group using its SHA-256 hash, stores opaque ciphertext, and has no code/encryption key. Per-device revisions are decimal strings on the wire to retain 64-bit precision in JavaScript. Unchanged snapshots are not reuploaded and known remote revisions are omitted. Only the GUI thread prepares snapshots or applies queue results to SQLite; network I/O and authenticated bounded decompression run in a daemon worker. Invalid responses retain the cache, redirects are refused, configuration generations discard retired results, and shutdown has a bounded join. Protocol v2 runs at startup and on tracked foreground transitions, plus manual requests; while a game remains active, successful exchanges schedule another. A one-shot timer coalesces transitions and waits out the ten-minute per-computer guard or server Retry-After. The guard persists across restarts and the service's request quotas still apply. Ciphertext format and associated data remain v1 so existing codes/caches remain compatible. Daily application and website aggregates and supported preference registers are optional fields in the encrypted snapshot; older clients ignore them. Imports stay separate from local usage and are not republished. Browser time is allocated per computer when aggregating activities. Application block/exclusion paths can be included, but account credentials, per-game consent, local folders, launch metadata and monitor names remain local. Legacy folder codes remain usable only for cached history and require a new opt-in internet code. SQLite is always local.
 
 `preferences_sync.py` tracks changes per field with logical clocks and device IDs, merging independent changes deterministically. Related warning/limit and bedtime fields are grouped to retain valid combinations; per-game settings use the same cross-device identity as statistics. It stages remote changes until no settings drafts or dialogs are being edited, then validates the complete result before updating the local profile. Preference metadata rides on existing sync snapshots and does not schedule extra network requests. Local time consumption and activity history never enter preference synchronization.
 
@@ -424,28 +426,38 @@ changes reuse them. Empty messages and white/red defaults retain old behavior.
 Personalization remains in local settings; current encrypted snapshots can also
 include message text and colors. Diagnostics expose only a message count.
 
-### Universal day boundary
+### Statistics day and independent budget boundaries
 
 `Settings.budget_reset_minute` defines one local start time for every day (00:00
 by default). The per-page gear menus expose a single “Day starts at” dialog.
-Game, application and website intervals, shared and per-game allowances, focus
-completions and daily reminder keys use this boundary. Today/yesterday and live
+Game, application and website history, focus completions and daily reminder keys
+use this boundary, as do budgets without their own reset. Today/yesterday and live
 statistics use the same logical date. Legacy weekday reset overrides remain
-readable but no longer override the universal time; weekday limits still apply.
+readable; weekday limits still apply.
 Bedtime and scheduled messages retain their wall-clock times, with weekday
 plans selected by the shared day. Settings edits preserve consumed allowances
 and delivered reminders. Existing daily history is not re-bucketed because it
-contains no interval timestamps. The encrypted preferences payload reuses its
-existing field; no server schema or history payload change is needed.
+contains no interval timestamps. `budget_periods.py` stores buffered per-budget
+counters when an override is used, carrying current consumption and markers when
+the clock changes. Restriction state and activity warnings use the budget's own
+logical day. Encrypted statistics snapshots optionally carry bounded game quota
+period totals and portable reset preferences; activity rules remain local. Old
+peers without period data contribute all overlapping daily totals conservatively
+until upgraded. The server continues to store encrypted opaque snapshots.
 
 ### Multi-stage restrictions (2.35.0)
+
+All new budget action selectors use one Restriction choice, including site-only budgets. The site-only editor stores the compatible `cover` action; applications use `restrict`, which closes immediately when allowance is zero or consumed and otherwise offers the existing one-time save prompt. Saved legacy actions remain readable without automatic destructive migration.
+
+Budget countdowns reuse the appearance dialog through `BudgetCountdownTargets`. Dialog Save writes only the current budget draft; budget Save commits it, and cancellation restores its prior appearance. Shared-game appearance uses the global fields, individual games use `game_overlays`, and activity budgets use `counter_overlays` plus the rule's overlay flag. Optional per-budget `overlay_rtss_auto` is supported by the game and counter profiles; activity-specific styles retain precedence. RTSS profile preparation considers enabled game budgets, keeps existing consent checks and does no new periodic work. Non-game countdowns retain the desktop renderer.
 
 `restriction_policy` validates local per-budget plans and owns the SQLite ledger
 for expiry, delivered warnings and the once-per-logical-day save allowance.
 Grant transactions recheck consumption under an immediate transaction. Game
-identity merges and day-boundary edits preserve consumed rights. Custom plans
-replace only the corresponding budget's legacy enforcement; focus remains
-independent. `qt_restrictions` reuses the foreground sampler and existing game
+identity merges and day-boundary edits preserve consumed rights. Existing custom
+plans retain their legacy-replacement behavior; newly created plans retain legacy
+enforcement unless it is removed. Legacy individual-game enforcement can be removed independently of its existing alert; existing activity-rule enforcement stays unchanged until its action is removed. Focus remains independent. New action blocks trigger after an absolute amount of accumulated use, even before the budget expires. Existing expiry-relative offsets retain their original semantics until explicitly converted. Applications have one new restriction action with a configurable save allowance; existing action kinds retain their behavior. Recurring break steps start only while their budget has time remaining, including its optional bedtime cap. They persist their next use threshold and active wall-clock deadline, carry across day boundaries and restarts, and remain independent of saving. A simultaneous regular restriction takes precedence and its save grant is honored while the break continues. Save grants bind to the exact process identity and can cross renewal. `qt_restriction_steps` edits and sorts blocks inline; opening or cancelling the editor does not migrate legacy settings.
+`qt_restrictions` reuses the foreground sampler and existing game
 countdown renderers. Closures run off the GUI thread and bind to a verified
 process handle. `restriction_audio` owns target Core Audio session mutes in a
 short-lived child; pipe EOF restores them when the GUI exits or crashes.
@@ -456,3 +468,14 @@ accepts domain/token allowance requests, queued to the GUI thread for SQLite
 access. DNR grants are scoped to the requesting tab and domain, and never bypass
 another active budget or focus policy. See the [restriction guide](docs/RESTRICTION-PLAN.hu.md)
 for behavior, fullscreen fallback and native audio/anti-cheat limitations.
+
+Website break steps may instead send the affected tab to a user-selected HTTP(S)
+destination or, when the field is empty, the browser's new-tab page. The extension retains the original URL only in session storage and
+allows the exact destination only in that tab and only when no independent rule
+blocks it. During the redirect it reports the active budget key alongside the
+domain; disjoint wellbeing atoms exclude that one budget while the ordinary
+activity statistics and other budgets continue to count the destination.
+
+The Overview stores its display, activity, period, computer, selected-day and list-search preferences in a separate local SQLite settings record. Explicit changes are saved without rewriting the application configuration or scheduling synchronization; search typing is debounced and flushed on exit. Relative periods are resolved against the current logical day at startup.
+
+The website activity list owns the browser-connection entry point. Individual and shared budget editors show usage and an editable daily renewal time directly, without a separate options disclosure. The same local browser bridge continues to serve activity measurement and focus rules.

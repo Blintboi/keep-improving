@@ -10,6 +10,7 @@ from .qt_translation import QCheckBox
 from .notification_text import KINDS,notification_text
 from .schedule import day_settings,week_plans
 from .budget import quota_plan
+from .restriction_policy import legacy_warning_active
 
 TITLES=dict(zip(KINDS,('Before the daily limit','Daily limit reached',
                        'Playing again after the limit','Bedtime reminder')))
@@ -50,6 +51,8 @@ class NotificationsPage(QWidget):
                 text=notification_text(night,kind)
             else:
                 enabled=settings.game_budget_enabled and (kind=='warning' or settings.limit_popup_enabled)
+                enabled=enabled and (legacy_warning_active(settings.restriction_plans,'shared-games') if kind=='warning'
+                                     else 'shared-games' not in settings.restriction_plans)
                 if kind=='session': timing=t('When playing again after reaching the daily limit')
                 else:
                     field='warning_seconds' if kind=='warning' else 'limit_seconds'

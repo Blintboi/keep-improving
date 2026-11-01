@@ -195,4 +195,4 @@ class PersonalReminderInterfaceTests(unittest.TestCase):
         for total,color in ((10,'12AB34'),(6000,'BC56EF')):
             self.app.tracker.cache[current.wall.date().isoformat()]={self.games[0].id:total}
             with patch.object(self.app,'rtss_available',return_value=True),patch('gametime.qt_ui.win32.sample',return_value=current),patch.object(self.app.rtss,'present',return_value=True) as present:
-                self.app.update_overlay(); self.assertIn(color,present.call_args.args[2])
+                self.app.update_overlay(); self.assertEqual(self.rtss_renderer.call_args.args[2],'#'+color)

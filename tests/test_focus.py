@@ -201,3 +201,26 @@ class BrowserBridgeTests(unittest.TestCase):
         self.assertTrue(self.post()['active'])
         self.focus.pause(1); self.bridge.update(self.focus.policy())
         self.assertFalse(self.post()['active'])
+
+    def test_break_redirect_only_excludes_a_matching_current_destination(self):
+        self.bridge.update({'active':False,'restrictions':[{'key':'web','kind':'redirect',
+                            'redirect_url':'https://rest.example.com/'}]})
+        data={'browser':'brave','domain':'rest.example.com','focused':True,'private':False,'redirect_budget':'web'}
+        self.post(data)
+        self.assertEqual(self.bridge.website(r'C:\Brave\brave.exe'),'rest.example.com')
+        self.assertEqual(self.bridge.redirect_budget(r'C:\Brave\brave.exe'),'web')
+        self.post(dict(data,domain='other.example.com'))
+        self.assertEqual(self.bridge.redirect_budget(r'C:\Brave\brave.exe'),'')
+        self.post(dict(data,private=True))
+        self.assertEqual(self.bridge.redirect_budget(r'C:\Brave\brave.exe'),'')
+
+    def test_cached_worker_gets_blocking_compatibility_without_changing_modern_grants(self):
+        policy={'active':False,'block':['dormant.example.com'],'allow':[],'mode':'allowlist',
+                'restrictions':[{'key':'clock','kind':'cover','domains':['example.com'],'minutes':3,'grant':None}]}
+        self.bridge.update(policy)
+        legacy=self.post(); self.assertTrue(legacy['active']); self.assertEqual(legacy['block'],['example.com'])
+        self.assertEqual(legacy['mode'],'blocklist'); self.assertGreater(legacy['remaining'],0)
+        modern=self.post({'browser':'brave','domain':'example.com','focused':True,'private':False,'restriction_version':1})
+        self.assertEqual(modern,policy)
+        policy['restrictions'][0]['grant']={'subject':'site:example.com:token','until':9999999999}
+        self.bridge.update(policy); self.assertFalse(self.post()['active'])

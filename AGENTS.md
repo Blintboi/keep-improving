@@ -55,6 +55,15 @@ foreground time accounting, warning/restriction responsiveness, synchronization
 and upgrade durability when optimizing. Avoid repeatedly rebuilding unchanged
 widgets or reading the catalog for a hidden window.
 
+# Interface consistency
+
+Make every new or changed interface fit the application's existing visual style,
+language and interaction patterns. Prefer familiar, user-friendly placement and
+behavior for navigation, actions and dialogs. Use the application's styled
+components for confirmations, keep destructive actions clear and cancellable,
+and visually check changed interfaces with representative window sizes and
+both supported languages when relevant.
+
 # Statistics service
 
 Use the existing Supabase **Game Monitor** project `jtvdbqwmejrckjejjrdl` on its

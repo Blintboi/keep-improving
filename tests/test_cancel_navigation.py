@@ -131,5 +131,22 @@ class CancelNavigationTests(unittest.TestCase):
         next(b for b in window.findChildren(QPushButton) if b.text()==app.t('Back')).click()
         self.assertNotIn(window,app._dialogs)
 
+    def test_page_back_controls_stay_in_top_left_and_budget_editor_has_one(self):
+        from PySide6.QtCore import QPoint
+        app=self.app; app.show(); app.switch_page(2); self.pump(.02)
+        self.assertIs(app.settings_page.layout().itemAt(0).layout().itemAt(0).widget(),app.settings_back)
+        point=app.settings_back.mapTo(app.settings_page,QPoint(0,0))
+        self.assertLess(point.x(),80); self.assertLess(point.y(),80)
+        app.open_budget(); self.pump(.02)
+        self.assertIs(app.budget_page.layout().itemAt(0).layout().itemAt(0).widget(),app.budget_back)
+        for editing in (False,True):
+            if editing: app.budget_editor.show_editor('shared-games')
+            self.pump(.02)
+            point=app.budget_back.mapTo(app.budget_page,QPoint(0,0))
+            self.assertLess(point.x(),80); self.assertLess(point.y(),80)
+            visible=[b for b in app.budget_page.findChildren(QPushButton)
+                     if b.isVisible() and b.accessibleName()==app.t('Back without saving')]
+            self.assertEqual(visible,[app.budget_back])
+
 
 if __name__=='__main__': unittest.main()

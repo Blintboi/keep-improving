@@ -90,5 +90,58 @@ class UniversalDayTests(unittest.TestCase):
         self.assertEqual(str(current_day(self.settings,datetime(2026,10,25,0,59).astimezone())),'2026-10-24')
         self.assertEqual(str(current_day(self.settings,datetime(2026,10,25,1).astimezone())),'2026-10-25')
 
+    def test_activity_budgets_renew_independently_and_preserve_spent_time(self):
+        rule2=dict(self.settings.wellbeing_rules[0],id='other',name='Other')
+        self.catalog.settings=replace(self.settings,wellbeing_rules=[self.settings.wellbeing_rules[0],rule2],
+                                      budget_reset_overrides={'web':120,'other':180})
+        start=datetime(2026,10,31,1,59,59)
+        for i in (0,1,2):
+            self.engine.tick(Sample(start+timedelta(seconds=i),i,self.browser,'fixture'),'example.com')
+        self.assertEqual([state.used for state in self.engine.states(start+timedelta(seconds=2))],[1,2])
+        self.engine.flush()
+        restored=Wellbeing(self.store,self.catalog,self.focus)
+        self.assertEqual([state.used for state in restored.states(start+timedelta(seconds=2))],[1,2])
+        self.catalog.settings=replace(self.catalog.settings,budget_reset_overrides={'web':240,'other':180})
+        self.assertEqual([state.used for state in restored.states(start+timedelta(seconds=2))],[1,2])
+        self.assertEqual([state.used for state in restored.states(start.replace(hour=4,minute=1))],[0,0])
+
+    def test_game_and_shared_quota_renew_independently_without_changing_history(self):
+        self.store.upsert([self.game]); self.catalog.games[self.game.id]=self.game
+        self.catalog.settings=replace(self.settings,game_limits={self.game.id:600},
+                                      budget_reset_overrides={'shared-games':120,'game:'+self.game.id:180})
+        start=datetime(2026,10,31,1,59,59); end=start+timedelta(seconds=2)
+        self.tracker._credit(self.game,start,end,2); self.tracker.flush()
+        self.assertEqual(self.tracker.quota_totals(end)[self.game.id],1)
+        self.assertEqual(self.tracker.game_quota_total(end,self.game.id),2)
+        self.assertEqual(self.store.totals('2026-10-31')[self.game.id],2)
+        restored=Tracker(self.store,self.catalog)
+        self.assertEqual(restored.quota_totals(end)[self.game.id],1)
+        self.assertEqual(restored.game_quota_total(end,self.game.id),2)
+
+    def test_disabled_activity_rule_keeps_counting_for_later_reenable(self):
+        rule=dict(self.settings.wellbeing_rules[0],enabled=False)
+        self.catalog.settings=replace(self.settings,wellbeing_rules=[rule],budget_reset_overrides={'web':120})
+        start=datetime(2026,10,31,2,0)
+        for i in (0,1,2):
+            self.engine.tick(Sample(start+timedelta(seconds=i),i,self.browser,'fixture'),'example.com')
+        self.assertEqual(self.engine.states(start+timedelta(seconds=2)),[])
+        self.catalog.settings=replace(self.catalog.settings,wellbeing_rules=[dict(rule,enabled=True)])
+        self.assertEqual(self.engine.states(start+timedelta(seconds=2))[0].used,2)
+
+    def test_break_landing_is_still_in_statistics_but_not_its_own_budget(self):
+        other=dict(self.settings.wellbeing_rules[0],id='other',name='Other')
+        self.catalog.settings=replace(self.settings,wellbeing_rules=[self.settings.wellbeing_rules[0],other],
+                                      budget_reset_overrides={'web':120})
+        start=datetime(2026,10,31,3,0)
+        for i in (0,1,2):
+            sample=Sample(start+timedelta(seconds=i),i,self.browser,'fixture')
+            self.focus.tick(sample,'rest.example.com'); self.engine.tick(sample,'rest.example.com','web')
+        self.focus.flush(); self.engine.flush()
+        self.assertEqual([state.used for state in self.engine.states(sample.wall)],[0,2])
+        self.assertEqual([state.rule['id'] for state in self.engine.states(sample.wall,self.engine.current[1],exclude='web')],['other'])
+        self.assertEqual(sum(row[3] for row in self.focus.usage('2026-10-31') if row[0]=='site'),2)
+        restored=Wellbeing(self.store,self.catalog,self.focus)
+        self.assertEqual([state.used for state in restored.states(sample.wall)],[0,2])
+
 
 if __name__=='__main__': unittest.main()

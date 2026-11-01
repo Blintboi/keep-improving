@@ -48,8 +48,8 @@ class BudgetFirstInterfaceTests(unittest.TestCase):
         self.assertEqual(editor.selector.count(),0); self.assertEqual(editor.stack.currentIndex(),2)
         self.assertNotIn('countdown',self.app.settings_shortcuts)
         self.app.open_budget(member=target('app',r'C:\Apps\editor.exe'))
-        self.assertEqual(editor.selector.count(),1); self.assertFalse(editor.appearance.isVisible())
-        editor.overlay.setChecked(False); self.assertFalse(editor.appearance.isVisible())
+        self.assertEqual(editor.selector.count(),1); self.assertTrue(editor.appearance.isVisible())
+        editor.overlay.setChecked(False); self.assertTrue(editor.appearance.isVisible())
         self.app.open_budget(member=target('category','sites'))
         self.assertEqual(editor.selector.count(),2)
 
@@ -68,8 +68,7 @@ class BudgetFirstInterfaceTests(unittest.TestCase):
         self.app.open_budget(member=target('site','example.com')); identity=editor.current
         self.app.save_budgets(); editor.show_editor(identity)
         targets=CountdownTargets(self.app); self.assertEqual(len(targets.rows()),1)
-        editor.enabled.setChecked(False); self.app.save_budgets(); targets.refresh(); self.assertEqual(targets.rows(),[])
-        editor.show_editor(identity); editor.remove_current(); self.app.save_budgets(); targets.refresh(); self.assertEqual(targets.rows(),[])
+        editor.remove_budget(identity); self.app.save_budgets(); targets.refresh(); self.assertEqual(targets.rows(),[])
         self.assertEqual(targets.edited,set())
 
     def test_game_is_added_explicitly_and_group_members_share_one_budget(self):

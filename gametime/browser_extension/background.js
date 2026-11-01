@@ -5,11 +5,28 @@ let blockedTabs = {};
 const restored = chrome.storage.session.get('blockedTabs').then(data => { blockedTabs = data.blockedTabs || {}; });
 async function saveBlocked() { await chrome.storage.session.set({blockedTabs}); }
 function grantTabs() { return Object.entries(blockedTabs).map(([id, r]) => ({tabId: Number(id), host: r.host, token: r.token})); }
+function redirectGrants() { return Object.entries(blockedTabs).filter(([,r]) => r.redirect_url)
+  .map(([id,r]) => ({tabId:Number(id),host:r.host,token:r.token,url:r.redirect_url})); }
+function atRedirectDestination(record, url) {
+  if (!record || typeof record.redirect_url !== 'string' || !url) return false;
+  if (record.redirect_url==='') {
+    try {
+      const value=new URL(url);
+      return value.protocol==='about:' && value.pathname==='newtab' ||
+        ['chrome:','brave:','edge:'].includes(value.protocol) && ['newtab','new-tab-page'].includes(value.hostname);
+    } catch { return false; }
+  }
+  try { return new URL(url).href === new URL(record.redirect_url).href; } catch { return false; }
+}
+function isRedirectLanding(record, url) {
+  if (!atRedirectDestination(record,url)) return false;
+  return !!redirectTarget({host:record.host,token:record.token,url:record.redirect_url},policy);
+}
 
 async function setPolicy(next) {
   policy = next;
   leaseUntil = Date.now() + Math.max(0, next.lease_seconds || next.remaining || 0) * 1000;
-  const rules = focusRules({...next, tabGrants: grantTabs()});
+  const rules = focusRules({...next, tabGrants: grantTabs(), redirectGrants: redirectGrants()});
   const key = JSON.stringify(rules);
   if (key === signature) return;
   const old = await chrome.declarativeNetRequest.getSessionRules();
@@ -49,29 +66,46 @@ async function sync() {
     }
     const tab = await activeTab();
     const host = publicHost(tab);
+    const landing=tab && blockedTabs[tab.id];
+    const redirectBudget=isRedirectLanding(landing,tab?.url) ? siteDecision(landing.host,policy,landing.token).redirect_key : '';
     const response = await fetch(`http://127.0.0.1:${pairing.port}/activity`, {
       method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(3000),
       headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + pairing.token},
-      body: JSON.stringify({browser, domain: policy.tracking ? host : '', focused: !!tab, private: !!tab?.incognito, idle: braveNewTab(tab, browser)})
+      body: JSON.stringify({browser, restriction_version: 1, domain: policy.tracking ? host : '', focused: !!tab, private: !!tab?.incognito,
+        idle: braveNewTab(tab, browser), redirect_budget: policy.tracking ? redirectBudget || '' : ''})
     });
     if (!response.ok) throw new Error('Connection unavailable');
     await setPolicy(await response.json());
+    if (redirectBudget && !isRedirectLanding(landing,tab?.url)) rerun = true;
     await chrome.action.setBadgeText({text: policy.active ? 'LIMIT' : ''});
     // Include matching background media tabs; re-read before each mutation.
     for (const candidate of await chrome.tabs.query({})) {
       const recordBefore = blockedTabs[candidate.id];
+      if (isRedirectLanding(recordBefore,candidate.url)) continue;
       const blockedPage = candidate.url?.startsWith(chrome.runtime.getURL('blocked.html'));
-      const host = publicHost(candidate) || (blockedPage ? recordBefore?.host : '');
+      const fromRedirect=atRedirectDestination(recordBefore,candidate.url) &&
+        !!siteDecision(recordBefore.host,policy,recordBefore.token).kind;
+      const host = fromRedirect ? recordBefore.host : publicHost(candidate) || (blockedPage ? recordBefore?.host : '');
       if (!host || candidate.incognito) continue;
       let record = recordBefore;
       if (!record || record.host !== host) record = {host, url: candidate.url, token: crypto.randomUUID().replaceAll('-', '')};
       const decision = siteDecision(host, policy, record.token);
-      if (!decision.kind || blockedPage && decision.kind !== 'close') continue;
+      if (!decision.kind || blockedPage && decision.kind !== 'close' && decision.kind !== 'redirect') continue;
       const current = await chrome.tabs.get(candidate.id).catch(() => null);
       if (!current || current.url !== candidate.url || current.incognito) continue;
+      let target='';
+      if (decision.kind === 'redirect') {
+        target=redirectTarget({host:record.host,token:record.token,url:decision.redirect_url},policy);
+        if (target) record.redirect_url=decision.redirect_url;
+        else delete record.redirect_url;
+      } else delete record.redirect_url;
       blockedTabs[current.id] = record; await saveBlocked();
       if (decision.kind === 'close') await chrome.tabs.remove(current.id);
-      else await chrome.tabs.update(current.id, {url: chrome.runtime.getURL('blocked.html') + '?key=' + record.token});
+      else if (target) {
+        await setPolicy(policy);
+        await chrome.tabs.update(current.id, {url: target});
+        if (current.id === tab?.id) rerun = true;
+      } else if (!blockedPage) await chrome.tabs.update(current.id, {url: chrome.runtime.getURL('blocked.html') + '?key=' + record.token});
     }
     await chrome.storage.session.set({connected: true, lastContact: Date.now()});
   } catch {
@@ -104,6 +138,7 @@ chrome.webNavigation.onBeforeNavigate.addListener(async details => {
   const host = publicHost({...tab, url: details.url});
   if (!host) return;
   const previous = blockedTabs[details.tabId];
+  if (isRedirectLanding(previous,details.url)) return;
   if (siteDecision(host, policy, previous?.token || '').kind) {
     blockedTabs[details.tabId] = {host, url: details.url,
       token: previous?.host === host ? previous.token : crypto.randomUUID().replaceAll('-', '')};

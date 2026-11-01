@@ -30,12 +30,12 @@ from .qt_widgets import (NoWheelComboBox as QComboBox,NoWheelDoubleSpinBox as QD
 from .qt_statistics import StatisticsPage
 from .focus import Focus, BROWSERS, app_key, SHELLS
 from .qt_focus import FocusPage
-from .overlay import CountdownOverlay,PositionPicker,choose_screen,foreground_screen_name
+from .overlay import CountdownOverlay,PositionPicker,choose_screen,foreground_screen_name,countdown_size
 from .rtss import Backend as RTSSBackend, countdown as rtss_countdown, installation as rtss_installation
 from .statistics_sync import StatisticsData
 from .statistics_cloud import CloudSyncWorker,SERVICE_URL,SYNC_COOLDOWN
 from .statistics_auth import AuthWorker
-from .schedule import day_settings,game_settings,any_countdown,bedtime_occurrence,DayScheduleError,DAY_NAMES
+from .schedule import day_settings,game_settings,any_countdown,any_rtss_countdown,bedtime_occurrence,DayScheduleError,DAY_NAMES
 from .budget import remaining_budget,quota_plan,game_remaining,gameplay_budget
 from .quota import reset_clock,period_day,reset_at,current_day
 from .sound import play_notification
@@ -43,6 +43,8 @@ from .game_preview import SnapshotWorker,running_window
 from .qt_game_preview import background_controls
 from .wellbeing import Wellbeing
 from .qt_wellbeing_runtime import WellbeingActions
+from .qt_timers import TimerActions
+from .timer_view import TimerView,tooltip as timer_tooltip
 from .game_safety import policy as safety
 from .overlay_consent import Consents,MinimizeConsents,display_reason as overlay_reason
 
@@ -135,7 +137,7 @@ class AlertDialog(QDialog):
         if self.owner.popup_window is self: self.owner.popup_window=self.owner.popup_day=None
         event.accept()
 
-class App(QMainWindow,MonitorActions,WellbeingActions):
+class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
     shutdown=Signal()
 
     def __init__(self,store,data_dir,background=False,service=None,hub=None,updates=False):
@@ -188,7 +190,7 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
         self.rtss=RTSSBackend(self.data_dir); self._overlay_backend='none'; self._overlay_identity=''; self._overlay_updated=0
         self._rtss_publishing=False; self._rtss_checked=0; self._rtss_available=False
         self._rtss_consent_paths=frozenset(); self._rtss_consent_attempt=None
-        if self.settings.overlay_rtss_auto: self.rtss.protect()
+        if any_rtss_countdown(self.settings): self.rtss.protect()
         self.overlay_timer=QTimer(self); self.overlay_timer.setInterval(200); self.overlay_timer.timeout.connect(self.update_overlay)
         self.assets_timer=QTimer(self); self.assets_timer.setInterval(1000); self.assets_timer.timeout.connect(self.poll_assets)
         self._build(); dark_window(self)
@@ -220,6 +222,7 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
         timer.timeout.connect(fire); timer.start(milliseconds); return timer
 
     def _build(self,state=None):
+        if hasattr(self,'statistics'): self.statistics.flush_view()
         state=state or {}; self.cards={}; self.last_rows=None
         surface=QWidget(); surface.setObjectName('Surface'); row=QHBoxLayout(surface); row.setContentsMargins(0,0,0,0); row.setSpacing(0)
         rail=QFrame(); rail.setObjectName('Rail'); rail.setFixedWidth(196)
@@ -240,11 +243,6 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
         side.addWidget(self.language)
         row.addWidget(rail)
         right=QVBoxLayout(); right.setContentsMargins(0,0,0,0); right.setSpacing(0)
-        self.restriction_banner=QFrame(); self.restriction_banner.setStyleSheet('QFrame {background:#45232b; border:0;}')
-        banner_layout=QHBoxLayout(self.restriction_banner); banner_layout.setContentsMargins(30,12,24,12)
-        self.restriction_label=label(); self.restriction_label.setWordWrap(True); self.restriction_label.setStyleSheet('color:#ffc5cc;')
-        banner_layout.addWidget(self.restriction_label,1); banner_layout.addWidget(button(self.t('Settings'),self.settings_dialog))
-        right.addWidget(self.restriction_banner); self.restriction_banner.hide()
         self.bedtime_banner=QFrame(); self.bedtime_banner.setStyleSheet('QFrame {background:#382b45; border:0;}')
         bedtime_row=QHBoxLayout(self.bedtime_banner); bedtime_row.setContentsMargins(30,12,24,12)
         bedtime_note=label(self.t('Bedtime: eligible foreground windows are minimized every 10 seconds. Protected games require separate minimization consent. Change this in Settings.'))
@@ -271,8 +269,9 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
         self.search.setText(state.get('query','')); self.sort.setCurrentIndex(self.sort.findData(state.get('sort','name')))
         self.statistics.start.setText(state.get('start',self.statistics.start.text())); self.statistics.end.setText(state.get('end',self.statistics.end.text()))
         self.statistics._range=(self.statistics.start.text(),self.statistics.end.text())
-        self.statistics.selected_day=state.get('day')
-        self.statistics.scope=state.get('statistics_scope','all')
+        if 'day' in state: self.statistics.selected_day=state['day']
+        if 'statistics_scope' in state:
+            self.statistics.scope=self.statistics._requested_scope=state['statistics_scope']
         self.pages.setCurrentIndex(0 if state.get('page')==3 else state.get('page',1))
         for i,item in self.nav.items(): item.setChecked(i==self.pages.currentIndex())
 
@@ -422,6 +421,11 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
             self.statistics_data.defer_sync(SYNC_COOLDOWN)
             self._sync_event_pending=False; self.statistics_event_timer.stop()
             self.tracker.flush()
+            now=datetime.now().astimezone()
+            for key in self.settings.budget_reset_overrides:
+                if key=='shared-games' or key.startswith('game:'):
+                    self.tracker.quota_totals(now,key)
+            self.tracker.flush()
             snapshot=self.statistics_data.snapshot(self.settings.statistics_sync_group,self.settings.statistics_device_name)
             self._sync_busy=self.statistics_sync.request(SERVICE_URL,self.settings.statistics_sync_group,snapshot,
                                                        self.statistics_data.revisions(self.settings.statistics_sync_group))
@@ -470,6 +474,10 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
             if not warning: self._sync_success_at=datetime.now().strftime('%Y-%m-%d %H:%M')
             if self._sync_event_pending and not self.statistics_event_timer.isActive():
                 self.schedule_statistics_event()
+            elif self.tracker.active and not warning:
+                # Refresh the shared game allowance during a continuous session,
+                # using the existing service cooldown and request limits.
+                self.schedule_statistics_event()
             if changed and self.isVisible() and not self.isMinimized() and self.pages.currentIndex()==1: self.statistics.refresh(live=True)
             if changed and self.isVisible() and not self.isMinimized() and self.pages.currentIndex()==0: self.refresh_activity_lists()
             self.update_statistics_sync_status()
@@ -503,6 +511,7 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
             if not changed: return
             previous_language=self.settings.language
             self.settings=self.catalog.settings=self.store.settings()
+            self.renewal_settings_changed(previous_settings,self.settings)
             from .qt_day_start import apply_day_start
             apply_day_start(self,previous_settings)
             self.catalog.overrides=self.store.overrides(); self.hidden_ids=self.store.hidden_ids()
@@ -561,6 +570,11 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
         self.activity_categories['game'].setChecked(True); layout.addLayout(categories)
         self.activity_pages=QStackedWidget(); layout.addWidget(self.activity_pages,1)
         games_page=QWidget(); game_layout=QVBoxLayout(games_page); game_layout.setContentsMargins(0,0,0,0); self.activity_pages.addWidget(games_page)
+        self.restriction_banner=QFrame(); self.restriction_banner.setStyleSheet('QFrame {background:#45232b; border:0;}')
+        banner_layout=QHBoxLayout(self.restriction_banner); banner_layout.setContentsMargins(20,12,20,12)
+        self.restriction_label=label(); self.restriction_label.setWordWrap(True); self.restriction_label.setStyleSheet('color:#ffc5cc;')
+        banner_layout.addWidget(self.restriction_label,1); banner_layout.addWidget(button(self.t('Settings'),self.settings_dialog))
+        game_layout.addWidget(self.restriction_banner); self.restriction_banner.hide()
         from .qt_activities import ActivityList
         self.activity_lists={kind:ActivityList(self,kind) for kind in ('app','site')}
         for listing in self.activity_lists.values(): self.activity_pages.addWidget(listing)
@@ -615,8 +629,8 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
 
     def _build_settings(self):
         page=QWidget(); outer=QVBoxLayout(page); outer.setContentsMargins(32,25,32,22); outer.setSpacing(16)
-        header=QHBoxLayout(); heading=label(self.t('Settings'),'title'); heading.setToolTip('Keep Improving '+__version__); header.addWidget(heading,1)
-        self.settings_back=back_button(self.t,self.cancel_general_settings); header.addWidget(self.settings_back); outer.addLayout(header)
+        header=QHBoxLayout(); self.settings_back=back_button(self.t,self.cancel_general_settings); header.addWidget(self.settings_back)
+        heading=label(self.t('Settings'),'title'); heading.setToolTip('Keep Improving '+__version__); header.addWidget(heading,1); outer.addLayout(header)
         shortcuts=QHBoxLayout(); shortcuts.setSpacing(6); self.settings_shortcuts={}
         for key,title in (('reminders','Reminders'),('games','Game folders'),('other','Updates and sync')):
             item=button(self.t(title),lambda checked=False,k=key:self.show_settings_section(k),'section-link')
@@ -676,12 +690,13 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
 
     def _build_budget_page(self):
         page=QWidget(); layout=QVBoxLayout(page); layout.setContentsMargins(32,25,32,22); layout.setSpacing(18)
-        heading=QHBoxLayout(); heading.addWidget(label(self.t('Time budgets'),'title'),1); heading.addWidget(self.page_settings_button('budgets')); layout.addLayout(heading)
+        heading=QHBoxLayout(); self.budget_back=back_button(self.t,self.cancel_budget_settings); heading.addWidget(self.budget_back)
+        self.budget_editor.back_button=self.budget_back
+        heading.addWidget(label(self.t('Time budgets'),'title'),1); heading.addWidget(self.page_settings_button('budgets')); layout.addLayout(heading)
         scroll=QScrollArea(); scroll.setWidgetResizable(True); self.budget_scroll=scroll
         body=QWidget(); content=QVBoxLayout(body); content.setContentsMargins(0,0,8,0)
         content.addWidget(self.budget_editor); content.addStretch(); scroll.setWidget(body); layout.addWidget(scroll,1)
         footer=QHBoxLayout(); self.budget_error=label('','danger'); self.budget_error.setWordWrap(True); footer.addWidget(self.budget_error,1)
-        self.budget_back=back_button(self.t,self.cancel_budget_settings); footer.addWidget(self.budget_back)
         footer.addWidget(button(self.t('Save changes'),self.save_budgets,'primary')); layout.addLayout(footer)
         return page
 
@@ -741,7 +756,7 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
         self.overlay_details=Disclosure(self.t('Position and appearance'))
         self.overlay_controls=QWidget(); controls=QVBoxLayout(self.overlay_controls); controls.setContentsMargins(0,4,0,0); controls.setSpacing(10)
         fields=QHBoxLayout(); fields.addWidget(label(self.t('Monitor'),'muted')); self.overlay_screen=QComboBox(); fields.addWidget(self.overlay_screen,1); controls.addLayout(fields)
-        self.overlay_picker=PositionPicker(self.settings.overlay_x,self.settings.overlay_y,QApplication.primaryScreen(),self.settings.overlay_font_size)
+        self.overlay_picker=PositionPicker(self.settings.overlay_x,self.settings.overlay_y,QApplication.primaryScreen(),self.settings.overlay_font_size,translate=self.t)
         self.overlay_picker.setAccessibleName(self.t('Countdown position'))
         self.overlay_screen.currentIndexChanged.connect(self.overlay_screen_changed)
         self.refresh_overlay_screens()
@@ -921,7 +936,7 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
         active=getattr(self,'_fullscreen_alert',None)
         if active: active.finish()
         self.hide_countdown(); self.rtss.hide(); self.rtss.failed_paths.clear()
-        if not self.settings.overlay_rtss_auto: self.rtss.cancel_preparation()
+        if not any_rtss_countdown(self.settings): self.rtss.cancel_preparation()
         self._fullscreen_retry=None; self._rtss_checked=0
         self.prepare_rtss_profiles(); self.update_overlay()
         self.notifications_page.refresh()
@@ -952,14 +967,18 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
 
     def prepare_rtss_profiles(self,keys=None):
         self.refresh_rtss_consent()
-        if self.closed or not any_countdown(self.settings) or not self.settings.overlay_rtss_auto or not self.rtss_available(): return
+        if self.closed or not any_countdown(self.settings) or not any_rtss_countdown(self.settings) or not self.rtss_available(): return
         paths=list(self.catalog.rules)
         for key in self.art.executables if keys is None else keys: paths.extend(self.art.executables.get(key,()))
         allowed=[]; protected=[]
         for path in dict.fromkeys(paths):
             if helper(path) or not (game:=self.catalog.resolve(path,fallback=False)): continue
             if overlay_reason(self.catalog,path,game): protected.append(path)
-            elif game_settings(self.settings,game.id).overlay_enabled: allowed.append(path)
+            else:
+                from .activities import activity_settings,matching_rules
+                member={'kind':'game','value':game.id}
+                profiles=[game_settings(self.settings,game.id),*(activity_settings(self.settings,member,r) for r in matching_rules(self.settings,member))]
+                if any(p.overlay_enabled and p.overlay_rtss_auto for p in profiles): allowed.append(path)
         self.rtss.protect(protected); self.rtss.prepare(allowed)
 
     def hide_countdown(self):
@@ -983,7 +1002,7 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
 
     def update_overlay(self):
         if self.closed or getattr(self,'_fullscreen_alert',None): return
-        preview=time.monotonic()<self._overlay_preview_until
+        preview=time.monotonic()<self._overlay_preview_until; timer_view=None
         if not preview: self._overlay_preview_target=None
         if not preview and self.tracker.active is None:
             self.update_wellbeing_overlay(); return
@@ -1033,6 +1052,7 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
                 state=getattr(self,'_overlay_game_preview_state',None) if getattr(self,'_overlay_preview_settings',None) else None
                 total=settings.warning_seconds if (state or self.overlay_preview_state.currentData())=='warning' else 0; remaining=settings.limit_seconds-total
                 warning=total>=settings.warning_seconds
+                timer_view=TimerView('preview','','break',remaining,settings.limit_seconds)
                 automatic=foreground_screen_name() if target else self.screen().name() if self.screen() else ''
             else:
                 settings=game_settings(quota_plan(self.settings,current.wall),self.tracker.active.id)
@@ -1041,13 +1061,16 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
                 if not active or not game or game.id!=active.id or current.identity!=self.tracker.identity:
                     self.hide_countdown(); return
                 totals=self.tracker.quota_totals(current.wall)
-                elapsed=0
+                elapsed=0; raw_elapsed=0
+                from .quota import budget_day
                 previous=self.tracker.previous
                 if previous and previous.identity==current.identity:
-                    elapsed=current.awake-previous.awake
-                    if not (0<elapsed<=1.5 and abs((current.wall-previous.wall).total_seconds()-elapsed)<1.5
-                            and period_day(previous.wall,reset_clock(self.settings))==period_day(current.wall,reset_clock(self.settings))): elapsed=0
-                budget=gameplay_budget(self.settings,current.wall,totals,active.id,elapsed)
+                    raw_elapsed=current.awake-previous.awake
+                    if not (0<raw_elapsed<=1.5 and abs((current.wall-previous.wall).total_seconds()-raw_elapsed)<1.5): raw_elapsed=0
+                    if budget_day(self.settings,'shared-games',previous.wall)==budget_day(self.settings,'shared-games',current.wall): elapsed=raw_elapsed
+                game_elapsed=raw_elapsed if previous and budget_day(self.settings,'game:'+active.id,previous.wall)==budget_day(self.settings,'game:'+active.id,current.wall) else 0
+                budget=gameplay_budget(self.settings,current.wall,totals,active.id,elapsed,
+                                       game_used=self.tracker.game_quota_total(current.wall,active.id),game_elapsed=game_elapsed)
                 total=sum(totals.values())+elapsed
                 remaining=budget.remaining; warning=budget.warning; automatic=foreground_screen_name()
                 member={'kind':'game','value':active.id}
@@ -1055,9 +1078,17 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
                 if states:
                     other=min(states,key=lambda value:value.remaining)
                     if other.remaining<=remaining:
-                        remaining=max(0,other.remaining-elapsed); warning=other.warning; settings=activity_settings(settings,member,other.rule)
+                        usage=max(0,other.rule['seconds']-other.used-elapsed) if other.usage_limit else math.inf
+                        remaining=min(usage,other.clock_remaining); warning=other.warning; settings=activity_settings(settings,member,other.rule)
                 save_remaining=self.restrictions.save_remaining(current.path)
                 if save_remaining is not None: remaining=save_remaining; warning=True
+                timer_view=self.overlay_timer_view(current)
+                if timer_view:
+                    if timer_view.event=='break_active': self.hide_countdown(); return
+                    remaining=timer_view.seconds
+                    warning=warning or timer_view.event=='save'
+                    rule=next((rule for rule in self.settings.wellbeing_rules if rule['id']==timer_view.key),None)
+                    if rule: settings=activity_settings(settings,member,rule)
                 if not math.isfinite(remaining): self.overlay_timer.stop(); self.hide_countdown(); return
             screen=choose_screen(settings.overlay_screen,automatic)
             attempted=(not preview or self._overlay_preview_target is not None) and settings.overlay_rtss_auto and self.rtss_available()
@@ -1067,7 +1098,8 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
                     if self._rtss_consent_attempt!=attempt:
                         self.refresh_rtss_consent((current.path,)); self._rtss_consent_attempt=attempt
                 geometry=screen.geometry(); ratio=screen.devicePixelRatio()
-                text=rtss_countdown(remaining,warning,settings.overlay_opacity,settings.overlay_font_size,settings.overlay_color_normal,settings.overlay_color_warning)
+                text=rtss_countdown(remaining,warning,settings.overlay_opacity,settings.overlay_font_size,settings.overlay_color_normal,settings.overlay_color_warning,
+                                    caption=timer_view.label(self.t) if timer_view else '',detail=timer_view.secondary(self.t) if timer_view else '')
                 # IPC can publish before its acknowledgement reaches this tick.
                 # Withdraw the desktop first; a failed receipt is not proof that
                 # the RTSS copy has disappeared.
@@ -1084,7 +1116,8 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
                     self._overlay_backend='none'; self._overlay_identity=''; self._overlay_updated=0
                     return
                 self._rtss_publishing=True
-                healthy=self.rtss.present(current.path,current.identity,text,(settings.overlay_x,settings.overlay_y,round(geometry.width()*ratio),round(geometry.height()*ratio),settings.overlay_font_size),retry=retry)
+                hud=countdown_size(settings.overlay_font_size,caption=timer_view.label(self.t) if timer_view else '',detail=timer_view.secondary(self.t) if timer_view else '')
+                healthy=self.rtss.present(current.path,current.identity,text,(settings.overlay_x,settings.overlay_y,round(geometry.width()*ratio),round(geometry.height()*ratio),settings.overlay_font_size,(hud.width(),hud.height())),retry=retry)
                 desktop_ready=self.rtss.desktop_ready
                 self.rtss_status.setText(self.t('RTSS connected' if healthy else self.rtss.error or ('RTSS unavailable; using the desktop countdown.' if desktop_ready else 'RTSS connecting…'))); self.rtss_status.show()
                 if healthy:
@@ -1103,7 +1136,7 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
                     self._overlay_backend='none'; self._overlay_identity=''; self._overlay_updated=0
                     return
             if not self.overlay: raise RuntimeError('Desktop countdown unavailable')
-            self.overlay.present(remaining,total,settings,screen,preview,warning=warning)
+            self.overlay.present(remaining,total,settings,screen,preview,warning=warning,timer=timer_view)
             self._overlay_backend='desktop'; self._overlay_identity='' if preview else current.identity; self._overlay_updated=time.monotonic()
             self.overlay_failed=False
         except Exception:
@@ -1117,7 +1150,7 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
     def save_settings(self,scope='all'):
         try:
             base=self.settings if scope=='general' else self.budget_editor.settings(self.schedule_editor.settings(self.settings))
-            values=self.overlay_values() if scope=='all' else {}
+            values={**self.overlay_values(),**self.budget_editor.shared_overlay} if scope=='all' else {}
             if scope!='budgets': values.update(games_root=self.games_path.text().strip(),
                 steam_roots=[p.strip() for p in self.paths['steam'].text().split(';') if p.strip()],
                 epic_manifest_dirs=[p.strip() for p in self.paths['epic'].text().split(';') if p.strip()],
@@ -1126,12 +1159,22 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
                 overlay_replace_warning=self.overlay_warning.isChecked(),limit_popup_enabled=self.limit_popup.isChecked(),
                 check_updates=self.updates.automatic.isChecked(),**self.sound_values())
             settings=replace(base,**values).validate()
-            self.tracker.flush(); self.store.save_settings(settings); self.settings=self.catalog.settings=settings
+            previous=self.settings
+            self.tracker.flush(); self.wellbeing.flush(); self.store.save_settings(settings); self.settings=self.catalog.settings=settings
+            self.renewal_settings_changed(previous,settings)
             if scope!='general':
+                if self.budget_editor.shared_overlay:
+                    self.overlay_enabled.setChecked(settings.overlay_enabled)
+                    self.overlay_font_size.setValue(settings.overlay_font_size); self.overlay_opacity.setValue(round(settings.overlay_opacity*100))
+                    self.overlay_picker.set_position(settings.overlay_x,settings.overlay_y)
+                    if self.overlay_screen.findData(settings.overlay_screen)<0: self.overlay_screen.addItem(settings.overlay_screen,settings.overlay_screen)
+                    self.overlay_screen.setCurrentIndex(self.overlay_screen.findData(settings.overlay_screen))
+                    self.overlay_colors={'normal':settings.overlay_color_normal,'warning':settings.overlay_color_warning}; self.update_overlay_colors()
                 self.schedule_editor.saved(settings)
                 self.budget_editor.saved(settings)
             self._wellbeing_grace=None; self._restriction_grace=None
-            self.tracker.evaluate(datetime.now().astimezone()); self.update_focus_policy()
+            self.tracker.evaluate(datetime.now().astimezone())
+            self.restrictions.prepare(datetime.now().astimezone()); self.update_focus_policy()
             if not any_countdown(settings): self.rtss.cancel_preparation()
             self.tracker.unclassified.clear(); self.tracker.previous=None; self.service.configure(settings)
             self.art.roots=list(dict.fromkeys(self.art.roots+settings.steam_roots)); self.art.invalidate(); self.art.refresh_links(settings.games_root)
@@ -1143,6 +1186,12 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
             self.update_bedtime_banner(plan.bedtime_minimize and state=='bedtime')
         except (ValueError,OSError,SQLiteError) as exc:
             self.settings_error.setText(self.t('{day}: {error}',day=self.t(DAY_NAMES[exc.day]),error=self.t(str(exc.error))) if isinstance(exc,DayScheduleError) else self.t(str(exc)))
+
+    def renewal_settings_changed(self,previous,settings):
+        for key in previous.budget_reset_overrides.keys()-settings.budget_reset_overrides.keys():
+            ledger=self.tracker.periods if key=='shared-games' or key.startswith('game:') else self.wellbeing.periods
+            ledger.forget_clock(('quota:' if key=='shared-games' or key.startswith('game:') else '')+key)
+        self.restrictions.state.days.clear(); self._wellbeing_delivered_by_day={}
 
     def budget_aliases(self,aliases):
         self.wellbeing.remap(aliases)
@@ -1182,6 +1231,9 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
             self.status_text=self.t(self.status_key,**self.status_values); self.status_label.setText(self.status_text)
             self.ring.setToolTip(self.t('Daily budget')+f': {quota_plan(self.settings).limit_seconds/60:g} '+self.t('min'))
             self.overlay_picker.setAccessibleName(self.t('Countdown position'))
+            for picker in self.findChildren(PositionPicker):
+                picker.update(); picker.positionChanged.emit(picker.x_ratio,picker.y_ratio)
+            self.update_overlay_coordinates()
             self.statistics.retranslate_report()
             self.budget_editor.collect(); self.budget_editor.refresh()
             self.focus_page.refresh(force=True)
@@ -1234,7 +1286,8 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
 
     def update_focus_policy(self):
         if self.browser_bridge:
-            policy=self.wellbeing.policy(self.focus.policy(),datetime.now().astimezone())
+            delegated=self.restrictions.delegated_website_rules() if hasattr(self,'restrictions') else ()
+            policy=self.wellbeing.policy(self.focus.policy(),datetime.now().astimezone(),delegated)
             if hasattr(self,'restrictions'): policy=self.restrictions.browser_policy(policy)
             self.browser_bridge.update(policy)
 
@@ -1245,7 +1298,9 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
         previous=self.focus.previous
         revision=self.focus.revision
         self.focus.tick(current,website)
-        self.wellbeing.tick(current,website)
+        redirect=getattr(self.browser_bridge,'redirect_budget',lambda path:'')(current.path) if self.browser_bridge else ''
+        if not isinstance(redirect,str): redirect=''
+        self.wellbeing.tick(current,website,redirect)
         if (previous and self.focus.revision != revision
                 and (app_key(previous[0].path) != app_key(current.path) or previous[1] != website)):
             # Reuse the existing debounced, rate-limited sync when tracked activity changes.
@@ -1284,7 +1339,7 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
             'overview':(('Linked statistics',self.statistics_sync_dialog),('Updates and sync',lambda:self.open_settings_section('other'))),
             'budgets':(('Reminders',lambda:self.open_settings_section('reminders')),('Notifications',lambda:self.switch_page(6))),
             'notifications':(('Reminders',lambda:self.open_settings_section('reminders')) ,),
-            'focus':(('Timer settings',lambda:self.focus_page.timer_settings()),('Edit list',lambda:self.focus_page.rules_dialog()),('Browser connection',lambda:self.focus_page.browser_dialog())),
+            'focus':(('Timer settings',lambda:self.focus_page.timer_settings()),('Edit list',lambda:self.focus_page.rules_dialog())),
         }
         for name,callback in sections[context]: menu.addAction(self.t(name),callback)
         from .qt_day_start import day_start_dialog
@@ -1514,10 +1569,7 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
             self.update_tray()
 
     def update_tray(self):
-        now=datetime.now().astimezone(); total=sum(self.tracker.totals(current_day(self.settings,now).isoformat()).values())
-        budget=remaining_budget(self.settings,now,sum(self.tracker.quota_totals(now).values()))
-        tip=self.t('Keep Improving\nToday: {total} · remaining: {remaining}\nLeft click: open · right click: menu',total=duration(total),remaining=duration(budget.remaining) if math.isfinite(budget.remaining) else self.t('No shared limit'))
-        if self.updates.available: tip=self.t('Update {version} available',version=self.updates.available.version)+'\n'+tip
+        tip=timer_tooltip(self.timer_views(wall=datetime.now().astimezone()),self.t)
         self.tray.update(tip)
 
     def render(self):
@@ -1530,10 +1582,12 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
         self.total_label.setText(duration(total)); self.remaining_label.setText(duration(budget.remaining) if math.isfinite(budget.remaining) else self.t('No shared limit'))
         tomorrow=period_day(now,reset_clock(self.settings))+timedelta(days=1)
         renewal=reset_at(tomorrow,reset_clock(self.settings)[tomorrow.weekday()],now)
-        self.remaining_label.setToolTip(self.t('Unused daily budget: {remaining}',remaining=duration(budget.quota_remaining))+'\n'+self.t('Next budget reset: {time}',time=renewal.strftime('%Y-%m-%d %H:%M')) if math.isfinite(budget.quota_remaining) else self.t('No shared limit'))
+        self.remaining_label.setToolTip((self.t('Unused daily budget: {remaining}',remaining=duration(budget.quota_remaining)) if math.isfinite(budget.quota_remaining) else self.t('No daily minute limit'))+'\n'+self.t('Next budget reset: {time}',time=renewal.strftime('%Y-%m-%d %H:%M')))
         self.remaining_reason.setText((self.t('Bedtime has started') if budget.bedtime.timestamp()<=now.timestamp() else self.t('Until bedtime at {time}',time=budget.bedtime.strftime('%H:%M'))) if budget.bedtime else '')
         self.remaining_reason.setVisible(budget.bedtime is not None)
-        self.ring.set_ratio(used/plan.limit_seconds if self.settings.game_budget_enabled else 0); self.ring.setToolTip(self.t('Daily budget')+f': {plan.limit_seconds/60:g} '+self.t('min') if self.settings.game_budget_enabled else self.t('No shared limit'))
+        from . import budget_access
+        usage_limit=self.settings.game_budget_enabled and budget_access.active(self.settings,'shared-games',now) and budget_access.usage_enabled(self.settings,'shared-games')
+        self.ring.set_ratio((used/plan.limit_seconds if plan.limit_seconds else 1) if usage_limit else 0); self.ring.setToolTip(self.t('Daily budget')+f': {plan.limit_seconds/60:g} '+self.t('min') if usage_limit else self.t('No daily minute limit'))
         self.active_label.setText(self.tracker.active.name if self.tracker.active else ''); self.active_label.setVisible(self.tracker.active is not None)
         self.active_label.setToolTip(self.t('Active game: {name}',name=self.tracker.active.name) if self.tracker.active else '')
         games={g.id:g for g in self.store.games()}; games.update(self.catalog.games); self.hidden_ids=self.store.hidden_ids()
@@ -1607,6 +1661,7 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
 
     def close(self):
         if self.closed: return
+        self.statistics.flush_view()
         self.closed=True
         self.restrictions.close()
         QApplication.instance().removeEventFilter(self.scroll_guard)
@@ -1622,6 +1677,8 @@ class App(QMainWindow,MonitorActions,WellbeingActions):
         if getattr(self,'_fullscreen_alert',None): self._fullscreen_alert.shutdown()
         self.game_snapshots.close()
         self.rtss.close()
+        from .rtss_timer import clear as clear_timer_images
+        clear_timer_images()
         self.assets_timer.stop(); self.art.close()
         for listing in self.activity_lists.values(): listing.icons.close()
         if self.client_worker: self.client_worker.close()

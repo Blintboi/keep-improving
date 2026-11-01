@@ -29,6 +29,112 @@ class StatisticsUsabilityTests(unittest.TestCase):
         self.assertTrue(page.games_table.isColumnHidden(1))
         self.assertFalse(page.games_table.isColumnHidden(2))
 
+    def restart_app(self):
+        from gametime.qt_ui import App
+        service,hub=self.app.service,self.app.hub
+        self.app.close(); self.pump(.03)
+        self.app=App(self.store,self.base,background=True,service=service,hub=hub)
+        self.app.tick_timer.stop(); self.app.switch_page(1); self.pump(.03)
+        return self.app.statistics
+
+    def test_overview_choices_survive_restart_without_saving_other_drafts(self):
+        from gametime.statistics_sync import FORMAT
+        today=date.today().isoformat(); group='ab'*16; laptop='12'*16
+        settings=replace(self.app.settings,statistics_sync_group=group,statistics_sync_enabled=False)
+        self.store.save_settings(settings); self.app.settings=self.app.catalog.settings=settings
+        self.app.statistics_data.ingest(dict(format=FORMAT,group=group,device=laptop,name='Laptop',revision=1,started=today,
+                                            rows=[[today,'remote-game','Example','Steam',60]]),group)
+        self.app.open_budget(); self.app.schedule_editor.limit.setValue(155)
+        page=self.app.statistics; self.app.switch_page(1); page.refresh()
+        page.category.setCurrentIndex(page.category.findData('games'))
+        page.period.setCurrentIndex(page.period.findData('month'))
+        page.devices.setCurrentIndex(page.devices.findData(laptop))
+        page.detail_devices.setCurrentIndex(page.detail_devices.findData('local'))
+        page.merge_duplicates.setChecked(True)
+        self.assertEqual(self.store.settings().limit_seconds,7200)
+        self.assertEqual(self.store.settings().statistics_sync_group,group)
+        self.assertEqual(self.app.schedule_editor.limit.value(),155)
+        self.app.set_language('en'); self.assertTrue(page.merge_duplicates.isChecked())
+        page=self.restart_app()
+        self.assertEqual(page.category.currentData(),'games'); self.assertEqual(page.period.currentData(),'month')
+        self.assertEqual(page.devices.currentData(),laptop); self.assertEqual(page.detail_devices.currentData(),'local')
+        self.assertTrue(page.merge_duplicates.isChecked()); self.assertEqual(len(page.report.days),30)
+        page.merge_duplicates.setChecked(False); page=self.restart_app(); self.assertFalse(page.merge_duplicates.isChecked())
+        self.assertEqual(page.category.currentData(),'games'); self.assertEqual(page.period.currentData(),'month')
+
+    def test_custom_date_range_is_saved_only_after_valid_application(self):
+        page=self.app.statistics; self.app.switch_page(1)
+        page.period.setCurrentIndex(page.period.findData('custom'))
+        page.start.setText('2026-10-01'); page.end.setText('2026-10-06'); page.apply_dates()
+        self.assertEqual(self.store.overview_view()['period'],'custom')
+        page.start.setText('2026-10-09'); page.end.setText('2026-10-02'); page.apply_dates()
+        self.assertFalse(page.error.isHidden()); saved=self.store.overview_view()
+        self.assertEqual((saved['custom_start'],saved['custom_end']),('2026-10-01','2026-10-06'))
+        page=self.restart_app(); self.assertEqual(page.period.currentData(),'custom')
+        self.assertEqual((page.start.text(),page.end.text()),('2026-10-01','2026-10-06'))
+        self.assertFalse(page.custom_range.isHidden())
+
+    def test_search_and_selected_day_survive_immediate_close(self):
+        page=self.app.statistics; self.app.switch_page(1)
+        today=date.today().isoformat(); page.choose_day(today); page.search.setText('Fixture')
+        self.assertTrue(page.search_timer.isActive())
+        page=self.restart_app()
+        self.assertEqual(page.search.text(),'Fixture'); self.assertEqual(page.selected_day,today)
+        page.show_period(); page.search.clear(); page=self.restart_app()
+        self.assertEqual(page.search.text(),''); self.assertIsNone(page.selected_day)
+
+    def test_relative_period_uses_the_current_day_after_restart(self):
+        from unittest.mock import patch
+        page=self.app.statistics; self.app.switch_page(1)
+        with patch('gametime.qt_statistics.current_day',return_value=date(2026,11,1)):
+            page.period.setCurrentIndex(page.period.findData('today'))
+            self.assertEqual(page._range,('2026-11-01','2026-11-01'))
+        with patch('gametime.qt_statistics.current_day',return_value=date(2026,11,2)):
+            page=self.restart_app()
+            self.assertEqual(page.period.currentData(),'today')
+            self.assertEqual(page._range,('2026-11-02','2026-11-02'))
+
+    def test_unavailable_computer_selection_returns_when_computer_reappears(self):
+        from gametime.statistics_sync import FORMAT
+        from unittest.mock import patch
+        today=date.today().isoformat(); group='ab'*16; laptop='12'*16
+        settings=replace(self.app.settings,statistics_sync_group=group,statistics_sync_enabled=False)
+        self.store.save_settings(settings); self.app.settings=self.app.catalog.settings=settings
+        self.app.statistics_data.ingest(dict(format=FORMAT,group=group,device=laptop,name='Laptop',revision=1,started=today,
+                                            rows=[[today,'remote-game','Example','Steam',60]]),group)
+        page=self.app.statistics; self.app.switch_page(1); page.refresh()
+        page.devices.setCurrentIndex(page.devices.findData(laptop))
+        page.detail_devices.setCurrentIndex(page.detail_devices.findData(laptop))
+        with patch.object(self.app.statistics_data,'devices',return_value=[]):
+            page.refresh(); self.assertEqual(page.devices.currentData(),'all'); self.assertEqual(page.detail_devices.currentData(),'all')
+        self.assertEqual(self.store.overview_view()['scope'],laptop)
+        page.refresh(); self.assertEqual(page.devices.currentData(),laptop); self.assertEqual(page.detail_devices.currentData(),laptop)
+        page.reset_computer_filters(); page.refresh()
+        self.assertEqual(page.devices.currentData(),'all'); self.assertEqual(page.detail_devices.currentData(),'all')
+        self.assertEqual(self.store.overview_view()['scope'],'all'); self.assertEqual(self.store.overview_view()['detail_scope'],'all')
+
+    def test_view_save_failure_reverts_checkbox_and_reports_problem(self):
+        from sqlite3 import OperationalError
+        from unittest.mock import patch
+        page=self.app.statistics; self.app.switch_page(1)
+        with patch.object(self.store,'save_overview_view',side_effect=OperationalError('fixture')):
+            page.merge_duplicates.setChecked(True)
+        self.assertFalse(page.merge_duplicates.isChecked())
+        self.assertFalse(self.store.overview_view()['combine'])
+        self.assertEqual(self.app.status_key,'Could not save the overview view. Try again.')
+
+    def test_corrupt_view_settings_fall_back_and_refresh_does_not_rewrite(self):
+        from gametime.qt_statistics import StatisticsPage
+        from unittest.mock import patch
+        with self.store.db:
+            self.store.db.execute("INSERT OR REPLACE INTO settings VALUES ('overview_view',?)",('{bad json',))
+        page=StatisticsPage(self.app)
+        self.assertFalse(page.merge_duplicates.isChecked()); self.assertEqual(page.category.currentData(),'all')
+        self.assertEqual(page.period.currentData(),'week'); page.deleteLater()
+        with patch.object(self.store,'save_overview_view') as save:
+            self.app.statistics.refresh(); self.app.set_language('en'); self.app.statistics.refresh(live=True)
+        save.assert_not_called()
+
     def test_daily_chart_stacks_three_computers_with_small_gaps(self):
         from PySide6.QtCore import QPointF,Qt
         from PySide6.QtTest import QTest
@@ -52,7 +158,8 @@ class StatisticsUsabilityTests(unittest.TestCase):
             self.assertAlmostEqual(blocks[0][0].left(),blocks[1][0].left())
             self.assertAlmostEqual(blocks[0][0].top()-blocks[1][0].bottom(),3,places=4)
             self.assertAlmostEqual(blocks[1][0].top()-blocks[2][0].bottom(),3,places=4)
-            self.assertIn('Laptop',chart.tooltip_at(blocks[1][0].center()))
+            QTest.mouseMove(chart,blocks[1][0].center().toPoint())
+            self.assertEqual(chart.toolTip(),'')
             visible_height=sum(rect.height() for rect,identity in blocks)
             self.assertAlmostEqual(blocks[0][0].bottom()-blocks[-1][0].top(),visible_height+6,places=4)
             self.assertAlmostEqual(blocks[0][0].bottom()-blocks[-1][0].top(),
@@ -161,7 +268,7 @@ class StatisticsUsabilityTests(unittest.TestCase):
     def test_custom_dates_use_themed_calendars_inside_the_window(self):
         from PySide6.QtCore import QPoint,QRect,Qt
         from PySide6.QtTest import QTest
-        from PySide6.QtWidgets import QTableView,QToolButton
+        from PySide6.QtWidgets import QTableView,QToolButton,QSpinBox,QAbstractSpinBox
         self.app.resize(1000,700); self.app.show(); self.app.switch_page(1)
         page=self.app.statistics; page.period.setCurrentIndex(page.period.findData('custom'))
         page.scroll.ensureWidgetVisible(page.start); self.pump(.1)
@@ -173,6 +280,11 @@ class StatisticsUsabilityTests(unittest.TestCase):
             self.assertTrue(bounds.contains(popup.geometry()))
             self.assertIn('#192126',calendar.styleSheet())
             self.assertEqual(calendar.findChild(QToolButton,'qt_calendar_prevmonth').text(),'‹')
+            calendar.findChild(QToolButton,'qt_calendar_yearbutton').click(); self.pump(.03)
+            year=calendar.findChild(QSpinBox)
+            self.assertEqual(year.buttonSymbols(),QAbstractSpinBox.NoButtons)
+            self.assertGreater(year.lineEdit().width(),year.fontMetrics().horizontalAdvance(year.text()))
+            QTest.keyClick(year,Qt.Key_Return); self.pump(.03)
             view=calendar.findChild(QTableView); model=view.model()
             candidates=[model.index(row,col) for row in range(model.rowCount()) for col in range(model.columnCount())
                         if str(model.data(model.index(row,col)))==str(number)]
@@ -197,8 +309,9 @@ class StatisticsUsabilityTests(unittest.TestCase):
         page.chart.resize(800,240); page.chart.grab()
         self.assertEqual(len([region for region,d,key in page.chart.segment_regions if d==day]),9)
         region=next(region for region,d,identity in page.chart.computer_regions if d==day and identity=='local')
-        tooltip=page.chart.tooltip_at(region.center())
-        for game in games: self.assertIn(game.name,tooltip)
+        from PySide6.QtTest import QTest
+        QTest.mouseMove(page.chart,region.center().toPoint())
+        self.assertEqual(page.chart.toolTip(),'')
         for row in range(page.games_table.rowCount()):
             key=page._breakdown_keys[row][0]
             self.assertEqual(page.games_table.item(row,0).foreground().color().name(),page.chart.series[key][1])

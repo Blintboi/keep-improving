@@ -23,9 +23,9 @@ class GameLimitTests(unittest.TestCase):
 
     def test_strict_validation_and_compatible_default(self):
         self.assertEqual(Settings().game_limits,{})
-        for value in ([],None,{'':60},{'x':True},{'x':0},{'x':-1},{'x':86401},{'x':float('nan')},{'x':float('inf')},{'x':'30'},{'x':{}}):
+        for value in ([],None,{'':60},{'x':True},{'x':-1},{'x':86401},{'x':float('nan')},{'x':float('inf')},{'x':'30'},{'x':{}}):
             with self.subTest(value=value),self.assertRaises(ValueError): replace(Settings(),game_limits=value).validate()
-        replace(Settings(),game_limits={'x':.6,'y':86400}).validate()
+        replace(Settings(),game_limits={'x':.6,'y':86400,'blocked':0}).validate()
 
     def test_overlay_uses_smaller_and_hub_keeps_shared_budget(self):
         totals={'fixture':600,'other':1800}
@@ -78,6 +78,21 @@ class GameLimitTests(unittest.TestCase):
         self.tracker.active=None; self.tracker.evaluate(self.now); self.assertFalse(self.tracker.alerts)
         self.tracker.active=self.game; self.tracker.evaluate(self.now); self.assertEqual(len(self.tracker.alerts),1)
         self.catalog.settings=replace(self.settings,game_limits={}); self.tracker.evaluate(self.now); self.assertFalse(self.tracker.alerts)
+
+    def test_explicit_restriction_only_plan_suppresses_old_expiry_and_session_popups(self):
+        from gametime.restriction_policy import new_plan,step
+        self.tracker.active=self.game; self.tracker.identity='fixture:creation'
+        for key,seconds in (('game:fixture',1800),('shared-games',7200)):
+            with self.subTest(budget=key):
+                self.catalog.settings=self.settings
+                self.tracker.cache['2026-10-24']={'fixture':seconds}
+                self.tracker.evaluate(self.now); self.assertTrue(self.tracker.alerts)
+                plan=new_plan(legacy=True); plan['legacy_warning']=False
+                plan['steps']=[step('cover',seconds,usage=True)]
+                self.catalog.settings=replace(self.settings,restriction_plans={key:plan})
+                self.tracker.evaluate(self.now); self.assertFalse(self.tracker.alerts)
+                self.tracker.identity='another:creation'; self.tracker.evaluate(self.now)
+                self.assertFalse(self.tracker.alerts)
 
     def test_excluded_game_does_not_emit_cap_alert(self):
         self.tracker.cache['2026-10-24']={'fixture':1800}
@@ -132,9 +147,10 @@ class GameLimitInterfaceTests(unittest.TestCase):
         with patch('gametime.qt_ui.win32.sample',return_value=sample),patch('gametime.qt_ui.foreground_screen_name',return_value=''):
             self.app.update_overlay(); self.assertEqual(self.app.overlay.seconds,1200)
             self.app.settings=self.app.catalog.settings=replace(self.app.settings,overlay_rtss_auto=True)
-            with patch.object(self.app,'rtss_available',return_value=True),patch.object(self.app.rtss,'present',return_value=True) as present:
+            from gametime.rtss import countdown
+            with patch.object(self.app,'rtss_available',return_value=True),patch.object(self.app.rtss,'present',return_value=True) as present, patch('gametime.qt_ui.rtss_countdown',wraps=countdown) as render:
                 self.app.update_overlay(); self.app._overlay_desktop_until=0; self.app.update_overlay()
-                self.assertIn('20:00',present.call_args[0][2])
+                self.assertEqual(render.call_args.args[0],1200); self.assertIn('<LI=',present.call_args[0][2])
 
     def test_only_capped_game_blocks_and_existing_grace_rechecks_before_minimizing(self):
         self.configure(); self.app.tracker.cache[self.now.date().isoformat()]={self.game.id:1800}
@@ -152,9 +168,9 @@ class GameLimitInterfaceTests(unittest.TestCase):
         self.app.limit.setValue(150)
         self.app.game_limits_dialog(self.games[0].id); editor=self.app.budget_editor
         self.assertEqual(self.app.pages.currentIndex(),5); self.assertFalse(self.app._dialogs)
-        enabled=editor.enabled; minutes=editor.minutes
-        enabled.setChecked(True); minutes.setValue(30); self.app.set_language('en')
-        self.assertEqual(minutes.value(),30); self.assertEqual(enabled.text(),'Use a daily limit')
+        minutes=editor.minutes
+        minutes.setValue(30); self.app.set_language('en')
+        self.assertEqual(minutes.value(),30)
         with patch.object(self.store,'save_settings',side_effect=OSError('fixture')):
             self.app.save_settings()
         self.assertEqual(self.store.settings().game_limits,{})
@@ -162,7 +178,7 @@ class GameLimitInterfaceTests(unittest.TestCase):
         self.assertEqual(self.store.settings().game_limits,{self.games[0].id:1800})
         self.assertEqual(self.app.limit.value(),150)
         self.app.save_settings(); self.assertEqual(self.store.settings().game_limits,{self.games[0].id:1800})
-        editor.enabled.setChecked(False); self.app.switch_page(1); self.pump(.03)
+        editor.remove_budget('game:'+self.games[0].id); self.app.switch_page(1); self.pump(.03)
         self.assertEqual(self.store.settings().game_limits,{self.games[0].id:1800})
 
     def test_excluded_game_keeps_saved_cap_but_can_launch(self):
@@ -206,7 +222,7 @@ class GameLimitInterfaceTests(unittest.TestCase):
         self.configure(); editor=self.app.budget_editor; editor.saved(self.app.settings)
         self.app.game_limits_dialog(self.game.id)
         editor.minutes.setValue(15); self.app.game_limits_dialog(self.games[1].id)
-        editor.enabled.setChecked(True); editor.minutes.setValue(45)
+        editor.minutes.setValue(45)
         self.app.settings=self.app.catalog.settings=replace(self.app.settings,game_limits={self.game.id:1800,self.games[2].id:3600})
         self.app.save_settings(); self.pump(.03)
         self.assertEqual(self.store.settings().game_limits,{self.game.id:900,self.games[1].id:2700,self.games[2].id:3600})

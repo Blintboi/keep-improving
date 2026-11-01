@@ -179,7 +179,7 @@ class BedtimeBudgetInterfaceTests(unittest.TestCase):
         with patch.object(self.app, 'rtss_available', return_value=True), patch.object(self.app.rtss, 'present', return_value=True) as present:
             self.show_overlay()
         text = present.call_args[0][2]
-        self.assertIn('00:05:00', text); self.assertIn('FF5C65>', text)
+        self.assertEqual(self.rtss_renderer.call_args.args[0],300); self.assertEqual(self.rtss_renderer.call_args.args[2],'#FF5C65'); self.assertIn('<LI=',text)
         self.assertFalse(self.app.overlay.isVisible())
 
     def test_weekly_option_supports_groups_mixed_values_save_and_language_drafts(self):

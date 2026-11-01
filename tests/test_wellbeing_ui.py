@@ -30,16 +30,18 @@ class WellbeingInterfaceTests(unittest.TestCase):
 
     def test_independent_category_and_mixed_group_drafts_save_in_one_place(self):
         editor=self.app.budget_editor; self.app.open_budget(member=target('category','apps'))
-        editor.enabled.setChecked(True); editor.minutes.setValue(90)
-        self.app.open_budget(member=target('category','sites')); editor.enabled.setChecked(True); editor.minutes.setValue(40)
+        editor.minutes.setValue(90)
+        self.app.open_budget(member=target('category','sites')); editor.minutes.setValue(40)
         members=[target('game',self.games[0].id),target('app',r'C:\Apps\editor.exe'),target('site','youtube.com')]
         self.app.open_budget(members=members); editor.name.setText('Szabadidő'); editor.minutes.setValue(25)
-        editor.enforce.setChecked(True)
+        editor.steps.add_step.click(); card=editor.steps.cards[0]
+        card.kind.setCurrentIndex(card.kind.findData('restrict')); card.consent.setChecked(True)
         self.app.set_language('en'); self.app.save_settings()
         self.assertFalse(self.app.settings_error.text())
         saved=self.store.settings(); self.assertEqual([r['seconds'] for r in saved.wellbeing_rules],[5400,2400,1500])
         self.assertEqual(saved.wellbeing_rules[-1]['members'],members)
-        self.assertEqual(saved.wellbeing_rules[-1]['name'],'Szabadidő'); self.assertTrue(saved.wellbeing_rules[-1]['enforce'])
+        self.assertEqual(saved.wellbeing_rules[-1]['name'],'Szabadidő'); self.assertFalse(saved.wellbeing_rules[-1]['enforce'])
+        self.assertEqual(saved.restriction_plans[saved.wellbeing_rules[-1]['id']]['steps'][0]['kind'],'restrict')
         editor.remove_current(); self.app.save_settings(); self.assertEqual(len(self.store.settings().wellbeing_rules),2)
 
     def test_statistics_opens_exact_local_member_and_groups_selected_rows(self):
@@ -57,8 +59,8 @@ class WellbeingInterfaceTests(unittest.TestCase):
 
     def test_disabling_shared_games_keeps_own_cap_and_does_not_crash_render_or_custom_reminder(self):
         from gametime.budget import remaining_budget,gameplay_budget
-        self.app.budget_editor.shared.setChecked(False); self.app.game_limits_dialog(self.games[0].id)
-        self.app.budget_editor.enabled.setChecked(True); self.app.budget_editor.minutes.setValue(30); self.app.save_settings()
+        self.app.budget_editor.remove_budget('shared-games'); self.app.game_limits_dialog(self.games[0].id)
+        self.app.budget_editor.minutes.setValue(30); self.app.save_settings()
         self.assertFalse(self.app.settings_error.text()); now=datetime.now().astimezone()
         self.assertTrue(math.isinf(remaining_budget(self.app.settings,now,8000).remaining))
         self.assertEqual(gameplay_budget(self.app.settings,now,{self.games[0].id:1800},self.games[0].id).remaining,0)
@@ -76,14 +78,13 @@ class WellbeingInterfaceTests(unittest.TestCase):
             minimize.assert_called_once_with(sample.path,sample.identity,consented=True)
             self.app.wellbeing_tick(replace(sample,interactive=False)); self.assertIsNone(self.app._wellbeing_grace)
 
-    def test_notifications_are_durable_and_site_rules_do_not_minimize_browser(self):
+    def test_budget_expiry_does_not_imply_a_notification_or_minimize_browser(self):
         self.configure([target('site','example.com')],enforce=True); sample=self.exhaust(r'C:\Apps\brave.exe','example.com')
         self.app.browser_bridge=Mock(); self.app.browser_bridge.website.return_value='example.com'
         with patch.object(self.app,'popup',return_value=True) as popup,patch('gametime.qt_wellbeing_runtime.win32.minimize_game') as minimize:
             for second in range(12): self.app.wellbeing_tick(replace(sample,wall=sample.wall+timedelta(seconds=second),awake=sample.awake+second))
-            popup.assert_called_once(); minimize.assert_not_called()
-            del self.app._wellbeing_alert_day
-            self.app.wellbeing_tick(sample); popup.assert_called_once()
+            popup.assert_not_called(); minimize.assert_not_called()
+            self.app.wellbeing_tick(sample); popup.assert_not_called()
         self.assertTrue(self.app.wellbeing.policy(self.app.focus.policy(),sample.wall)['active'])
 
     def test_application_countdown_uses_own_budget_without_rtss_or_foreground_transfer(self):
@@ -107,7 +108,7 @@ class WellbeingInterfaceTests(unittest.TestCase):
     def test_game_alias_remaps_pending_time_saved_rules_and_unsaved_editor(self):
         member=target('game',self.games[0].id); self.configure([member]); self.store.save_settings(self.app.settings)
         self.app.budget_editor.saved(self.app.settings); self.app.open_budget(member=member)
-        self.app.budget_editor.enabled.setChecked(True); self.app.budget_editor.minutes.setValue(25)
+        self.app.budget_editor.minutes.setValue(25)
         sample=self.exhaust(str(self.exe)); renamed=replace(self.games[0],id='steam:renamed',source='Steam')
         self.app.tracker.reconcile([renamed],lambda g:g.source=='Games')
         expected=[target('game',renamed.id)]

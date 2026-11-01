@@ -11,6 +11,20 @@ from .focus import BROWSERS, BROWSER_IDLE, domain
 from .secrets import protect, unprotect
 
 
+def compatible_policy(policy, version):
+    """Keep cached pre-action workers blocking until their extension page reloads them."""
+    if version == 1: return policy
+    entries=[item for item in policy.get('restrictions',()) if not item.get('grant') and not item.get('grant_only')]
+    if not entries: return policy
+    active=policy.get('active',False); all_sites=any(item.get('all') for item in entries)
+    return dict(policy,active=True,
+                mode='allowlist' if all_sites else policy.get('mode','blocklist') if active else 'blocklist',
+                allow=list(policy.get('allow',())) if active and not all_sites else [],
+                block=list(dict.fromkeys([*(policy.get('block',()) if active else ()),
+                                          *(host for item in entries for host in item.get('domains',()))])),
+                remaining=max(policy.get('remaining',0) if active else 0,30))
+
+
 class BrowserBridge:
     def __init__(self, store, port=47853):
         row = store.db.execute("SELECT value FROM settings WHERE key='browser_pairing'").fetchone()
@@ -78,23 +92,34 @@ class BrowserBridge:
                             bridge.requests.append((data,answer,event))
                         event.wait(2.5)
                         return self.reply(200,answer or {'ok':False})
-                    if set(data) - {'browser', 'domain', 'focused', 'private', 'idle'}: raise ValueError()
+                    if set(data) - {'browser', 'domain', 'focused', 'private', 'idle', 'redirect_budget', 'restriction_version'}: raise ValueError()
+                    version=data.get('restriction_version',0)
+                    if type(version) is not int or version not in (0,1): raise ValueError()
                     if data.get('browser') not in set(BROWSERS.values()): raise ValueError()
                     if type(data.get('focused')) is not bool or type(data.get('private')) is not bool: raise ValueError()
                     host = domain(data['domain']) if data.get('domain') else ''
                     idle=data.get('idle',False)
                     if type(idle) is not bool or idle and (data['browser']!='brave' or host): raise ValueError()
-                    if data['private']: host = ''; idle=False
+                    redirect=data.get('redirect_budget','')
+                    if not isinstance(redirect,str) or len(redirect)>2100 or '\0' in redirect: raise ValueError()
+                    if data['private']: host = ''; idle=False; redirect=''
                 except (ValueError, TypeError, KeyError, AttributeError): return self.reply(400, {})
                 with bridge.lock:
                     now = time.monotonic()
                     bridge.last_seen = now
                     # A background browser must not overwrite the foreground browser's observation.
                     if data['focused'] or data['browser'] == bridge.observation.get('browser'):
+                        if redirect:
+                            from urllib.parse import urlsplit
+                            entries=bridge.current_policy.get('restrictions',())
+                            if not any(entry.get('key')==redirect and entry.get('kind')=='redirect'
+                                       and (not host or (urlsplit(entry.get('redirect_url','')).hostname or '').rstrip('.').encode('idna').decode('ascii')==host) for entry in entries):
+                                redirect=''
                         bridge.observation = {'browser': data['browser'], 'domain': host, 'idle':idle,
-                                              'focused': data['focused'] and not data['private'], 'at': now}
+                                              'focused': data['focused'] and not data['private'], 'at': now,
+                                              'redirect_budget':redirect}
                     policy = dict(bridge.current_policy)
-                self.reply(200, policy)
+                self.reply(200, compatible_policy(policy,version))
 
         class Server(ThreadingHTTPServer):
             daemon_threads = True
@@ -127,6 +152,15 @@ class BrowserBridge:
             if (item.get('focused') and time.monotonic() - item['at'] < 20
                     and BROWSERS.get(ntpath.basename(path).lower()) == item['browser']):
                 return BROWSER_IDLE if item.get('idle',False) else item['domain']
+        return ''
+
+    def redirect_budget(self, path):
+        import ntpath
+        with self.lock:
+            item=self.observation
+            if (item.get('focused') and time.monotonic()-item['at']<20
+                    and BROWSERS.get(ntpath.basename(path).lower())==item['browser']):
+                return item.get('redirect_budget','')
         return ''
 
     @property

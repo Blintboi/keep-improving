@@ -1,5 +1,83 @@
 # Testing
 
+## 2.39.20 next-event countdowns and persistent tray timers — 2026-11-01
+
+The desktop and RTSS counter project the next configured warning, break or restriction, with the full daily allowance on a smaller second line. Tests cover repeating breaks, equal-time restriction precedence, clock deadlines, save allowances, disabled targets, redirected browser tabs, independent member appearances and foreground changes. Running breaks remain in the tray tooltip and named timer menu after leaving the activity. The native tooltip stays within its UTF-16 limit and hidden-window work reuses the existing accounting sample.
+
+Restriction-only custom budgets no longer emit an implicit expiry notification. Explicit shared/game action plans suppress the old expiry/session popups, while their configured warning steps and the visible legacy early-warning card remain independent. Regression tests also retain website blocking, one-time save dialogs and explicit sound/popup delivery.
+
+HU/EN captures verify the desktop counter and position picker. A real fullscreen Direct3D fixture verifies the RTSS counter, including Hungarian accents and visibly different text sizes. Its bounded sprite cache writes labels and digits only when appearance changes; countdown ticks only update ASCII image tags. The same fixture confirms connection without a startup delay. Temporary-profile installer and upgrade checks precede the local installation update.
+
+## 2.39.19 daily clock actions and active budget days — 2026-11-01
+
+Temporary-profile tests cover clock-only website, individual-game and shared budgets, independent renewal times, overnight selected days, disabling the minute cap even when its stored value is zero, no selected days, warning/closure boundaries, once-daily clock breaks, renewal and persistent save grants. Usage-based breaks and zero-budget blocking retain their behavior. UI tests verify save/reopen/cancel, computer-period day selection, finite countdowns and optional caps. Existing restriction, weekly schedule, wellbeing, focus, preference, navigation and budget-editor suites pass; HU/EN captures verify both window sizes and scrolled action controls.
+
+The authenticated browser bridge negotiates the action protocol. A cached old worker gets temporary blocking compatibility without activating dormant focus lists or changing modern grants. Packaged extension pages compare the local manifest and reload an outdated worker at most once per version pair, preserving pairing; Node tests exercise the actual script. Installer smoke includes selected weekdays, the disabled usage cap and a clock action in its preserved upgrade profile.
+
+## 2.39.18 browser compatibility for zero budgets — 2026-11-01
+
+Zero-minute website budgets also populate the original browser blocking protocol, including its lease, so a still-loaded 2.31.1 worker blocks an already-open website without adding an action or reloading the extension. An active focus list retains its rules; an inactive list is not accidentally activated. Saving publishes the updated budget state immediately. Tests use the authenticated loopback bridge and the archived worker from `6522494`, plus the current browser worker. Action-target checkboxes now name their warning, break or restriction behavior, with HU/EN visual checks.
+
+## 2.39.17 zero-minute daily budgets — 2026-11-01
+
+`test_zero_budgets.py` verifies zero-minute shared, individual, weekday and mixed budgets: validation and persistence, implicit immediate blocking, native cover/mute and site-only isolation, browser policy, renewal/restart, save-grant cancellation, restoring a positive limit, exclusions, and preference synchronization. All profiles are temporary. Installer smoke also retains an enabled zero-minute website budget without a saved action plan.
+
+## 2.39.16 actions for selected member types — 2026-11-01
+
+Each card shows only the native application/game and website types present in its budget. Mixed cards have separate warning flags, break modes and lengths, restriction actions and save allowances, with a shared use threshold. Existing unedited plans keep their behavior and durable identifiers. Target projections isolate warning delivery, break deadlines, action priority and redirects. Temporary-profile checks cover independent settings, disabled types, membership changes, save/cancel, strict validation and runtime warning routing. Hungarian and English captures cover single-type and mixed cards at 700 and 1100 pixels. Installer upgrade checks preserve the nested target configuration. This delivery also includes the closure save-time work described below.
+
+## 2.39.15 save time for every application closure — 2026-11-01
+
+The existing per-budget one-time save allowance is editable on explicit close cards and closing breaks as well as restrictions. Native closure offers the configured allowance before closing; zero remains immediate, and browser-tab closure is unchanged. Isolated checks cover persistence, exact process identity, one-time use, expired breaks, renewal, cancellation and automatic closure after the granted interval. A requested save-and-close interval survives a shorter break and still closes its original process at the promised deadline. Non-closing breaks remain ineligible for save time. Hungarian and English captures verify the additional controls.
+
+## 2.39.14 explicit restriction descriptions — 2026-11-01
+
+Restriction cards separately explain application/game closure and website overlays, including the one-time save allowance and zero-minute behavior. Existing legacy actions retain accurate descriptions and unchanged execution. Hungarian and English screenshots cover site and mixed budgets at 700 and 1100 pixels wide with zero and positive allowances; the existing action-editor suite checks saving and compatibility.
+
+## 2.39.13 redirect breaks in mixed budgets — 2026-11-01
+
+Redirect breaks cover and mute native application/game members while retaining website redirects and the empty-address new-tab behavior. Temporary-profile checks cover both target types in the same budget, browser-process isolation for website members, timed release, recurrence, restart/day rollover, overlapping break priorities and uninterrupted restriction save time. Hungarian and English action cards are visually checked at 700 and 1100 pixels wide.
+
+## 2.39.12 plain numeric and time inputs — 2026-11-01
+
+Number and time inputs consistently omit step buttons. A local geometry workaround preserves the styled Qt 6.12 text editor without invisible clickable button areas. Temporary-profile checks cover keyboard decimal and time-section editing, saving, resizing, text visibility and clicks at the former button position; Hungarian and English screenshots verify the padded input appearance.
+
+## 2.39.11 restore spacious action cards — 2026-11-01
+
+Restores the earlier action-card field arrangement at the user's request while retaining individual group countdown settings. Hungarian and English captures and the existing action-editor checks verify the reverted presentation.
+
+## 2.39.10 compact action fields and individual group countdowns — 2026-11-01
+
+Hungarian and English action cards were inspected at 700 and 1100 pixels wide. Temporary-profile tests cover scoped group target lists, mixed members, separate styles and RTSS settings, switching targets without losing drafts, persistence, and cancellation without losing another budget's edits. The installer checks individual activity appearance preservation too.
+
+## 2.39.9 unified website restriction and budget countdowns — 2026-11-01
+
+Temporary-profile tests cover the single website restriction choice, numeric zero in both languages, immediate app closure with zero allowance, reopening after a consumed allowance, cancellable budget appearance drafts, shared and individual RTSS settings, renderer selection, and preservation of activity-specific overrides. Budget countdown changes are checked independently from unfinished restriction edits. Hungarian and English editor captures use disposable profiles.
+
+## 2.39.4 simpler budget details and browser connection — 2026-11-01
+
+Temporary-profile Qt tests cover direct budget usage and the actual custom day-start time, the browser connection dialog from the website activity list (including an empty list), language changes, cancellation and existing restrictions. Browser policy tests pass. Budget and website pages were inspected in Hungarian and English at 1000 × 700 and at a larger window size.
+
+## 2.39.3 persistent Overview view — 2026-11-01
+
+Temporary-profile Qt tests cover immediate and debounced view persistence across app restarts, name grouping, activity, relative and custom periods, both computer filters, selected day and search, invalid input, save failure, unavailable computers, unchanged settings drafts, language changes and no view-preference writes during refresh. The installer upgrade fixture checks the separate view record. Hungarian and English screens were inspected at 1000 × 700.
+
+## 2.39.2 existing restrictions in the action list — 2026-11-01
+
+Temporary-profile tests cover removing existing activity and individual-game restrictions from the action list, cancelling edits, preserving the game limit and its alert, adding new actions, language changes and legacy behavior. The editor was inspected in Hungarian and English at 1000 × 700.
+
+## 2.39.1 breaks within the daily budget — 2026-11-01
+
+Temporary-profile tests check that repeating breaks start only before budget expiry, do not start at or after the limit even after restart, that an exhausted bedtime cap prevents a new break, and that a break already underway finishes normally.
+
+## 2.39.0 usage-based actions — 2026-11-01
+
+Temporary-profile tests cover a single action button, absolute active-use thresholds before and after the budget, repeated breaks and release across restart/day changes, legacy timing preservation and explicit conversion, save allowance before expiry, closing consent, chronological order, cancellation and the scheduled-period action chooser. Hungarian and English action cards were inspected at 1000 × 700.
+
+## 2.38.0 rebuildable budgets — 2026-11-01
+
+Temporary-profile tests cover deleting and rebuilding the shared game budget and computer-use period, independently removing and adding computer-period warning/minimization blocks, old profile defaults, and compatible synchronization of per-day warning settings. The creation dialog and computer-period editor were inspected in Hungarian and English at 1000 × 700.
+
 ## 2.35.0 staged restrictions and current screenshots — 2026-10-30
 
 - 832 Python tests across 62 modules pass. Modules run in isolated processes to

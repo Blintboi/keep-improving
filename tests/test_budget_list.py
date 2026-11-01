@@ -62,8 +62,51 @@ class BudgetListTests(unittest.TestCase):
     def test_abandoned_empty_form_and_deletion_do_not_restore_a_budget(self):
         editor=self.app.budget_editor; editor.create_new(); editor.show_list()
         self.assertEqual(editor.row_keys,['shared-games']); self.assertEqual(editor.rules,[])
-        editor.show_editor('shared-games'); editor.remove_current(); self.app.save_budgets()
+        editor.remove_budget('shared-games'); self.app.save_budgets()
         self.assertEqual(editor.row_keys,[]); self.assertFalse(self.store.settings().game_budget_enabled)
+
+    def test_rebuild_both_original_budgets_from_new_and_member_selection(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QListWidget,QDialog
+        from gametime.schedule import week_plans
+        editor=self.app.budget_editor; self.app.open_budget()
+        editor.remove_budget('shared-games'); self.app.save_budgets()
+        editor.add_button.click(); draft=editor.current
+        editor.minutes.setValue(75); editor.steps.add_step.click()
+        editor.replace_members(editor.rule(draft),[target('category','games')])
+        self.assertEqual(editor.current,'shared-games')
+        self.assertEqual(len(editor.steps.cards),1)
+        self.app.save_budgets(); saved=self.store.settings()
+        self.assertTrue(saved.game_budget_enabled); self.assertEqual(saved.limit_seconds,4500)
+        self.assertIn('shared-games',saved.restriction_plans)
+        editor.add_button.click()
+        editor.pick_members([],lambda members:editor.replace_members(editor.rule(editor.current),members))
+        window=next(w for w in self.app.findChildren(QDialog) if w.isVisible())
+        listing=window.findChild(QListWidget)
+        computer=next(listing.item(i) for i in range(listing.count()) if listing.item(i).data(Qt.UserRole)=={'kind':'computer','value':'period'})
+        computer.setCheckState(Qt.Checked)
+        next(b for b in window.findChildren(QPushButton) if b.text()==self.app.t('Use selection')).click()
+        self.assertEqual(editor.current,'computer-window'); self.app.save_budgets()
+        self.assertTrue(all(p['bedtime_enabled'] for p in week_plans(self.store.settings()).values()))
+        self.assertEqual(self.store.settings().wellbeing_rules,[])
+
+    def test_computer_warning_and_minimization_blocks_can_be_removed_and_added(self):
+        from gametime.schedule import week_plans
+        editor=self.app.budget_editor; self.app.open_budget(); editor.create_computer()
+        schedule=self.app.schedule_editor
+        self.assertFalse(schedule.computer_warning_card.isHidden())
+        remove=next(b for b in schedule.computer_warning_card.findChildren(QPushButton) if b.accessibleName()==self.app.t('Remove warning'))
+        remove.click(); self.assertTrue(schedule.computer_warning_card.isHidden())
+        from PySide6.QtWidgets import QMenu
+        schedule.add_computer_step.click(); menu=schedule.add_computer_step.findChild(QMenu)
+        menu.actions()[1].trigger(); menu.close(); self.assertFalse(schedule.computer_restriction_card.isHidden())
+        self.app.save_budgets(); plans=week_plans(self.store.settings())
+        self.assertTrue(all(not p['bedtime_warning_enabled'] and p['bedtime_minimize'] for p in plans.values()))
+        editor.show_editor('computer-window'); schedule.add_computer_step.click()
+        menu=schedule.add_computer_step.findChild(QMenu); menu.actions()[0].trigger(); menu.close()
+        remove=next(b for b in schedule.computer_restriction_card.findChildren(QPushButton) if b.accessibleName()==self.app.t('Remove restriction'))
+        remove.click(); self.app.save_budgets(); plans=week_plans(self.store.settings())
+        self.assertTrue(all(p['bedtime_warning_enabled'] and not p['bedtime_minimize'] for p in plans.values()))
 
     def test_disabled_and_long_named_rules_remain_readable_and_editable(self):
         name='A long budget name '+('abcde '*10)
@@ -73,8 +116,85 @@ class BudgetListTests(unittest.TestCase):
         self.app.resize(1020,740); self.app.open_budget(); self.pump(.04)
         self.assertEqual(set(editor.row_keys),{'shared-games','long'})
         self.assertEqual(self.app.budget_scroll.horizontalScrollBar().maximum(),0)
-        editor.show_editor('long'); self.assertFalse(editor.enabled.isChecked()); editor.enabled.setChecked(True)
+        editor.show_editor('long'); editor.minutes.setValue(22); self.app.save_budgets()
+        self.assertFalse(self.store.settings().wellbeing_rules[0]['enabled'])
+        row=next(editor.rows_layout.itemAt(i).widget() for i in range(editor.rows_layout.count()) if editor.rows_layout.itemAt(i).widget().property('budgetKey')=='long')
+        next(b for b in row.findChildren(QPushButton) if b.text()==self.app.t('Enable')).click()
         self.app.save_budgets(); self.assertTrue(self.store.settings().wellbeing_rules[0]['enabled'])
+
+    def test_each_row_deletes_only_its_budget_and_preserves_history_until_saved(self):
+        from datetime import date
+        from PySide6.QtWidgets import QCheckBox
+        editor=self.app.budget_editor; self.app.open_budget(member=target('site','example.com'))
+        site=editor.current; self.app.open_budget(member=target('game',self.games[0].id))
+        game='game:'+self.games[0].id; self.app.save_budgets()
+        day=date.today().isoformat(); self.store.add_usage({(day,self.games[0].id):123})
+        self.app.open_budget(); self.pump(.03)
+        self.assertEqual(set(editor.row_keys),{'shared-games',site,game})
+        for key in list(editor.row_keys):
+            row=next(editor.rows_layout.itemAt(i).widget() for i in range(editor.rows_layout.count()) if editor.rows_layout.itemAt(i).widget().property('budgetKey')==key)
+            controls=row.findChildren(QPushButton)
+            self.assertEqual(len([b for b in controls if not b.icon().isNull()]),1)
+            self.assertTrue(any(b.text()==self.app.t('Edit') for b in controls))
+        editor.show_editor('shared-games')
+        self.assertFalse(any(c.isVisible() and c.text()==self.app.t('Use a shared game budget') for c in editor.findChildren(QCheckBox)))
+        editor.show_editor(site)
+        self.assertFalse(any(c.isVisible() and c.text()==self.app.t('Use a daily limit') for c in editor.findChildren(QCheckBox)))
+        editor.show_list()
+        row=next(editor.rows_layout.itemAt(i).widget() for i in range(editor.rows_layout.count()) if editor.rows_layout.itemAt(i).widget().property('budgetKey')=='shared-games')
+        trash=next(b for b in row.findChildren(QPushButton) if not b.icon().isNull())
+        with patch.object(editor,'ask_delete',return_value=False) as prompt:
+            trash.click()
+        self.assertIn('shared-games',editor.row_keys)
+        prompt.assert_called_once_with(str(self.app.t('Games · shared budget')))
+        with patch.object(editor,'ask_delete',return_value=True): trash.click()
+        self.assertNotIn('shared-games',editor.row_keys)
+        self.assertTrue(self.store.settings().game_budget_enabled)
+        self.app.cancel_budget_settings(); self.app.open_budget()
+        self.assertIn('shared-games',editor.row_keys)
+        row=next(editor.rows_layout.itemAt(i).widget() for i in range(editor.rows_layout.count()) if editor.rows_layout.itemAt(i).widget().property('budgetKey')=='shared-games')
+        with patch.object(editor,'ask_delete',return_value=True):
+            next(b for b in row.findChildren(QPushButton) if not b.icon().isNull()).click()
+        self.app.save_budgets()
+        self.assertFalse(self.store.settings().game_budget_enabled)
+        self.assertIn(self.games[0].id,self.store.settings().game_limits)
+        self.assertEqual(len(self.store.settings().wellbeing_rules),1)
+        self.assertEqual(self.store.totals(day),{self.games[0].id:123})
+        for key in (site,game):
+            row=next(editor.rows_layout.itemAt(i).widget() for i in range(editor.rows_layout.count()) if editor.rows_layout.itemAt(i).widget().property('budgetKey')==key)
+            with patch.object(editor,'ask_delete',return_value=True):
+                next(b for b in row.findChildren(QPushButton) if not b.icon().isNull()).click()
+        self.app.save_budgets()
+        self.assertEqual(self.store.settings().wellbeing_rules,[])
+        self.assertEqual(self.store.settings().game_limits,{})
+        self.assertEqual(self.store.totals(day),{self.games[0].id:123})
+
+    def test_delete_confirmation_is_localized_and_cancel_is_default(self):
+        from PySide6.QtCore import QTimer,Qt
+        from PySide6.QtWidgets import QApplication,QDialog
+        from PySide6.QtTest import QTest
+        editor=self.app.budget_editor; self.app.open_budget(); observed=[]
+        def respond(answer):
+            dialog=QApplication.activeModalWidget()
+            self.assertIsInstance(dialog,QDialog)
+            labels=dialog.findChildren(QLabel); buttons=dialog.findChildren(QPushButton)
+            observed.append((dialog.windowTitle(),[(item.text(),item.textFormat()) for item in labels],
+                             [b.text() for b in buttons if b.isDefault()],[(b.text(),b.property('role')) for b in buttons],dialog.objectName()))
+            if answer=='Escape': QTest.keyClick(dialog,Qt.Key_Escape)
+            else: next(b for b in buttons if b.text()==answer).click()
+        QTimer.singleShot(0,lambda:respond('Mégse'))
+        self.assertFalse(editor.ask_delete('Játék <teszt>'))
+        self.assertEqual(observed[0][0],'Időkeret törlése')
+        self.assertTrue(any('Játék <teszt>' in text and fmt==Qt.PlainText for text,fmt in observed[0][1]))
+        self.assertEqual(observed[0][2],['Mégse']); self.assertIn(('Törlés','danger-action'),observed[0][3]); self.assertEqual(observed[0][4],'Surface')
+        QTimer.singleShot(0,lambda:respond('Escape'))
+        self.assertFalse(editor.ask_delete('Játék <teszt>'))
+        QTimer.singleShot(0,lambda:respond('Törlés'))
+        self.assertTrue(editor.ask_delete('Játék <teszt>'))
+        self.app.set_language('en'); editor=self.app.budget_editor
+        QTimer.singleShot(0,lambda:respond('Cancel'))
+        self.assertFalse(editor.ask_delete('Game <test>'))
+        self.assertEqual(observed[-1][0],'Delete budget'); self.assertEqual(observed[-1][2],['Cancel'])
 
     def test_hidden_refresh_is_cached_and_language_switch_preserves_unsaved_budget(self):
         self.app.open_budget(member=target('site','example.com')); editor=self.app.budget_editor

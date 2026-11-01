@@ -9,7 +9,7 @@ import time
 import unicodedata
 from PySide6.QtCore import Qt,QDate,QLocale,QEvent,QTimer,QPoint,QRect,QSize
 from PySide6.QtGui import QColor,QIcon,QPainter,QPixmap,QTextCharFormat,QPalette
-from PySide6.QtWidgets import QWidget,QScrollArea,QVBoxLayout,QHBoxLayout,QGridLayout,QHeaderView,QAbstractItemView,QDateEdit,QCalendarWidget,QToolButton,QListWidget,QListWidgetItem,QListView
+from PySide6.QtWidgets import QWidget,QScrollArea,QVBoxLayout,QHBoxLayout,QGridLayout,QHeaderView,QAbstractItemView,QDateEdit,QCalendarWidget,QToolButton,QListWidget,QListWidgetItem,QListView,QSpinBox,QAbstractSpinBox
 from .statistics import date_range,summarize
 from .quota import current_day
 from .qt_widgets import label,button,panel,duration,DailyChart
@@ -189,6 +189,10 @@ class StatisticsDate(QDateEdit):
             control=calendar.findChild(QToolButton,name)
             if control:
                 control.setArrowType(Qt.NoArrow); control.setIcon(QIcon()); control.setText(text)
+        for field in calendar.findChildren(QSpinBox):
+            field.setButtonSymbols(QAbstractSpinBox.NoButtons); field.setMinimumWidth(64)
+            field.lineEdit().setStyleSheet('QLineEdit {background:transparent; border:none; padding:0;}')
+            field.installEventFilter(self)
         self.setCalendarWidget(calendar); calendar.installEventFilter(self)
         self.setFocusPolicy(Qt.StrongFocus)
 
@@ -197,6 +201,8 @@ class StatisticsDate(QDateEdit):
         if self.calendarPopup(): self.calendarWidget().setLocale(locale)
 
     def eventFilter(self,watched,event):
+        if isinstance(watched,QSpinBox) and event.type() in (QEvent.Show,QEvent.Paint):
+            watched.lineEdit().setGeometry(6,1,max(1,watched.width()-12),max(1,watched.height()-2))
         if watched is self.calendarWidget() and event.type()==QEvent.Show:
             popup=watched.window()
             if popup is not self.window():
@@ -227,7 +233,12 @@ class StatisticsDate(QDateEdit):
 class StatisticsPage(QWidget):
     def __init__(self,app):
         super().__init__(); self.app=app; self.report=None; self.selected_day=None
-        self.last_refresh=0; self.updating=False; self.scope='all'; self._game_scope='all'; self._category='all'
+        self.last_refresh=0; self.updating=False
+        try: view=app.store.overview_view()
+        except (OSError,SQLiteError): view={'combine':False,'category':'all','period':'week','scope':'all','detail_scope':'all','custom_start':'','custom_end':'','selected_day':'','search':''}
+        self.scope=view['scope']; self._requested_scope=view['scope']; self._requested_detail=view['detail_scope']
+        self.selected_day=view['selected_day'] or None
+        self._game_scope='all'; self._category=view['category']
         if not hasattr(app,'statistics_colors'): app.statistics_colors=StatisticsColors()
         self.colors=app.statistics_colors; t=app.t
         self.setStyleSheet("""
@@ -257,17 +268,18 @@ class StatisticsPage(QWidget):
         grid=QGridLayout(); grid.setHorizontalSpacing(14); grid.setVerticalSpacing(6)
         self.category=QComboBox(); self.category.setAccessibleName(t('Show activity'))
         for name,key in (('Games','games'),('Applications','apps'),('Websites','websites'),('Everything','all')): self.category.addItem(t(name),key)
-        self.category.setCurrentIndex(self.category.findData('all'))
+        self.category.setCurrentIndex(self.category.findData(view['category']))
         self.period=QComboBox(); self.period.setAccessibleName(t('Period'))
         for name,key in (('Today','today'),('Yesterday','yesterday'),('Last 7 days','week'),('Last 30 days','month'),('This month','calendar'),('Custom dates…','custom')):
             self.period.addItem(t(name),key)
-        self.period.setCurrentIndex(self.period.findData('week'))
+        self.period.setCurrentIndex(self.period.findData(view['period']))
         self.devices=QComboBox(); self.devices.setAccessibleName(t('Computer'))
         for column,(name,widget) in enumerate((('Show activity',self.category),('Period',self.period),('Computer',self.devices))):
             grid.addWidget(label(t(name),'muted'),0,column); grid.addWidget(widget,1,column); grid.setColumnStretch(column,1)
         filter_box.addLayout(grid)
         self.custom_range=QWidget(); dates=QHBoxLayout(self.custom_range); dates.setContentsMargins(0,4,0,0); dates.setSpacing(10)
-        self.start=StatisticsDate((current_day(self.app.settings)-timedelta(days=6)).isoformat()); self.end=StatisticsDate(current_day(self.app.settings).isoformat())
+        initial=(view['custom_start'],view['custom_end']) if view['period']=='custom' else self.period_dates(view['period'])
+        self.start=StatisticsDate(initial[0]); self.end=StatisticsDate(initial[1])
         self._range=(self.start.text(),self.end.text())
         self._relative_day=current_day(self.app.settings)
         for name,widget in (('From',self.start),('To',self.end)):
@@ -276,7 +288,7 @@ class StatisticsPage(QWidget):
             dates.addWidget(label(t(name),'muted')); dates.addWidget(widget)
             widget.lineEdit().returnPressed.connect(self.apply_dates)
         dates.addWidget(button(t('Show period'),self.apply_dates)); dates.addStretch()
-        filter_box.addWidget(self.custom_range); self.custom_range.hide()
+        filter_box.addWidget(self.custom_range); self.custom_range.setVisible(view['period']=='custom')
         self.activity_note=label('','muted'); self.activity_note.setWordWrap(True); filter_box.addWidget(self.activity_note); self.activity_note.hide()
         self.tracking=QCheckBox(t('Measure application and website time'))
         self.tracking.setChecked(app.focus.settings.tracking); self.tracking.toggled.connect(self.tracking_changed)
@@ -298,7 +310,7 @@ class StatisticsPage(QWidget):
         chart_box=panel(); chart_layout=QVBoxLayout(chart_box); chart_layout.setContentsMargins(18,15,18,14); chart_layout.setSpacing(8)
         self.chart_title=label(t('Time by day'),'section'); chart_layout.addWidget(self.chart_title)
         self.chart_summary=label('','muted'); self.chart_summary.setWordWrap(True); chart_layout.addWidget(self.chart_summary)
-        self.chart=DailyChart(t,self.share); self.chart.axis_format=self.friendly_time
+        self.chart=DailyChart(t); self.chart.axis_format=self.friendly_time
         self.chart.empty_text='No time recorded for this selection.'
         self.chart.setMinimumHeight(210); self.chart.day_clicked.connect(self.choose_day); chart_layout.addWidget(self.chart)
         self.computer_legend=ComputerLegend(); self.computer_legend.setAccessibleName(t('Computer colors'))
@@ -311,17 +323,21 @@ class StatisticsPage(QWidget):
         self.day_selector.currentIndexChanged.connect(self.select_row); details_heading.addWidget(self.day_selector)
         self.search=QLineEdit(); self.search.setPlaceholderText(t('Search this list…')); self.search.setAccessibleName(t('Search this list'))
         self.search.setClearButtonEnabled(True); self.search.setMinimumWidth(130); self.search.setMaximumWidth(220)
-        self.search.textChanged.connect(self.show_breakdown); details_heading.addWidget(self.search)
+        self.search.setText(view['search'])
+        self.search_timer=QTimer(self); self.search_timer.setSingleShot(True); self.search_timer.setInterval(400)
+        self.search_timer.timeout.connect(self.save_search)
+        self.search.textChanged.connect(self.search_changed); details_heading.addWidget(self.search)
         self.whole_period_button=button(t('All days'),self.show_period,'quiet'); details_heading.addWidget(self.whole_period_button)
         details_box.addLayout(details_heading)
         detail_filters=QHBoxLayout()
         detail_filters.addWidget(label(t('List computer'),'muted'))
         self.detail_devices=QComboBox(); self.detail_devices.setAccessibleName(t('List computer'))
         self.detail_devices.setMinimumWidth(190); self.detail_devices.setMaximumWidth(280)
-        self.detail_devices.currentIndexChanged.connect(self.show_breakdown); detail_filters.addWidget(self.detail_devices)
+        self.detail_devices.currentIndexChanged.connect(self.choose_detail_device); detail_filters.addWidget(self.detail_devices)
         self.merge_duplicates=QCheckBox(t('Combine matching names'))
         self.merge_duplicates.setToolTip(t('Combine entries with the same name and activity type in this list.'))
-        self.merge_duplicates.toggled.connect(self.show_breakdown); detail_filters.addWidget(self.merge_duplicates)
+        self.merge_duplicates.setChecked(view['combine'])
+        self.merge_duplicates.toggled.connect(self.choose_combining); detail_filters.addWidget(self.merge_duplicates)
         detail_filters.addStretch(); details_box.addLayout(detail_filters)
         self.breakdown_note=label('','muted'); details_box.addWidget(self.breakdown_note)
         self.details_panel=details
@@ -352,6 +368,37 @@ class StatisticsPage(QWidget):
         details_box.addWidget(self.empty_details); layout.addWidget(details)
         self.average_note=label('','muted',parent=self); self.average_note.hide()
         self.refresh_category_text()
+
+    def save_view(self,**changes):
+        try:
+            self.app.store.save_overview_view(**changes)
+            return True
+        except (OSError,SQLiteError):
+            self.app.set_status('Could not save the overview view. Try again.')
+            return False
+
+    def search_changed(self,*_):
+        self.search_timer.start(); self.show_breakdown()
+
+    def save_search(self):
+        self.save_view(search=self.search.text())
+
+    def flush_view(self):
+        if self.search_timer.isActive():
+            self.search_timer.stop(); self.save_search()
+
+    def choose_combining(self,enabled):
+        if not self.save_view(combine=enabled):
+            blocked=self.merge_duplicates.blockSignals(True); self.merge_duplicates.setChecked(not enabled); self.merge_duplicates.blockSignals(blocked)
+        self.show_breakdown()
+
+    def choose_detail_device(self,index):
+        self._requested_detail=self.detail_devices.itemData(index) or 'all'
+        self.save_view(detail_scope=self._requested_detail); self.show_breakdown()
+
+    def reset_computer_filters(self):
+        self.scope=self._requested_scope=self._requested_detail='all'
+        self.save_view(scope='all',detail_scope='all')
 
     def update_exclusion_action(self):
         rows=self.games_table.selectionModel().selectedRows()
@@ -434,6 +481,7 @@ class StatisticsPage(QWidget):
         if value=='custom': return
         start,end=self.period_dates(value)
         self.start.setText(start); self.end.setText(end); self.selected_day=None; self._relative_day=current_day(self.app.settings); self.refresh()
+        self.save_view(period=value,selected_day='')
 
     def period_dates(self,value):
         today=current_day(self.app.settings); end=today
@@ -444,6 +492,8 @@ class StatisticsPage(QWidget):
 
     def apply_dates(self):
         self.selected_day=None; self.refresh()
+        if not self.error.isHidden(): return
+        self.save_view(period=self.period.currentData(),custom_start=self._range[0],custom_end=self._range[1],selected_day='')
 
     def preset(self,count):
         index=self.period.findData({7:'week',30:'month',0:'calendar'}[count])
@@ -525,6 +575,7 @@ class StatisticsPage(QWidget):
     def choose_category(self,*_):
         category=self.category.currentData()
         self._category=category
+        self.save_view(category=category,selected_day='')
         self.selected_day=None; self.refresh(live=True)
 
     def item_name(self,key,name):
@@ -588,13 +639,14 @@ class StatisticsPage(QWidget):
             for i in range(1,self.devices.count()): self.devices.setItemIcon(i,self.colors.icon(self.devices.itemData(i),'computer'))
         else:
             for i,(identity,name) in enumerate(choices): self.devices.setItemText(i,name)
-        index=self.devices.findData(self.scope)
+        index=self.devices.findData(self._requested_scope)
         if index<0: self.scope='all'; index=0
+        else: self.scope=self._requested_scope
         self.devices.setCurrentIndex(index); self.devices.blockSignals(blocked)
         self.devices.view().setRowHidden(self.devices.findData('local'),not bool(remote))
         self.devices.setEnabled(bool(remote))
         self.devices.setToolTip(self.app.t('Choose a computer, or include all linked computers.'))
-        selected=self.detail_devices.currentData() or 'all'
+        selected=self._requested_detail
         blocked=self.detail_devices.blockSignals(True)
         if [self.detail_devices.itemData(i) for i in range(self.detail_devices.count())]!=[identity for identity,name in choices]:
             self.detail_devices.clear()
@@ -609,20 +661,21 @@ class StatisticsPage(QWidget):
         self.app.update_statistics_sync_controls()
 
     def choose_device(self,index):
-        self.scope=self.devices.itemData(index) or 'all'; self.selected_day=None; self.refresh(live=True)
+        self.scope=self._requested_scope=self.devices.itemData(index) or 'all'
+        self.save_view(scope=self.scope,selected_day=''); self.selected_day=None; self.refresh(live=True)
 
     def select_row(self,row):
         if self.updating or not self.report or row<0: return
-        self.selected_day=self.day_selector.itemData(row); self.show_breakdown()
+        self.selected_day=self.day_selector.itemData(row); self.save_view(selected_day=self.selected_day or ''); self.show_breakdown()
 
     def choose_day(self,day):
         if not self.report or day not in self.report.days: return
-        self.selected_day=day
+        self.selected_day=day; self.save_view(selected_day=day)
         self.refresh_day_selector(); self.show_breakdown()
         if self.isVisible(): self.scroll.ensureWidgetVisible(self.details_panel,0,16)
 
     def show_period(self):
-        self.selected_day=None; self.refresh_day_selector(); self.show_breakdown()
+        self.selected_day=None; self.save_view(selected_day=''); self.refresh_day_selector(); self.show_breakdown()
 
     def show_breakdown(self,*_):
         if not self.report: return

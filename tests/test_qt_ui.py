@@ -18,6 +18,9 @@ class QtInterfaceTests(unittest.TestCase):
         cls.qt=setup_application()
 
     def setUp(self):
+        from gametime import rtss_timer
+        timer_render=patch('gametime.rtss_timer.countdown',wraps=rtss_timer.countdown)
+        self.rtss_renderer=timer_render.start(); self.addCleanup(timer_render.stop)
         from gametime.qt_ui import App
         from gametime.discovery import Discovery
         from gametime.store import Store
@@ -148,6 +151,18 @@ class QtInterfaceTests(unittest.TestCase):
         self.assertGreater(StatisticsData(self.store).sync_delay(),3599)
         self.assertFalse(self.app.statistics_event_timer.isActive())
         self.assertFalse(self.app._sync_startup_pending)
+
+    def test_active_game_schedules_next_sync_under_existing_cooldown(self):
+        from gametime.qt_ui import SERVICE_URL
+        code='f'*32
+        self.app.settings=replace(self.app.settings,statistics_sync_enabled=True,statistics_sync_group=code)
+        self.app.tracker.active=self.games[0]
+        self.app.statistics_data.defer_sync(600)
+        self.app.statistics_sync.results.put(((SERVICE_URL,code,self.app.statistics_sync.generation),[],''))
+        self.app.poll_statistics_sync()
+        self.assertTrue(self.app.statistics_event_timer.isActive())
+        self.assertGreater(self.app.statistics_event_timer.remainingTime(),598000)
+        self.app.statistics_event_timer.stop()
 
     def test_search_source_sort_and_keyboard_card_selection(self):
         from PySide6.QtCore import Qt
@@ -326,7 +341,7 @@ class QtInterfaceTests(unittest.TestCase):
         from PySide6.QtTest import QTest
         from PySide6.QtWidgets import QScrollArea,QDateTimeEdit
         self.app.show(); self.app.open_budget(); self.app.budget_editor.show_editor('shared-games')
-        self.app.restriction_enabled.setChecked(True); self.app.bedtime_enabled.setChecked(True)
+        self.app.restriction_enabled.setChecked(True); self.app.budget_editor.create_computer()
         for details in self.app.schedule_editor.details.values(): details.setExpanded(True)
         self.app.overlay_details.setExpanded(True)
         self.app.overlay_enabled.setChecked(True); self.pump(.03)
@@ -338,8 +353,7 @@ class QtInterfaceTests(unittest.TestCase):
             if widget is self.app.overlay_screen: return widget.currentIndex()
             return widget.value()
         for widget in controls:
-            if widget in controls[:6]: self.app.budget_editor.show_editor('shared-games')
-            else: self.app.budget_editor.show_shared_appearance()
+            self.app.budget_editor.show_editor('computer-window' if widget in self.app.bedtime_times.values() else 'shared-games')
             self.pump(.03)
             for focused in (False,True):
                 with self.subTest(control=type(widget).__name__,focused=focused):
@@ -471,7 +485,7 @@ class QtInterfaceTests(unittest.TestCase):
         self.assertEqual(stats.devices.currentText(),'Játszós PC <otthon> (ez a gép)')
         self.assertEqual(stats.games_table.item(0,1).text(),'Játszós PC <otthon> (ez a gép)')
         stats.chart.resize(700,220); stats.chart.grab()
-        self.assertIn('Játszós PC &lt;otthon&gt;',stats.chart.tooltip_at(stats.chart.segment_regions[0][0].center()))
+        self.assertEqual(stats.chart.toolTip(),'')
         renamed=self.app.statistics_data.snapshot(group,expected.statistics_device_name)
         self.assertEqual(renamed['device'],snapshot['device']); self.assertEqual(renamed['rows'],snapshot['rows'])
         self.assertGreater(renamed['revision'],snapshot['revision'])
@@ -626,7 +640,8 @@ class QtInterfaceTests(unittest.TestCase):
         stats.chart.resize(700,220); stats.chart.grab()
         self.assertEqual(len(stats.chart.segment_regions),4)
         area=next(area for area,d,identity in stats.chart.computer_regions if d==day and identity==snapshot['device'])
-        self.assertIn('100,0%',stats.chart.tooltip_at(area.center()))
+        QTest.mouseMove(stats.chart,area.center().toPoint())
+        self.assertEqual(stats.chart.toolTip(),'')
         QTest.mouseClick(stats.chart,Qt.LeftButton,pos=area.center().toPoint())
         self.assertEqual(stats.selected_day,day)
         self.assertEqual(stats.games_table.rowCount(),3)
@@ -636,8 +651,7 @@ class QtInterfaceTests(unittest.TestCase):
         device_colors=dict(stats.chart.device_colors)
         self.assertNotEqual(device_colors['local'],device_colors[snapshot['device']])
         stats.chart.grab()
-        self.assertIn('Laptop &lt;guest&gt;',stats.chart.tooltip_at(area.center()))
-        self.assertEqual(stats.chart.tooltip_at(QPointF(-1,-1)),'')
+        self.assertEqual(stats.chart.toolTip(),'')
         for row in range(stats.games_table.rowCount()):
             item=stats.games_table.item(row,1)
             self.assertFalse(item.icon().isNull())
@@ -670,7 +684,8 @@ class QtInterfaceTests(unittest.TestCase):
         self.assertEqual(len(stats.chart.regions),366); self.assertEqual(len(stats.chart.segment_regions),1)
         rect=stats.chart.segment_regions[0][0]
         self.assertGreater(rect.width(),0); self.assertGreater(rect.height(),0)
-        self.assertIn('100,0%',stats.chart.tooltip_at(rect.center()))
+        QTest.mouseMove(stats.chart,rect.center().toPoint())
+        self.assertEqual(stats.chart.toolTip(),'')
 
     def test_sync_dialog_connects_and_disconnects_without_sharing_settings(self):
         from PySide6.QtWidgets import QLineEdit,QPushButton,QCheckBox
