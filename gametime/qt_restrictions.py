@@ -75,7 +75,8 @@ class RestrictionRuntime:
                 result.append(Budget('game:' + gid, game.name, budget_access.limit(app.settings,'game:'+gid,limit,wall), app.tracker.game_quota_total(wall,gid), ({'kind': 'game', 'value': gid},),
                                      day=budget_day(app.settings,'game:'+gid,wall).isoformat()))
         for value in app.wellbeing.states(wall):
-            result.append(Budget(value.rule['id'], value.rule['name'], budget_access.limit(app.settings,value.rule['id'],value.rule['seconds'],wall), value.used, tuple(value.rule['members']),
+            used=sum(app.tracker.quota_totals(wall,value.rule['id']).values()) if value.rule['id'].startswith('games-') and value.rule['members']==[{'kind':'category','value':'games'}] else value.used
+            result.append(Budget(value.rule['id'], value.rule['name'], budget_access.limit(app.settings,value.rule['id'],value.rule['seconds'],wall), used, tuple(value.rule['members']),
                                  day=budget_day(app.settings,value.rule['id'],wall).isoformat()))
         return [replace(budget,clock_deadlines=budget_access.clock_deadlines(app.settings,budget.key,wall),
                         breaks_allowed=budget.breaks_allowed and budget_access.clock_remaining(app.settings,budget.key,wall)>0) for budget in result]

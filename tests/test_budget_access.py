@@ -122,7 +122,9 @@ class ClockInterfaceTests(unittest.TestCase):
         self.assertEqual(saved.restriction_plans[key]['steps'][0]['clock_minute'],1320)
         editor.show_editor(key); self.assertFalse(editor.minutes.isEnabled()); self.assertTrue(editor.zero_limit_note.isHidden())
         self.assertEqual(editor.steps.cards[0].clock_time.time(),QTime(22,0))
-        editor.access.select([5,6]); editor.usage_limit.setChecked(True); self.app.budget_back.click(); self.app.save_budgets()
+        editor.access.select([5,6]); editor.usage_limit.setChecked(True); self.app.budget_back.click()
+        self.assertEqual(editor.access.active_days[key],[5,6])
+        editor.show_editor(key); editor.cancel_edit(); self.app.save_budgets()
         self.assertEqual(self.store.settings().budget_active_days,saved.budget_active_days)
         self.assertEqual(self.store.settings().budget_usage_limits,saved.budget_usage_limits)
         runtime=self.app.restrictions

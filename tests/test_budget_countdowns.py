@@ -39,7 +39,7 @@ class BudgetCountdownTests(unittest.TestCase):
         self.assertEqual(activity_settings(saved,target('site','example.com')).overlay_font_size,38)
         editor.show_editor(key); editor.appearance.click(); window=self.app._dialogs[-1]
         self.field(window,'Text size').setValue(46); self.click(window,'Save')
-        self.app.budget_back.click(); self.app.save_budgets()
+        self.app.budget_editor.cancel_edit(); self.app.save_budgets()
         self.assertEqual(self.store.settings().counter_overlays[key]['overlay_font_size'],38)
 
     def test_shared_countdown_and_rtss_save_and_cancel_independently(self):
@@ -54,7 +54,7 @@ class BudgetCountdownTests(unittest.TestCase):
         self.app.save_settings(); self.assertEqual(self.store.settings().overlay_font_size,39)
         editor.show_editor('shared-games'); editor.shared_appearance.click(); window=self.app._dialogs[-1]
         self.field(window,'Use RTSS in games').setChecked(False); self.click(window,'Save')
-        self.app.budget_back.click(); self.app.save_budgets()
+        self.app.budget_editor.cancel_edit(); self.app.save_budgets()
         self.assertTrue(self.store.settings().overlay_rtss_auto)
 
     def test_individual_budget_rtss_reaches_renderer_without_global_switch(self):
@@ -129,7 +129,7 @@ class BudgetCountdownTests(unittest.TestCase):
                          {'shared-games',*('game:'+g.id for g in self.games)})
         choices.setCurrentIndex(choices.findData('game:'+self.games[0].id))
         self.field(window,'Text size').setValue(40); self.click(window,'Save')
-        self.app.budget_back.click(); self.app.save_budgets()
+        self.app.budget_editor.cancel_edit(); self.app.save_budgets()
         self.assertEqual(self.store.settings().game_overlays,{})
         self.app.open_budget(members=[target('site','one.example'),target('site','two.example')]); first=editor.current
         editor.appearance.click(); window=self.app._dialogs[-1]; choices=self.field(window,'Countdown target')
@@ -137,7 +137,7 @@ class BudgetCountdownTests(unittest.TestCase):
         self.app.open_budget(members=[target('site','one.example'),target('site','three.example')])
         editor.appearance.click(); window=self.app._dialogs[-1]; choices=self.field(window,'Countdown target')
         choices.setCurrentIndex(choices.findData('site:one.example')); self.field(window,'Text size').setValue(47); self.click(window,'Save')
-        self.app.budget_back.click(); self.app.save_budgets()
+        self.app.budget_editor.cancel_edit(); self.app.save_budgets()
         self.assertEqual(self.store.settings().activity_overlays['site:one.example']['overlay_font_size'],35)
         self.assertIn(first,{r['id'] for r in self.store.settings().wellbeing_rules})
 
@@ -150,7 +150,7 @@ class BudgetCountdownTests(unittest.TestCase):
         self.assertEqual(self.field(window,'Text size').value(),35)
         self.field(window,'Text size').setValue(46); self.click(window,'Save')
         self.assertEqual(editor.countdown_settings(self.app.settings).game_overlays[self.games[0].id]['overlay_font_size'],46)
-        self.app.budget_back.click(); self.app.save_budgets()
+        self.app.budget_editor.cancel_edit(); self.app.save_budgets()
         self.assertEqual(self.store.settings().game_overlays[self.games[0].id]['overlay_font_size'],35)
 
 

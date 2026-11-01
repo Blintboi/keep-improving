@@ -99,16 +99,24 @@ class TimeBudgets(QWidget):
         self.schedule.controls.layout().insertWidget(0,self.shared_usage_limit)
         from .qt_budget_access import BudgetAccess
         self.access=BudgetAccess(self); edit_layout.insertWidget(1,self.access.widget)
+        self.detail_form=form
+        from .qt_budget_periods import PeriodEditor
+        self.periods=PeriodEditor(self)
+        self.conflicts=label('','muted'); self.conflicts.setStyleSheet('color:#e8c583;'); self.conflicts.setWordWrap(True)
+        edit_layout.insertWidget(0,self.conflicts); self.conflicts.hide()
         self.usage_limit.toggled.connect(self.access.usage_changed); self.shared_usage_limit.toggled.connect(self.access.usage_changed)
         empty=panel(); empty_layout=QVBoxLayout(empty); empty_layout.setContentsMargins(22,24,22,24); empty_layout.setAlignment(Qt.AlignTop)
         empty_layout.addWidget(label(app.t('Start with a time budget'),'section'))
         empty_note=label(app.t('Set a daily budget for one game, application or website, or let several share a group budget. You can add a countdown to each budget.'),'muted')
         empty_note.setWordWrap(True); empty_layout.addWidget(empty_note); self.stack.addWidget(empty)
+        self.stack.addWidget(self.periods.page)
         self.overlay.toggled.connect(self.controls)
         self.name.textChanged.connect(self.rename)
         self.selector.currentIndexChanged.connect(self.choose)
         self.refresh('shared-games')
         self.views.setCurrentIndex(0)
+        from .qt_budget_drafts import BudgetDrafts
+        self.drafts=BudgetDrafts(self)
 
     def reset_field(self):
         edit=NoWheelTimeEdit(); edit.setDisplayFormat('HH:mm'); edit.setButtonSymbols(QAbstractSpinBox.NoButtons)
@@ -117,7 +125,7 @@ class TimeBudgets(QWidget):
         return edit
 
     def changed_reset(self,value):
-        if self.loading or not self.current or self.current=='computer-window': return
+        if self.loading or not self.current: return
         self.reset_overrides[self.current]=value.hour()*60+value.minute()
         self.reset_changed.add(self.current)
         for card in self.steps.cards: card.update_controls()
@@ -145,16 +153,19 @@ class TimeBudgets(QWidget):
         if hasattr(self.app,'budget_scroll'): self.app.budget_scroll.verticalScrollBar().setValue(0)
 
     def show_list(self):
+        if hasattr(self,'drafts'): self.drafts.remember()
         self.collect()
-        # An untouched creation form is not an extra empty budget.
-        self.rules=[rule for rule in self.rules if rule['members'] or rule['name']!=str(self.app.t('New budget'))
-                    or rule['seconds']!=3600 or not rule['enabled'] or not rule['overlay'] or rule['enforce']]
         self.current=None; self.refresh(); self.views.setCurrentIndex(0)
+        if hasattr(self,'drafts'): self.drafts.flush()
         if hasattr(self.app,'budget_scroll'): self.app.budget_scroll.verticalScrollBar().setValue(0)
 
     def cancel_edit(self):
         """Discard this budget's draft, retaining drafts for other budgets."""
         key=self.current; settings=self.app.settings
+        if hasattr(self,'drafts'): self.drafts.raw.pop(key,None)
+        if self.periods.is_extra(key):
+            self.periods.discard(key,settings); self.current=None; self.refresh(); self.views.setCurrentIndex(0)
+            self.drafts.flush(); return
         self.access.discard(key,settings)
         self.member_overlay_drafts.pop(key,None)
         if key in settings.restriction_plans: self.restriction_plans[key]=deepcopy(settings.restriction_plans[key])
@@ -197,13 +208,16 @@ class TimeBudgets(QWidget):
         self.refresh(); self.views.setCurrentIndex(0)
         self.app.budget_scroll.verticalScrollBar().setValue(0)
         self.app.set_status('Changes discarded.')
+        if hasattr(self,'drafts'): self.drafts.flush()
 
     def create_new(self):
         self.collect(); rule=new_rule(str(self.app.t('New budget')),[]); rule['enabled']=True; self.rules.append(rule)
         self.refresh(rule['id']); self.show_editor(); self.name.setFocus(); self.name.selectAll()
 
     def create_computer(self):
-        self.collect(); self.computer_created=True; self.schedule.set_computer_enabled(True)
+        self.collect()
+        if self.computer_created: self.periods.create(); return
+        self.computer_created=True; self.schedule.set_computer_enabled(True)
         self.refresh('computer-window'); self.show_editor()
 
     def list_rows(self):
@@ -236,6 +250,7 @@ class TimeBudgets(QWidget):
             rows.append((rule['id'],t(rule['name']) if rule['id'].startswith('category-') else rule['name'],members,
                          t('{minutes:g} min / day',minutes=rule['seconds']/60),rule['enabled'],rule['overlay']))
         adjusted=[]
+        rows.extend(self.periods.rows())
         for key,name,members,amount,enabled,overlay in rows:
             if not self.access.usage_limits.get(key,True): amount=t('No daily minute limit')
             days=self.access.active_days.get(key)
@@ -246,7 +261,8 @@ class TimeBudgets(QWidget):
         return adjusted
 
     def refresh_rows(self):
-        self.add_computer.setVisible(not self.computer_created)
+        if hasattr(self,'drafts'): self.drafts.queue()
+        self.add_computer.show()
         rows=self.list_rows(); signature=tuple(tuple(map(str,row)) for row in rows)
         if signature==self._rows_signature: return
         self._rows_signature=signature; self.row_keys=[row[0] for row in rows]
@@ -271,6 +287,9 @@ class TimeBudgets(QWidget):
         self.empty.setVisible(not rows)
 
     def enable_rule(self,key):
+        if self.periods.is_extra(key):
+            next(p for p in self.periods.items if p['id']==key)['values']['bedtime_enabled']=True
+            self.refresh(key); return
         rule=self.rule(key)
         if rule:
             rule['enabled']=True; self.refresh(key)
@@ -293,6 +312,7 @@ class TimeBudgets(QWidget):
         return next((rule for rule in self.rules if rule['id']==key),None) or next((rule for rule in self.categories.values() if rule['id']==key),None)
 
     def collect(self):
+        if hasattr(self,'periods'): self.periods.collect()
         if self.loading or not self.current or self.current in ('shared-games','computer-window'): return
         key=self.current
         if key.startswith('game:'):
@@ -307,10 +327,12 @@ class TimeBudgets(QWidget):
                 if rule not in self.rules and rule['enabled']: self.rules.append(rule)
 
     def refresh(self,selected=None):
+        if hasattr(self,'drafts'): self.drafts.remember()
         chosen=selected or self.current or 'shared-games'
         self.loading=True; blocked=self.selector.blockSignals(True); self.selector.clear()
         if self.shared_created: self.selector.addItem(self.app.t('Games · shared budget'),'shared-games')
         if self.computer_created: self.selector.addItem(self.app.t('Computer use'),'computer-window')
+        for item in self.periods.items: self.selector.addItem(item['name'],item['id'])
         for gid in sorted(set(self.game_limits)|self.draft_games,key=lambda value:self.game_name(value).casefold()):
             self.selector.addItem(self.game_name(gid),'game:'+gid)
         for rule in self.rules:
@@ -319,11 +341,14 @@ class TimeBudgets(QWidget):
         self.current=None; self.loading=False; self.choose(); self.refresh_rows()
 
     def choose(self,*args):
+        if hasattr(self,'drafts'): self.drafts.remember()
         self.collect(); self.current=self.selector.currentData(); self.loading=True
         if self.current is None: self.stack.setCurrentIndex(2)
+        elif self.periods.is_extra(self.current):
+            self.periods.choose(self.current); self.stack.setCurrentIndex(3)
         elif self.current in ('shared-games','computer-window'):
             self.schedule.set_mode('games' if self.current=='shared-games' else 'computer')
-            self.shared_reset_panel.setVisible(self.current=='shared-games')
+            self.shared_reset_panel.show()
             minute=self.reset_overrides.get(self.current,self.app.settings.budget_reset_minute)
             self.shared_reset.setTime(QTime(minute//60,minute%60))
             self.stack.setCurrentIndex(0); self.toggle_shared()
@@ -346,16 +371,19 @@ class TimeBudgets(QWidget):
                 self.minutes.setValue(rule['seconds']/60)
                 self.overlay.setChecked(rule['overlay'])
                 names=[str(self.member_name(member)) for member in rule['members']]
-                self.members_note.setText(', '.join(names[:4])+(self.app.t(' · {count} more',count=len(names)-4) if len(names)>4 else ''))
                 self.members_note.setToolTip(', '.join(names))
-                self.members_note.setText(', '.join(names[:4]) if names else self.app.t('Choose what this budget applies to'))
+                self.members_note.setText(', '.join(names) if names else self.app.t('Choose what this budget applies to'))
                 self.members_note.show(); self.members_button.show()
                 self.app.wellbeing.configure(datetime.now().astimezone())
                 from .wellbeing import applies
                 used=self.app.wellbeing.totals.get(rule['id'],sum(seconds for atom,seconds in self.app.wellbeing.atoms.items() if applies(rule['members'],atom)))
+                if rule['id'].startswith('games-') and rule['members']==[target('category','games')]:
+                    used=sum(self.app.tracker.quota_totals(datetime.now().astimezone(),rule['id']).values())
             self.usage.setText(self.app.t('Used in this budget: {time}',time=duration(used)))
         self.access.choose(self.current)
-        self.loading=False; self.steps.set_budget(None if self.current=='computer-window' else self.current); self.controls(); self.error.hide()
+        self.periods.place_days()
+        self.loading=False; self.steps.set_budget(None if self.periods.is_computer(self.current) else self.current); self.controls(); self.error.hide()
+        if hasattr(self,'drafts'): self.drafts.apply_raw()
 
     def controls(self,*args):
         usage=self.access.usage_limits.get(self.current,True) if hasattr(self,'access') else True
@@ -380,6 +408,10 @@ class TimeBudgets(QWidget):
         self.app.statistics.tracking.setChecked(True); self.controls()
 
     def saved(self,settings):
+        from .computer_periods import split_weekly
+        source=settings; settings=split_weekly(settings)
+        self.schedule.saved(settings)
+        self.periods.saved(settings)
         self.access.saved(settings)
         self.member_overlay_drafts.clear()
         self.counter_overlays=deepcopy(settings.counter_overlays); self.counter_overlay_changed.clear(); self.shared_overlay.clear()
@@ -392,7 +424,14 @@ class TimeBudgets(QWidget):
         self.game_limits=dict(settings.game_limits); self.game_overlays=deepcopy(settings.game_overlays); self.game_overlay_changed.clear()
         self.reset_overrides=dict(settings.budget_reset_overrides); self.reset_changed.clear()
         self.draft_games.clear()
+        if settings!=source:
+            self.schedule._edits=deepcopy(self.schedule._plans)
+            self.restriction_changed.update(set(source.restriction_plans)|set(settings.restriction_plans))
+            self.reset_changed.update(settings.budget_reset_overrides)
+            self.access.changed_days.update(settings.budget_active_days); self.access.changed_limits.update(settings.budget_usage_limits)
         self.refresh()
+        if hasattr(self,'drafts'): self.drafts.saved()
+        self.periods.migrated=settings!=source
 
     def remap(self,aliases):
         for values,changed in ((self.access.active_days,self.access.changed_days),(self.access.usage_limits,self.access.changed_limits)):
@@ -446,7 +485,7 @@ class TimeBudgets(QWidget):
             if key in self.reset_overrides: resets[key]=self.reset_overrides[key]
             else: resets.pop(key,None)
         return self.countdown_settings(replace(base,wellbeing_rules=rules,game_limits=limits,
-                       game_budget_enabled=self.shared_enabled,restriction_plans=plans,budget_reset_overrides=resets,**self.access.values(base)))
+                       computer_periods=deepcopy(self.periods.items),game_budget_enabled=self.shared_enabled,restriction_plans=plans,budget_reset_overrides=resets,**self.access.values(base)))
 
     def countdown_settings(self,base):
         overlays=deepcopy(base.game_overlays); activities=deepcopy(base.activity_overlays)
@@ -551,6 +590,7 @@ class TimeBudgets(QWidget):
 
     def remove_budget(self,key):
         if not key: return
+        if hasattr(self,'drafts'): self.drafts.raw.pop(key,None)
         self.access.remove(key)
         self.member_overlay_drafts.pop(key,None)
         self.collect(); self.current=None
@@ -560,6 +600,7 @@ class TimeBudgets(QWidget):
             self.shared_created=False; self.shared_enabled=False
         elif key=='computer-window':
             self.computer_created=False; self.schedule.set_computer_enabled(False)
+        elif self.periods.is_extra(key): self.periods.items=[p for p in self.periods.items if p['id']!=key]
         elif key.startswith('game:'):
             self.game_limits.pop(key[5:],None); self.draft_games.discard(key[5:])
         else: self.rules=[rule for rule in self.rules if rule['id']!=key]
@@ -589,7 +630,7 @@ class TimeBudgets(QWidget):
         rule=self.rule(self.current)
         if not individual:
             for key in ('games','apps','sites'): add(target('category',key))
-            if rule and not rule['members'] and not self.computer_created:
+            if rule and not rule['members']:
                 computer_choice=add({'kind':'computer','value':'period'},app.t('Computer use · scheduled period'))
                 def exclusive_period(changed):
                     if changed.checkState()!=Qt.Checked: return

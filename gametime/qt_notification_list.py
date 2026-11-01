@@ -5,7 +5,7 @@ from sqlite3 import Error as SQLiteError
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QScrollArea
-from .qt_widgets import label,button,panel,glyph,ACCENT
+from .qt_widgets import label,button,panel,glyph,ACCENT,separator
 from .qt_translation import QCheckBox
 from .notification_text import KINDS,notification_text
 from .schedule import day_settings,week_plans
@@ -31,9 +31,15 @@ class NotificationsPage(QWidget):
         self.protected=QCheckBox(app.t('Also show in anti-cheat games')); self.protected.setAccessibleName(app.t('Also show in anti-cheat games'))
         display_layout.addWidget(self.protected)
         self.display_note=label(app.t('Applies to countdowns and notifications.'),'muted'); self.display_note.setWordWrap(True); display_layout.addWidget(self.display_note)
+        display_layout.addWidget(separator())
+        self.details=QCheckBox(app.t('Detailed RTSS countdown')); self.details.setAccessibleName(app.t('Detailed RTSS countdown'))
+        display_layout.addWidget(self.details)
+        detail_note=label(app.t('Show the event name and daily budget remaining. Turn off to show only the countdown in games.'),'muted')
+        detail_note.setWordWrap(True); display_layout.addWidget(detail_note)
         self.display_status=label('','muted'); self.display_status.setWordWrap(True); self.display_status.hide(); display_layout.addWidget(self.display_status)
         outer.addWidget(display)
         self.fullscreen.clicked.connect(self.toggle_fullscreen); self.protected.clicked.connect(self.toggle_protected)
+        self.details.clicked.connect(self.toggle_details)
         self.scroll=QScrollArea(); self.scroll.setWidgetResizable(True)
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff); outer.addWidget(self.scroll,1)
         body=QWidget(); self.rows=QVBoxLayout(body); self.rows.setContentsMargins(0,0,8,0)
@@ -66,7 +72,8 @@ class NotificationsPage(QWidget):
         return entries
 
     def refresh(self):
-        for widget,checked in ((self.fullscreen,self.app.settings.overlay_rtss_auto),(self.protected,self.app.overlay_consents.display_enabled)):
+        for widget,checked in ((self.fullscreen,self.app.settings.overlay_rtss_auto),(self.protected,self.app.overlay_consents.display_enabled),
+                               (self.details,self.app.settings.overlay_rtss_details)):
             blocked=widget.blockSignals(True); widget.setChecked(checked); widget.blockSignals(blocked)
         if self._settings is self.app.settings and self._day==current_day(self.app.settings): return
         self._settings=self.app.settings; self._day=current_day(self.app.settings)
@@ -110,6 +117,14 @@ class NotificationsPage(QWidget):
         try:
             self.app.overlay_consents.set_display_enabled(enabled)
             self.display_saved(enabled)
+        except (ValueError,OSError,SQLiteError): self.display_error()
+
+    def toggle_details(self,enabled):
+        try:
+            settings=replace(self.app.settings,overlay_rtss_details=enabled).validate()
+            self.app.store.save_settings(settings); self.app.settings=self.app.catalog.settings=settings
+            self.app.update_overlay(); self.refresh()
+            self.display_status.clear(); self.display_status.hide()
         except (ValueError,OSError,SQLiteError): self.display_error()
 
     def display_error(self):

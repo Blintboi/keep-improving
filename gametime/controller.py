@@ -449,15 +449,22 @@ class MonitorActions:
         from .bedtime import Bedtime
         if not hasattr(self, 'bedtime'):
             self.bedtime = Bedtime(self.store)
-        state, marker, minimize = self.bedtime.update(self.settings, current)
-        if marker:
-            if self.popup_window: self.dismiss_popup()
-            alert = Alert(period_day(current.wall,reset_clock(self.settings)).isoformat(), (), 'bedtime',
-                          self.bedtime_message(marker[0],current.wall),
-                          self.t('OK, I’ll finish'))
-            # Bedtime is independent of game budgets, exclusions and Escape.
-            if self.popup(alert): self.bedtime.delivered(marker)
-        active = self.bedtime.active
+        from .computer_periods import schedules
+        if getattr(self,'_computer_schedule_source',None) is not self.settings:
+            self._computer_schedule_source=self.settings; self._computer_schedules=list(schedules(self.settings))
+        engines=getattr(self,'_computer_engines',{}); active=False; minimize=False; kept={}
+        for key,name,settings in self._computer_schedules:
+            engine=self.bedtime if key=='computer-window' else engines.get(key) or Bedtime(self.store,key)
+            kept[key]=engine
+            state,marker,due=engine.update(settings,current)
+            if marker:
+                if self.popup_window: self.dismiss_popup()
+                from .notification_text import notification_text
+                message=self.bedtime_message(marker[0],current.wall) if key=='computer-window' else str(name)+'\n'+notification_text(settings,'bedtime',day=marker[0])
+                alert=Alert(period_day(current.wall,reset_clock(settings)).isoformat(),(),'bedtime',message,self.t('OK, I’ll finish'))
+                if self.popup(alert): engine.delivered(marker)
+            active=active or engine.active; minimize=minimize or due
+        self._computer_engines=kept
         update = getattr(self, 'update_bedtime_banner', None)
         if update: update(active)
         if minimize:

@@ -13,8 +13,9 @@ def phase(settings, wall):
 
 
 class Bedtime:
-    def __init__(self, store):
+    def __init__(self, store, identity=''):
         self.store = store
+        self.identity=identity
         self.ledger = None
         self.keys = set()
         self.previous = None
@@ -43,11 +44,13 @@ class Bedtime:
         # A reminder is never caught up after a missed minute, sleep or a clock
         # jump. A process started in the scheduled minute may show it once.
         key = 'bedtime:'+':'.join(map(str, schedule[1:4]))
+        previous_key=key
+        if self.identity: key+=':'+self.identity
         if state == 'warning' and (not current.interactive or previous is not None and not continuous):
             self.warning_suppressed = True
         warning = (settings.bedtime_warning_enabled and state == 'warning' and current.interactive and popup_available
                    and current.wall.hour*60+current.wall.minute == settings.bedtime_warning_minute
-                   and not self.warning_suppressed and key not in self.keys)
+                   and not self.warning_suppressed and key not in self.keys and previous_key not in self.keys)
         active = state == 'bedtime' and settings.bedtime_minimize
         self.active=active
         minimize = False

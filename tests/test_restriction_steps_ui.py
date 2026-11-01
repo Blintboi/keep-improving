@@ -60,7 +60,8 @@ class StepsInterfaceTests(unittest.TestCase):
         self.assertTrue(editor.restriction_plans['shared-games']['legacy'])
         self.assertIn('shared-games',editor.restriction_plans)
         self.assertEqual(self.store.settings().restriction_plans,{})
-        self.app.budget_back.click(); self.assertEqual(editor.restriction_plans,{})
+        self.app.budget_back.click(); self.assertIn('shared-games',editor.restriction_plans)
+        editor.show_editor('shared-games'); editor.cancel_edit(); self.assertEqual(editor.restriction_plans,{})
         editor.show_editor('shared-games'); blocks.add_step.click()
         self.app.save_budgets()
         self.assertIn('shared-games',self.store.settings().restriction_plans)
@@ -71,12 +72,15 @@ class StepsInterfaceTests(unittest.TestCase):
                                                        'restriction_enabled':True,'restriction_seconds':7800}})
         self.store.save_settings(settings); self.app.settings=self.app.catalog.settings=settings
         self.app.schedule_editor.saved(settings); editor=self.app.budget_editor; editor.saved(settings)
-        self.app.open_budget(); editor.show_editor('shared-games'); self.app.save_budgets()
+        self.app.open_budget(); editor.show_editor('shared-games')
         self.assertEqual(self.store.settings(),settings)
+        from gametime.computer_periods import split_weekly
+        expected=split_weekly(settings); self.app.save_budgets()
+        self.assertEqual(self.store.settings(),expected)
         editor.show_editor('shared-games'); editor.steps.add_step.click()
-        self.assertEqual(self.store.settings(),settings)
-        self.app.budget_back.click(); self.app.save_budgets()
-        self.assertEqual(self.store.settings(),settings)
+        self.assertEqual(self.store.settings(),expected)
+        editor.cancel_edit(); self.app.save_budgets()
+        self.assertEqual(self.store.settings(),expected)
 
     def test_blocks_sort_by_active_use_and_keep_ids_and_other_budgets(self):
         from gametime.wellbeing import target
@@ -103,7 +107,7 @@ class StepsInterfaceTests(unittest.TestCase):
         editor=self.app.budget_editor; editor.saved(settings); self.app.open_budget(); editor.show_editor('shared-games')
         self.assertEqual(editor.settings(settings).restriction_plans['shared-games'],plan)
         editor.steps.restore.click(); self.assertNotIn('shared-games',editor.restriction_plans)
-        self.app.budget_back.click(); self.app.save_budgets()
+        editor.cancel_edit(); self.app.save_budgets()
         self.assertEqual(self.store.settings().restriction_plans['shared-games'],plan)
 
     def test_close_before_budget_expiry_requires_consent_on_its_card(self):
@@ -590,7 +594,7 @@ class StepsInterfaceTests(unittest.TestCase):
         self.assertFalse(editor.steps.legacy_single_card.isHidden())
         trash=next(b for b in editor.steps.legacy_single_card.findChildren(QPushButton) if b.accessibleName()==self.app.t('Remove step'))
         trash.click(); self.assertTrue(editor.steps.legacy_single_card.isHidden()); self.assertTrue(self.store.settings().wellbeing_rules[0]['enforce'])
-        self.app.budget_back.click(); editor.show_editor(rule['id']); self.assertFalse(editor.steps.legacy_single_card.isHidden())
+        editor.cancel_edit(); editor.show_editor(rule['id']); self.assertFalse(editor.steps.legacy_single_card.isHidden())
         next(b for b in editor.steps.legacy_single_card.findChildren(QPushButton) if b.accessibleName()==self.app.t('Remove step')).click()
         self.app.save_budgets(); self.assertFalse(self.store.settings().wellbeing_rules[0]['enforce'])
         self.assertEqual(self.store.settings().wellbeing_rules[0]['members'],rule['members'])
@@ -627,7 +631,8 @@ class StepsInterfaceTests(unittest.TestCase):
         self.app.schedule_editor.saved(settings); editor=self.app.budget_editor; editor.saved(settings)
         self.app.open_budget(); self.assertIn('computer-window',editor.row_keys)
         editor.show_editor('computer-window'); schedule=self.app.schedule_editor
-        self.assertFalse(schedule.day_details.isHidden()); self.assertTrue(schedule.controls.isHidden())
+        self.assertTrue(schedule.day_details.isHidden()); self.assertTrue(schedule.controls.isHidden())
+        self.assertIs(editor.access.widget.parent(),schedule)
         schedule.bedtime_times['bedtime_minute'].setTime(QTime(22,0))
         schedule.bedtime_times['bedtime_resume_minute'].setTime(QTime(7,0))
         self.app.save_budgets(); saved=self.store.settings(); plans=week_plans(saved)

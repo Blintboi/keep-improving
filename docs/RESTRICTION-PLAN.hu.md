@@ -2,6 +2,12 @@
 
 A jelenlegi működés leírása.
 
+Az időkeretek félbehagyott módosításai helyi piszkozatként automatikusan megmaradnak, visszalépés és újraindítás után is. A **Módosítások mentése** érvényesíti őket; a **Piszkozat elvetése** külön, megerősíthető művelet. Az általános beállításokra ez nem vonatkozik.
+
+Minden keret egy beállításcsomagot és a saját érvényes napjait tartalmazza. Eltérő hétvégi értékekhez külön időkeret hozható létre, géphasználati időszakból is lehet több. A korábbi, naponként eltérő beállítások külön keretként jelennek meg a szerkesztőben; a mentésig a korábban mentett szabályok érvényesek. Közös tevékenységekre, átfedő időszakokra vonatkozó kereteknél figyelmeztetés jelenik meg; a mentést ez nem tiltja, és minden érintett korlátozás számít.
+
+A keret neve alatt minden kiválasztott tag látható, szükség esetén több sorban. A korlátozási művelet alkalmazás- és weboldalrésze közvetlenül mutatja a beállításokat. Korábban kifejezetten kikapcsolt típus továbbra sem kapcsolódik be automatikusan.
+
 ## Beállítás
 
 Az Időkeretek oldalon nyiss meg egy keretet, majd a **Figyelmeztetések és korlátozások** részen a **Művelet hozzáadása** gombbal adj hozzá lépést, és válaszd ki a típusát. A kockák automatikusan időrendbe kerülnek; az azonos időpontú lépések egyszerre lépnek életbe. Az új lépések mellett a meglévő figyelmeztetési és minimalizálási szabályok is érvényben maradnak, amíg el nem távolítod őket. A korábbi verzióban mentett egyéni tervek megtartják eredeti működésüket. A géphasználati időszak külön keretben állítható.
@@ -12,7 +18,7 @@ A **Szünet** lépésnél a használati időt, a korlátozás módját és a sz�
 
 Az egyszeri mentési idő a korlátozásnál, a korábbi bezárási lépésnél és a bezárást választó szünetnél is megadható. A mentési idő 0–60 egész perc: a nulla kikapcsolja. Vegyes keret műveleteinél a két típus külön értéket is kaphat; a kérés továbbra is keretenként egyszer használható fel a következő megújulásig. A kért mentési idő végén az alkalmazás akkor is bezárul, ha közben a szünet lejárt; utána újra elindítható, ha más korlátozás nincs. Több érintett korlátozás esetén mindegyiknek engednie kell, és a legrövidebb idő számít. Ha szünet is aktív, a korlátozás az erősebb: a szünet tovább telik, de nem akadályozza a mentési időt. A jog keretenként, a saját napváltásig egyszer jár. A folyamat azonosítójához kötött, már kért mentési idő a megújuláson is átnyúlhat; a lejárat utáni bezárás a megkezdett mentésre vonatkozik.
 
-A műveletkártyák csak a keret kiválasztott tagjaihoz tartozó típusokat mutatják. Vegyes keretnél az **Alkalmazások és játékok** és a **Weboldalak** külön rész: saját hangos/felugró figyelmeztetés, szünetmód és szünethossz, valamint korlátozás és mentési idő adható meg. A használati küszöb közös. Egy típus jelölését kikapcsolva az adott művelet arra a típusra nem vonatkozik. A weboldalaknál takarófelület, átirányítás vagy lapbezárás választható; alkalmazásoknál az új korlátozás továbbra is bezárás. A meg nem változtatott régi beállítások eredeti viselkedése megmarad.
+A műveletkártyák csak a keret kiválasztott tagjaihoz tartozó típusokat mutatják. Vegyes keretnél az **Alkalmazások és játékok** és a **Weboldalak** külön rész: saját hangos/felugró figyelmeztetés, szünetmód és szünethossz, valamint korlátozás és mentési idő adható meg. A használati küszöb közös. Figyelmeztetésnél és szünetnél egy típus jelölését kikapcsolva az adott művelet arra a típusra nem vonatkozik. A weboldalaknál takarófelület, átirányítás vagy lapbezárás választható; alkalmazásoknál az új korlátozás továbbra is bezárás. A meg nem változtatott régi beállítások eredeti viselkedése megmarad.
 
 ## Alkalmazások és játékok
 
@@ -51,6 +57,8 @@ Szünet alatt a lebegő számláló elrejtőzik. A tálcaikonon az aktuális tev
 A korlátozás nem ad hozzá automatikus figyelmeztetést. Az egyéni keret elfogyása önmagában nem nyit értesítést, és műveletlistás játékkeretnél sem fut le mellé a régi lejárati vagy újraindítási értesítés. A külön beállított figyelmeztetés és a mentési idő kérésére szolgáló korlátozófelület továbbra is működik.
 
 ## Állapot és erőforrások
+
+Az Értesítések megjelenítési beállításainál a **Részletes RTSS-számláló** kikapcsolható. Ekkor játékban csak a következő eseményig hátralévő idő látszik; az esemény neve és a kisebb napi keret sor elmarad. Az asztali számláló és a tálca továbbra is részletes marad. A választás újraindítás után is megmarad.
 
 A tervek és az egyszeri jogosultságok helyiek, nem szinkronizálódnak. A `restriction_state` SQLite-tábla megőrzi az adott napra kiadott értesítéseket, lejáratot és hosszabbítást; a hosszabbítás tranzakciója újra ellenőrzi, hogy azt nem használták-e már el. A meglévő egy másodperces előtérmintavétel indítja a lépéseket. A bezárás háttérszálon vár, nem fagyasztja a felületet. Hangkezelő csak aktív némításkor fut, a böngésző pedig csak aktív tiltáskor ellenőriz sűrűbben.
 

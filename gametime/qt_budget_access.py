@@ -46,6 +46,7 @@ class BudgetAccess:
         if len(values)==7: self.active_days.pop(key,None)
         else: self.active_days[key]=values
         self.changed_days.add(key); self.none.setVisible(not values)
+        if hasattr(self.editor,'drafts'): self.editor.drafts.queue()
 
     def usage_changed(self,enabled):
         key=self.editor.current

@@ -42,6 +42,13 @@ class PreferenceSyncTests(unittest.TestCase):
         self.assertEqual(one,two); self.assertEqual(self.stores[0].db.total_changes,before)
         self.assertNotIn(GROUP,str(one.get('preferences',{})))
 
+    def test_rtss_detail_choice_uses_the_existing_preference_exchange(self):
+        self.stores[0].save_settings(replace(self.stores[0].settings(),overlay_rtss_details=False))
+        self.transfer(0,1)
+        self.assertFalse(self.stores[1].settings().overlay_rtss_details)
+        self.transfer(1,0)
+        self.assertFalse(self.stores[0].settings().overlay_rtss_details)
+
     def test_computer_warning_days_sync_separately_from_legacy_schedules(self):
         from gametime.preferences_sync import values,WARNING_DAYS
         settings=replace(self.stores[0].settings(),bedtime_enabled=True,

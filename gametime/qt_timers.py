@@ -72,9 +72,13 @@ class TimerActions:
                 if event and event.wall_clock and event.seconds>0: result.append(event)
         # Existing scheduled computer-use caps remain part of game countdowns.
         if not overlays or atom and atom[0]:
-            budget=remaining_budget(self.settings,wall,sum(self.tracker.quota_totals(wall).values()))
-            if budget.bedtime:
-                result.append(TimerView('computer-window',str(self.t('Computer use')),'clock_limit',budget.remaining,budget.quota_remaining,True,'app',bool(atom and atom[0])))
+            from .computer_periods import schedules
+            from .budget import _remaining_budget
+            used=sum(self.tracker.quota_totals(wall).values())
+            for key,name,settings in schedules(self.settings):
+                budget=_remaining_budget(settings,wall,used)
+                if budget.bedtime:
+                    result.append(TimerView(key,str(self.t(name)),'clock_limit',budget.remaining,budget.quota_remaining,True,'app',bool(atom and atom[0])))
         if not overlays and self.focus.running:
             result.append(TimerView('focus',str(self.t('Focus mode')),'focus' if self.focus.phase=='focus' else 'break_active',self.focus.remaining,wall_clock=True))
         # Identical native/site timers in a mixed budget share one tray row.

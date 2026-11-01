@@ -217,6 +217,7 @@ class RestrictionBlocks(QWidget):
 
     def changed(self):
         if not self.loading and self.key: self.editor.restriction_changed.add(self.key)
+        if hasattr(self.editor,'drafts'): self.editor.drafts.queue()
 
     def extra_changed(self,value):
         if not self.loading and self.key in self.editor.restriction_plans:

@@ -193,6 +193,8 @@ class WeeklyScheduleEditor(QFrame):
         mixed=self._selected and any(len({self._plans[day][key] for day in self._selected})>1 for key in fields)
         self.difference.setText(self.t('The selected days differ. Values shown are from {day}; only edited fields change on all selected days.',day=self.t(DAY_NAMES[min(self._selected)])) if mixed else self.t('The selected days use the same schedule.') if names else '')
         self.difference.setVisible(bool(mixed))
+        if getattr(self,'_fixed_budget',False):
+            self.selection_label.hide(); self.difference.hide(); self.day_details.hide()
         self.unify.setVisible(bool(mixed))
         if self._selected: self.unify.setText(self.t("Use {day}'s schedule for selected days",day=self.t(DAY_NAMES[min(self._selected)])))
 

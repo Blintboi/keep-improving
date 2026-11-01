@@ -60,8 +60,9 @@ class BudgetListTests(unittest.TestCase):
         self.assertEqual(rules[0]['name'],'Leisure'); self.assertEqual(rules[0]['seconds'],900)
 
     def test_abandoned_empty_form_and_deletion_do_not_restore_a_budget(self):
-        editor=self.app.budget_editor; editor.create_new(); editor.show_list()
-        self.assertEqual(editor.row_keys,['shared-games']); self.assertEqual(editor.rules,[])
+        editor=self.app.budget_editor; editor.create_new(); draft=editor.current; editor.show_list()
+        self.assertIn(draft,editor.row_keys); self.assertEqual(len(editor.rules),1)
+        editor.remove_budget(draft)
         editor.remove_budget('shared-games'); self.app.save_budgets()
         self.assertEqual(editor.row_keys,[]); self.assertFalse(self.store.settings().game_budget_enabled)
 
@@ -151,10 +152,8 @@ class BudgetListTests(unittest.TestCase):
         self.assertNotIn('shared-games',editor.row_keys)
         self.assertTrue(self.store.settings().game_budget_enabled)
         self.app.cancel_budget_settings(); self.app.open_budget()
-        self.assertIn('shared-games',editor.row_keys)
-        row=next(editor.rows_layout.itemAt(i).widget() for i in range(editor.rows_layout.count()) if editor.rows_layout.itemAt(i).widget().property('budgetKey')=='shared-games')
-        with patch.object(editor,'ask_delete',return_value=True):
-            next(b for b in row.findChildren(QPushButton) if not b.icon().isNull()).click()
+        self.assertNotIn('shared-games',editor.row_keys)
+        self.assertTrue(self.store.settings().game_budget_enabled)
         self.app.save_budgets()
         self.assertFalse(self.store.settings().game_budget_enabled)
         self.assertIn(self.games[0].id,self.store.settings().game_limits)

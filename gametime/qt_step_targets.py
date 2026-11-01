@@ -11,6 +11,7 @@ class TargetFields(QWidget):
         t=card.owner.app.t
         outer=QVBoxLayout(self); outer.setContentsMargins(0,4,0,4); outer.setSpacing(10)
         self.enabled=QCheckBox(); outer.addWidget(self.enabled)
+        self.heading=label('','section'); outer.addWidget(self.heading)
         self.body=QWidget(); self.body.setSizePolicy(QSizePolicy.Expanding,QSizePolicy.Maximum)
         box=QVBoxLayout(self.body); box.setContentsMargins(0,0,0,0); box.setSpacing(10); outer.addWidget(self.body)
         self.warnings=QWidget(); warning_row=QHBoxLayout(self.warnings); warning_row.setContentsMargins(0,0,0,0)
@@ -97,6 +98,11 @@ class TargetFields(QWidget):
         titles={'site': ('Warn when using websites','Pause websites','Restrict websites'),
                 'app': ('Warn when using applications and games','Pause applications and games','Restrict applications and games')}
         self.enabled.setText(t(titles[self.scope][0 if notice else 1 if is_break else 2]))
+        # A new restriction already applies to every selected activity type.
+        # Keep an explicit opt-in only for a previously disabled legacy target.
+        self.enabled.setVisible(notice or is_break or not active)
+        self.heading.setText(t('Applications and games' if self.scope=='app' else 'Websites'))
+        self.heading.setVisible(not notice and not is_break and active)
         self.enabled.setToolTip(t('Apply this action to websites in this budget.' if self.scope=='site' else
                                   'Apply this action to applications and games in this budget.'))
         mode=self.break_mode.currentData() if is_break else self.mode.currentData()

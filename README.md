@@ -1,6 +1,6 @@
-# Keep Improving — 2.39.20
+# Keep Improving — 2.39.21
 
-**[Download for Windows x64 — 2.39.20](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256) · [Magyar](README.hu.md)
+**[Download for Windows x64 — 2.39.21](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256) · [Magyar](README.hu.md)
 
 Keep Improving helps you see where your computer time goes and set limits that suit you. Track games, applications and websites, create individual or shared budgets, schedule reminders and run focus sessions. Free and open source, with English and Hungarian interfaces.
 
@@ -29,6 +29,10 @@ The **Overview** remembers its activity, period, computer, day and list filters,
 
 Open a budget, choose the days and daily allowance, then use **Add action** to choose a warning or restriction. Blocks sort automatically by time. Existing enabled restrictions also appear here and remain active unless removed. When creating a budget, choose **All games** to build the weekly shared game budget, or **Computer use · scheduled period** to set start and end times. The period warning and window minimization can be added or removed independently.
 
+Each budget has one configuration and its own active weekdays. For different weekend limits, add another budget with those days selected; multiple named computer-use periods are supported too. The editor flags overlapping activities and times, and all applicable restrictions remain in force. Selected members are listed in full, including websites you have not visited yet.
+
+Unfinished budget edits are kept locally as drafts when you leave the editor or restart the app. **Save** applies them; **Discard draft** removes the unfinished changes after confirmation. General settings are not included in these drafts.
+
 | Action | Applications and games | Websites |
 | --- | --- | --- |
 | Warning | Sound, popup, or both | Sound, popup, or both |
@@ -56,6 +60,8 @@ In a group's countdown editor, choose **Budget default** or an individual member
 **Notifications** lists the built-in reminders and your scheduled messages together. Set the title, text, icon, time and weekdays of a custom notification. Desktop notifications can be dismissed or moved. Ordinary reminders and countdowns do not take keyboard focus from games.
 
 The countdown shows the next event prominently, with the remaining daily allowance below it. During a break, its remaining time stays available in the tray, including after a website redirects to a new tab. The tray menu lists running timers by budget name. Adding a restriction does not add an expiry warning: only the separately configured warning action is delivered. The save-time dialog remains available when enabled.
+
+Turn off **Detailed RTSS countdown** in **Notifications** to show only the time until the next event in games. Desktop and tray counters keep their details.
 
 Countdown appearance and position can be customized per target. Supported fullscreen games can use separately installed **RTSS 7.3.7 or later**; desktop rendering is used where available. Fullscreen compatibility depends on the game and renderer. Protected games have separate explicit consent controls; see the [anti-cheat guide](docs/ANTICHEAT.hu.md).
 

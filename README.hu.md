@@ -1,6 +1,6 @@
-# Keep Improving — 2.39.20
+# Keep Improving — 2.39.21
 
-**[Letöltés Windows x64-re — 2.39.20](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256) · [English](README.md)
+**[Letöltés Windows x64-re — 2.39.21](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256) · [English](README.md)
 
 A Keep Improving megmutatja, mire megy el a gép előtt töltött időd, és segít saját kereteket beállítani. Játékokat, alkalmazásokat és weboldalakat mér, egyéni vagy közös időkereteket, emlékeztetőket és fókuszidőzítőt kínál. Ingyenes, nyílt forráskódú, magyar és angol felülettel.
 
@@ -29,6 +29,10 @@ Az **Áttekintés** megjegyzi ezen a gépen a kiválasztott tevékenységet, id�
 
 Nyiss meg egy keretet, válaszd ki a napokat és a napi keretet, majd a **Művelet hozzáadása** gombbal válassz figyelmeztetést vagy korlátozást. A kockák automatikusan időrendbe kerülnek; a korábban bekapcsolt korlátozások is itt láthatók, és eltávolításig érvényben maradnak. Új keretnél az **Összes játék** kiválasztásával a heti közös játékkeretet állíthatod össze; a **Géphasználat · időszak** választással kezdő és záró óraidőt adhatsz meg. Az időszak figyelmeztetése és az ablakok minimalizálása külön adható hozzá vagy távolítható el.
 
+Minden keretnek egy beállításkészlete és saját napválasztója van. Eltérő hétvégi korláthoz adj hozzá másik keretet a megfelelő napokkal; több, külön elnevezett géphasználati időszak is létrehozható. A szerkesztő jelzi a közös tevékenységeket és időszakokat érintő átfedéseket; minden érvényes korlátozás számít. A tagok teljes felsorolása látható, a még meg nem látogatott weboldalakkal együtt.
+
+A félbehagyott időkeret-szerkesztés helyi piszkozatként megmarad, ha elnavigálsz vagy újraindítod a programot. A **Mentés** érvényesíti, a **Piszkozat elvetése** megerősítés után törli a befejezetlen módosításokat. Az általános beállítások nem tartoznak ezekhez a piszkozatokhoz.
+
 | Művelet | Alkalmazás és játék | Weboldal |
 | --- | --- | --- |
 | Figyelmeztetés | Hang, felugró értesítés vagy mindkettő | Hang, felugró értesítés vagy mindkettő |
@@ -56,6 +60,8 @@ A csoport számlálójánál a **Mihez állítod a számlálót?** listában a *
 Az **Értesítések** oldalon együtt látod a beépített emlékeztetőket és a saját üzeneteidet. Egyéni címet, szöveget, ikont, időpontot és napokat adhatsz meg. Az asztali értesítések bezárhatók és mozgathatók. A normál emlékeztető és számláló nem veszi el a billentyűzet fókuszát a játéktól.
 
 A számláló nagyban a következő eseményig hátralévő időt, alatta kisebben a napi keret maradékát mutatja. Szünet alatt annak hátralévő ideje a tálcán követhető, új lapra átirányítás után is. A tálca menüje keretnévvel sorolja fel a futó időzítőket. A korlátozás hozzáadása nem kapcsol be automatikus lejárati figyelmeztetést: a külön beállított figyelmeztetés jelez, a mentési idő kérésére szolgáló ablak pedig akkor jelenik meg, ha engedélyezted.
+
+Az **Értesítések** oldalon kikapcsolhatod a **Részletes RTSS-számláló** beállítást: ekkor játék közben csak a következő eseményig hátralévő idő látszik. Az asztali és tálcás számláló részletei megmaradnak.
 
 A számláló megjelenése és helye célonként állítható. Támogatott teljes képernyős játékokhoz a külön telepíthető **RTSS 7.3.7 vagy újabb** használható; ahol lehet, asztali megjelenítés működik. A kompatibilitás a játéktól és a megjelenítési módtól is függ. Védett játékokhoz külön, kifejezett hozzájárulási beállítások tartoznak: [anti-cheat útmutató](docs/ANTICHEAT.hu.md).
 

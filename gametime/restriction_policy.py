@@ -88,7 +88,8 @@ def validate_plans(plans):
                 or ('legacy_enforce' in plan and type(plan['legacy_enforce']) is not bool)
                 or type(plan['extension_minutes']) is not int or not 0 <= plan['extension_minutes'] <= 60
                 or type(plan['close_confirmed']) is not bool
-                or not isinstance(plan['steps'], list) or len(plan['steps']) > 20):
+                or not isinstance(plan['steps'], list) or len(plan['steps']) > 22
+                or sum(not isinstance(s,dict) or s.get('id') not in ('legacy-warning','legacy-limit') for s in plan['steps'])>20):
             raise ValueError('Invalid restriction plan.')
         seen = set()
         for step in plan['steps']:

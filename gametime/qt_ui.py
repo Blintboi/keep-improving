@@ -489,7 +489,10 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
 
     def settings_have_draft(self):
         try:
-            proposed=replace(self.budget_editor.settings(self.schedule_editor.settings(self.settings)),games_root=self.games_path.text().strip(),
+            editor=self.budget_editor
+            automatic=editor.periods.migrated and editor.drafts.snapshot()==editor.drafts.baseline and not editor.drafts.raw
+            base=self.settings if automatic else editor.settings(self.schedule_editor.settings(self.settings))
+            proposed=replace(base,games_root=self.games_path.text().strip(),
                 steam_roots=[p.strip() for p in self.paths['steam'].text().split(';') if p.strip()],
                 epic_manifest_dirs=[p.strip() for p in self.paths['epic'].text().split(';') if p.strip()],
                 ubisoft_roots=[p.strip() for p in self.paths['ubisoft'].text().split(';') if p.strip()],
@@ -691,16 +694,20 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
     def _build_budget_page(self):
         page=QWidget(); layout=QVBoxLayout(page); layout.setContentsMargins(32,25,32,22); layout.setSpacing(18)
         heading=QHBoxLayout(); self.budget_back=back_button(self.t,self.cancel_budget_settings); heading.addWidget(self.budget_back)
+        self.budget_back.setAccessibleName(self.t('Back')); self.budget_back.setToolTip(self.t('Back'))
         self.budget_editor.back_button=self.budget_back
         heading.addWidget(label(self.t('Time budgets'),'title'),1); heading.addWidget(self.page_settings_button('budgets')); layout.addLayout(heading)
         scroll=QScrollArea(); scroll.setWidgetResizable(True); self.budget_scroll=scroll
         body=QWidget(); content=QVBoxLayout(body); content.setContentsMargins(0,0,8,0)
         content.addWidget(self.budget_editor); content.addStretch(); scroll.setWidget(body); layout.addWidget(scroll,1)
         footer=QHBoxLayout(); self.budget_error=label('','danger'); self.budget_error.setWordWrap(True); footer.addWidget(self.budget_error,1)
+        self.budget_discard=button(self.t('Discard draft'),self.budget_editor.drafts.discard,'quiet'); footer.addWidget(self.budget_discard); self.budget_discard.hide()
         footer.addWidget(button(self.t('Save changes'),self.save_budgets,'primary')); layout.addLayout(footer)
+        self.budget_draft_note=label('','muted'); self.budget_draft_note.setWordWrap(True); layout.addWidget(self.budget_draft_note)
         return page
 
     def save_budgets(self):
+        if not self.budget_editor.drafts.prepare_save(): return
         self.budget_editor.collect()
         missing=next((rule for rule in self.budget_editor.rules if not rule['members']),None)
         if missing:
@@ -723,14 +730,11 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
 
     def cancel_budget_settings(self):
         if self.budget_editor.views.currentIndex()==1:
-            self.budget_editor.cancel_edit(); return
-        self.budget_editor.current=None
-        self.schedule_editor.saved(self.settings); self.budget_editor.saved(self.settings)
-        self.budget_editor.show_list()
-        if self.settings_error.text()==self.budget_error.text(): self.settings_error.clear()
-        self.budget_error.clear()
+            self.budget_editor.show_list()
+            if self.settings_error.text()==self.budget_error.text(): self.settings_error.clear()
+            self.budget_error.clear(); return
+        self.budget_editor.drafts.flush()
         self.switch_page(getattr(self,'_return_pages',{}).get(5,1),remember=False)
-        self.set_status('Changes discarded.')
 
     def show_settings_section(self,key):
         if key=='schedule': self.open_budget(); return
@@ -1098,8 +1102,11 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
                     if self._rtss_consent_attempt!=attempt:
                         self.refresh_rtss_consent((current.path,)); self._rtss_consent_attempt=attempt
                 geometry=screen.geometry(); ratio=screen.devicePixelRatio()
+                detailed=timer_view is not None and self.settings.overlay_rtss_details
+                caption=timer_view.label(self.t) if detailed else ''
+                detail=timer_view.secondary(self.t) if detailed else ''
                 text=rtss_countdown(remaining,warning,settings.overlay_opacity,settings.overlay_font_size,settings.overlay_color_normal,settings.overlay_color_warning,
-                                    caption=timer_view.label(self.t) if timer_view else '',detail=timer_view.secondary(self.t) if timer_view else '')
+                                    caption=caption,detail=detail)
                 # IPC can publish before its acknowledgement reaches this tick.
                 # Withdraw the desktop first; a failed receipt is not proof that
                 # the RTSS copy has disappeared.
@@ -1116,7 +1123,7 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
                     self._overlay_backend='none'; self._overlay_identity=''; self._overlay_updated=0
                     return
                 self._rtss_publishing=True
-                hud=countdown_size(settings.overlay_font_size,caption=timer_view.label(self.t) if timer_view else '',detail=timer_view.secondary(self.t) if timer_view else '')
+                hud=countdown_size(settings.overlay_font_size,caption=caption,detail=detail)
                 healthy=self.rtss.present(current.path,current.identity,text,(settings.overlay_x,settings.overlay_y,round(geometry.width()*ratio),round(geometry.height()*ratio),settings.overlay_font_size,(hud.width(),hud.height())),retry=retry)
                 desktop_ready=self.rtss.desktop_ready
                 self.rtss_status.setText(self.t('RTSS connected' if healthy else self.rtss.error or ('RTSS unavailable; using the desktop countdown.' if desktop_ready else 'RTSS connecting…'))); self.rtss_status.show()
@@ -1161,6 +1168,8 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
             settings=replace(base,**values).validate()
             previous=self.settings
             self.tracker.flush(); self.wellbeing.flush(); self.store.save_settings(settings); self.settings=self.catalog.settings=settings
+            from .computer_periods import carry_runtime
+            carry_runtime(self.store,previous,settings)
             self.renewal_settings_changed(previous,settings)
             if scope!='general':
                 if self.budget_editor.shared_overlay:
@@ -1249,6 +1258,7 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
 
     def switch_page(self,index,*,remember=True):
         previous=self.pages.currentIndex()
+        if previous==5 and index!=5: self.budget_editor.drafts.flush()
         if remember and index in (2,5) and previous!=index:
             if not hasattr(self,'_return_pages'): self._return_pages={}
             self._return_pages[index]=previous if previous in (0,1,2,4,5,6) else 1
@@ -1373,7 +1383,8 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
         self.show()
     def closeEvent(self,event):
         if self.closed: event.accept()
-        else: event.ignore(); self.hide()
+        else:
+            self.budget_editor.drafts.flush(); event.ignore(); self.hide()
     def showEvent(self,event):
         super().showEvent(event)
         if not self.closed:
@@ -1661,6 +1672,7 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
 
     def close(self):
         if self.closed: return
+        self.budget_editor.drafts.close()
         self.statistics.flush_view()
         self.closed=True
         self.restrictions.close()

@@ -1,5 +1,13 @@
 # Testing
 
+## 2.39.21 local budget drafts and fixed weekday selections — 2026-11-01
+
+Temporary-profile tests exercise durable, unapplied budget drafts across back navigation, failed validation and application restart. General settings remain outside draft storage. Budget actions, active weekdays, renewals and member countdown appearance survive; successful Save clears the draft and explicit Discard remains cancellable. Idle flushes do not rewrite unchanged data. Budget members are shown in full, including unvisited websites beyond the fourth entry.
+
+Each budget has one settings set and its own active-day selector. Independent computer periods retain their own names, timing, renewal, warning ledgers and weekday coverage. Legacy weekday schedules are presented as separate fixed budgets without changing applied settings until Save. Tests compare old and migrated overnight behavior and daily game limits, and verify nonblocking overlap warnings. Existing timing, restriction, zero-budget, preference, activity and countdown tests cover compatibility.
+
+The optional detailed RTSS setting persists and uses the same selected next event in compact mode. Desktop and tray detail stays available. HU/EN interface captures and the native fullscreen fixture verify presentation. All 285 targeted tests and 86 bundled installer checks passed. Both native fullscreen RTSS modes passed five checks each. The verified installer upgraded the actual local installation before publication was requested; 26 profile-preservation checks passed and the updated application opened successfully.
+
 ## 2.39.20 next-event countdowns and persistent tray timers — 2026-11-01
 
 The desktop and RTSS counter project the next configured warning, break or restriction, with the full daily allowance on a smaller second line. Tests cover repeating breaks, equal-time restriction precedence, clock deadlines, save allowances, disabled targets, redirected browser tabs, independent member appearances and foreground changes. Running breaks remain in the tray tooltip and named timer menu after leaving the activity. The native tooltip stays within its UTF-16 limit and hidden-window work reuses the existing accounting sample.

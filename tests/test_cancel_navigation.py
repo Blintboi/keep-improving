@@ -1,4 +1,4 @@
-"""Back exits drafts without saving, including invalid input and other-page drafts."""
+"""Budget back preserves drafts; general settings and dialogs retain cancellation."""
 from dataclasses import replace
 from unittest.mock import patch
 import unittest
@@ -67,13 +67,13 @@ class CancelNavigationTests(unittest.TestCase):
         app.save_settings(scope='general'); self.assertEqual(self.store.settings(),saved)
         app.save_budgets(); self.assertEqual(self.store.settings().wellbeing_rules[0]['seconds'],1500)
 
-    def test_back_removes_even_invalid_new_budget_and_clears_validation_error(self):
+    def test_back_preserves_even_invalid_new_budget_without_applying_it(self):
         app=self.app; saved=self.store.settings(); app.open_budget(); editor=app.budget_editor
         editor.create_new(); key=editor.current; editor.name.setText(''); app.save_budgets()
         self.assertTrue(app.budget_error.text())
         editor.back_button.click()
-        self.assertEqual(editor.views.currentIndex(),0); self.assertNotIn(key,editor.row_keys)
-        self.assertFalse(app.budget_error.text()); self.assertFalse(app.settings_error.text())
+        self.assertEqual(editor.views.currentIndex(),0); self.assertIn(key,editor.row_keys)
+        self.assertEqual(editor.rule(key)['name'],'')
         app.save_budgets(); self.assertEqual(self.store.settings(),saved)
 
     def test_cancel_existing_budget_reverts_members_name_and_limit_only_for_that_budget(self):
@@ -83,8 +83,9 @@ class CancelNavigationTests(unittest.TestCase):
         app.open_budget(); editor.show_editor('one'); editor.minutes.setValue(25); editor.show_list()
         editor.show_editor('two'); editor.name.setText('Renamed'); editor.replace_members(editor.rule('two'),[target('site','changed.com')])
         editor.minutes.setValue(30); editor.name.setText(''); app.budget_back.click()
-        self.assertEqual(editor.rule('two'),rules[1]); self.assertEqual(editor.rule('one')['seconds'],1500)
+        self.assertEqual(editor.rule('two')['name'],''); self.assertEqual(editor.rule('one')['seconds'],1500)
         self.assertEqual(self.store.settings(),settings)
+        editor.show_editor('two'); editor.cancel_edit()
         app.save_budgets(); self.assertEqual(self.store.settings().wellbeing_rules[1],rules[1])
         self.assertEqual(self.store.settings().wellbeing_rules[0]['seconds'],1500)
 
@@ -92,10 +93,10 @@ class CancelNavigationTests(unittest.TestCase):
         app=self.app; saved=self.store.settings(); app.games_path.setText(str(self.base/'pending'))
         app.open_budget(); app.budget_editor.show_editor('shared-games'); app.limit.setValue(97)
         app.schedule_editor.restriction_enabled.setChecked(True); app.budget_back.click()
-        self.assertEqual(app.schedule_editor.settings(saved),saved)
+        self.assertEqual(app.schedule_editor.settings(saved).limit_seconds,97*60)
         app.open_budget(member=target('game',self.games[0].id)); app.budget_editor.minutes.setValue(33)
-        app.budget_back.click(); self.assertNotIn(self.games[0].id,app.budget_editor.game_limits)
-        self.assertNotIn(self.games[0].id,app.budget_editor.draft_games)
+        app.budget_back.click(); self.assertEqual(app.budget_editor.game_limits[self.games[0].id],33*60)
+        self.assertIn(self.games[0].id,app.budget_editor.draft_games)
         self.assertEqual(app.games_path.text(),str(self.base/'pending'))
         self.assertEqual(self.store.settings(),saved)
 
@@ -103,7 +104,7 @@ class CancelNavigationTests(unittest.TestCase):
         app=self.app; saved=self.store.settings(); app.switch_page(0); app.switch_page(2)
         app.open_budget(member=target('site','example.com')); app.budget_editor.minutes.setValue(25); app.budget_editor.show_list()
         app.budget_back.click(); self.assertEqual(app.pages.currentIndex(),2)
-        self.assertEqual(app.budget_editor.settings(app.schedule_editor.settings(saved)),saved)
+        self.assertEqual(app.budget_editor.rules[0]['seconds'],1500)
         app.settings_back.click(); self.assertEqual(app.pages.currentIndex(),0)
         self.assertEqual(self.store.settings(),saved)
 
@@ -145,7 +146,7 @@ class CancelNavigationTests(unittest.TestCase):
             point=app.budget_back.mapTo(app.budget_page,QPoint(0,0))
             self.assertLess(point.x(),80); self.assertLess(point.y(),80)
             visible=[b for b in app.budget_page.findChildren(QPushButton)
-                     if b.isVisible() and b.accessibleName()==app.t('Back without saving')]
+                     if b.isVisible() and b.accessibleName()==app.t('Back')]
             self.assertEqual(visible,[app.budget_back])
 
 

@@ -103,10 +103,11 @@ from datetime import date
 from gametime.statistics_sync import local_group
 d=sqlite3.connect(sys.argv[1]); code='1'*32; day='2026-01-01'
 c=json.loads(d.execute("SELECT value FROM settings WHERE key='config'").fetchone()[0])
-c.update(bedtime_caps_budget=True,notification_sound='silent',notification_sound_path=r'C:\Fixture\saved.wav',weekend_enabled=True,weekend_schedule={'limit_seconds':10800,'warning_seconds':9000,'bedtime_minute':60,'bedtime_resume_minute':480},game_overlays={'test:hidden':{'overlay_enabled':False,'overlay_font_size':36,'overlay_x':0.1,'overlay_y':0.9,'overlay_color_normal':'#aabbcc','overlay_color_warning':'#dd5566'}})
+c.update(overlay_rtss_details=False,bedtime_caps_budget=True,notification_sound='silent',notification_sound_path=r'C:\Fixture\saved.wav',weekend_enabled=True,weekend_schedule={'limit_seconds':10800,'warning_seconds':9000,'bedtime_minute':60,'bedtime_resume_minute':480},game_overlays={'test:hidden':{'overlay_enabled':False,'overlay_font_size':36,'overlay_x':0.1,'overlay_y':0.9,'overlay_color_normal':'#aabbcc','overlay_color_warning':'#dd5566'}})
 c.update(daily_schedules={'1':{'limit_seconds':13200,'warning_seconds':12000,'bedtime_minute':90}})
 c.update(scheduled_notifications=[{'id':'a'*32,'title':'Fixture reminder','text':'A custom message','icon':r'C:\Fixture\icon.png','minute':875,'enabled':True}])
 c.update(game_limits={'test:hidden':1800})
+c.update(computer_periods=[{'id':'computer-fixture','name':'Fixture period','values':{'bedtime_enabled':False,'bedtime_warning_enabled':True,'bedtime_warning_minute':1315,'bedtime_minute':1320,'bedtime_resume_minute':360,'bedtime_minimize':True,'bedtime_caps_budget':True}}])
 c.update(budget_reset_overrides={'shared-games':420,'game:test:hidden':540})
 c.update(budget_active_days={'website-fixture':[0,2,4],'game:test:hidden':[5,6]},budget_usage_limits={'website-fixture':False})
 c.update(wellbeing_rules=[{'id':'website-fixture','name':'Fixture website','members':[{'kind':'site','value':'example.com'}],'seconds':1800,'enabled':True,'enforce':False,'overlay':False}],
@@ -247,6 +248,10 @@ d.close()
     $report.update_check_preference_preserved_on_upgrade = (Get-Content -LiteralPath $diag -Raw -Encoding UTF8 | ConvertFrom-Json).check_updates -eq $false
     $rtssConfig = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); print(c["overlay_rtss_auto"] is False and c["overlay_rtss_paths"]==[r"C:\Fixture\game.exe"])' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     $report.rtss_selection_preserved_on_upgrade = $rtssConfig -eq 'True'
+    $rtssDetails = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); print(c["overlay_rtss_details"] is False)' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    $report.rtss_detail_preference_preserved_on_upgrade = $rtssDetails -eq 'True'
+    $periods = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); p=c["computer_periods"][0]; print(p["id"]=="computer-fixture" and p["name"]=="Fixture period" and p["values"]["bedtime_minute"]==1320 and p["values"]["bedtime_caps_budget"] is True)' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    $report.independent_computer_period_preserved_on_upgrade = $periods -eq 'True'
     $trackingStartAfter = 'import sqlite3,sys; d=sqlite3.connect(sys.argv[1]); print(d.execute("SELECT value FROM settings WHERE key=?",("tracking_started_on",)).fetchone()[0])' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     $report.tracking_start_preserved_on_upgrade = $trackingStartAfter -eq $trackingStart
     $upgradedHub = $shell.CreateShortcut($hubPath)

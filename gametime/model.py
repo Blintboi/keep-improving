@@ -77,6 +77,7 @@ class Settings:
     overlay_y: float = 0.0
     overlay_screen: str = ""
     overlay_rtss_auto: bool = False
+    overlay_rtss_details: bool = True
     # Retained when reading older profiles; automatic mode needs no EXE list.
     overlay_rtss_paths: list = field(default_factory=list)
     restriction_enabled: bool = False
@@ -102,6 +103,7 @@ class Settings:
     activity_overlays: dict = field(default_factory=dict)
     game_limits: dict = field(default_factory=dict)
     daily_schedules: dict = field(default_factory=dict)
+    computer_periods: list = field(default_factory=list)
     wellbeing_rules: list = field(default_factory=list)
     restriction_plans: dict = field(default_factory=dict)
     budget_active_days: dict = field(default_factory=dict)
@@ -112,6 +114,8 @@ class Settings:
     budget_setup_completed: bool = True
 
     def validate(self):
+        from .computer_periods import validate as validate_periods
+        validate_periods(self)
         from .restriction_policy import validate_plans
         validate_plans(self.restriction_plans)
         from .scheduled_notifications import validate_notifications
@@ -199,7 +203,7 @@ class Settings:
                 or not (0<=self.limit_seconds<=86400 and
                         (0<=self.warning_seconds<=86400 if self.limit_seconds==0 else 0<self.warning_seconds<self.limit_seconds))):
             raise ValueError("Use 0 to block access, or choose 0 < warning < daily limit ≤ 1440 minutes.")
-        for value in (self.overlay_enabled, self.overlay_replace_warning, self.limit_popup_enabled, self.overlay_rtss_auto):
+        for value in (self.overlay_enabled, self.overlay_replace_warning, self.limit_popup_enabled, self.overlay_rtss_auto, self.overlay_rtss_details):
             if not isinstance(value, bool):
                 raise ValueError("Overlay switches must be on or off.")
         for value, minimum, maximum in ((self.overlay_opacity,.25,1), (self.overlay_x,0,1), (self.overlay_y,0,1)):

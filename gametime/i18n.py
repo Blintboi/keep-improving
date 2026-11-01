@@ -975,6 +975,25 @@ HU.update({'Break in':'Szünetig','Break remaining':'Szünetből hátra','Restri
            'No active timers':'Nincs aktív időzítő','+{count} more timers':'+{count} további időzítő'})
 
 
+HU.update({'Detailed RTSS countdown':'Részletes RTSS-számláló',
+           'Show the event name and daily budget remaining. Turn off to show only the countdown in games.':
+               'Az esemény nevét és a napi keret maradékát is mutatja. Kikapcsolva játék közben csak a visszaszámlálás látszik.'})
+
+
+HU.update({
+    'Applications and games':'Alkalmazások és játékok',
+    'Invalid computer-use period.':'Érvénytelen géphasználati időszak.',
+    'Draft saved on this computer. Save changes to apply.':'A piszkozatot megőriztük ezen a gépen. A módosításokat a Mentés gombbal érvényesítheted.',
+    'Could not save the draft. Keep this window open and try again.':'Nem sikerült megőrizni a piszkozatot. Hagyd nyitva ezt az ablakot, és próbáld újra.',
+    'Discard draft':'Piszkozat elvetése',
+    'Finish the incomplete value before saving.':'Mentés előtt fejezd be a hiányos érték megadását.',
+    'Discard all unfinished budget changes?':'Elveted az időkeretek összes félbehagyott módosítását?',
+    'Your saved budgets and activity history will be kept.':'A mentett időkeretek és a használati előzmények megmaradnak.',
+    'Overlapping budgets: {names}. They cover common activities at the same time; all restrictions apply, so the stricter limit takes precedence.':
+        'Átfedő időkeretek: {names}. Ugyanazokra a tevékenységekre egy időben érvényesek; minden korlátozás számít, így a szigorúbb korlát az irányadó.',
+})
+
+
 def tr(text, language="en", **values):
     translated = text
     if language == "hu":

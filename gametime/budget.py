@@ -1,5 +1,5 @@
 """Shared-game budget and its optional bedtime cap."""
-from dataclasses import dataclass
+from dataclasses import dataclass,replace
 from datetime import datetime, time, timedelta
 import math
 from . import budget_access
@@ -52,6 +52,18 @@ def _deadline(day, plan, wall):
 
 
 def remaining_budget(settings, wall, used):
+    primary=_remaining_budget(settings,wall,used)
+    if not settings.computer_periods: return primary
+    from .computer_periods import project
+    for item in settings.computer_periods:
+        if not item['values']['bedtime_caps_budget']: continue
+        candidate=_remaining_budget(replace(project(settings,item),game_budget_enabled=False),wall,used)
+        if candidate.bedtime and candidate.remaining<primary.remaining:
+            primary=RemainingBudget(candidate.remaining,primary.quota_remaining,primary.warning or candidate.warning,candidate.bedtime)
+    return primary
+
+
+def _remaining_budget(settings, wall, used):
     plan = quota_plan(settings, wall)
     enabled=settings.game_budget_enabled and budget_access.active(settings,'shared-games',wall)
     usage=enabled and budget_access.usage_enabled(settings,'shared-games')
@@ -59,6 +71,8 @@ def remaining_budget(settings, wall, used):
     clock=budget_access.clock_remaining(settings,'shared-games',wall,'app:') if enabled else math.inf
     remaining=min(quota,clock)
     warning = usage and used >= plan.warning_seconds or clock<=600
+    if 'computer-window' in settings.budget_reset_overrides:
+        settings=replace(settings,budget_reset_minute=settings.budget_reset_overrides['computer-window'])
     # No date searches or extra work for existing profiles with this option off.
     if not (settings.bedtime_caps_budget
             or settings.weekend_enabled and settings.weekend_schedule.get('bedtime_caps_budget')

@@ -132,7 +132,9 @@ class Tracker:
             day=period_day(wall,reset_clock(self.catalog.settings))
             def seed():
                 source=self.totals(day) if self.budget_clock is None else self._budget_totals(day)
-                return dict(source) if key=='shared-games' else {key[5:]:source.get(key[5:],0)}
+                if key.startswith('games-') and self.catalog.settings.budget_reset_overrides.get('shared-games')==minute:
+                    return dict(self.periods.totals('quota:shared-games',minute,wall,lambda:dict(source),marker_key='shared-games',previous_day=day.isoformat()))
+                return {key[5:]:source.get(key[5:],0)} if key.startswith('game:') else dict(source)
             local=self.periods.totals('quota:'+key,minute,wall,seed,marker_key=key,previous_day=day.isoformat())
             remote=self.custom_remote_totals(key,minute,wall)
             result=dict(local)
@@ -160,7 +162,7 @@ class Tracker:
         if not {'statistics_devices','statistics_remote'}<=tables: return {}
         mapping={}
         for game in self.store.games(): mapping[game_key(game.id,game.name,game.source)]=game.id
-        portable='shared-games' if key=='shared-games' else 'game:'+next((p for p,g in mapping.items() if g==key[5:]),'')
+        portable='game:'+next((p for p,g in mapping.items() if g==key[5:]),'') if key.startswith('game:') else 'shared-games'
         beginning=reset_at(day,minute,wall)
         first=period_day(beginning,reset_clock(settings)).isoformat()
         last=period_day(wall,reset_clock(settings)).isoformat()
@@ -176,7 +178,7 @@ class Tracker:
                 rows=self.store.db.execute('SELECT game_id,SUM(seconds) FROM statistics_remote WHERE group_id=? AND device_id=? AND day>=? AND day<=? GROUP BY game_id',(group,device,first,last))
             for gid,seconds in rows:
                 local=mapping.get(gid,'remote:'+gid)
-                if key=='shared-games' or local==key[5:]: remote[local]+=seconds
+                if not key.startswith('game:') or local==key[5:]: remote[local]+=seconds
         self.custom_remote_cache[key]=(cache_key,dict(remote))
         return self.custom_remote_cache[key][1]
 
@@ -238,13 +240,16 @@ class Tracker:
     def _credit(self, game, start, end, seconds):
         self.configure_budget(start)
         overrides=self.catalog.settings.budget_reset_overrides
-        for key in ('shared-games','game:'+game.id):
+        extra=[r['id'] for r in self.catalog.settings.wellbeing_rules if r['id'].startswith('games-') and r['members']==[{'kind':'category','value':'games'}]]
+        for key in (*extra,'shared-games','game:'+game.id):
             if key not in overrides: continue
             minute=overrides[key]
             day=period_day(start,reset_clock(self.catalog.settings))
             def seed():
                 source=self.totals(day) if self.budget_clock is None else self._budget_totals(day)
-                return dict(source) if key=='shared-games' else {game.id:source.get(game.id,0)}
+                if key.startswith('games-') and overrides.get('shared-games')==minute:
+                    return dict(self.periods.totals('quota:shared-games',minute,start,lambda:dict(source),marker_key='shared-games',previous_day=day.isoformat()))
+                return {game.id:source.get(game.id,0)} if key.startswith('game:') else dict(source)
             self.periods.totals('quota:'+key,minute,start,seed,marker_key=key,previous_day=day.isoformat())
             self.periods.credit('quota:'+key,minute,game.id,start,end,seconds,seed)
         for day, amount in day_slices(start, end, seconds,self.catalog.settings.budget_reset_minute):
