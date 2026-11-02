@@ -31,6 +31,18 @@ class DetailsInterfaceTests(unittest.TestCase):
     setUp=timer_fixture.TimerInterfaceTests.setUp; tearDown=timer_fixture.TimerInterfaceTests.tearDown
     pump=timer_fixture.TimerInterfaceTests.pump; setup_budget=timer_fixture.TimerInterfaceTests.setup_budget
 
+    def test_rtss_omits_duplicate_budget_line_and_keeps_different_budget_value(self):
+        from gametime.restriction_policy import step
+        current=self.configure_game()
+        self.app.settings.restriction_plans['youtube']['steps']=[step('cover',3600,usage=True)]
+        with patch('gametime.qt_ui.win32.sample',return_value=current),patch.object(self.app,'rtss_available',return_value=True),patch.object(self.app.rtss,'present',return_value=True):
+            self.app._overlay_desktop_until=0; self.app.update_overlay()
+            self.assertEqual(self.rtss_renderer.call_args.args[4],self.app.t('Restriction in'))
+            self.assertEqual(self.rtss_renderer.call_args.args[5],'')
+            self.app.settings.restriction_plans['youtube']['steps']=[step('cover',1200,usage=True)]
+            self.app.update_overlay()
+            self.assertIn('01:00:00',self.rtss_renderer.call_args.args[5])
+
     def configure_game(self):
         self.setup_budget(target('game',self.games[0].id))
         self.app.settings.restriction_plans['youtube']['steps'][0]['redirect_url']=''

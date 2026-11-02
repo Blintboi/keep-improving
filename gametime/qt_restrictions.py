@@ -114,8 +114,8 @@ class RestrictionRuntime:
 
     def legacy_block(self, atom, permitted=()):
         app = self.app
-        if app.focus.restricting and (app.focus.settings.app_blocked(atom[1]) or atom[2] and any(
-                matches(atom[2], host) for host in app.focus.settings.block_sites)):
+        if app.focus.restricting and (app.focus_application_blocked(atom[1],atom[0]) or
+                app.focus.settings.site_blocked(atom[2],app.settings.wellbeing_rules)):
             return True
         if atom[0]:
             from .restriction_policy import legacy_restriction_active
@@ -384,7 +384,7 @@ class RestrictionRuntime:
                 if not isinstance(token, str) or not __import__('re').fullmatch('[a-zA-Z0-9_-]{16,100}', token): raise ValueError()
                 atom = ('', '', host); subject = 'site:' + host + ':' + token
                 keys = self.state.dominant(self.matching(atom),subject); active = [k for k in keys if self.state.action(k, subject)]
-                base = self.app.wellbeing.policy(self.app.focus.policy(), datetime.now().astimezone(),self.delegated_website_rules())
+                base = self.app.wellbeing.policy(self.app.focus.policy(self.app.settings.wellbeing_rules), datetime.now().astimezone(),self.delegated_website_rules())
                 from .focus import matches
                 legacy = base['active'] and (any(matches(host, h) for h in base['block']) or base['mode'] == 'allowlist')
                 until = None if legacy else self.extend(active, subject)

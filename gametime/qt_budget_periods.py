@@ -24,8 +24,7 @@ class PeriodEditor:
         self.name=QLineEdit(); self.name.setMaxLength(80); self.name.setAccessibleName(editor.app.t('Budget name')); box.addWidget(self.name)
         self.schedule=WeeklyScheduleEditor(editor.app.settings,editor.app.t); self.schedule.set_mode('computer'); fixed_form(self.schedule)
         box.addWidget(self.schedule)
-        row=QHBoxLayout(); row.addWidget(label(editor.app.t('Renews daily at'),'muted'))
-        self.reset=editor.reset_field(); row.addWidget(self.reset,1); box.addLayout(row)
+        self.reset=editor.reset_field(); self.reset.setParent(self.page); self.reset.hide()
         fixed_form(editor.schedule)
         source=editor.app.settings; normalized=split_weekly(source)
         self.migrated=normalized!=source

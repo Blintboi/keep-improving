@@ -15,6 +15,24 @@ GROUP='ab'*16
 
 
 class PreferenceSyncTests(unittest.TestCase):
+    def test_single_session_and_disabled_breaks_sync_without_defaults_replacing_zero(self):
+        self.focus[0].configure(replace(self.focus[0].settings,work=19,short_break=0,long_break=0,rounds=0))
+        self.transfer(0,1)
+        saved=self.focus[1].settings
+        self.assertEqual((saved.work,saved.short_break,saved.long_break,saved.rounds),(19,0,0,0))
+
+    def test_notification_actions_paths_and_triggers_stay_local(self):
+        from gametime.notification_rules import builtin
+        item=builtin(self.stores[0].settings(),'warning')
+        item.update(trigger='startup',action={'kind':'app','path':r'C:\Private\tool.exe'},timeout=0)
+        self.stores[0].save_settings(replace(self.stores[0].settings(),notification_overrides={'warning':item},removed_notifications=['warning'],
+            scheduled_notifications=[dict(item,id='c'*32,trigger='pomodoros',count=4)]))
+        self.transfer(0,1)
+        self.assertEqual(self.stores[1].settings().notification_overrides,{})
+        self.assertEqual(self.stores[1].settings().scheduled_notifications,[])
+        snapshot=self.data[0].snapshot(GROUP,'Example computer')
+        self.assertNotIn('Private',str(snapshot.get('preferences',{})))
+
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
         self.stores=[]; self.data=[]; self.focus=[]

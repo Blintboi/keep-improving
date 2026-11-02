@@ -13,6 +13,8 @@ LOCAL_FIELDS={'games_root','steam_roots','epic_manifest_dirs','ubisoft_roots',
               'overlay_screen','overlay_rtss_paths','notification_sound_path',
               'scheduled_notifications','statistics_sync_enabled','statistics_sync_group','statistics_device_name','wellbeing_rules','counter_overlays','activity_overlays','budget_setup_completed','restriction_plans','budget_reset_overrides','budget_active_days','budget_usage_limits'}
 CONFIG_FIELDS={item.name for item in fields(Settings)}-LOCAL_FIELDS
+LOCAL_FIELDS.add('removed_notifications'); CONFIG_FIELDS.discard('removed_notifications')
+LOCAL_FIELDS.add('notification_overrides'); CONFIG_FIELDS.discard('notification_overrides')
 LOCAL_FIELDS.add('computer_periods'); CONFIG_FIELDS.discard('computer_periods')
 CONFIG_FIELDS-={'game_limits','game_overlays','limit_seconds','warning_seconds',
                 'bedtime_warning_minute','bedtime_minute','bedtime_resume_minute'}

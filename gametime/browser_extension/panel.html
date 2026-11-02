@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="hu">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Keep Improving</title>
+    <link rel="icon" href="icons/32.png" />
+    <link rel="stylesheet" href="panel.css" />
+  </head>
+  <body>
+    <aside>
+      <a class="brand" href="panel.html"
+        ><img src="icons/48.png" alt="" /><strong>Keep Improving</strong></a
+      >
+      <nav id="nav" aria-label="Navigation"></nav>
+      <div class="sidebar-bottom">
+        <span id="connection" class="muted"></span
+        ><button id="language" class="quiet">English</button>
+      </div>
+    </aside>
+    <main id="main">
+      <header>
+        <div>
+          <p id="eyebrow" class="eyebrow">KEEP IMPROVING</p>
+          <h1 id="heading"></h1>
+        </div>
+        <button id="refresh" class="quiet" title="Refresh">↻</button>
+      </header>
+      <p id="status" role="status" aria-live="polite"></p>
+      <div id="content"></div>
+    </main>
+    <dialog id="dialog"><div id="dialog-content"></div></dialog>
+    <script src="local_update.js"></script>
+    <script type="module" src="panel.js"></script>
+  </body>
+</html>

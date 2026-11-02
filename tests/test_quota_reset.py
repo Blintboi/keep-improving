@@ -148,20 +148,15 @@ class QuotaResetInterfaceTests(unittest.TestCase):
         setUpClass=classmethod(fixtures.QtInterfaceTests.setUpClass.__func__)
         setUp=fixtures.QtInterfaceTests.setUp; tearDown=fixtures.QtInterfaceTests.tearDown; pump=fixtures.QtInterfaceTests.pump
 
-    def test_universal_dialog_saves_only_day_start_and_cancel_discards(self):
+    def test_global_settings_save_only_day_start_and_cancel_discards(self):
         from PySide6.QtCore import QTime
-        from PySide6.QtWidgets import QPushButton
-        from gametime.qt_widgets import NoWheelTimeEdit
-        from gametime.qt_day_start import day_start_dialog
         self.assertNotIn('budget_reset_minute',self.app.schedule_editor._fields)
-        window=day_start_dialog(self.app)
-        edit=window.findChild(NoWheelTimeEdit,'DayStartTime'); edit.setTime(QTime(1,0))
-        window.reject(); self.assertEqual(self.store.settings().budget_reset_minute,0)
+        self.app.switch_page(2); self.app.global_day_start.setTime(QTime(1,0))
+        self.app.cancel_general_settings(); self.assertEqual(self.store.settings().budget_reset_minute,0)
         # An unrelated schedule draft must survive saving this global setting.
         self.app.schedule_editor.limit.setValue(180)
-        window=day_start_dialog(self.app)
-        edit=window.findChild(NoWheelTimeEdit,'DayStartTime'); edit.setTime(QTime(1,0))
-        save=next(b for b in window.findChildren(QPushButton) if b.text()=='Mentés'); save.click()
+        self.app.switch_page(2); self.app.global_day_start.setTime(QTime(1,0))
+        self.app.save_settings(scope='general')
         self.assertEqual(self.store.settings().budget_reset_minute,60)
         self.assertEqual(self.store.settings().limit_seconds,7200)
         self.assertEqual(self.app.focus.day_start_minute,60)
@@ -171,16 +166,11 @@ class QuotaResetInterfaceTests(unittest.TestCase):
 
     def test_failed_day_start_save_keeps_draft_and_profile_unchanged(self):
         from PySide6.QtCore import QTime
-        from PySide6.QtWidgets import QPushButton
-        from gametime.qt_widgets import NoWheelTimeEdit
-        from gametime.qt_day_start import day_start_dialog
-        window=day_start_dialog(self.app)
-        edit=window.findChild(NoWheelTimeEdit,'DayStartTime'); edit.setTime(QTime(1,0))
-        save=next(b for b in window.findChildren(QPushButton) if b.text()=='Mentés')
-        with patch.object(self.store,'save_settings',side_effect=OSError('fixture')): save.click()
-        self.assertTrue(window.isVisible()); self.assertEqual(edit.time(),QTime(1,0))
+        self.app.switch_page(2); edit=self.app.global_day_start; edit.setTime(QTime(1,0))
+        with patch.object(self.store,'save_settings',side_effect=OSError('fixture')): self.app.save_settings(scope='general')
+        self.assertTrue(self.app.settings_error.text()); self.assertEqual(edit.time(),QTime(1,0))
         self.assertEqual(self.store.settings().budget_reset_minute,0)
-        save.click(); self.assertEqual(self.store.settings().budget_reset_minute,60)
+        self.app.save_settings(scope='general'); self.assertEqual(self.store.settings().budget_reset_minute,60)
 
     def test_statistics_today_yesterday_and_live_rollover_use_one_am(self):
         from gametime.quota import current_day

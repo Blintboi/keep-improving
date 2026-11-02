@@ -45,13 +45,14 @@ def dialog(app,initial_id=None,*,single=False):
         enabled.setChecked(item['enabled'] if item else True); error.hide()
     chooser.currentIndexChanged.connect(load)
     def value():
-        item={'id':current[0] or uuid.uuid4().hex,'title':title.text().strip(),'text':message.toPlainText(),
+        item={**next((x for x in items if x['id']==current[0]),{}),'id':current[0] or uuid.uuid4().hex,'title':title.text().strip(),'text':message.toPlainText(),
               'icon':icon.text().strip(),'minute':time.time().hour()*60+time.time().minute(),'enabled':enabled.isChecked()}
         validate_notifications([item]); return item
     def save():
         try:
             item=value()
-            if item['icon'] and not Path(item['icon']).is_file(): raise ValueError(t('Icon file was not found.'))
+            from .notification_rules import validate_files
+            validate_files(item)
             updated=[dict(x) for x in app.settings.scheduled_notifications if x['id']!=item['id']]+[item]
             settings=replace(app.settings,scheduled_notifications=updated).validate(); app.store.save_settings(settings)
             app.settings=app.catalog.settings=settings; items[:]=updated; refresh(item['id']); app.set_status('Scheduled notification saved.')
@@ -68,7 +69,7 @@ def dialog(app,initial_id=None,*,single=False):
     def preview():
         try:
             item=value()
-            if not app.popup(Alert(current_day(app.settings).isoformat(),(),'scheduled',item['text'],'',title=item['title'],icon=item['icon'])):
+            if not app.popup(Alert(current_day(app.settings).isoformat(),(),'scheduled',item['text'],'',title=item['title'],icon=item['icon'],action=item.get('action'),timeout=item.get('timeout'))):
                 raise ValueError(t('Close the current alert before previewing another.'))
         except ValueError as exc: error.setText(str(exc)); error.show()
     actions=QHBoxLayout()

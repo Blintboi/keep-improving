@@ -1,9 +1,66 @@
-importScripts('policy.js');
+importScripts('policy.js', 'dashboard_update.js', 'local_update.js');
 let timer, busy = false, rerun = false, signature = '', leaseUntil = 0;
 let policy = {active: false, tracking: true, allow: [], block: [], mode: 'blocklist'};
 let blockedTabs = {};
-const restored = chrome.storage.session.get('blockedTabs').then(data => { blockedTabs = data.blockedTabs || {}; });
-async function saveBlocked() { await chrome.storage.session.set({blockedTabs}); }
+let returnPages = {}, savedReturns = '';
+function validRecord(record) {
+  return record && typeof record.host==='string' && record.host && /^[a-f0-9]{32}$/.test(record.token || '') && typeof record.url === 'string' &&
+    record.url.length <= 32768 && publicHost({url:record.url}) === record.host;
+}
+function blockKey(url) {
+  try {
+    if (/^http:\/\/127\.0\.0\.1:\d{1,5}\/browser-update#[a-f0-9]{32}$/.test(url)) return url.slice(-32);
+    const value=new URL(url), page=new URL(chrome.runtime.getURL('blocked.html'));
+    return value.protocol===page.protocol && value.host===page.host && value.pathname===page.pathname ? value.searchParams.get('key') || '' : null;
+  } catch { return null; }
+}
+const restored = Promise.all([chrome.storage.session.get('blockedTabs'),chrome.storage.local.get('returnPages')]).then(([session,local]) => {
+  blockedTabs=Object.fromEntries(Object.entries(session.blockedTabs || {}).filter(([,record])=>validRecord(record)));
+  returnPages=Object.fromEntries(Object.entries(local.returnPages || {}).filter(([token,record])=>validRecord(record) && token===record.token));
+  savedReturns=JSON.stringify(returnPages);
+});
+let saving=Promise.resolve();
+function saveBlocked() { saving=saving.catch(()=>{}).then(persistBlocked); return saving; }
+async function persistBlocked() {
+  await chrome.storage.session.set({blockedTabs});
+  for (const record of Object.values(blockedTabs)) {
+    if (!validRecord(record)) continue;
+    const old=returnPages[record.token];
+    if (!old || old.url!==record.url || Date.now()-(old.savedAt || 0)>86400000)
+      returnPages[record.token]={host:record.host,url:record.url,token:record.token,savedAt:Date.now()};
+  }
+  // Bound stale closed-window recovery records while retaining all live tabs.
+  const live=new Set(Object.values(blockedTabs).map(record=>record.token));
+  const stale=Object.entries(returnPages).filter(([token])=>!live.has(token)).sort((a,b)=>(b[1].savedAt||0)-(a[1].savedAt||0));
+  for (const [token] of stale.slice(Math.max(0,1024-live.size))) delete returnPages[token];
+  const signature=JSON.stringify(returnPages);
+  if (signature!==savedReturns) { await chrome.storage.local.set({returnPages}); savedReturns=signature; }
+}
+async function recoverTabs() {
+  const tabs=await chrome.tabs.query({}), open=new Set(tabs.map(tab=>String(tab.id)));
+  for (const id of Object.keys(blockedTabs)) if (!open.has(id)) delete blockedTabs[id];
+  for (const tab of tabs) {
+    if (tab.incognito) { delete blockedTabs[tab.id]; continue; }
+    const key=blockKey(tab.url || tab.pendingUrl);
+    if (key) {
+      const record=returnPages[key];
+      if (validRecord(record)) blockedTabs[tab.id]={host:record.host,url:record.url,token:record.token};
+      else if (blockedTabs[tab.id]?.token!==key) delete blockedTabs[tab.id];
+    } else if (key===null) {
+      const record=blockedTabs[tab.id];
+      if (record && publicHost(tab)!==record.host && !atRedirectDestination(record,tab.url)) delete blockedTabs[tab.id];
+    }
+  }
+  await saveBlocked(); return tabs;
+}
+async function restoreReleasedTabs() {
+  for (const tab of await recoverTabs()) {
+    const record=blockedTabs[tab.id];
+    if (blockKey(tab.url)===null || !validRecord(record) || tab.incognito || siteDecision(record.host,policy,record.token).kind) continue;
+    const current=await chrome.tabs.get(tab.id).catch(()=>null);
+    if (current && !current.incognito && current.url===tab.url) await chrome.tabs.update(tab.id,{url:record.url});
+  }
+}
 function grantTabs() { return Object.entries(blockedTabs).map(([id, r]) => ({tabId: Number(id), host: r.host, token: r.token})); }
 function redirectGrants() { return Object.entries(blockedTabs).filter(([,r]) => r.redirect_url)
   .map(([id,r]) => ({tabId:Number(id),host:r.host,token:r.token,url:r.redirect_url})); }
@@ -59,9 +116,11 @@ async function sync() {
   clearTimeout(timer);
   try {
     await restored;
+    await recoverTabs();
     const {pairing, browser = 'brave'} = await chrome.storage.local.get(['pairing', 'browser']);
     if (!pairing) {
       await setPolicy({active: false, tracking: true, allow: [], block: [], mode: 'blocklist'});
+      await restoreReleasedTabs();
       return;
     }
     const tab = await activeTab();
@@ -82,7 +141,7 @@ async function sync() {
     for (const candidate of await chrome.tabs.query({})) {
       const recordBefore = blockedTabs[candidate.id];
       if (isRedirectLanding(recordBefore,candidate.url)) continue;
-      const blockedPage = candidate.url?.startsWith(chrome.runtime.getURL('blocked.html'));
+      const blockedPage = blockKey(candidate.url)!==null;
       const fromRedirect=atRedirectDestination(recordBefore,candidate.url) &&
         !!siteDecision(recordBefore.host,policy,recordBefore.token).kind;
       const host = fromRedirect ? recordBefore.host : publicHost(candidate) || (blockedPage ? recordBefore?.host : '');
@@ -90,7 +149,15 @@ async function sync() {
       let record = recordBefore;
       if (!record || record.host !== host) record = {host, url: candidate.url, token: crypto.randomUUID().replaceAll('-', '')};
       const decision = siteDecision(host, policy, record.token);
-      if (!decision.kind || blockedPage && decision.kind !== 'close' && decision.kind !== 'redirect') continue;
+      if (!decision.kind) continue;
+      if (blockedPage && decision.kind !== 'close' && decision.kind !== 'redirect') {
+        if ((!blockKey(candidate.url) || candidate.url.startsWith('http://127.0.0.1:')) && validRecord(record)) {
+          const current=await chrome.tabs.get(candidate.id).catch(()=>null);
+          if (current && current.url===candidate.url && !current.incognito)
+            await chrome.tabs.update(current.id,{url:chrome.runtime.getURL('blocked.html')+'?key='+record.token});
+        }
+        continue;
+      }
       const current = await chrome.tabs.get(candidate.id).catch(() => null);
       if (!current || current.url !== candidate.url || current.incognito) continue;
       let target='';
@@ -107,10 +174,14 @@ async function sync() {
         if (current.id === tab?.id) rerun = true;
       } else if (!blockedPage) await chrome.tabs.update(current.id, {url: chrome.runtime.getURL('blocked.html') + '?key=' + record.token});
     }
+    await restoreReleasedTabs();
     await chrome.storage.session.set({connected: true, lastContact: Date.now()});
+    await saving;
+    await checkLocalExtensionUpdate(policy.extension_version);
   } catch {
     // A closed monitor, expired pairing or network error must release browser restrictions.
     await setPolicy({active: false, tracking: true, allow: [], block: [], mode: 'blocklist'});
+    await restoreReleasedTabs();
     await chrome.action.setBadgeText({text: '!'});
     await chrome.storage.session.set({connected: false});
   } finally {
@@ -123,9 +194,14 @@ async function sync() {
 }
 chrome.tabs.onActivated.addListener(sync);
 chrome.tabs.onUpdated.addListener((id, change, tab) => { if (tab.active && (change.url || change.status === 'complete')) sync(); });
-chrome.tabs.onRemoved.addListener(id => { delete blockedTabs[id]; saveBlocked(); sync(); });
+chrome.tabs.onRemoved.addListener(async (id,info) => {
+  await restored;
+  const record=blockedTabs[id]; delete blockedTabs[id];
+  if (record && !info?.isWindowClosing && !Object.values(blockedTabs).some(other=>other.token===record.token)) delete returnPages[record.token];
+  await saveBlocked(); sync();
+});
 chrome.windows.onFocusChanged.addListener(sync);
-chrome.storage.onChanged.addListener((changes, area) => { if (area === 'local') sync(); });
+chrome.storage.onChanged.addListener((changes, area) => { if (area === 'local' && (changes.pairing || changes.browser)) sync(); });
 chrome.alarms.onAlarm.addListener(sync);
 chrome.runtime.onStartup.addListener(sync);
 chrome.runtime.onInstalled.addListener(() => { chrome.alarms.create('connection', {periodInMinutes: 0.5}); sync(); });
@@ -147,9 +223,10 @@ chrome.webNavigation.onBeforeNavigate.addListener(async details => {
 });
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id || !sender.tab ||
-      !sender.url?.startsWith(chrome.runtime.getURL('blocked.html'))) return;
+      blockKey(sender.url)===null) return;
   (async () => {
     await restored;
+    await recoverTabs();
     const record = blockedTabs[sender.tab.id];
     const key = new URL(sender.url).searchParams.get('key');
     if (!record || key && key !== record.token)
@@ -172,6 +249,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'return' || message.action === 'extend') {
       const current = await chrome.tabs.get(sender.tab.id);
       const destination = new URL(record.url);
+      if (!siteDecision(record.host, policy, record.token).kind && current.url === record.url) return {ok:true};
       if (!siteDecision(record.host, policy, record.token).kind && current.url === sender.url &&
           ['http:', 'https:'].includes(destination.protocol) && !destination.username && !destination.password &&
           destination.hostname === record.host) {

@@ -120,18 +120,18 @@ class NestedScrollGuard(QObject):
 
 
 class AlertDialog(QDialog):
-    def __init__(self,owner,passive=False):
+    def __init__(self,owner,passive=False,interactive=False):
         flags=Qt.Dialog|Qt.WindowStaysOnTopHint|Qt.WindowCloseButtonHint
         # Keep the native title bar: Windows supplies dragging and the close X.
         # NOACTIVATE permits deliberate mouse interaction without taking the
         # keyboard away from the current application.
-        if passive: flags|=Qt.WindowDoesNotAcceptFocus
+        if passive and not interactive: flags|=Qt.WindowDoesNotAcceptFocus
         super().__init__(None,flags)
         if passive: self.setAttribute(Qt.WA_ShowWithoutActivating)
-        self.owner=owner; self.setObjectName('Surface'); self.setAttribute(Qt.WA_DeleteOnClose)
+        self.owner=owner; self.interactive=interactive; self.setObjectName('Surface'); self.setAttribute(Qt.WA_DeleteOnClose)
     def nativeEvent(self,event_type,message):
         native=win32.W.MSG.from_address(int(message))
-        if native.message==0x21: return True,3  # WM_MOUSEACTIVATE -> MA_NOACTIVATE
+        if native.message==0x21 and not self.interactive: return True,3  # WM_MOUSEACTIVATE -> MA_NOACTIVATE
         return super().nativeEvent(event_type,message)
     def closeEvent(self,event):
         if self.owner.popup_window is self: self.owner.popup_window=self.owner.popup_day=None
@@ -148,7 +148,11 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
         self.store,self.data_dir=store,Path(data_dir)
         from .bedtime_legacy import migrate
         migrate(store,self.data_dir)
+        from .global_day_start import migrate as migrate_day_start
+        migrate_day_start(store)
         self.settings=store.settings(); self.catalog=Catalog(self.settings,store.games(True),store.overrides(),store.rules())
+        from .scheduled_notifications import initialize_startup
+        initialize_startup(self)
         self._preferences_known_games={game.id for game in store.games()}
         self.overlay_consents=Consents(store); self.catalog.overlay_consents=self.overlay_consents
         self.minimize_consents=MinimizeConsents(store)
@@ -231,10 +235,12 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
         name=label('Keep Improving'); name.setFont(QFont('Segoe UI',11,QFont.Bold)); brand.addWidget(name,1); side.addLayout(brand)
         side.addSpacing(32)
         self.nav={}
-        for index,text,icon in ((1,'Overview','stats'),(5,'Time budgets','clock'),(6,'Notifications','bell'),(4,'Focus mode','focus'),(0,'Activities','library')):
+        for index,text,icon in ((1,'Overview','stats'),(0,'Activities','library'),(5,'Time budgets','clock'),(6,'Notifications','bell'),(4,'Focus mode','focus')):
             item=button(self.t(text),lambda checked=False,n=index:self.switch_page(n),'nav'); item.setCheckable(True); item.setIcon(glyph(icon)); item.setMinimumHeight(45)
             self.nav[index]=item; side.addWidget(item)
         side.addStretch()
+        item=button(self.t('Settings'),lambda:self.open_settings_section('general'),'nav'); item.setCheckable(True)
+        item.setIcon(glyph('settings')); item.setMinimumHeight(45); self.nav[2]=item; side.addWidget(item)
         self.language=QComboBox(); self.language.popup_upwards=True
         self.language.setAccessibleName(self.t('Language / Nyelv')); self.language.setToolTip(self.t('Language / Nyelv'))
         self.language.setIconSize(QSize(24,16))
@@ -497,6 +503,7 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
                 epic_manifest_dirs=[p.strip() for p in self.paths['epic'].text().split(';') if p.strip()],
                 ubisoft_roots=[p.strip() for p in self.paths['ubisoft'].text().split(';') if p.strip()],
                 hub_enabled=self.hub_enabled.isChecked(),check_updates=self.updates.automatic.isChecked(),
+                budget_reset_minute=self.global_day_start.time().hour()*60+self.global_day_start.time().minute(),
                 **self.overlay_values(),**self.sound_values())
             return proposed!=self.settings
         except (ValueError,TypeError): return True
@@ -513,7 +520,8 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
             self._preferences_pending=False
             if not changed: return
             previous_language=self.settings.language
-            self.settings=self.catalog.settings=self.store.settings()
+            from .global_day_start import migrate as migrate_day_start
+            self.settings=self.catalog.settings=migrate_day_start(self.store)
             self.renewal_settings_changed(previous_settings,self.settings)
             from .qt_day_start import apply_day_start
             apply_day_start(self,previous_settings)
@@ -522,6 +530,7 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
             self.update_focus_policy(); self.focus_page.refresh(force=True)
             blocked=self.statistics.tracking.blockSignals(True)
             self.statistics.tracking.setChecked(self.focus.settings.tracking); self.statistics.tracking.blockSignals(blocked)
+            self.budget_editor.drafts.close()
             old=self.settings_page; replacement=self._build_settings()
             self.pages.insertWidget(2,replacement); self.pages.removeWidget(old); self.settings_page=replacement; old.deleteLater()
             old_budgets=self.budget_page; replacement=self._build_budget_page()
@@ -565,7 +574,9 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
     def _build_library(self,state):
         page=QWidget(); layout=QVBoxLayout(page); layout.setContentsMargins(32,25,24,17); layout.setSpacing(17)
         top=QHBoxLayout(); top.addWidget(label(self.t('Activities'),'title'),1)
-        add=button(self.t('Add'),self.add_activity); add.setIcon(glyph('plus','#cee1db',17)); top.addWidget(add); top.addWidget(self.page_settings_button('activities')); layout.addLayout(top)
+        self.game_folders_button=button(self.t('Game folders'),lambda:self.open_settings_section('games'),'quiet')
+        self.game_folders_button.setIcon(glyph('folder',MUTED,18)); top.addWidget(self.game_folders_button)
+        add=button(self.t('Add'),self.add_activity); add.setIcon(glyph('plus','#cee1db',17)); top.addWidget(add); layout.addLayout(top)
         categories=QHBoxLayout(); categories.setSpacing(6); self.activity_categories={}
         for kind,title in (('game','Games'),('app','Applications'),('site','Websites')):
             item=button(self.t(title),lambda checked=False,k=kind:self.select_activity_category(k),'section-link')
@@ -635,17 +646,23 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
         header=QHBoxLayout(); self.settings_back=back_button(self.t,self.cancel_general_settings); header.addWidget(self.settings_back)
         heading=label(self.t('Settings'),'title'); heading.setToolTip('Keep Improving '+__version__); header.addWidget(heading,1); outer.addLayout(header)
         shortcuts=QHBoxLayout(); shortcuts.setSpacing(6); self.settings_shortcuts={}
-        for key,title in (('reminders','Reminders'),('games','Game folders'),('other','Updates and sync')):
+        for key,title in (('general','General'),('reminders','Reminders'),('games','Game folders'),('other','Updates and sync')):
             item=button(self.t(title),lambda checked=False,k=key:self.show_settings_section(k),'section-link')
             item.setCheckable(True); item.setAutoExclusive(True)
             item.setAccessibleName(self.t('Go to {section}',section=self.t(title)))
             shortcuts.addWidget(item,1); self.settings_shortcuts[key]=item
         outer.addLayout(shortcuts)
-        for item in self.settings_shortcuts.values(): item.hide()
         scroll=QScrollArea(); scroll.setWidgetResizable(True); outer.addWidget(scroll,1)
         self.settings_scroll=scroll
         body=QWidget(); body_layout=QVBoxLayout(body); body_layout.setContentsMargins(0,0,8,0); body_layout.setSpacing(18); scroll.setWidget(body)
         self.settings_body=body
+        general=panel(); general_layout=QVBoxLayout(general); general_layout.setContentsMargins(22,20,22,22); general_layout.setSpacing(12)
+        general_layout.addWidget(label(self.t('Day starts at'),'section'))
+        note=label(self.t('One daily boundary for statistics, all time budgets and daily reminders.'),'muted'); note.setWordWrap(True); general_layout.addWidget(note)
+        from .qt_widgets import NoWheelTimeEdit
+        self.global_day_start=NoWheelTimeEdit(); self.global_day_start.setDisplayFormat('HH:mm'); self.global_day_start.setAccessibleName(self.t('Day starts at'))
+        minute=self.settings.budget_reset_minute; self.global_day_start.setTime(QTime(minute//60,minute%60)); general_layout.addWidget(self.global_day_start)
+        note=label(self.t('Earlier statistics and already used time are kept.'),'muted'); note.setWordWrap(True); general_layout.addWidget(note)
         from .qt_schedule import WeeklyScheduleEditor
         self.schedule_editor=WeeklyScheduleEditor(self.settings,self.t)
         for name in ('limit','warning','restriction_enabled','restriction_minutes','bedtime_enabled','bedtime_times','bedtime_minimize','bedtime_controls','bedtime_caps_budget'):
@@ -682,11 +699,11 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
         # A section switch changes visibility only. Unsaved values and widgets
         # survive navigation, translation and opening optional details.
         self.settings_sections={}
-        for key,widgets in (('reminders',(sounds,messages)),('games',(locations,)),('other',(sync,updates))):
+        for key,widgets in (('general',(general,)),('reminders',(sounds,messages)),('games',(locations,)),('other',(sync,updates))):
             section=QWidget(); section_layout=QVBoxLayout(section); section_layout.setContentsMargins(0,0,0,0); section_layout.setSpacing(16)
             for widget in widgets: section_layout.addWidget(widget)
             body_layout.addWidget(section); self.settings_sections[key]=section
-        body_layout.addStretch(); self.show_settings_section('reminders')
+        body_layout.addStretch(); self.show_settings_section('general')
         footer=QHBoxLayout(); self.settings_error=label('','danger'); self.settings_error.setWordWrap(True); footer.addWidget(self.settings_error,1)
         footer.addWidget(button(self.t('Save'),lambda:self.save_settings(scope='general'),'primary')); outer.addLayout(footer)
         return page
@@ -718,6 +735,7 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
 
     def cancel_general_settings(self):
         settings=self.settings
+        self.global_day_start.setTime(QTime(settings.budget_reset_minute//60,settings.budget_reset_minute%60))
         self.games_path.setText(settings.games_root)
         for key,values in (('steam',settings.steam_roots),('epic',settings.epic_manifest_dirs),('ubisoft',settings.ubisoft_roots)):
             self.paths[key].setText(';'.join(values))
@@ -1163,14 +1181,20 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
                 epic_manifest_dirs=[p.strip() for p in self.paths['epic'].text().split(';') if p.strip()],
                 ubisoft_roots=[p.strip() for p in self.paths['ubisoft'].text().split(';') if p.strip()],
                 hub_enabled=self.hub_enabled.isChecked(),
+                budget_reset_minute=self.global_day_start.time().hour()*60+self.global_day_start.time().minute(),
                 overlay_replace_warning=self.overlay_warning.isChecked(),limit_popup_enabled=self.limit_popup.isChecked(),
                 check_updates=self.updates.automatic.isChecked(),**self.sound_values())
-            settings=replace(base,**values).validate()
+            from .global_day_start import normalize
+            settings=normalize(replace(base,**values)).validate()
             previous=self.settings
             self.tracker.flush(); self.wellbeing.flush(); self.store.save_settings(settings); self.settings=self.catalog.settings=settings
+            from .global_day_start import carry_markers
+            carry_markers(self.store,previous,settings)
             from .computer_periods import carry_runtime
             carry_runtime(self.store,previous,settings)
             self.renewal_settings_changed(previous,settings)
+            from .qt_day_start import apply_day_start
+            apply_day_start(self,previous)
             if scope!='general':
                 if self.budget_editor.shared_overlay:
                     self.overlay_enabled.setChecked(settings.overlay_enabled)
@@ -1266,7 +1290,7 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
             self.pages.setCurrentIndex(0); self.clients_toggle.setChecked(True); self.set_clients_expanded(True); index=0
         self.pages.setCurrentIndex(index)
         if index not in (2,5) and self._preferences_pending: self.apply_synchronized_preferences()
-        selected=getattr(self,'_return_pages',{}).get(2,1) if index==2 else index
+        selected=index
         for n,item in self.nav.items(): item.setChecked(n==selected)
         if index==1: self.statistics.refresh(live=True)
         if index==4: self.focus_page.refresh(force=True)
@@ -1286,7 +1310,9 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
     def enable_browser_bridge(self):
         if self.browser_bridge is None:
             from .browser_activity import BrowserBridge
-            self.browser_bridge=BrowserBridge(self.store)
+            from .browser_control import BrowserControl
+            self.browser_control=BrowserControl(self)
+            self.browser_bridge=BrowserBridge(self.store,control=self.browser_control.request)
             self.update_focus_policy()
         return self.browser_bridge
 
@@ -1297,7 +1323,7 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
     def update_focus_policy(self):
         if self.browser_bridge:
             delegated=self.restrictions.delegated_website_rules() if hasattr(self,'restrictions') else ()
-            policy=self.wellbeing.policy(self.focus.policy(),datetime.now().astimezone(),delegated)
+            policy=self.wellbeing.policy(self.focus.policy(self.settings.wellbeing_rules),datetime.now().astimezone(),delegated)
             if hasattr(self,'restrictions'): policy=self.restrictions.browser_policy(policy)
             self.browser_bridge.update(policy)
 
@@ -1324,7 +1350,8 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
         if focus.restricting and current.interactive and current.path and current.identity:
             key=app_key(current.path); filename=ntpath.basename(key)
             own=current.identity.startswith(str(os.getpid())+':')
-            blocked=focus.settings.app_blocked(key)
+            atom=self.wellbeing.current[1] if self.wellbeing.current else None
+            blocked=self.focus_application_blocked(key,atom[0] if atom else None)
             if blocked and not own and filename not in SHELLS:
                 if self.minimization_allowed(current.path,current.identity):
                     win32.minimize_game(current.path,current.identity,consented=True)
@@ -1332,6 +1359,14 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
                     self.focus_page.notice.setText(self.t('This protected game requires the existing minimization permission.'))
         if self.isVisible() and not self.isMinimized() and self.pages.currentIndex()==4:
             self.focus_page.refresh()
+
+    def focus_application_blocked(self,path,game_id=None):
+        settings=self.focus.settings
+        if settings.app_blocked(path): return True
+        if not settings.block_groups or self.catalog.explicitly_ignored(path): return False
+        if game_id is None:
+            game=self.catalog.resolve(path); game_id=game.id if game else ''
+        return settings.app_blocked(path,game_id,self.settings.wellbeing_rules)
     def open_settings_section(self,key):
         self.switch_page(2); self.show_settings_section(key)
 
@@ -1352,8 +1387,6 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
             'focus':(('Timer settings',lambda:self.focus_page.timer_settings()),('Edit list',lambda:self.focus_page.rules_dialog())),
         }
         for name,callback in sections[context]: menu.addAction(self.t(name),callback)
-        from .qt_day_start import day_start_dialog
-        menu.addSeparator(); menu.addAction(self.t('Day starts at…'),lambda:day_start_dialog(self))
         menu.exec(widget.mapToGlobal(QPoint(0,widget.height())))
 
     def settings_dialog(self):
@@ -1504,18 +1537,25 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
 
     def popup(self,alert):
         if self.popup_window: return False
+        from .notification_rules import needs_interaction
+        from .qt_notification_options import notification_icon,popup_action
         mode=self.notification_mode()
         current=win32.sample()
+        if needs_interaction(alert) and (mode in ('defer','audio') or getattr(self,'_fullscreen_alert',None)):
+            return False
         # Every game reminder uses the same in-game renderer, including budget
         # expiry and bedtime. A visible desktop HWND is no fullscreen receipt.
-        if getattr(self,'_fullscreen_alert',None) or (current.interactive and self.catalog.resolve(current.path)
-                and self.settings.overlay_rtss_auto and self.rtss_available()):
+        if not needs_interaction(alert) and (getattr(self,'_fullscreen_alert',None) or (current.interactive and self.catalog.resolve(current.path)
+                and self.settings.overlay_rtss_auto and self.rtss_available())):
             delivered=self.fullscreen_scheduled_notification(alert,current)
             if delivered or getattr(self,'_fullscreen_alert',None): return delivered
         if mode=='defer': return False
         if mode=='audio': return self.audio_notification(alert)
         passive=True
-        window=AlertDialog(self,passive); self.popup_window=window; self.popup_day=alert.day; self.popup_kind=alert.kind
+        window=AlertDialog(self,passive,interactive=bool(alert.action and alert.action.get('kind')=='pomodoro'))
+        window.notification_rule=alert.kind=='scheduled'
+        window.close_timer=QTimer(window); window.close_timer.setSingleShot(True); window.close_timer.timeout.connect(window.close)
+        self.popup_window=window; self.popup_day=alert.day; self.popup_kind=alert.kind
         from .notification_text import notification_presentation
         caption,heading,icon_name=notification_presentation(alert,self.t)
         screen=QApplication.primaryScreen().availableGeometry()
@@ -1525,8 +1565,7 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
         header=QHBoxLayout(); header.setSpacing(16)
         badge=label(); badge.setFixedSize(48,48); badge.setAlignment(Qt.AlignCenter)
         badge.setStyleSheet('background:#284c3c; border-radius:12px;')
-        custom_icon=QIcon(alert.icon) if alert.icon else QIcon()
-        badge.setPixmap(custom_icon.pixmap(36,36) if not custom_icon.isNull() else glyph(icon_name,ACCENT,30).pixmap(30,30)); header.addWidget(badge)
+        badge.setPixmap(notification_icon(alert.icon,30,icon_name).pixmap(30,30)); header.addWidget(badge)
         title=label(heading,'title')
         title.setTextFormat(Qt.PlainText)
         title.setStyleSheet('font-size:24px;'); title.setWordWrap(True); header.addWidget(title,1); layout.addLayout(header)
@@ -1540,12 +1579,13 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
         body.setStyleSheet('QScrollArea {background:transparent; border:0;} QScrollArea > QWidget {background:transparent;}')
         message_layout.addWidget(body); layout.addWidget(message,1)
         title.ensurePolished(); header_height=max(48,title.heightForWidth(width-120))
-        window.setFixedSize(width,min(max(260,172+header_height+min(260,text_height)),max(260,screen.height()-60)))
+        action_height=popup_action(self,window,layout,alert)
+        window.setFixedSize(width,min(max(260,172+header_height+min(260,text_height)+action_height),max(260,screen.height()-60)))
         window.finished.connect(lambda result:self._popup_finished(window))
         window.move(screen.right()-width-20,screen.top()+20)
         try:
             window.show(); hwnd=dark_window(window)
-            foreground=win32.present_notification(hwnd,activate=False)
+            foreground=win32.present_notification(hwnd,activate=False,accept_mouse=window.interactive)
             QApplication.processEvents(QEventLoop.ExcludeUserInputEvents)
             if not window.isVisible() or not win32.u.IsWindowVisible(hwnd): raise RuntimeError('Notification window did not become visible')
         except Exception:
@@ -1553,7 +1593,8 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
         log.info('Notification presented: kind=%s day=%s main_visible=%s foreground=%s',alert.kind,alert.day,self.isVisible(),foreground)
         if alert.sound: play_notification(self.settings)
         # The message can be scrolled with the mouse without keyboard focus.
-        QTimer.singleShot(min(90000,max(12000,len(alert.text)*75)),window.close)
+        duration=min(90000,max(12000,len(alert.text)*75)) if alert.timeout is None else alert.timeout*1000
+        if duration: window.close_timer.start(duration)
         return True
 
     def fullscreen_scheduled_notification(self,alert,current):
@@ -1589,15 +1630,14 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
         plan=quota_plan(self.settings,now)
         quota_totals=self.tracker.quota_totals(now)
         used=sum(quota_totals.values())
-        budget=remaining_budget(self.settings,now,used)
-        self.total_label.setText(duration(total)); self.remaining_label.setText(duration(budget.remaining) if math.isfinite(budget.remaining) else self.t('No shared limit'))
-        tomorrow=period_day(now,reset_clock(self.settings))+timedelta(days=1)
-        renewal=reset_at(tomorrow,reset_clock(self.settings)[tomorrow.weekday()],now)
-        self.remaining_label.setToolTip((self.t('Unused daily budget: {remaining}',remaining=duration(budget.quota_remaining)) if math.isfinite(budget.quota_remaining) else self.t('No daily minute limit'))+'\n'+self.t('Next budget reset: {time}',time=renewal.strftime('%Y-%m-%d %H:%M')))
-        self.remaining_reason.setText((self.t('Bedtime has started') if budget.bedtime.timestamp()<=now.timestamp() else self.t('Until bedtime at {time}',time=budget.bedtime.strftime('%H:%M'))) if budget.bedtime else '')
-        self.remaining_reason.setVisible(budget.bedtime is not None)
         from . import budget_access
         usage_limit=self.settings.game_budget_enabled and budget_access.active(self.settings,'shared-games',now) and budget_access.usage_enabled(self.settings,'shared-games')
+        remaining=max(0,plan.limit_seconds-used) if usage_limit else math.inf
+        self.total_label.setText(duration(total)); self.remaining_label.setText(duration(remaining) if math.isfinite(remaining) else self.t('No shared limit'))
+        tomorrow=period_day(now,reset_clock(self.settings))+timedelta(days=1)
+        renewal=reset_at(tomorrow,reset_clock(self.settings)[tomorrow.weekday()],now)
+        self.remaining_label.setToolTip((self.t('Unused daily budget: {remaining}',remaining=duration(remaining)) if math.isfinite(remaining) else self.t('No daily minute limit'))+'\n'+self.t('Next budget reset: {time}',time=renewal.strftime('%Y-%m-%d %H:%M')))
+        self.remaining_reason.clear(); self.remaining_reason.hide()
         self.ring.set_ratio((used/plan.limit_seconds if plan.limit_seconds else 1) if usage_limit else 0); self.ring.setToolTip(self.t('Daily budget')+f': {plan.limit_seconds/60:g} '+self.t('min') if usage_limit else self.t('No daily minute limit'))
         self.active_label.setText(self.tracker.active.name if self.tracker.active else ''); self.active_label.setVisible(self.tracker.active is not None)
         self.active_label.setToolTip(self.t('Active game: {name}',name=self.tracker.active.name) if self.tracker.active else '')
@@ -1672,6 +1712,7 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
 
     def close(self):
         if self.closed: return
+        self.notifications_page.close_draft()
         self.budget_editor.drafts.close()
         self.statistics.flush_view()
         self.closed=True

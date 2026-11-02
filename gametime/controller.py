@@ -456,7 +456,8 @@ class MonitorActions:
         for key,name,settings in self._computer_schedules:
             engine=self.bedtime if key=='computer-window' else engines.get(key) or Bedtime(self.store,key)
             kept[key]=engine
-            state,marker,due=engine.update(settings,current)
+            available=not (self.popup_window and getattr(self.popup_window,'notification_rule',False))
+            state,marker,due=engine.update(settings,current,popup_available=available)
             if marker:
                 if self.popup_window: self.dismiss_popup()
                 from .notification_text import notification_text
@@ -520,7 +521,7 @@ class MonitorActions:
             restricting = bedtime_restricting or planned_restricting or self.enforce_gameplay(current) or wellbeing_restricting
             today = period_day(current.wall,reset_clock(self.settings)).isoformat()
             popup_day = today
-            if self.popup_window and self.popup_day != popup_day:
+            if self.popup_window and self.popup_day != popup_day and not getattr(self.popup_window,'notification_rule',False):
                 self.dismiss_popup()
                 self.popup_window = self.popup_day = None
             if not restricting and not self.popup_window and self.notification_timer is None and self.tracker.alerts:

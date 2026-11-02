@@ -167,7 +167,7 @@ def game_overlay_dialog(app,gid=None,*,targets=None):
         blocked_space.setVisible(not available or hide_countdown.isChecked())
         controls.setEnabled(not hide_countdown.isChecked()); preview_button.setEnabled(bool(current[0]) and not hide_countdown.isChecked() and not reason)
         value=draft()
-        if current[0] and available and not initializing[0]:
+        if current[0] and available and not initializing[0] and value!=targets.profile(current[0]):
             targets.set_profile(current[0],value)
         update_coordinates()
         update_colors()

@@ -145,7 +145,14 @@ class CustomizationInterfaceTests(unittest.TestCase):
         self.app.save_settings(); saved=self.store.settings(); plans=week_plans(saved)
         self.assertEqual((plans[0]['limit_seconds'],plans[5]['limit_seconds']),(9300,10800))
         editor.select_days(range(5)); self.assertEqual(self.app.limit.value(),155)
-        self.app.save_settings(); self.assertEqual(week_plans(self.store.settings())[5]['limit_seconds'],10800)
+        self.app.save_settings(); saved=self.store.settings()
+        # The current editor migrates legacy weekday schedules into separate
+        # budgets; verify the effective weekend allowance after that migration.
+        weekend=next(rule for rule in saved.wellbeing_rules if saved.budget_active_days.get(rule['id'])==[5,6])
+        self.assertEqual(weekend['seconds'],10800)
+        self.assertEqual(weekend['members'],[{'kind':'category','value':'games'}])
+        self.assertEqual(saved.budget_active_days['shared-games'],list(range(5)))
+        self.assertEqual(saved.limit_seconds,9300)
 
     def test_per_game_drafts_preview_cancel_save_reset_and_translation(self):
         from PySide6.QtWidgets import QComboBox

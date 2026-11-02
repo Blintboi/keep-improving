@@ -44,9 +44,12 @@ def day_start_dialog(app):
         try:
             previous=app.settings
             minute=edit.time().hour()*60+edit.time().minute()
-            settings=replace(previous,budget_reset_minute=minute).validate()
+            from .global_day_start import normalize
+            settings=normalize(replace(previous,budget_reset_minute=minute)).validate()
             app.tracker.flush(); app.focus.flush(); app.wellbeing.flush()
             app.store.save_settings(settings); app.settings=app.catalog.settings=settings
+            from .global_day_start import carry_markers
+            carry_markers(app.store,previous,settings)
             apply_day_start(app,previous)
             app.update_focus_policy(); app.tracker.evaluate(datetime.now().astimezone())
             app.last_rows=None; app.render(); app.statistics.refresh(live=True)

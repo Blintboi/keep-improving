@@ -164,10 +164,10 @@ def nonactivating_window(hwnd):
     if not previous and C.get_last_error(): raise C.WinError(C.get_last_error())
 
 
-def present_notification(hwnd,*,activate=True):
+def present_notification(hwnd,*,activate=True,accept_mouse=False):
     # Show in the topmost group even when Windows refuses foreground focus.
     # NOMOVE | NOSIZE | NOACTIVATE | SHOWWINDOW | NOOWNERZORDER
-    if not activate: nonactivating_window(hwnd)
+    if not activate and not accept_mouse: nonactivating_window(hwnd)
     if not u.SetWindowPos(hwnd, W.HWND(-1), 0, 0, 0, 0, 0x253):
         raise C.WinError(C.get_last_error())
     return bool(u.SetForegroundWindow(hwnd)) if activate else False

@@ -48,7 +48,7 @@ class Bedtime:
         if self.identity: key+=':'+self.identity
         if state == 'warning' and (not current.interactive or previous is not None and not continuous):
             self.warning_suppressed = True
-        warning = (settings.bedtime_warning_enabled and state == 'warning' and current.interactive and popup_available
+        warning = ('bedtime' not in settings.removed_notifications and settings.bedtime_warning_enabled and state == 'warning' and current.interactive and popup_available
                    and current.wall.hour*60+current.wall.minute == settings.bedtime_warning_minute
                    and not self.warning_suppressed and key not in self.keys and previous_key not in self.keys)
         active = state == 'bedtime' and settings.bedtime_minimize

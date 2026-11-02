@@ -72,7 +72,7 @@ class TimeBudgets(QWidget):
         self.shared_reset_panel=panel(); shared_reset_layout=QHBoxLayout(self.shared_reset_panel)
         shared_reset_layout.addWidget(label(app.t('Renews daily at'),'muted'))
         self.shared_reset=self.reset_field(); shared_reset_layout.addWidget(self.shared_reset,1)
-        box.addWidget(self.shared_reset_panel); self.stack.addWidget(shared)
+        self.shared_reset_panel.hide(); self.stack.addWidget(shared)
         detail=panel(); form=QVBoxLayout(detail); form.setContentsMargins(22,20,22,22); form.setSpacing(14); form.setAlignment(Qt.AlignTop)
         self.name=QLineEdit(); self.name.setMaxLength(80); self.name.setAccessibleName(app.t('Budget name')); form.addWidget(self.name)
         self.members_note=label('','muted'); self.members_note.setWordWrap(True); form.addWidget(self.members_note)
@@ -88,8 +88,7 @@ class TimeBudgets(QWidget):
         self.appearance=button(app.t('Countdown settings…'),self.edit_countdown,'quiet')
         form.addWidget(self.appearance,0,Qt.AlignLeft)
         self.usage=label('','muted'); self.usage.setWordWrap(True); form.addWidget(self.usage)
-        reset_row=QHBoxLayout(); reset_row.addWidget(label(app.t('Renews daily at'),'muted'))
-        self.reset_time=self.reset_field(); reset_row.addWidget(self.reset_time,1); form.addLayout(reset_row)
+        self.reset_time=self.reset_field(); self.reset_time.setParent(self); self.reset_time.hide()
         self.tracking=button(app.t('Enable application and website measurement'),self.enable_tracking)
         form.addWidget(self.tracking,0,Qt.AlignLeft)
         self.error=label('','danger'); self.error.setWordWrap(True); form.addWidget(self.error); self.error.hide()
@@ -125,11 +124,7 @@ class TimeBudgets(QWidget):
         return edit
 
     def changed_reset(self,value):
-        if self.loading or not self.current: return
-        self.reset_overrides[self.current]=value.hour()*60+value.minute()
-        self.reset_changed.add(self.current)
-        for card in self.steps.cards: card.update_controls()
-        self.steps.queue_sort()
+        pass  # Renewal is configured once in global Settings.
 
     def toggle_shared(self):
         self.schedule.show()
@@ -348,7 +343,7 @@ class TimeBudgets(QWidget):
             self.periods.choose(self.current); self.stack.setCurrentIndex(3)
         elif self.current in ('shared-games','computer-window'):
             self.schedule.set_mode('games' if self.current=='shared-games' else 'computer')
-            self.shared_reset_panel.show()
+            self.shared_reset_panel.hide()
             minute=self.reset_overrides.get(self.current,self.app.settings.budget_reset_minute)
             self.shared_reset.setTime(QTime(minute//60,minute%60))
             self.stack.setCurrentIndex(0); self.toggle_shared()
@@ -480,10 +475,7 @@ class TimeBudgets(QWidget):
         for key in self.restriction_changed:
             if key in self.restriction_plans: plans[key]=deepcopy(self.restriction_plans[key])
             else: plans.pop(key,None)
-        resets=dict(base.budget_reset_overrides)
-        for key in self.reset_changed:
-            if key in self.reset_overrides: resets[key]=self.reset_overrides[key]
-            else: resets.pop(key,None)
+        resets={key:base.budget_reset_minute for key in base.budget_reset_overrides if key not in self.reset_changed or key in self.reset_overrides}
         return self.countdown_settings(replace(base,wellbeing_rules=rules,game_limits=limits,
                        computer_periods=deepcopy(self.periods.items),game_budget_enabled=self.shared_enabled,restriction_plans=plans,budget_reset_overrides=resets,**self.access.values(base)))
 

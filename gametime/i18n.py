@@ -976,8 +976,8 @@ HU.update({'Break in':'Szünetig','Break remaining':'Szünetből hátra','Restri
 
 
 HU.update({'Detailed RTSS countdown':'Részletes RTSS-számláló',
-           'Show the event name and daily budget remaining. Turn off to show only the countdown in games.':
-               'Az esemény nevét és a napi keret maradékát is mutatja. Kikapcsolva játék közben csak a visszaszámlálás látszik.'})
+           'Show the event name and daily budget remaining. Turn off to show only the countdown.':
+               'Az esemény nevét és a napi keret maradékát is mutatja. Kikapcsolva csak a visszaszámlálás látszik.'})
 
 
 HU.update({
@@ -1004,3 +1004,125 @@ def tr(text, language="en", **values):
                     translated = target + text[len(prefix):]
                     break
     return translated.format(**values) if values else translated
+
+
+HU.update({
+    'Invalid notification selection.':'Érvénytelen értesítésválasztás.',
+    'Notification type':'Értesítés típusa',
+    'Scheduled notification':'Időzített értesítés',
+    'New notification':'Új értesítés',
+    'No notifications yet. Add one to get started.':'Még nincs értesítés. A kezdéshez adj hozzá egyet.',
+    'This reminder follows its time budget. Its timing can be changed under Time budgets.':'Ez az emlékeztető a hozzá tartozó időkeretet követi. Az időzítését az Időkeretek oldalon módosíthatod.',
+    'Unapplied changes. Save changes to apply.':'A módosítások még nem érvényesek. A Mentés gombbal alkalmazhatod őket.',
+    'Delete notification':'Értesítés törlése',
+    'Discard all unfinished notification changes?':'Elveted az értesítések összes félbehagyott módosítását?',
+    'Saved notifications will be kept.':'A mentett értesítések megmaradnak.',
+    'Time budgets and recorded activity history will be kept. Save changes to apply.':'Az időkeretek és a rögzített előzmények megmaradnak. A törlést a Mentés gombbal érvényesítheted.',
+    'Notifications saved.':'Értesítések mentve.',
+    'Could not save notifications. Try again.':'Nem sikerült menteni az értesítéseket. Próbáld újra.',
+})
+
+
+HU.update({
+    'Invalid application group.':'Érvénytelen alkalmazáscsoport.',
+    'Application groups':'Alkalmazáscsoportok',
+    'Add application group':'Alkalmazáscsoport hozzáadása',
+    'Removed group':'Törölt csoport',
+    'Add application groups you want to avoid during work.':'Add hozzá a munka közben kerülendő alkalmazáscsoportokat.',
+    'Groups follow their current application and game members, including newly detected games. Websites keep their separate blacklist.':'A csoportok az aktuális alkalmazás- és játéktagjaikat követik, az újonnan felismert játékokat is beleértve. A weboldalak külön tiltólistát kapnak.',
+    'All available groups have already been added.':'Már minden elérhető csoportot hozzáadtál.',
+    '{apps} apps · {sites} websites · {groups} groups':'{apps} alkalmazás · {sites} weboldal · {groups} csoport',
+})
+
+HU.update({'Completed rounds in total: {count}':'Összes befejezett kör: {count}'})
+
+HU.update({
+    'From groups: {names}':'Csoportból: {names}',
+    'Direct entry · groups: {names}':'Külön is hozzáadva · csoportból: {names}',
+    'This entry comes from a group. Change its members in Time budgets or remove the group under Groups.':'Ez az elem csoportból származik. A tagságot az Időkereteknél módosíthatod, a csoportot a Csoportok fülön veheted ki.',
+    'Removing the direct entry keeps the group rule. Manage inherited members in Time budgets or remove their group under Groups.':'A külön hozzáadott elem eltávolítása után a csoport szabálya megmarad. A tagságot az Időkereteknél módosíthatod, a csoportot a Csoportok fülön veheted ki.',
+    'All websites are included, including newly detected sites. Known members are listed above.':'Minden weboldalra érvényes, az újonnan felismert oldalakra is. Felül az ismert tagok láthatók.',
+    'Group members are listed above. Categories also include newly detected activities.':'Felül a csoportok tagjai láthatók. A kategóriák az újonnan felismert tevékenységeket is tartalmazzák.',
+    'Removed game':'Eltávolított játék',
+    'Excluded from group blocking.':'A csoportos tiltásból ki van zárva.',
+})
+
+HU.update({
+    '0-minute breaks are skipped. Set rounds to 0 for a single focus session, with no break or repetition.':'A 0 perces szünet kimarad. A körök számát 0-ra állítva egyetlen fókuszszakasz fut, szünet és ismétlés nélkül.',
+    'Single focus session: {work} min':'Egyszeri fókusz: {work} perc',
+    'Set a focus duration from 1 to 240 minutes.':'A fókusz hossza 1 és 240 perc közötti egész szám legyen.',
+    'Focus session complete.':'A fókusz befejeződött.',
+    'Focus complete. Start the next focus session when ready.':'A fókuszszakasz befejeződött. A következőt akkor indítsd el, amikor készen állsz.',
+    'Choose a detected or registered application. Search by name or path.':'Válassz a felismert vagy a Windowsban regisztrált alkalmazások közül. Név és elérési út alapján is kereshetsz.',
+    'Search applications…':'Alkalmazások keresése…',
+    'No applications found. Open an application once so it can be detected, or choose its executable.':'Nincs találat. Nyisd meg egyszer az alkalmazást, hogy felismerjük, vagy válaszd ki az indítófájlját.',
+    'Selected application':'Kiválasztott alkalmazás',
+    'Select application':'Alkalmazás kiválasztása',
+})
+
+HU.update({
+    'Create reminders with your own triggers and actions.':'Állítsd be, mikor jelenjen meg az értesítés, és mit indíthass el belőle.',
+    'Show notification':'Mikor jelenjen meg?',
+    'At a time of day':'Adott időpontban',
+    'When Keep Improving starts':'A Keep Improving indulásakor',
+    'After daily Pomodoro count':'Napi Pomodoro-cél elérésekor',
+    'Completed focus rounds today':'Ma befejezett fókuszkörök száma',
+    'After {count} focus rounds today':'{count} mai fókuszkör után',
+    'Appears once a day at the selected time while Keep Improving is running.':'Naponta egyszer, a megadott időpontban jelenik meg, ha fut a Keep Improving.',
+    'Appears once each time Keep Improving starts. Saving a notification does not trigger it.':'A Keep Improving minden indításakor egyszer jelenik meg. Az értesítés mentése még nem indítja el.',
+    'Counts completed focus rounds, not breaks. Uses the global day start and appears once per day.':'A befejezett fókuszköröket számolja, a szüneteket nem. A közös napváltást követi, naponta egyszer jelenik meg.',
+    'Follows the bedtime reminder time in your time budget.':'Az időkeretben beállított lefekvési emlékeztető időpontját követi.',
+    'Follows the shared game time budget.':'A közös játékidőkeretet követi.',
+    'Icon':'Ikon', 'Reminder':'Emlékeztető', 'Rest':'Pihenés', 'Water':'Víz', 'Reading':'Olvasás',
+    'Movement':'Mozgás', 'Completed':'Kész', 'Health':'Egészség', 'Goal':'Cél',
+    'Choose image…':'Saját kép…', 'Custom icon path':'Saját ikon elérési útja',
+    'Notification button':'Gomb az értesítésen', 'No button':'Nincs gomb',
+    'Open an application':'Alkalmazás megnyitása', 'Start Pomodoro':'Pomodoro indítása',
+    'Application path':'Alkalmazás elérési útja', 'Choose application…':'Alkalmazás kiválasztása…',
+    'Windows applications (*.exe)':'Windows-alkalmazások (*.exe)',
+    'Pomodoro timing':'Pomodoro időzítése', 'Custom':'Egyéni',
+    'Focus (minutes)':'Fókusz (perc)', 'Short break (minutes)':'Rövid szünet (perc)',
+    'Long break (minutes)':'Hosszú szünet (perc)', 'Rounds before a long break':'Körök a hosszú szünetig',
+    'You can adjust these times in the notification before starting. Uses your current focus blacklist.':'Indítás előtt az értesítésben is módosíthatod az időket. Az aktuális fókusz-tiltólistát használja.',
+    'Uses your current focus blacklist. Starting replaces any paused timer.':'Az aktuális fókusz-tiltólistát használja. Az indítás felülírja a szüneteltetett időzítőt.',
+    'Close automatically':'Automatikus bezárás', 'Seconds until closing':'Bezárás ennyi másodperc után',
+    'When turned off, the notification stays open until you close it.':'Kikapcsolva az értesítés addig látható, amíg kézzel be nem zárod.',
+    'Open {name}':'{name} megnyitása', 'Application opened.':'Alkalmazás megnyitva.',
+    'Pomodoro started.':'Pomodoro elindítva.', 'Could not start the action. Try again.':'Nem sikerült elindítani a műveletet. Próbáld újra.',
+    'A focus timer is already running. Stop it in Focus mode before starting a new one.':'Már fut egy fókuszidőzítő. Új indítása előtt állítsd le a Fókusz oldalon.',
+    'Choose a local Windows application (.exe).':'Válassz egy helyi Windows-alkalmazást (.exe).',
+    'Application file was not found.':'Az alkalmazás fájlja nem található.',
+    'Invalid notification button.':'Érvénytelen értesítési gomb.', 'Invalid notification.':'Érvénytelen értesítés.',
+    'Invalid notification trigger.':'Érvénytelen megjelenési feltétel.', 'Enter a title and message.':'Adj meg címet és üzenetet.',
+    'Choose a Pomodoro count from 1 to 1000.':'A Pomodoro-cél 1 és 1000 közötti egész szám lehet.',
+    'Choose a duration from 1 to 3600 seconds, or manual closing.':'Válassz 1–3600 másodperces időtartamot vagy kézi bezárást.',
+})
+
+HU.update({
+    'Groups':'Csoportok',
+    'Add group':'Csoport hozzáadása',
+    'Add groups you want to avoid during work.':'Add hozzá a munka közben kerülendő csoportokat.',
+    'Choose a time-budget group or a whole category. All its applications, games and websites are blocked during focus. Changes to the group are followed automatically.':'Válassz egy időkeretcsoportot vagy egy teljes kategóriát. Fókusz közben minden alkalmazás-, játék- és weboldaltagja tiltva lesz. A csoport módosításait automatikusan követjük.',
+})
+
+HU.update({
+    'General':'Általános',
+    'One daily boundary for statistics, all time budgets and daily reminders.':'Közös napváltás a statisztikához, minden időkerethez és a napi értesítésekhez.',
+    'Earlier statistics and already used time are kept.':'A korábbi statisztikák és a már felhasznált idő megmaradnak.',
+})
+
+HU.update({
+    'Settings changed in another window. Refresh before saving; your draft is kept.':'A beállítások egy másik ablakban megváltoztak. Mentés előtt frissíts; a piszkozatod megmarad.',
+    'Save or discard the open desktop settings draft before changing settings here.':'Az asztali alkalmazásban nyitott beállítások piszkozatát előbb mentsd vagy vesd el, utána itt is módosíthatod a beállításokat.',
+    'Invalid request.':'Érvénytelen kérés.',
+    'Unknown command.':'Ismeretlen művelet.',
+    'The application is closing.':'Az alkalmazás bezárul.',
+    'The application is busy. Try again.':'Az alkalmazás még dolgozik. Próbáld újra.',
+    'Confirm revoking the connection code.':'Erősítsd meg a kapcsolódási kód visszavonását.',
+    'Sign in with GitHub before activating a new connection code.':'Új kapcsolódási kód aktiválásához jelentkezz be GitHubbal.',
+    'Enter a game name.':'Adj nevet a játéknak.',
+    'The uninstall plan changed. Open it again.':'Az eltávolítási útmutató megváltozott. Nyisd meg újra.',
+    'Choose an image smaller than 330 KB.':'Válassz 330 KB-nál kisebb képet.',
+    'Choose a valid PNG, JPEG or WebP image.':'Válassz érvényes PNG-, JPEG- vagy WebP-képet.',
+    'Confirm the display notice.':'Fogadd el a megjelenítéshez tartozó tájékoztatót.',
+})

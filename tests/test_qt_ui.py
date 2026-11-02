@@ -58,7 +58,10 @@ class QtInterfaceTests(unittest.TestCase):
         self.app.tick_timer.stop(); self.app.switch_page(0); self.pump(.03)
 
     def tearDown(self):
-        self.app.close(); self.pump(.02); self.sound.stop(); self.store.close()
+        from PySide6.QtCore import QCoreApplication,QEvent
+        self.app.close(); self.app.deleteLater()
+        QCoreApplication.sendPostedEvents(None,QEvent.DeferredDelete)
+        self.pump(.02); self.sound.stop(); self.store.close()
         self.app=None; gc.collect(); self.tmp.cleanup()
 
     def pump(self,seconds=.1):

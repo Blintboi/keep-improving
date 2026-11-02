@@ -18,6 +18,17 @@ class TimerProjectionTests(unittest.TestCase):
     setUp=policy_fixture.StepsTests.setUp
     tearDown=policy_fixture.StepsTests.tearDown
 
+    def test_equal_displayed_times_keep_only_primary_countdown_in_both_languages(self):
+        for language in ('hu','en'):
+            t=lambda text,**values:tr(text,language,**values)
+            for seconds,total in ((1767,1767),(1766.2,1766.8),(0,0),(-1,0),(7200,7200)):
+                with self.subTest(language=language,seconds=seconds,total=total):
+                    event=TimerView('same','Same','limit',seconds,total,active=True)
+                    self.assertEqual(event.secondary(t),''); self.assertNotIn(t('Daily budget left: {time}',time=''),tooltip([event],t))
+            event=TimerView('different','Different','break',900,1800,active=True)
+            self.assertIn('30:00',event.secondary(t)); self.assertIn('30:00',tooltip([event],t))
+            self.assertIn('00:00',replace(event,seconds=120,total=0).secondary(t))
+
     def prepare(self,used,now=1000,limit=3600):
         self.budget=Budget('budget','YouTube',limit,used,(target('site','youtube.com'),))
         self.engine.update(self.day,now,[self.budget],self.plans)

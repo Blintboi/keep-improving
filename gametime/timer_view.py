@@ -27,7 +27,11 @@ class TimerView:
     def label(self,t): return t(LABELS[self.event])
 
     def secondary(self,t):
-        return t('Daily budget left: {time}',time=clock(self.total)) if math.isfinite(self.total) and self.event!='quota' else ''
+        if not math.isfinite(self.total) or self.event=='quota': return ''
+        # Compare the displayed seconds, so fractional accounting cannot create
+        # two visually identical lines with different numeric representations.
+        if math.isfinite(self.seconds) and clock(self.total)==clock(self.seconds): return ''
+        return t('Daily budget left: {time}',time=clock(self.total))
 
 
 def clock(seconds):

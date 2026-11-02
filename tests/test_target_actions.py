@@ -110,7 +110,11 @@ class TargetInterfaceTests(unittest.TestCase):
         saved=deepcopy(self.store.settings().restriction_plans[key])
         self.assertFalse(saved['steps'][0]['targets']['app']['popup']); self.assertFalse(saved['steps'][0]['targets']['site']['sound'])
         editor.show_editor(key); editor.steps.cards[0].targets['app'].enabled.setChecked(False)
-        self.app.budget_back.click(); self.app.save_budgets()
+        self.app.budget_back.click()
+        self.assertEqual(self.store.settings().restriction_plans[key],saved)
+        from gametime.qt_translation import QDialog
+        with patch.object(QDialog,'exec',return_value=QDialog.Accepted): editor.drafts.discard()
+        self.app.save_budgets()
         self.assertEqual(self.store.settings().restriction_plans[key],saved)
 
     def test_regular_site_redirect_does_not_change_application_closure(self):

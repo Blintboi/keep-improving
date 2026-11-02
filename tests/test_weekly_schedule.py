@@ -80,7 +80,9 @@ class WeeklyScheduleInterfaceTests(unittest.TestCase):
         editor.select_days((1,)); self.app.limit.setValue(180); self.app.warning.setValue(160)
         editor.select_days((0,1)); self.assertFalse(editor._mixed['limit_seconds'].isHidden()); self.assertFalse(editor.unify.isHidden())
         self.app.bedtime_enabled.setChecked(True)
-        self.app.save_settings(); plans=week_plans(self.store.settings())
+        # Check the legacy draft before saving migrates it into separate fixed
+        # budgets; unification must be an explicit edit before that migration.
+        plans=week_plans(editor.settings(self.app.settings).validate())
         self.assertEqual((plans[0]['limit_seconds'],plans[1]['limit_seconds']),(9000,10800))
         self.assertEqual((plans[0]['warning_seconds'],plans[1]['warning_seconds']),(6000,9600))
         self.assertTrue(plans[0]['bedtime_enabled']); self.assertTrue(plans[1]['bedtime_enabled'])

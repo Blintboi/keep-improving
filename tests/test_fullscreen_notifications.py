@@ -70,7 +70,7 @@ class FullscreenTests(TestCase):
         with patch.object(self.app,'rtss',backend),patch.object(self.app,'rtss_available',return_value=True),patch.object(self.app,'notification_mode',return_value='defer'),patch('gametime.qt_fullscreen_notifications.overlay_reason',return_value=''),patch('gametime.qt_fullscreen_notifications.win32.sample',return_value=replace(current,identity='other:123')):
             tick(self.app,current); active=self.app._fullscreen_alert; active.tick()
             self.assertTrue(active.closing); active.tick(); self.assertIsNone(self.app._fullscreen_alert)
-            self.assertFalse(self.store.alert_keys(now.date())); self.assertEqual(self.app._scheduled_pending,['scheduled:'+item['id']])
+            self.assertFalse(self.store.alert_keys(now.date())); self.assertEqual([key for key,_ in self.app._scheduled_pending],['scheduled:'+item['id']])
 
     def test_denied_or_unavailable_overlay_keeps_notification_pending(self):
         from gametime.model import norm
@@ -81,7 +81,7 @@ class FullscreenTests(TestCase):
         with patch.object(self.app,'rtss',backend),patch.object(self.app,'rtss_available',return_value=True),patch.object(self.app,'notification_mode',return_value='audio'),patch('gametime.qt_fullscreen_notifications.overlay_reason',return_value='Protected'):
             tick(self.app,current)
             self.assertIsNone(getattr(self.app,'_fullscreen_alert',None)); backend.present.assert_not_called()
-            self.assertFalse(self.store.alert_keys(now.date())); self.assertEqual(self.app._scheduled_pending,['scheduled:'+item['id']])
+            self.assertFalse(self.store.alert_keys(now.date())); self.assertEqual([key for key,_ in self.app._scheduled_pending],['scheduled:'+item['id']])
 
     def test_cleanup_failure_does_not_block_closing_or_future_alerts(self):
         from gametime.qt_fullscreen_notifications import FullscreenNotification

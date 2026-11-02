@@ -66,8 +66,8 @@ class FullscreenNotification:
         painter.drawRoundedRect(QRectF(1,1,WIDTH-2,HEIGHT-2),16,16)
         painter.setPen(Qt.NoPen); painter.setBrush(QColor('#284c3c')); painter.drawRoundedRect(QRectF(20,20,54,54),12,12)
         _,heading,icon_name=notification_presentation(self.alert,self.app.t)
-        icon=QIcon(self.alert.icon) if self.alert.icon else QIcon()
-        if icon.isNull(): icon=glyph(icon_name,ACCENT,30)
+        from .qt_notification_options import notification_icon
+        icon=notification_icon(self.alert.icon,30,icon_name)
         icon.paint(painter,29,29,36,36)
         painter.setPen(QColor('#edf4f2')); title_font=QFont('Segoe UI',19,QFont.Bold); painter.setFont(title_font)
         painter.drawText(QRectF(89,18,WIDTH-114,85),Qt.AlignLeft|Qt.AlignVCenter|Qt.TextWordWrap,heading)
@@ -103,7 +103,8 @@ class FullscreenNotification:
                         self.started=True
                         if self.alert.sound: play_notification(self.app.settings)
                     if self.page==self.pages-1: self.confirmed=True
-                if time.monotonic()-self.visible_since>=PAGE_SECONDS:
+                duration=self.alert.timeout/self.pages if self.alert.timeout else PAGE_SECONDS
+                if time.monotonic()-self.visible_since>=duration:
                     if self.page+1>=self.pages: self.finish(); return
                     self.page+=1; self.visible_since=None; self.render_page()
             elif self.app.rtss.fallback_for(self.identity): self.finish()
@@ -128,6 +129,8 @@ class FullscreenNotification:
 
 
 def present(app,alert,current):
+    from .notification_rules import needs_interaction
+    if needs_interaction(alert): return False
     active=getattr(app,'_fullscreen_alert',None)
     if active:
         return (active.alert==alert and active.confirmed and not active.closing and current.interactive

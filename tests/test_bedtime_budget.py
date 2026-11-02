@@ -145,25 +145,25 @@ class BedtimeBudgetInterfaceTests(unittest.TestCase):
         with patch('gametime.qt_ui.win32.sample', return_value=current), patch('gametime.qt_ui.foreground_screen_name', return_value=''):
             self.app.update_overlay()
 
-    def test_hub_and_tray_agree_and_explain_why_only_one_hour_remains(self):
+    def test_games_summary_shows_daily_budget_while_tray_keeps_bedtime_cap(self):
         self.configure()
         with self.clock(), patch.object(self.app.tray, 'update') as tray:
             self.app.render()
-        self.assertEqual(self.app.remaining_label.text(), '01:00:00')
-        self.assertIn('02:00:00', self.app.remaining_label.toolTip()); self.assertIn('00:00', self.app.remaining_reason.text())
-        self.assertFalse(self.app.remaining_reason.isHidden()); self.assertIn('01:00:00', tray.call_args[0][0])
-        self.app.set_language('en'); self.assertEqual(self.app.remaining_reason.text(), 'Until bedtime at 00:00')
+        self.assertEqual(self.app.remaining_label.text(), '02:00:00')
+        self.assertIn('02:00:00', self.app.remaining_label.toolTip()); self.assertEqual(self.app.remaining_reason.text(),'')
+        self.assertTrue(self.app.remaining_reason.isHidden()); self.assertIn('01:00:00', tray.call_args[0][0])
+        self.app.set_language('en'); self.assertTrue(self.app.remaining_reason.isHidden())
 
     def test_disabling_cap_restores_quota_and_removes_bedtime_caption(self):
         self.configure(); self.app.settings = self.app.catalog.settings = replace(self.app.settings, bedtime_caps_budget=False)
         with self.clock(): self.app.render()
         self.assertEqual(self.app.remaining_label.text(), '02:00:00'); self.assertTrue(self.app.remaining_reason.isHidden())
 
-    def test_hub_explains_zero_time_after_bedtime(self):
+    def test_games_summary_keeps_daily_budget_after_bedtime(self):
         self.configure(); self.wall += timedelta(hours=2)
         with self.clock(): self.app.render()
-        self.assertEqual(self.app.remaining_label.text(), '00:00:00')
-        self.assertEqual(self.app.remaining_reason.text(), self.app.t('Bedtime has started'))
+        self.assertEqual(self.app.remaining_label.text(), '02:00:00')
+        self.assertTrue(self.app.remaining_reason.isHidden())
 
     def test_desktop_countdown_uses_cap_and_bedtime_warning_color(self):
         self.configure(); self.show_overlay()

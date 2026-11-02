@@ -2,6 +2,7 @@
 from dataclasses import asdict
 import math
 import os
+from sqlite3 import Error as SQLiteError
 from pathlib import Path
 
 from PySide6.QtCore import Qt
@@ -27,7 +28,7 @@ class FocusPage(QWidget):
         t = owner.t
         outer=QVBoxLayout(self); outer.setContentsMargins(28,24,28,20); outer.setSpacing(12)
         heading=QHBoxLayout(); heading.addWidget(label(t('Focus mode'),'title'),1)
-        heading.addWidget(button(t('How does focus work?'),self.explain,'quiet')); heading.addWidget(owner.page_settings_button('focus')); outer.addLayout(heading)
+        heading.addWidget(button(t('How does focus work?'),self.explain,'quiet')); outer.addLayout(heading)
         focus_scroll=QScrollArea(); focus_scroll.setWidgetResizable(True); outer.addWidget(focus_scroll,1)
         focus_content=QWidget(); focus_scroll.setWidget(focus_content)
         focus_box=QVBoxLayout(focus_content); focus_box.setContentsMargins(0,0,5,0); focus_box.setSpacing(14)
@@ -50,7 +51,7 @@ class FocusPage(QWidget):
         self.connection=label('','muted'); status.addWidget(self.connection)
         rules_box.addLayout(status)
         self.rule_tabs=QTabWidget(); self.block_lists={}
-        for kind,name in (('site','Websites'),('app','Applications')):
+        for kind,name in (('site','Websites'),('app','Applications'),('group','Groups')):
             container=QWidget(); container_box=QVBoxLayout(container); container_box.setContentsMargins(12,12,12,12); container_box.setSpacing(8); container_box.setAlignment(Qt.AlignTop)
             if kind=='site':
                 url_row=QHBoxLayout(); self.url_input=QLineEdit()
@@ -59,12 +60,16 @@ class FocusPage(QWidget):
                 url_row.addWidget(self.url_input,1); self.add_url_button=button(t('Add website'),self.add_url)
                 url_row.addWidget(self.add_url_button); container_box.addLayout(url_row)
                 hint=label(t('The whole domain and its subdomains will be blocked during work.'),'muted'); hint.setWordWrap(True); container_box.addWidget(hint)
-            else:
+            elif kind=='app':
                 choices=QHBoxLayout()
                 choices.addWidget(button(t('Choose from detected applications…'),self.choose_detected_applications))
                 choices.addWidget(button(t('Choose executable…'),self.choose_application))
                 choices.addStretch(); container_box.addLayout(choices)
+            else:
+                self.add_group_button=button(t('Add group'),self.choose_groups)
+                container_box.addWidget(self.add_group_button,0,Qt.AlignLeft)
             listing=QListWidget(); listing.setMinimumHeight(76); listing.setMaximumHeight(155)
+            listing.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff); listing.setTextElideMode(Qt.ElideRight)
             listing.setSelectionMode(QAbstractItemView.SingleSelection)
             listing.itemSelectionChanged.connect(self.rule_selection_changed)
             container_box.addWidget(listing); self.block_lists[kind]=listing
@@ -82,6 +87,7 @@ class FocusPage(QWidget):
         dialog,box=self.dialog(self.owner.t('How does focus work?'),620)
         for text in ('Start a work interval to enable your blacklist. Pausing or stopping releases the restrictions immediately.',
                      'Breaks start automatically. After a break, you choose when to start working again.',
+                     '0-minute breaks are skipped. Set rounds to 0 for a single focus session, with no break or repetition.',
                      'Website blocking needs the paired browser extension. Protected games retain their existing minimization permission.',
                      'Activity history works independently of the timer and is shared when computer sync is enabled.'):
             note=label(self.owner.t(text)); note.setWordWrap(True); box.addWidget(note)
@@ -118,16 +124,34 @@ class FocusPage(QWidget):
         listing.itemSelectionChanged.connect(lambda:add.setEnabled(bool(listing.selectedItems())))
         actions.addWidget(add); box.addLayout(actions); dialog.show()
 
-    def refresh_rules(self):
-        import ntpath
-        snapshot=(tuple(self.focus.settings.block_sites),tuple(self.focus.settings.block_apps),self.owner.settings.language)
+    def refresh_rules(self,force=False):
+        from .focus_members import rows,categories
+        names=dict(self.group_choices())
+        settings=self.owner.settings; focus=self.focus.settings; catalog=self.owner.catalog
+        self._member_categories=categories(focus,settings.wellbeing_rules)
+        inventory=getattr(self,'_member_inventory',{})
+        if self._member_categories&{'apps','sites'}:
+            if force or not hasattr(self,'_member_inventory'):
+                inventory={(kind,key):name for kind,key,name in self.owner.store.db.execute('SELECT kind,key,name FROM activity_items')}
+            inventory.update(self.focus.items)
+            self._member_inventory=inventory
+        else: inventory={}
+        source=(tuple(focus.block_sites),tuple(focus.block_apps),tuple(focus.block_groups),tuple(focus.excluded_apps),settings.language,
+                tuple((r['id'],r['name'],tuple((m['kind'],m['value']) for m in r['members'])) for r in settings.wellbeing_rules),
+                tuple(catalog.games.values()),tuple(catalog.rules.items()),tuple(catalog.overrides.items()),tuple(inventory.items()))
+        if source!=getattr(self,'_member_source',None):
+            self._member_source=source
+            self._member_rows=rows(focus,settings.wellbeing_rules,catalog,inventory,names,self.owner.t)
+        snapshot=tuple((kind,entries) for kind,entries in self._member_rows.items())
         if snapshot!=self._rules_snapshot:
             self._rules_snapshot=snapshot
-            for kind,entries in (('site',snapshot[0]),('app',snapshot[1])):
+            for kind,entries in snapshot:
                 listing=self.block_lists[kind]; previous=listing.currentItem(); selected=previous.data(Qt.UserRole) if previous else None
                 blocked=listing.blockSignals(True); listing.clear()
-                for key in entries:
-                    item=QListWidgetItem(key if kind=='site' else ntpath.basename(key)); item.setData(Qt.UserRole,key); item.setToolTip(key)
+                for key,name,detail,direct,groups in entries:
+                    origin=str(self.owner.t('Direct entry · groups: {names}' if direct else 'From groups: {names}',names=', '.join(groups))) if groups else ''
+                    item=QListWidgetItem(name+('\n'+origin if origin else '')); item.setData(Qt.UserRole,key)
+                    item.setData(Qt.UserRole+1,direct); item.setData(Qt.UserRole+2,list(groups)); item.setToolTip(detail+('\n'+origin if origin else ''))
                     listing.addItem(item)
                     if key==selected: listing.setCurrentItem(item)
                 listing.blockSignals(blocked)
@@ -139,18 +163,56 @@ class FocusPage(QWidget):
         self.rule_selection_changed()
 
     def rule_selection_changed(self,*_):
-        kind='site' if self.rule_tabs.currentIndex()==0 else 'app'
-        listing=self.block_lists[kind]
-        self.remove_rule_button.setEnabled(listing.currentItem() is not None)
-        self.rules_hint.setText(self.owner.t('Select an entry to remove it.' if listing.count() else
-                                            'Add the websites you want to avoid during work.' if kind=='site' else 'Add applications you want to avoid during work.'))
+        kind=('site','app','group')[max(0,self.rule_tabs.currentIndex())]
+        listing=self.block_lists[kind]; item=listing.currentItem()
+        direct=bool(item and item.data(Qt.UserRole+1)); inherited=bool(item and item.data(Qt.UserRole+2))
+        self.remove_rule_button.setEnabled(direct)
+        if inherited:
+            hint=('Removing the direct entry keeps the group rule. Manage inherited members in Time budgets or remove their group under Groups.' if direct else
+                  'This entry comes from a group. Change its members in Time budgets or remove the group under Groups.')
+        elif kind=='site' and 'sites' in getattr(self,'_member_categories',()): hint='All websites are included, including newly detected sites. Known members are listed above.'
+        elif kind=='app' and getattr(self,'_member_categories',set())&{'apps','games'}: hint='Group members are listed above. Categories also include newly detected activities.'
+        else: hint=('Select an entry to remove it.' if listing.count() else 'Add the websites you want to avoid during work.' if kind=='site' else
+                    'Add groups you want to avoid during work.' if kind=='group' else 'Add applications you want to avoid during work.')
+        self.rules_hint.setText(self.owner.t(hint))
 
     def remove_rule(self):
-        kind='site' if self.rule_tabs.currentIndex()==0 else 'app'; item=self.block_lists[kind].currentItem()
-        if not item: return
+        kind=('site','app','group')[self.rule_tabs.currentIndex()]; item=self.block_lists[kind].currentItem()
+        if not item or not item.data(Qt.UserRole+1): return
         values=asdict(self.focus.settings); field='block_'+kind+'s'
         values[field]=[value for value in values[field] if value!=item.data(Qt.UserRole)]
         self.focus.configure(FocusSettings(**values)); self.owner.update_focus_policy(); self.refresh(force=True)
+
+    def group_choices(self):
+        settings=self.owner.settings; language=settings.language
+        signature=tuple((rule['id'],rule['name']) for rule in settings.wellbeing_rules)
+        cached=getattr(self,'_group_choices',None)
+        if cached and cached[0]==signature and cached[1]==language: return cached[2]
+        choices=[('games',self.owner.t('All games')),('apps',self.owner.t('All applications')),('sites',self.owner.t('All websites'))]
+        for rule in settings.wellbeing_rules:
+            choices.append(('budget:'+rule['id'],rule['name']))
+        self._group_choices=(signature,language,choices); return choices
+
+    def choose_groups(self):
+        t=self.owner.t; dialog,box=self.dialog(t('Add group'),620)
+        note=label(t('Choose a time-budget group or a whole category. All its applications, games and websites are blocked during focus. Changes to the group are followed automatically.'),'muted')
+        note.setWordWrap(True); box.addWidget(note)
+        listing=QListWidget(); listing.setAccessibleName(t('Groups')); box.addWidget(listing)
+        for key,name in self.group_choices():
+            if key in self.focus.settings.block_groups: continue
+            item=QListWidgetItem(str(name)); item.setData(Qt.UserRole,key); item.setFlags(item.flags()|Qt.ItemIsUserCheckable); item.setCheckState(Qt.Unchecked); listing.addItem(item)
+        error=label('','danger'); error.setWordWrap(True); box.addWidget(error)
+        if not listing.count(): error.setText(t('All available groups have already been added.'))
+        def save():
+            values=asdict(self.focus.settings)
+            values['block_groups'].extend(listing.item(i).data(Qt.UserRole) for i in range(listing.count()) if listing.item(i).checkState()==Qt.Checked)
+            try: self.focus.configure(FocusSettings(**values))
+            except (ValueError,OSError,SQLiteError): error.setText(t('Could not save settings. Try again.')); return
+            self.owner.update_focus_policy(); self.refresh(force=True); dialog.accept()
+        actions=QHBoxLayout(); actions.addStretch(); actions.addWidget(button(t('Cancel'),dialog.reject))
+        add=button(t('Add selected'),save,'primary'); add.setEnabled(False)
+        listing.itemChanged.connect(lambda *_:add.setEnabled(any(listing.item(i).checkState()==Qt.Checked for i in range(listing.count()))))
+        actions.addWidget(add); box.addLayout(actions); dialog.show()
 
     def exclude_application(self, path):
         values=asdict(self.focus.settings)
@@ -183,25 +245,28 @@ class FocusPage(QWidget):
     def refresh(self, force=False):
         owner, focus, t = self.owner, self.focus, self.owner.t
         seconds = math.ceil(focus.remaining)
-        paused=not focus.running and (focus.phase!='focus' or focus.remaining<focus.settings.work*60)
+        paused=not focus.running and not focus.finished and (focus.phase!='focus' or focus.remaining!=focus.settings.work*60)
         self.clock.setText(f'{seconds // 60:02d}:{seconds % 60:02d}')
         self.phase_label.setText(t({'focus':'Focus','short_break':'Short break','long_break':'Long break'}[focus.phase]))
-        self.timer_state.setText(t('Running' if focus.running else 'Paused' if paused else 'Ready'))
+        self.timer_state.setText(t('Completed' if focus.finished else 'Running' if focus.running else 'Paused' if paused else 'Ready'))
         self.timer_state.setStyleSheet('color:'+('#7de5bf' if focus.running else '#f0ba68' if paused else '#93a3a7')+';')
         self.start_button.setText(t('Pause focus' if focus.running else 'Continue break' if focus.phase!='focus' else 'Resume focus' if paused else 'Start focus'))
         self.stop_button.setEnabled(focus.running or paused or focus.round>0)
-        self.round_label.setText(t('Completed rounds: {count}',count=focus.round))
-        self.plan_label.setText(t('Work: {work} min · short break: {rest} min',work=focus.settings.work,rest=focus.settings.short_break))
+        self.round_label.setText(t('Completed rounds in total: {count}',count=focus.completed_rounds))
+        self.plan_label.setText(t('Single focus session: {work} min',work=focus.settings.work) if focus.settings.rounds==0 else
+                               t('Work: {work} min · short break: {rest} min',work=focus.settings.work,rest=focus.settings.short_break))
         self.notice.setText(t(focus.notice or ('Blacklist active until this work interval ends.' if focus.restricting else
+                                             'Focus session complete.' if focus.finished else
                                              'Paused. Restrictions are off until you continue.' if paused else
                                              'Take a break. Restrictions are off.' if focus.phase!='focus' else
                                              'Start when you are ready. Your blacklist applies during work.')))
-        self.mode_label.setText(t('{apps} apps · {sites} websites',apps=len(focus.settings.block_apps),sites=len(focus.settings.block_sites)))
         bridge = owner.browser_bridge
         self.connection.setText(t('Browser connected' if bridge and bridge.connected else 'Browser not connected'))
-        self.connection.setStyleSheet('color:#7de5bf;' if bridge and bridge.connected else 'color:#f0ba68;' if focus.settings.block_sites else 'color:#93a3a7;')
-        self.refresh_rules()
-        for index,name in enumerate(('Websites','Applications')): self.rule_tabs.setTabText(index,t(name))
+        all_sites,sites=focus.settings.site_rules(owner.settings.wellbeing_rules)
+        self.connection.setStyleSheet('color:#7de5bf;' if bridge and bridge.connected else 'color:#f0ba68;' if sites or all_sites else 'color:#93a3a7;')
+        self.refresh_rules(force)
+        self.mode_label.setText(t('{apps} apps · {sites} websites · {groups} groups',apps=self.block_lists['app'].count(),sites=self.block_lists['site'].count(),groups=len(focus.settings.block_groups)))
+        for index,name in enumerate(('Websites','Applications','Groups')): self.rule_tabs.setTabText(index,t(name))
 
     def toggle(self):
         focus = self.focus
@@ -232,14 +297,20 @@ class FocusPage(QWidget):
         for key, name, maximum in (('work', 'Focus minutes', 240), ('short_break', 'Short break minutes', 60),
                                     ('long_break', 'Long break minutes', 120), ('rounds', 'Rounds before long break', 12)):
             row = QHBoxLayout(); row.addWidget(label(t(name)), 1)
-            edit = NoWheelDoubleSpinBox(); edit.setDecimals(0); edit.setRange(1, maximum)
+            edit = NoWheelDoubleSpinBox(); edit.setDecimals(0); edit.setRange(0, maximum)
             edit.setValue(getattr(self.focus.settings, key)); edit.setAccessibleName(t(name))
             row.addWidget(edit); box.addLayout(row); fields[key] = edit
         help_label = label(t('If an interval is already in progress, new durations apply to the next interval.'), 'muted')
         help_label.setWordWrap(True); box.addWidget(help_label)
+        zero_hint=label(t('0-minute breaks are skipped. Set rounds to 0 for a single focus session, with no break or repetition.'),'muted')
+        zero_hint.setWordWrap(True); box.addWidget(zero_hint)
+        error=label('','danger'); error.setWordWrap(True); box.addWidget(error)
         def save():
             values = asdict(self.focus.settings); values.update({key: int(edit.value()) for key, edit in fields.items()})
-            self.focus.configure(FocusSettings(**values)); self.refresh(force=True); dialog.accept()
+            try: self.focus.configure(FocusSettings(**values))
+            except ValueError as exc: error.setText(t(str(exc))); return
+            except (OSError,SQLiteError): error.setText(t('Could not save settings. Try again.')); return
+            self.refresh(force=True); dialog.accept()
         actions=QHBoxLayout(); actions.addStretch(); actions.addWidget(button(t('Cancel'),dialog.reject))
         save_button=button(t('Save'),save,'primary'); save_button.setDefault(True); actions.addWidget(save_button)
         box.addLayout(actions); dialog.show()

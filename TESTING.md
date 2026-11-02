@@ -1,5 +1,53 @@
 # Testing
 
+## 2.39.27 browser dashboard — 2026-11-02
+
+Sixteen temporary-profile control tests cover the authenticated loopback API, extension-origin and host checks, body limits, GUI-thread dispatch, conflict detection, idempotent commands, atomic validation, full-path activity exclusions, budget and notification CRUD, zero-break focus sessions, local icon uploads and explicit application/removal actions. Account sessions remain redacted, reads and previews do not launch applications, native unsaved settings survive, and existing desktop forms reload after browser saves.
+
+The real Brave dashboard test uses a disposable browser and desktop profile. It verifies HU/EN navigation and layouts at 1280 × 850 and 1000 × 700, populated seven-day/today statistics, budget creation and domain normalization, notification triggers/buttons/manual closing, draft recovery, global day-start changes and focus save/start/stop. Run `node tests/browser_panel_smoke.cjs <browser.exe> <python.exe>` with the build Python environment; output goes under ignored `test-reports/browser-panel`.
+
+The 33 JavaScript tests cover restriction recovery and local upgrades, including same-tab dashboard restoration and draft preservation. `node tests/browser_auto_update_smoke.cjs <browser.exe> --dashboard` independently verifies an actual automatic Brave reload alongside a covered website. The dashboard refreshes only while visible and pauses countdown painting when hidden. No live account sign-in, code revocation, application launch or uninstall is executed by these tests.
+
+The installer passed all 92 temporary-profile install/upgrade checks and the 22-check native RTSS self-test. Extraction verified all 306 payload files. The real local upgrade preserved all 21 database tables and configuration, verified the installed files and reopened the 2.39.27 application. Brave's installed worker automatically reached 2.39.27. Visual checks used disposable profiles; automatic inspection of the real Brave window was unavailable.
+
+Broader regression testing also caught a countdown-editor issue: language refresh emitted an unchanged position and marked an untouched game's inherited appearance as edited. Unchanged effective values now leave its saved profile intact. All 41 consent, customization and budget-countdown tests pass with this fix, which is included in the final verified installer. Legacy tests now verify separate weekday budgets and explicit draft discard; the test that manually replaces the whole UI retires its old draft event filter first.
+
+All 1,078 discovered Python tests passed across module runs and targeted reruns, with no skips or uncovered tests. Remaining modules ran in fresh processes to bound Qt test memory use. The public installer, stable checksum, release manifest and both README version headers were checked for agreement.
+
+## 2.39.26 focus group members and countdown clarity — 2026-11-02
+
+Temporary-profile tests verify live focus-group membership, mixed game/application/website groups, deduplication with direct entries and multiple source groups, group edits and removals, inherited-entry removal guards, excluded games, cached activity inventory and newly observed members. Unchanged visible refreshes do not rebuild lists or query the catalog/database. Projection leaves saved rules, history and enforcement unchanged.
+
+Countdown tests cover equal displayed seconds, different fractions that round to the same second, zero/negative values, longer durations and unequal event/budget values in both languages. The RTSS integration retains the main caption and suppresses only the duplicate secondary budget line. The notification editor's Enabled control is aligned at the top right of its first card. Hungarian and English layouts were inspected at 1000 × 700 and 1280 × 850. All 84 targeted tests passed.
+
+The verified installer passed all 89 temporary-profile install/upgrade checks and the 22-check native RTSS self-test. Local delivery preserved all 21 profile tables and settings, verified 292 installed files, and reopened the installed 2.39.26 Hub. The paired Brave worker automatically reached 2.39.26. Public download artifacts remain unchanged.
+
+## 2.39.25 single focus sessions and application selection — 2026-11-02
+
+Temporary-profile tests exercise different work lengths, every zero/positive short-break, long-break and round combination, pause/resume, restart, completed-state persistence and restriction release. Disabled breaks wait for the next explicit start; zero rounds ends a single session without any break. Daily completion accounting remains unchanged. Focus settings and notification editor/popup tests verify zeros, visible validation without silently replacing input, draft recovery and synchronized timer preferences.
+
+Application-picker tests cover detected/registered local executables, deduplication, missing and remote paths, searching, cancellation and explicit selection without launching. Discovery runs only when the picker opens. Installer upgrade checks retain zero values and a completed 00:00 timer alongside the existing profile-preservation checks.
+
+## 2.39.24 configurable notification triggers and buttons — 2026-11-02
+
+Temporary-profile tests cover time/startup/daily completed-Pomodoro triggers, persistent daily receipts, the global day boundary, deferred display, deletion and edits of pending rules. Startup rules fire once per process, never merely on save or day change. Cached completed-round totals avoid repeated history queries. The unified editor retains drafts and all rule fields across navigation and restart, including editable legacy presets.
+
+Popup tests cover explicit/manual closing, survival through day changes and bedtime, preset icons, application launch only after an explicit click with literal executable arguments, missing files, editable Pomodoro timing, blacklist preservation and protection of running focus timers. Notification actions/paths stay local. Hungarian and English editors were inspected at 1000 × 700 and 1280 × 850, along with the interactive popup. Qt test teardown now disposes retired main windows before subsequent suites reapply the stylesheet.
+
+Installer verification checks embedded payload hashes and temporary-profile upgrades, including notification trigger/icon/action/duration fields, legacy preset overrides, drafts, history and credentials, before updating the real local installation. Public download artifacts are unchanged during local delivery.
+
+## 2.39.23 automatic local extension upgrades — 2026-11-02
+
+The authenticated activity response announces the installed application version. The worker reuses its existing synchronization cycle to reload matching local extension files, after persisting covered-page recovery data. Covered tabs briefly use a static loopback handoff page because Chromium closes extension-owned pages on reload; opaque recovery tokens stay in fragments and never reach the server. Tests cover no-click upgrades, restart recovery, pairing preservation, normal idle operation without manifest reads, incomplete file replacement, storage/reload failures, bounded retries and loop prevention. A real Brave instance with a disposable profile verifies automatic upgrades and the legacy one-time bootstrap, retaining tab IDs, positions, pairing and original URLs, then restoring released websites. Legacy action-protocol compatibility remains covered. Temporary-profile installer checks precede the real local upgrade.
+
+## 2.39.22 notifications, focus groups and browser recovery — 2026-11-02
+
+Temporary-profile tests cover creating, editing, deleting and restoring built-in and scheduled notifications, unapplied drafts across restart, cancellation, failed validation and suppression of removed reminders. Focus tests cover application/site/game groups, changing budget membership, exclusions, pauses, breaks and the persistent total of completed rounds. The Activities game summary retains the daily game allowance independently of bedtime.
+
+One global day-start control lives in Settings. Migration retains existing usage, warning receipts and one-time save grants while unifying legacy budget renewals. Regression checks cover overnight clock actions, computer periods, draft navigation and HU/EN layouts at 1000 × 700 and 1280 × 850.
+
+The actual browser scripts run against mocked Chromium APIs: persistent original URLs, restored covers with changed tab IDs, automatic return after renewal or monitor disconnection, reused tab IDs, incognito exclusion and migration before extension reload. Installer smoke uses temporary fresh and upgrade profiles and checks notification drafts, focus groups and unified renewals alongside history, credentials and per-game preferences.
+
 ## 2.39.21 local budget drafts and fixed weekday selections — 2026-11-01
 
 Temporary-profile tests exercise durable, unapplied budget drafts across back navigation, failed validation and application restart. General settings remain outside draft storage. Budget actions, active weekdays, renewals and member countdown appearance survive; successful Save clears the draft and explicit Discard remains cancellable. Idle flushes do not rewrite unchanged data. Budget members are shown in full, including unvisited websites beyond the fourth entry.

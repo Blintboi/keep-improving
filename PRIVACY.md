@@ -36,13 +36,16 @@ extension. It sends only the focused tab's HTTP(S) domain and browser family
 to an authenticated server bound to `127.0.0.1` on this computer. URL paths,
 queries, fragments, page titles and contents are not sent to the desktop app or
 recorded in activity history. For a blocked page, the extension can temporarily
-keep its original HTTP(S) URL in browser-session storage so an explicitly requested
-one-time allowance can return to it. That return address stays in the extension,
-is removed when the tab closes and is never synchronized. Private
+keep its original HTTP(S) URL in local extension storage so a browser restart,
+daily renewal or one-time allowance can return to the same page. An opaque token
+identifies the cover; the address stays in the extension and is never synchronized.
+Closing an individual tab removes its recovery record. Window closure retains
+records for session restore; stale records are bounded to 1024 entries, excluding live tabs. Private
 tabs and local/numeric hosts are excluded. Website time is a breakdown of browser
 time. Application/site aggregates are stored in the local SQLite profile and, when computer linking is enabled, synchronize in encrypted snapshots. Completed-round counts and timer state remain local. Focus preferences
 and blacklists also synchronize in encrypted snapshots; application rules can contain
-executable paths and may not match paths on another computer.
+  executable paths and may not match paths on another computer. Focus group selections
+  stay local because they refer to this computer's time budgets.
 The pairing token is Windows-user protected in the desktop profile and stored
 in the extension's local browser storage after pairing. It is not a cloud key.
 The extension has host permissions to redirect blocked sites during focus and
@@ -77,6 +80,8 @@ sound leaves delivery pending until a visual reminder can be shown.
 
 The standard profile is in the Windows Documents folder under `GameTimeMonitor\data`. Local artwork is read from installed files and caches and is not uploaded. Application paths in focus blocklists and exclusions are included in encrypted settings synchronization. Upgrade backups stay beside the profile. Local history is not an encrypted database.
 
+Configurable notification rules, triggers, icon paths, button application paths, Pomodoro defaults, closing delays and unfinished notification drafts stay in the local profile and are not synchronized. An application button launches only the selected local executable after a click; it does not run a shell command or launch automatically when the reminder appears. Pomodoro completion goals use local completed-round counts. Notification buttons that start Pomodoros save the chosen focus timing under the existing focus-preference synchronization rules.
+
 Multi-stage restriction plans, delivery markers, one-time allowance usage and
 deadlines remain local. Closing applications is separately enabled in each plan;
 it first requests a normal close, then may terminate that exact process instance.
@@ -94,6 +99,8 @@ If daily quota reset times differ from midnight, recent quota-period totals are 
 Optional per-game time limits can synchronize with linked computers. When linking is enabled, the shared game budget and per-game limits also include the other computers' last synchronized daily game statistics. Activity budgets and restriction plans remain local. The last synchronized totals may be stale while offline or rate-limited; all computers need an updated client to count each other's time.
 
 ## Optional computer linking
+
+The paired extension's dashboard reads statistics and settings from the authenticated local desktop connection and sends explicit editing commands through it. Application launches, uninstall commands and notification buttons require user actions. Dashboard drafts and navigation choices stay in the browser profile; uploaded notification images are copied into the desktop profile. Browser access does not expose account access/refresh tokens. A connection code is revealed only through its explicit show/copy control. The dashboard uses no remote scripts, fonts or analytics. Hidden dashboard tabs stop refreshing.
 
 Synchronization is off by default. When enabled, the app uploads each computer's cumulative daily game times, game names/sources, daily application executable paths and website domains with their measured times, chosen display name and supported settings, including focus lists, application-rule paths and per-game preferences. These contents are encrypted on the client using keys derived from the connection code. Account credentials, computer names as settings, local game folders, monitor selection, custom WAV paths and protected-game consent remain local. The service stores encrypted snapshots, random device identifiers, revisions, timestamps and resource counters. It does not receive the connection code or its encryption key.
 

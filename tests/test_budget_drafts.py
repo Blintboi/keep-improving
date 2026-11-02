@@ -98,7 +98,7 @@ class FixedBudgetDaysTests(unittest.TestCase):
     setUpClass=classmethod(fixture.QtInterfaceTests.setUpClass.__func__)
     setUp=fixture.QtInterfaceTests.setUp; tearDown=fixture.QtInterfaceTests.tearDown; pump=fixture.QtInterfaceTests.pump
 
-    def test_two_computer_periods_use_separate_days_values_and_renewals(self):
+    def test_two_computer_periods_use_separate_days_values_and_global_renewal(self):
         from PySide6.QtCore import QTime
         editor=self.app.budget_editor; self.app.open_budget(); editor.create_computer(); editor.access.select([0,1,2,3,4])
         editor.schedule.change('bedtime_minute',22*60); editor.shared_reset.setTime(QTime(6,0))
@@ -108,7 +108,7 @@ class FixedBudgetDaysTests(unittest.TestCase):
         self.assertFalse(self.app.budget_error.text()); saved=self.store.settings()
         self.assertEqual(saved.bedtime_minute,22*60); self.assertEqual(saved.computer_periods[0]['values']['bedtime_minute'],23*60)
         self.assertEqual(saved.budget_active_days['computer-window'],[0,1,2,3,4]); self.assertEqual(saved.budget_active_days[key],[5,6])
-        self.assertEqual(saved.budget_reset_overrides[key],420)
+        self.assertNotIn(key,saved.budget_reset_overrides)
         editor.show_editor(key)
         self.assertTrue(editor.periods.schedule.day_details.isHidden()); self.assertTrue(editor.periods.schedule.bedtime_enabled.isHidden())
         self.assertIs(editor.access.widget.parent(),editor.periods.schedule)

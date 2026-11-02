@@ -94,6 +94,8 @@ class Settings:
     statistics_device_name: str = ""
     scheduled_notifications: list = field(default_factory=list)
     notification_messages: dict = field(default_factory=dict)
+    removed_notifications: list = field(default_factory=list)
+    notification_overrides: dict = field(default_factory=dict)
     notification_sound: str = 'default'
     notification_sound_path: str = ''
     weekend_enabled: bool = False
@@ -120,6 +122,19 @@ class Settings:
         validate_plans(self.restriction_plans)
         from .scheduled_notifications import validate_notifications
         validate_notifications(self.scheduled_notifications)
+        from .notification_text import KINDS
+        from .notification_rules import validate_item,BUILTIN_IDS
+        if not isinstance(self.notification_overrides,dict) or any(key not in KINDS for key in self.notification_overrides):
+            raise ValueError('Invalid notification selection.')
+        for kind,item in self.notification_overrides.items():
+            validate_item(item)
+            if item['id']!=BUILTIN_IDS[kind]: raise ValueError('Invalid notification selection.')
+        if any(item['id'] in {rule['id'] for rule in self.notification_overrides.values()} for item in self.scheduled_notifications):
+            raise ValueError('Invalid notification selection.')
+        if (not isinstance(self.removed_notifications,list) or
+                any(kind not in KINDS for kind in self.removed_notifications) or
+                len(set(self.removed_notifications))!=len(self.removed_notifications)):
+            raise ValueError('Invalid notification selection.')
         from .wellbeing import validate_rules
         validate_rules(self.wellbeing_rules)
         from .budget_access import validate as validate_access

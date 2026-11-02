@@ -248,7 +248,7 @@ class Wellbeing:
 
     def policy(self,base,wall,delegated=()):
         from .restriction_policy import legacy_active
-        policy=dict(base); blocked=list(base['block']) if base['active'] else []; all_sites=False
+        policy=dict(base); blocked=list(base['block']) if base['active'] else []; all_sites=bool(base['active'] and base.get('mode')=='allowlist')
         for state in self.states(wall):
             if state.rule['id'] in delegated: continue
             if not legacy_active(self.catalog.settings.restriction_plans,state.rule['id']): continue

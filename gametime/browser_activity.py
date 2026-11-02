@@ -9,6 +9,7 @@ import time
 
 from .focus import BROWSERS, BROWSER_IDLE, domain
 from .secrets import protect, unprotect
+from . import __version__
 
 
 def compatible_policy(policy, version):
@@ -26,7 +27,7 @@ def compatible_policy(policy, version):
 
 
 class BrowserBridge:
-    def __init__(self, store, port=47853):
+    def __init__(self, store, port=47853, control=None):
         row = store.db.execute("SELECT value FROM settings WHERE key='browser_pairing'").fetchone()
         try: self.token = unprotect(row[0]) if row else ''
         except (OSError, ValueError): self.token = ''
@@ -41,6 +42,7 @@ class BrowserBridge:
         self.current_policy = {'active': False, 'tracking': True, 'mode': 'blocklist', 'allow': [], 'block': [], 'remaining': 0}
         self.server = None
         self.error = ''
+        self.control = control
         bridge = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -72,16 +74,34 @@ class BrowserBridge:
                 self.send_header('Content-Length', '0')
                 self.end_headers()
 
+            def do_GET(self):
+                if self.headers.get('Host') != f'127.0.0.1:{bridge.port}' or not self.origin_ok():
+                    return self.reply(403,{})
+                if self.path != '/browser-update': return self.reply(404,{})
+                # A neutral document keeps an existing covered tab alive while
+                # Chromium unloads extension-owned pages. Tokens stay in the
+                # URL fragment (never sent here); this page exposes no data.
+                raw=b'<!doctype html><meta charset="utf-8"><title>Keep Improving</title><body style="background:#101719;color:#cfe5dd;font:16px sans-serif;padding:32px">Friss\xc3\xadt\xc3\xa9s / Updating\xe2\x80\xa6</body>'
+                self.send_response(200)
+                self.send_header('Content-Type','text/html; charset=utf-8')
+                self.send_header('Cache-Control','no-store')
+                self.send_header('Content-Security-Policy',"default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'")
+                self.send_header('Content-Length',str(len(raw))); self.end_headers(); self.wfile.write(raw)
+
             def do_POST(self):
                 if self.headers.get('Host') != f'127.0.0.1:{bridge.port}' or not self.origin_ok():
                     return self.reply(403, {})
                 if not hmac.compare_digest(self.headers.get('Authorization', ''), 'Bearer ' + bridge.token):
                     return self.reply(401, {})
-                if self.path not in ('/activity','/restriction-extension'): return self.reply(404, {})
+                if self.path not in ('/activity','/restriction-extension','/control'): return self.reply(404, {})
                 try:
                     length = int(self.headers.get('Content-Length', '0'))
-                    if not 0 < length <= 2048: raise ValueError()
+                    if not 0 < length <= (524288 if self.path=='/control' else 2048): raise ValueError()
                     data = json.loads(self.rfile.read(length))
+                    if self.path == '/control':
+                        if not isinstance(data,dict): raise ValueError()
+                        if bridge.control is None: return self.reply(503,{'ok':False,'error':'Desktop controls are not ready.'})
+                        return self.reply(200,bridge.control(data))
                     if self.path == '/restriction-extension':
                         if not isinstance(data,dict) or set(data)!={'domain','token'}: raise ValueError()
                         domain(data['domain'])
@@ -119,7 +139,9 @@ class BrowserBridge:
                                               'focused': data['focused'] and not data['private'], 'at': now,
                                               'redirect_budget':redirect}
                     policy = dict(bridge.current_policy)
-                self.reply(200, compatible_policy(policy,version))
+                # The running desktop signals a completed upgrade; setup may
+                # still be replacing extension files while the desktop is off.
+                self.reply(200, dict(compatible_policy(policy,version),extension_version=__version__))
 
         class Server(ThreadingHTTPServer):
             daemon_threads = True

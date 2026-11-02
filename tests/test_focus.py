@@ -187,6 +187,16 @@ class BrowserBridgeTests(unittest.TestCase):
         saved = self.store.db.execute("SELECT value FROM settings WHERE key='browser_pairing'").fetchone()[0]
         self.assertNotIn(self.bridge.token, saved)
 
+    def test_update_handoff_page_is_static_and_exposes_no_profile_data(self):
+        request=Request(f'http://127.0.0.1:{self.bridge.port}/browser-update')
+        with urlopen(request,timeout=2) as response:
+            raw=response.read().decode('utf-8')
+            self.assertEqual(response.headers['Cache-Control'],'no-store')
+            self.assertIn("default-src 'none'",response.headers['Content-Security-Policy'])
+        self.assertIn('Frissítés',raw); self.assertNotIn(self.bridge.token,raw)
+        for suffix,headers in (('/browser-update?token=bad',{}),('/browser-update',{'Origin':'https://example.com'}),('/private',{})):
+            with self.assertRaises(HTTPError): urlopen(Request(f'http://127.0.0.1:{self.bridge.port}'+suffix,headers=headers),timeout=2)
+
     def test_bridge_policy_expiry_background_browser_and_private_observations(self):
         self.post()
         self.post({'browser': 'edge', 'domain': '', 'focused': False, 'private': False})
@@ -221,6 +231,7 @@ class BrowserBridgeTests(unittest.TestCase):
         legacy=self.post(); self.assertTrue(legacy['active']); self.assertEqual(legacy['block'],['example.com'])
         self.assertEqual(legacy['mode'],'blocklist'); self.assertGreater(legacy['remaining'],0)
         modern=self.post({'browser':'brave','domain':'example.com','focused':True,'private':False,'restriction_version':1})
-        self.assertEqual(modern,policy)
+        from gametime import __version__
+        self.assertEqual(modern,dict(policy,extension_version=__version__))
         policy['restrictions'][0]['grant']={'subject':'site:example.com:token','until':9999999999}
         self.bridge.update(policy); self.assertFalse(self.post()['active'])

@@ -58,15 +58,22 @@ class FocusSettings:
     long_break: int = 15
     rounds: int = 4
     block_apps: list = field(default_factory=list)
+    block_groups: list = field(default_factory=list)
     block_sites: list = field(default_factory=list)
     excluded_apps: list = field(default_factory=list)
 
     def validate(self):
+        if (not isinstance(self.block_groups,list) or len(self.block_groups)>200 or
+                any(not isinstance(value,str) or not (value in ('games','apps','sites') or re.fullmatch(r'budget:[A-Za-z0-9_-]{1,80}',value)) for value in self.block_groups)):
+            raise ValueError('Invalid application group.')
+        self.block_groups=list(dict.fromkeys(self.block_groups))
         if type(self.tracking) is not bool:
             raise ValueError('Invalid focus settings.')
+        if type(self.work) is not int or not 1<=self.work<=240:
+            raise ValueError('Set a focus duration from 1 to 240 minutes.')
         for key, maximum in (('work', 240), ('short_break', 60), ('long_break', 120), ('rounds', 12)):
             value = getattr(self, key)
-            if type(value) is not int or not 1 <= value <= maximum:
+            if type(value) is not int or not (1 if key=='work' else 0) <= value <= maximum:
                 raise ValueError('Invalid focus settings.')
         for key in ('block_apps', 'block_sites', 'excluded_apps'):
             items = getattr(self, key)
@@ -86,13 +93,31 @@ class FocusSettings:
             setattr(self, key, normalized)
         return self
 
-    def app_blocked(self, path):
+    def app_blocked(self, path, game_id=None, rules=()):
         key = app_key(path)
         if not key or ntpath.basename(key) in SHELLS: return False
-        return key in self.block_apps
+        if key in self.block_apps: return True
+        if game_id is None: return False
+        if self.app_excluded(key): return False
+        if 'games' in self.block_groups and game_id: return True
+        if 'apps' in self.block_groups and not game_id: return True
+        if self.block_groups:
+            from .wellbeing import applies
+            return any('budget:'+rule['id'] in self.block_groups and applies(rule['members'],(game_id,key,'')) for rule in rules)
+        return False
 
-    def site_blocked(self, host):
-        return any(matches(host, item) for item in self.block_sites)
+    def site_rules(self,rules=()):
+        sites=list(self.block_sites); all_sites='sites' in self.block_groups
+        for rule in rules:
+            if 'budget:'+rule['id'] not in self.block_groups: continue
+            for member in rule['members']:
+                if member['kind']=='site': sites.append(member['value'])
+                elif member=={'kind':'category','value':'sites'}: all_sites=True
+        return all_sites,list(dict.fromkeys(sites))
+
+    def site_blocked(self, host, rules=()):
+        all_sites,sites=self.site_rules(rules)
+        return bool(host) and (all_sites or any(matches(host,item) for item in sites))
 
     def app_excluded(self, path):
         return app_key(path) in self.excluded_apps
@@ -125,9 +150,13 @@ class Focus:
         self.phase = state.get('phase', 'focus')
         if self.phase not in ('focus', 'short_break', 'long_break'): self.phase = 'focus'
         self.remaining = float(state.get('remaining', self.settings.work * 60))
-        if not math.isfinite(self.remaining) or not 0 < self.remaining <= 14400:
+        if not math.isfinite(self.remaining) or not 0 <= self.remaining <= 14400:
             self.remaining = self.settings.work * 60
+        if self.phase!='focus' and self.remaining==0:
+            self.phase='focus'; self.remaining=self.settings.work*60
         self.round = max(0, min(10000, int(state.get('round', 0))))
+        self.completed_rounds=int(store.db.execute('SELECT COALESCE(SUM(rounds),0) FROM focus_completions').fetchone()[0])
+        self._daily_completed={}
         self.running = False  # Explicitly resume after restart, never surprise the user with restrictions.
         self.previous = None
         self.last_awake = None
@@ -155,6 +184,17 @@ class Focus:
     def restricting(self):
         return self.running and self.phase == 'focus'
 
+    @property
+    def finished(self):
+        return not self.running and self.phase=='focus' and self.remaining==0
+
+    def completed_on(self,day):
+        day=str(day)
+        if day not in self._daily_completed:
+            row=self.store.db.execute('SELECT rounds FROM focus_completions WHERE day=?',(day,)).fetchone()
+            self._daily_completed={day:int(row[0]) if row else 0}
+        return self._daily_completed[day]
+
     def configure(self, settings):
         settings.validate()
         previous_settings=self.settings
@@ -164,6 +204,9 @@ class Focus:
         if not self.running and self.remaining == old_duration:
             self.remaining = getattr(settings, 'work' if self.phase == 'focus' else self.phase) * 60
         self.settings = settings
+        if not self.running and self.phase!='focus' and self.remaining==0:
+            self.phase='focus'; self.remaining=settings.work*60
+            self.notice='Focus complete. Start the next focus session when ready.'
         with self.store.db: self._save('focus_config', asdict(settings))
         if previous_settings!=settings: self.store.observe_preferences()
         self.revision += 1
@@ -171,6 +214,8 @@ class Focus:
         self.flush()
 
     def start(self, awake):
+        if self.finished:
+            self.remaining=self.settings.work*60; self.round=0
         self.running = True
         self.last_awake = awake
         self.notice = ''
@@ -205,9 +250,19 @@ class Focus:
             with self.store.db:
                 self.store.db.execute('INSERT INTO focus_completions VALUES (?,1) '
                                       'ON CONFLICT(day) DO UPDATE SET rounds=rounds+1', (day,))
-            self.phase = 'long_break' if self.round % self.settings.rounds == 0 else 'short_break'
-            self.remaining = getattr(self.settings, self.phase) * 60
-            self.notice = 'Focus complete. Time for a break.'
+            self.completed_rounds+=1
+            self._daily_completed.pop(day,None)
+            if self.settings.rounds==0:
+                # Zero repetitions is one complete work interval, without a break.
+                self.running=False; self.notice='Focus session complete.'
+            else:
+                self.phase = 'long_break' if self.round % self.settings.rounds == 0 else 'short_break'
+                self.remaining = getattr(self.settings, self.phase) * 60
+                self.notice = 'Focus complete. Time for a break.'
+                if self.remaining==0:
+                    # Skip a disabled break, then wait for an explicit new start.
+                    self.phase='focus'; self.remaining=self.settings.work*60; self.running=False
+                    self.notice='Focus complete. Start the next focus session when ready.'
         else:
             self.phase = 'focus'
             self.remaining = self.settings.work * 60
@@ -270,10 +325,11 @@ class Focus:
             row[1] += seconds
         return [(kind, key, name, seconds) for (kind, key), (name, seconds) in rows.items()]
 
-    def policy(self):
+    def policy(self,rules=()):
         # Keep the wire shape compatible with already paired 2.29 browser extensions.
-        return {'active': self.restricting, 'tracking': self.settings.tracking, 'mode': 'blocklist',
-                'allow': [], 'block': self.settings.block_sites,
+        all_sites,sites=self.settings.site_rules(rules)
+        return {'active': self.restricting, 'tracking': self.settings.tracking, 'mode': 'allowlist' if all_sites else 'blocklist',
+                'allow': [], 'block': sites,
                 'remaining': math.ceil(self.remaining) if self.restricting else 0}
 
     def history(self, start, end, category):

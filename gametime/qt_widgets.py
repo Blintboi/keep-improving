@@ -64,7 +64,7 @@ QPushButton[role="section-link"]:hover { background: #254039; border-color: #527
 QPushButton[role="section-link"]:checked { background: #24483b; border-color: #7de5bf; color: #c4f7e3; }
 QToolButton[role="disclosure"] { background: transparent; border: none; border-top: 1px solid #304047; border-radius: 0; padding: 14px 4px; text-align: left; }
 QToolButton[role="disclosure"]:hover { background: #223238; }
-QPushButton[role="preset"]:checked { background: #24483b; color: #a1f0d2; border-color: #396451; }
+QPushButton[role="preset"]:checked, QToolButton[role="preset"]:checked { background: #24483b; color: #a1f0d2; border-color: #396451; }
 QPushButton[role="day"] { border-radius:22px; padding:0; color:#b9c9c9; font-weight:600; }
 QPushButton[role="day"]:checked { background:#7de5bf; color:#10291f; border-color:#7de5bf; }
 QPushButton[role="day"]:focus { border:2px solid #d1ffee; }
@@ -232,6 +232,9 @@ def glyph(name, color=ACCENT, size=20):
         for x,y in ((7,11),(13,6),(19,3)): p.drawLine(x,16,x,y)
     elif name=='clock':
         p.drawEllipse(QRectF(3,3,18,18)); p.drawLine(12,7,12,12); p.drawLine(12,12,16,14)
+    elif name=='folder':
+        path=QPainterPath(); path.moveTo(3,7); path.lineTo(3,4); path.lineTo(9,4); path.lineTo(12,7)
+        path.lineTo(21,7); path.lineTo(21,20); path.lineTo(3,20); path.closeSubpath(); p.drawPath(path); p.drawLine(3,9,21,9)
     elif name=='focus':
         p.drawEllipse(QRectF(5,5,14,14)); p.drawEllipse(QRectF(9,9,6,6))
         for x1,y1,x2,y2 in ((12,2,12,5),(12,19,12,22),(2,12,5,12),(19,12,22,12)): p.drawLine(x1,y1,x2,y2)
@@ -251,6 +254,23 @@ def glyph(name, color=ACCENT, size=20):
     elif name=='moon':
         path=QPainterPath(); path.moveTo(17,3); path.cubicTo(7,-1,0,10,6,17)
         path.cubicTo(11,24,22,19,21,12); path.cubicTo(15,17,9,8,17,3); p.drawPath(path)
+    elif name=='water':
+        path=QPainterPath(); path.moveTo(12,2); path.cubicTo(8,8,5,11,5,15); path.cubicTo(5,24,19,24,19,15); path.cubicTo(19,11,16,8,12,2); p.drawPath(path)
+    elif name=='book':
+        p.drawRoundedRect(QRectF(3,3,18,18),2,2); p.drawLine(12,3,12,21); p.drawLine(6,7,9,7); p.drawLine(15,7,18,7)
+    elif name=='stretch':
+        p.drawEllipse(QRectF(10,2,4,4)); p.drawLine(12,7,12,15); p.drawLine(4,7,12,10); p.drawLine(12,10,20,7); p.drawLine(12,15,6,22); p.drawLine(12,15,18,22)
+    elif name=='check': p.drawLine(4,12,10,18); p.drawLine(10,18,21,5)
+    elif name=='heart':
+        path=QPainterPath(); path.moveTo(12,21); path.cubicTo(-7,8,6,-4,12,6); path.cubicTo(18,-4,31,8,12,21); p.drawPath(path)
+    elif name=='star':
+        import math
+        path=QPainterPath()
+        for index in range(10):
+            angle=math.pi*index/5-math.pi/2; radius=10 if index%2==0 else 4.5
+            point=QPointF(12+radius*math.cos(angle),12+radius*math.sin(angle))
+            path.moveTo(point) if not index else path.lineTo(point)
+        path.closeSubpath(); p.drawPath(path)
     elif name=='dots':
         p.setBrush(QColor(color)); p.setPen(Qt.NoPen)
         for x in (5,12,19): p.drawEllipse(QRectF(x-1.5,10.5,3,3))

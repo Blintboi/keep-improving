@@ -49,7 +49,7 @@ class SettingsUsabilityTests(unittest.TestCase):
         editor.steps.add_step.click(); card=editor.steps.cards[0]
         card.kind.setCurrentIndex(card.kind.findData('break'))
         self.app.show(); self.pump(.03)
-        for field in (editor.minutes,card.minutes,card.break_minutes,card.extra,editor.reset_time):
+        for field in (editor.minutes,card.minutes,card.break_minutes,card.extra,self.app.global_day_start):
             self.assertEqual(field.buttonSymbols(),QAbstractSpinBox.NoButtons)
         card.minutes.setFocus(); card.minutes.selectAll()
         QTest.keyClicks(card.minutes,'12'+card.minutes.locale().decimalPoint()+'50'); QTest.keyClick(card.minutes,Qt.Key_Tab)
@@ -57,10 +57,11 @@ class SettingsUsabilityTests(unittest.TestCase):
         card.break_minutes.setFocus(); card.break_minutes.selectAll()
         QTest.keyClicks(card.break_minutes,'30'); QTest.keyClick(card.break_minutes,Qt.Key_Tab)
         self.assertEqual(card.break_minutes.value(),30)
-        editor.reset_time.setFocus(); editor.reset_time.setSelectedSection(QTimeEdit.HourSection)
-        QTest.keyClicks(editor.reset_time,'09'); editor.reset_time.setSelectedSection(QTimeEdit.MinuteSection)
-        QTest.keyClicks(editor.reset_time,'45'); QTest.keyClick(editor.reset_time,Qt.Key_Tab)
-        self.assertEqual(editor.reset_time.time(),QTime(9,45))
+        self.app.open_settings_section('general'); reset=self.app.global_day_start
+        reset.setFocus(); reset.setSelectedSection(QTimeEdit.HourSection)
+        QTest.keyClicks(reset,'09'); reset.setSelectedSection(QTimeEdit.MinuteSection)
+        QTest.keyClicks(reset,'45'); QTest.keyClick(reset,Qt.Key_Tab)
+        self.assertEqual(reset.time(),QTime(9,45)); self.app.switch_page(5)
         for width in (1000,1380):
             self.app.resize(width,740); self.pump(.03)
             QTest.mouseClick(card.break_minutes,Qt.LeftButton,pos=QPoint(card.break_minutes.width()-4,10))
@@ -70,7 +71,7 @@ class SettingsUsabilityTests(unittest.TestCase):
         key=editor.current; self.app.save_budgets(); self.assertFalse(self.app.budget_error.text())
         saved=self.store.settings(); action=saved.restriction_plans[key]['steps'][0]
         self.assertEqual((action['offset'],action['break_minutes']),(750,30))
-        self.assertEqual(saved.budget_reset_overrides[key],585)
+        self.assertNotIn(key,saved.budget_reset_overrides)
 
     def test_browsing_and_collapsing_sections_does_not_change_existing_preferences(self):
         saved=self.store.settings(); self.app.show(); self.app.switch_page(2)

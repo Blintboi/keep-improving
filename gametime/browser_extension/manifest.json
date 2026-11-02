@@ -1,12 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Keep Improving",
-  "version": "2.39.21",
+  "version": "2.39.27",
   "description": "Local website activity, daily time budgets and focus lists for Brave, Chrome and Edge.",
   "permissions": ["tabs", "storage", "alarms", "declarativeNetRequest", "webNavigation"],
   "host_permissions": ["http://*/*", "https://*/*"],
   "background": {"service_worker": "background.js"},
-  "options_page": "options.html",
-  "action": {"default_title": "Connect Keep Improving"},
+  "options_page": "panel.html",
+  "icons": {"16": "icons/16.png", "32": "icons/32.png", "48": "icons/48.png", "128": "icons/128.png"},
+  "action": {"default_title": "Keep Improving", "default_popup": "popup.html", "default_icon": {"16": "icons/16.png", "32": "icons/32.png", "48": "icons/48.png"}},
+  "content_security_policy": {"extension_pages": "script-src 'self'; object-src 'none'; connect-src 'self' http://127.0.0.1:*; img-src 'self' data:; frame-ancestors 'none'"},
   "web_accessible_resources": [{"resources": ["blocked.html", "style.css"], "matches": ["http://*/*", "https://*/*"]}]
 }

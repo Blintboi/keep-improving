@@ -248,6 +248,9 @@ class StatisticsUsabilityTests(unittest.TestCase):
             self.assertEqual(first,[colors.color(key,kind) for key in keys])
 
     def test_removed_chart_mode_falls_back_to_activity_breakdown(self):
+        # This test replaces the whole widget tree; retire its application-wide
+        # draft event filter just as the normal settings rebuild does.
+        self.app.budget_editor.drafts.close()
         self.app._build({'statistics_chart_mode':'total'})
         self.assertFalse(hasattr(self.app.statistics,'chart_mode'))
 

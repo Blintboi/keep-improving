@@ -38,6 +38,11 @@ try {
     $report.runtime_version_matches_payload = $first.version -eq $installedVersion
     $report.runtime_file_version_matches_payload = (Get-Item -LiteralPath $exe).VersionInfo.ProductVersion -eq $installedVersion
     $report.visible_product_name_is_keep_improving = (Get-Item -LiteralPath $exe).VersionInfo.ProductName -eq 'Keep Improving'
+    $extensionDir = Join-Path $app '_internal\gametime\browser_extension'
+    $extensionManifest = Get-Content -LiteralPath (Join-Path $extensionDir 'manifest.json') -Raw | ConvertFrom-Json
+    $report.extension_version_matches_payload = $extensionManifest.version -eq $installedVersion
+    $report.extension_dashboard_and_popup_bundled = $extensionManifest.options_page -eq 'panel.html' -and $extensionManifest.action.default_popup -eq 'popup.html' -and (Test-Path -LiteralPath (Join-Path $extensionDir 'panel.js')) -and (Test-Path -LiteralPath (Join-Path $extensionDir 'popup.js'))
+    $report.extension_icons_bundled = @($extensionManifest.icons.PSObject.Properties | Where-Object { -not (Test-Path -LiteralPath (Join-Path $extensionDir $_.Value)) }).Count -eq 0 -and @($extensionManifest.icons.PSObject.Properties).Count -eq 4
     $report.fresh_update_checks_enabled = $first.check_updates -eq $true
     $report.runtime_and_profile_verified = $process.ExitCode -eq 0 -and $first.data -eq $data -and $first.games_root -eq $games -and $first.hub_enabled -and $first.language -eq 'en'
     $report.fresh_overlay_is_opt_in = -not $first.overlay_enabled -and $first.overlay_replace_warning -and $first.limit_popup_enabled
@@ -105,7 +110,12 @@ d=sqlite3.connect(sys.argv[1]); code='1'*32; day='2026-01-01'
 c=json.loads(d.execute("SELECT value FROM settings WHERE key='config'").fetchone()[0])
 c.update(overlay_rtss_details=False,bedtime_caps_budget=True,notification_sound='silent',notification_sound_path=r'C:\Fixture\saved.wav',weekend_enabled=True,weekend_schedule={'limit_seconds':10800,'warning_seconds':9000,'bedtime_minute':60,'bedtime_resume_minute':480},game_overlays={'test:hidden':{'overlay_enabled':False,'overlay_font_size':36,'overlay_x':0.1,'overlay_y':0.9,'overlay_color_normal':'#aabbcc','overlay_color_warning':'#dd5566'}})
 c.update(daily_schedules={'1':{'limit_seconds':13200,'warning_seconds':12000,'bedtime_minute':90}})
-c.update(scheduled_notifications=[{'id':'a'*32,'title':'Fixture reminder','text':'A custom message','icon':r'C:\Fixture\icon.png','minute':875,'enabled':True}])
+c.update(scheduled_notifications=[{'id':'a'*32,'title':'Fixture reminder','text':'A custom message','icon':'preset:water','minute':875,'enabled':True,'trigger':'pomodoros','count':4,'timeout':0,'action':{'kind':'pomodoro','work':50,'short_break':10,'long_break':30,'rounds':4}}])
+from gametime.notification_rules import builtin
+from gametime.model import Settings
+notice=builtin(Settings(),'warning'); notice.update(trigger='startup',action={'kind':'app','path':r'C:\Fixture\launch.exe'},timeout=45)
+c.update(notification_overrides={'warning':notice})
+c.update(removed_notifications=['session'])
 c.update(game_limits={'test:hidden':1800})
 c.update(computer_periods=[{'id':'computer-fixture','name':'Fixture period','values':{'bedtime_enabled':False,'bedtime_warning_enabled':True,'bedtime_warning_minute':1315,'bedtime_minute':1320,'bedtime_resume_minute':360,'bedtime_minimize':True,'bedtime_caps_budget':True}}])
 c.update(budget_reset_overrides={'shared-games':420,'game:test:hidden':540})
@@ -131,6 +141,10 @@ d.execute('INSERT INTO statistics_remote VALUES (?,?,?,?,?,?,?)',(code,'a'*32,da
 d.execute('INSERT INTO settings VALUES (?,?)',('statistics_snapshot:'+code,json.dumps({'revision':99,'digest':'fixture'})))
 d.execute('INSERT INTO settings VALUES (?,?)',('launcher_clients',json.dumps({'version':1,'clients':[]})))
 d.execute('INSERT OR REPLACE INTO settings VALUES (?,?)',('overview_view',json.dumps({'combine':True,'category':'games','period':'custom','scope':'local','detail_scope':'local','custom_start':'2026-10-01','custom_end':'2026-10-06','selected_day':'2026-10-03','search':'fixture'})))
+d.execute('INSERT OR REPLACE INTO settings VALUES (?,?)',('focus_config',json.dumps({'work':37,'short_break':0,'long_break':0,'rounds':0,'block_groups':['games','budget:website-fixture']})))
+d.execute('INSERT OR REPLACE INTO settings VALUES (?,?)',('focus_timer',json.dumps({'phase':'focus','remaining':0,'round':1})))
+d.execute('INSERT OR REPLACE INTO focus_completions VALUES (?,?)',(day,1))
+d.execute('INSERT OR REPLACE INTO settings VALUES (?,?)',('notification_editor_draft_v1',json.dumps({'builtin:warning':None})))
 d.execute('INSERT INTO settings VALUES (?,?)',('statistics_device_alias:'+local_group(code)+':'+'a'*32,'Fixture Laptop'))
 d.commit(); d.close()
 '@ | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
@@ -215,8 +229,8 @@ d.close()
     $report.weekly_day_preferences_preserved_on_upgrade = $dailyConfig -eq 'True'
     $gameCaps = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); print(c["game_limits"]=={"test:hidden":1800})' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     $report.per_game_limits_preserved_on_upgrade = $gameCaps -eq 'True'
-    $renewals = 'import json,sqlite3,sys; from datetime import date; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); print(c["budget_reset_overrides"]=={"shared-games":420,"game:test:hidden":540} and d.execute("SELECT seconds FROM independent_budget_usage WHERE budget=? AND day=? AND item=?",("quota:game:test:hidden",date.today().isoformat(),"test:hidden")).fetchone()==(123.0,))' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
-    $report.independent_renewal_and_usage_preserved_on_upgrade = $renewals -eq 'True'
+    $renewals = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); print(c["budget_reset_overrides"]=={k:c["budget_reset_minute"] for k in ("shared-games","game:test:hidden")} and d.execute("SELECT SUM(seconds) FROM independent_budget_usage WHERE budget=? AND item=?",("quota:game:test:hidden","test:hidden")).fetchone()==(123.0,))' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    $report.global_renewal_migrates_without_losing_consumed_time = $renewals -eq 'True'
     $redirect = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); p=c["restriction_plans"]["website-fixture"]["steps"][0]; print(p["break_mode"]=="redirect" and p["redirect_url"]=="https://example.org/break")' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     $report.break_redirect_address_preserved_on_upgrade = $redirect -eq 'True'
     $newTab = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); p=c["restriction_plans"]["website-fixture"]["steps"][1]; print(p["break_mode"]=="redirect" and p["redirect_url"]=="")' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
@@ -237,8 +251,14 @@ d.close()
     $report.individual_member_countdown_preserved_on_upgrade = $memberCountdown -eq 'True'
     $overview = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); v=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("overview_view",)).fetchone()[0]); print(v=={"combine":True,"category":"games","period":"custom","scope":"local","detail_scope":"local","custom_start":"2026-10-01","custom_end":"2026-10-06","selected_day":"2026-10-03","search":"fixture"})' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     $report.overview_view_preserved_on_upgrade = $overview -eq 'True'
-    $scheduledConfig = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); print(c["scheduled_notifications"]==[{"id":"a"*32,"title":"Fixture reminder","text":"A custom message","icon":r"C:\Fixture\icon.png","minute":875,"enabled":True}])' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    $scheduledConfig = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); print(c["scheduled_notifications"]==[{"id":"a"*32,"title":"Fixture reminder","text":"A custom message","icon":"preset:water","minute":875,"enabled":True,"trigger":"pomodoros","count":4,"timeout":0,"action":{"kind":"pomodoro","work":50,"short_break":10,"long_break":30,"rounds":4}}])' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     $report.scheduled_notifications_preserved_on_upgrade = $scheduledConfig -eq 'True'
+    $overrides = 'import json,sqlite3,sys; from gametime.model import Settings; from gametime.notification_rules import builtin; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); n=builtin(Settings(),"warning"); n.update(trigger="startup",action={"kind":"app","path":r"C:\Fixture\launch.exe"},timeout=45); print(c["notification_overrides"]=={"warning":n})' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    $report.notification_override_trigger_action_and_duration_preserved = $overrides -eq 'True'
+    $notificationAndFocus = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); read=lambda k:json.loads(d.execute("SELECT value FROM settings WHERE key=?",(k,)).fetchone()[0]); print(read("config")["removed_notifications"]==["session"] and read("focus_config")["block_groups"]==["games","budget:website-fixture"] and read("notification_editor_draft_v1")=={"builtin:warning":None})' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    $report.notification_drafts_removals_and_focus_groups_survive_upgrade = $notificationAndFocus -eq 'True'
+    $singleSession = 'import sqlite3,sys; from pathlib import Path; from gametime.store import Store; from gametime.focus import Focus; s=Store(Path(sys.argv[1])); f=Focus(s); print((f.settings.work,f.settings.short_break,f.settings.long_break,f.settings.rounds)==(37,0,0,0) and f.finished and not f.running and f.remaining==0 and f.completed_rounds==1); s.close()' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    $report.single_session_zero_breaks_and_completed_state_survive_upgrade = $singleSession -eq 'True'
     $explorerHistory = 'import sqlite3,sys; d=sqlite3.connect(sys.argv[1]); print(d.execute("SELECT seconds FROM activity_usage WHERE day=? AND kind=? AND key=?",("2026-01-01","app",r"c:\windows\explorer.exe")).fetchone()==(900.0,))' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     $report.legacy_explorer_history_preserved_on_upgrade = $explorerHistory -eq 'True'
 

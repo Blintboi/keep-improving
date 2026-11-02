@@ -32,6 +32,8 @@ class Alert:
     title: str = ""
     icon: str = ""
     sound: bool = True
+    action: dict | None = None
+    timeout: int | None = None
 
 
 def day_slices(start, end, duration, minute=0):
@@ -327,14 +329,14 @@ class Tracker:
         from . import budget_access
         shared=settings.game_budget_enabled and budget_access.active(settings,'shared-games',now) and budget_access.usage_enabled(settings,'shared-games')
         if shared and settings.limit_seconds>0 and 'shared-games' not in settings.restriction_plans and total >= settings.limit_seconds:
-            if limit not in delivered:
+            if limit not in delivered and 'limit' not in settings.removed_notifications:
                 keys = (limit, warning, session) if self.identity else (limit, warning)
                 text=notification_text(settings,'limit',day=day)
                 self._queue(Alert(day, keys, "limit", text, tr("OK, I’ll stop", settings.language)))
-            elif self.identity and session not in delivered:
+            elif self.identity and session not in delivered and 'session' not in settings.removed_notifications:
                 self._queue(Alert(day, (session,), "session",
                                   notification_text(settings,'session',day=day), tr("OK, I’ll stop", settings.language)))
-        elif shared and settings.limit_seconds>0 and legacy_warning_active(settings.restriction_plans,'shared-games') and total >= settings.warning_seconds and warning not in delivered:
+        elif shared and settings.limit_seconds>0 and legacy_warning_active(settings.restriction_plans,'shared-games') and total >= settings.warning_seconds and warning not in delivered and 'warning' not in settings.removed_notifications:
             remaining = math.ceil(remaining_budget(self.catalog.settings,now,total).remaining / 60)
             self._queue(Alert(day, (warning,), "warning", notification_text(settings,'warning',remaining,day=day), tr("OK", settings.language)))
         game = self.active
@@ -354,6 +356,7 @@ class Tracker:
         key='game:'+alert.game_id if alert.game_id else 'shared-games'
         if not budget_access.active(self.catalog.settings,key,now) or not budget_access.usage_enabled(self.catalog.settings,key): return False
         if not alert.game_id:
+            if alert.kind in self.catalog.settings.removed_notifications: return False
             day=budget_day(self.catalog.settings,'shared-games',now).isoformat()
             return alert.day==day and self.catalog.settings.game_budget_enabled and day_settings(self.catalog.settings,day).limit_seconds>0 and (legacy_warning_active(self.catalog.settings.restriction_plans,'shared-games') if alert.kind=='warning' else 'shared-games' not in self.catalog.settings.restriction_plans)
         if alert.day!=budget_day(self.catalog.settings,'game:'+alert.game_id,now).isoformat(): return False

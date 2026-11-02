@@ -18,24 +18,19 @@ class CancelNavigationTests(unittest.TestCase):
         buttons=[button for button in window.findChildren(QPushButton) if button.accessibleName()==self.app.t('Back without saving') and not button.text()]
         self.assertTrue(buttons); self.assertFalse(buttons[0].autoDefault()); buttons[0].click(); self.pump(.02)
 
-    def test_each_page_has_contextual_settings_and_no_settings_tab(self):
+    def test_contextual_settings_direct_folders_and_global_day_start(self):
         app=self.app; app.show()
-        self.assertNotIn(2,app.nav)
-        for index,context in ((0,'activities'),(1,'overview'),(4,'focus'),(5,'budgets')):
+        self.assertIn(2,app.nav)
+        for index,context in ((1,'overview'),(5,'budgets'),(6,'notifications')):
             app.switch_page(index); self.pump(.02)
             controls=[w for w in app.pages.currentWidget().findChildren(QPushButton) if w.property('settingsContext')==context]
             self.assertEqual(len(controls),1)
             self.assertTrue(controls[0].isVisible()); self.assertEqual(controls[0].accessibleName(),app.t('Page settings'))
-        app.switch_page(0)
-        control=next(w for w in app.hub_page.findChildren(QPushButton) if w.property('settingsContext')=='activities')
-        from PySide6.QtCore import QTimer
-        from PySide6.QtWidgets import QApplication
-        def choose():
-            menu=QApplication.activePopupWidget()
-            if menu:
-                action=next(a for a in menu.actions() if a.text()==app.t('Game folders'))
-                menu.close(); action.trigger()
-        QTimer.singleShot(100,choose); control.click()
+        for index in (0,4):
+            app.switch_page(index)
+            self.assertFalse(any(w.property('settingsContext') for w in app.pages.currentWidget().findChildren(QPushButton)))
+        app.nav[2].click(); self.assertTrue(app.nav[2].isChecked()); self.assertTrue(app.global_day_start.isVisible())
+        app.switch_page(0); self.assertTrue(app.game_folders_button.isVisible()); app.game_folders_button.click()
         self.assertEqual(app.pages.currentIndex(),2); self.assertTrue(app.settings_sections['games'].isVisible())
         self.assertEqual(app.settings_back.text(),''); self.assertEqual(app.settings_back.accessibleName(),app.t('Back without saving'))
         app.settings_back.click(); self.assertEqual(app.pages.currentIndex(),0)

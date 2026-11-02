@@ -116,8 +116,11 @@ class ClockInterfaceTests(unittest.TestCase):
         return editor,card
 
     def test_clock_only_website_budget_saves_reopens_cancels_and_obeys_active_days(self):
+        self.app.switch_page(2); self.app.show_settings_section('general')
+        self.app.global_day_start.setTime(QTime(6,0)); self.app.save_settings()
         editor,card=self.setup_clock(); key=editor.current; editor.minutes.setValue(0)
-        editor.reset_time.setTime(QTime(6,0)); self.app.save_budgets(); self.assertFalse(self.app.budget_error.text())
+        self.assertTrue(editor.reset_time.isHidden())
+        self.app.save_budgets(); self.assertFalse(self.app.budget_error.text())
         saved=self.store.settings(); self.assertEqual(saved.budget_active_days[key],[0,2]); self.assertFalse(saved.budget_usage_limits[key])
         self.assertEqual(saved.restriction_plans[key]['steps'][0]['clock_minute'],1320)
         editor.show_editor(key); self.assertFalse(editor.minutes.isEnabled()); self.assertTrue(editor.zero_limit_note.isHidden())
