@@ -2,6 +2,10 @@
 
 **[Letöltés Windows x64-re — 2.39.27](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256) · [English](README.md)
 
+**[Android telepítő letöltése — 0.1.0 előzetes (.apk)](https://github.com/Blintboi/keep-improving/raw/refs/heads/main/downloads/KeepImproving-Android.apk)** · [SHA-256 ellenőrzőösszeg](downloads/KeepImproving-Android.apk.sha256) · [Android telepítési útmutató](android/README.hu.md)
+
+**Android 8.0 vagy újabb:** nyisd meg ezt az oldalt a telefonodon, töltsd le a fenti APK-t, majd nyisd meg a telepítéshez. Az előzetes méri a telefon alkalmazáshasználatát, és szinkronizálja a statisztikákat a számítógépeiddel. Telefonos időkorlátokat és tiltást még nem tartalmaz.
+
 Lásd, mire megy el a gép előtt töltött időd, szabj határt a használatnak, és iktass be szüneteket. A Keep Improving játékokat, alkalmazásokat és weboldalakat mér, egyéni vagy közös időkeretekkel, emlékeztetőkkel és fókuszidőzítővel. Ingyenes, nyílt forráskódú, magyar és angol felülettel.
 
 ![Tevékenységek: játékok, alkalmazások és weboldalak a Keep Improving 2.39.21-ben](docs/images/library-hu.png)

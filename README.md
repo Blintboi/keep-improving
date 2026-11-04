@@ -2,6 +2,10 @@
 
 **[Download for Windows x64 — 2.39.27](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256) · [Magyar](README.hu.md)
 
+**[Download for Android — 0.1.0 preview (.apk)](https://github.com/Blintboi/keep-improving/raw/refs/heads/main/downloads/KeepImproving-Android.apk)** · [SHA-256 checksum](downloads/KeepImproving-Android.apk.sha256) · [Android installation guide](android/README.md)
+
+**Android 8.0+:** open this page on your phone, download the APK above and open it to install. The preview measures phone app usage and syncs statistics with your computers. Phone time limits and blocking are not included yet.
+
 See where your computer time goes, decide when to stop, and make room for breaks. Keep Improving tracks games, applications and websites, with individual or shared time budgets, reminders and focus sessions. Free and open source, with English and Hungarian interfaces.
 
 ![Activities: games, applications and websites in Keep Improving 2.39.21](docs/images/library-en.png)

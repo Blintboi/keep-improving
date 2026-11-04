@@ -1,0 +1,49 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'hu.keepimproving.android'
+    compileSdk 36
+    bundle { language { enableSplit = false } }
+    defaultConfig {
+        applicationId 'hu.keepimproving.android'
+        minSdk 26
+        targetSdk 36
+        versionCode 1
+        versionName '0.1.0'
+        testInstrumentationRunner 'android.test.InstrumentationTestRunner'
+    }
+    signingConfigs {
+        if (System.getenv('KI_ANDROID_KEYSTORE')) {
+            localPreview {
+                storeFile file(System.getenv('KI_ANDROID_KEYSTORE'))
+                storePassword System.getenv('KI_ANDROID_STORE_PASSWORD')
+                keyAlias 'keepimproving'
+                keyPassword System.getenv('KI_ANDROID_STORE_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        release { minifyEnabled false }
+        // build.ps1 supplies a persistent private key, outside the repository.
+        preview { initWith release; signingConfig signingConfigs.findByName('localPreview') }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    testOptions {
+        unitTests.includeAndroidResources = true
+        unitTests.all {
+            maxHeapSize = '1536m'; maxParallelForks = 1
+            systemProperty 'keepImprovingReports', layout.buildDirectory.get().asFile.absolutePath
+        }
+    }
+    lint { abortOnError true; checkReleaseBuilds true }
+}
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20250517'
+    testImplementation 'org.robolectric:robolectric:4.16.1'
+}
+// Small sources compile quickly; avoid Windows junction rename failures in javac's stash.
+tasks.withType(JavaCompile).configureEach { options.incremental = false }
