@@ -30,27 +30,33 @@ begin
   select ctid,sync_hits into tuple_before,hits_before from public.gametime_sync_groups where group_hash=g;
   for i in 1..3 loop
     r:=public.gametime_sync_exchange_limited(g,repeat('0',64),d,'2',repeat('B',44),'{}');
-    if r->>'error' is distinct from 'cooldown' or (r->>'retry_after')::int<>600 then raise exception 'Durable cooldown bypass: %',r; end if;
+    if r->>'error' is distinct from 'cooldown' or (r->>'retry_after')::int<>15 then raise exception 'Durable cooldown bypass: %',r; end if;
   end loop;
   if (select ctid from public.gametime_sync_groups where group_hash=g)<>tuple_before
     or (select sync_hits from public.gametime_sync_groups where group_hash=g)<>hits_before
     or (select revision from public.gametime_sync_devices where group_hash=g and device_id=d)<>1 then
     raise exception 'Rejected requests wrote tuples, counters or payload';
   end if;
-  update public.gametime_sync_accounts set sync_hits=19,sync_day=utc_day where owner_id=u;
+  -- Previously exhausted clients must work without resetting their accounting.
+  update public.gametime_sync_accounts set sync_day=utc_day,sync_hits=20,month_requests=600 where owner_id=u;
+  update public.gametime_sync_groups set sync_day=utc_day,sync_hits=20,month_requests=600 where group_hash=g;
+  r:=public.gametime_sync_exchange_limited(g,ip,repeat('2',32),'1',repeat('A',44),'{}');
+  if r ? 'error' then raise exception 'Old 20/day or 600/month allowance still blocks companions: %',r; end if;
+  if (select sync_hits from public.gametime_sync_accounts where owner_id=u)<>21 then raise exception 'Existing accounting was reset'; end if;
+  update public.gametime_sync_accounts set sync_hits=9999,sync_day=utc_day where owner_id=u;
   r:=public.gametime_sync_exchange_limited(g,ip,other,'1',repeat('A',44),'{}');
-  if r ? 'error' or jsonb_array_length(r->'snapshots')<>1 then raise exception 'Other device blocked or isolated incorrectly: %',r; end if;
+  if r ? 'error' or jsonb_array_length(r->'snapshots')<>2 then raise exception 'Other device blocked or isolated incorrectly: %',r; end if;
   r:=public.gametime_sync_exchange_limited(g,ip,repeat('1',32),'1',repeat('A',44),'{}');
   if r->>'error' is distinct from 'rate' then raise exception 'Daily owner limit bypassed with a new device'; end if;
   r:=public.gametime_sync_account(u,s,'rotate',h);
   if r->>'ok' is distinct from 'true' then raise exception 'Rotation failed: %',r; end if;
   r:=public.gametime_sync_exchange_limited(h,ip,d,'1',repeat('A',44),'{}');
   if r->>'error' is distinct from 'rate' then raise exception 'Rotation reset daily owner quota'; end if;
-  update public.gametime_sync_accounts set sync_day=utc_day-1,sync_hits=20,month_requests=599 where owner_id=u;
+  update public.gametime_sync_accounts set sync_day=utc_day-1,sync_hits=10000,month_requests=least(250000,350000/(select greatest(1,count(*))::integer from public.gametime_sync_groups where enabled))-1 where owner_id=u;
   r:=public.gametime_sync_exchange_limited(h,ip,d,'1',repeat('A',44),'{}');
   if r ? 'error' then raise exception 'Next UTC day failed to reset guard: %',r; end if;
   r:=public.gametime_sync_exchange_limited(h,ip,other,'1',repeat('A',44),'{}');
-  if r->>'error' is distinct from 'rate' then raise exception 'Monthly 600 limit bypassed'; end if;
+  if r->>'error' is distinct from 'rate' then raise exception 'Adaptive monthly limit bypassed'; end if;
   if (select sync_hits from public.gametime_sync_accounts where owner_id=u)<>1 then raise exception 'Daily reset incorrect'; end if;
   insert into public.gametime_sync_groups(group_hash) values(probe);
   r:=public.gametime_sync_exchange_limited(probe,ip,d,'1',null,'{}');
@@ -60,7 +66,7 @@ begin
   update public.gametime_sync_devices set next_sync_at=now()-interval '1 second' where group_hash=probe;
   r:=public.gametime_sync_exchange_limited(probe,ip,d,'2',repeat('B',44),'{}');
   if r ? 'error' then raise exception 'Cooldown did not expire: %',r; end if;
-  update public.gametime_sync_groups set sync_hits=20,sync_day=utc_day where group_hash=probe;
+  update public.gametime_sync_groups set sync_hits=10000,sync_day=utc_day where group_hash=probe;
   r:=public.gametime_sync_exchange_limited(probe,ip,other,'1',null,'{}');
   if r->>'error' is distinct from 'rate' then raise exception 'Unowned-group daily limit bypassed'; end if;
 end $$;

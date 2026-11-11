@@ -110,12 +110,22 @@ class Settings:
     restriction_plans: dict = field(default_factory=dict)
     budget_active_days: dict = field(default_factory=dict)
     budget_usage_limits: dict = field(default_factory=dict)
+    budget_devices: dict = field(default_factory=dict)
+    device_groups: dict = field(default_factory=dict)
+    # Always replaced with this profile's stable device identity when read by Store.
+    scope_device: str = ''
     game_budget_enabled: bool = True
     # Legacy/configured profiles retain their game budget; Store supplies the
     # opt-in defaults for a genuinely new profile.
     budget_setup_completed: bool = True
 
     def validate(self):
+        from .device_scopes import validate as validate_scope,validate_groups
+        validate_groups(self.device_groups)
+        if not isinstance(self.budget_devices,dict) or len(self.budget_devices)>2200:raise ValueError('Invalid budget computer selection.')
+        for key,scope in self.budget_devices.items():
+            if not isinstance(key,str) or not key or len(key)>2053 or '\0' in key:raise ValueError('Invalid budget computer selection.')
+            validate_scope(scope)
         from .computer_periods import validate as validate_periods
         validate_periods(self)
         from .restriction_policy import validate_plans
@@ -139,8 +149,8 @@ class Settings:
         validate_rules(self.wellbeing_rules)
         from .budget_access import validate as validate_access
         validate_access(self)
-        if type(self.game_budget_enabled) is not bool: raise ValueError('Invalid time budget.')
-        if type(self.budget_setup_completed) is not bool: raise ValueError('Invalid time budget.')
+        if type(self.game_budget_enabled) is not bool: raise ValueError('Invalid budget.')
+        if type(self.budget_setup_completed) is not bool: raise ValueError('Invalid budget.')
         from .schedule import SCHEDULE_FIELDS,DayScheduleError
         if (not isinstance(self.game_limits, dict) or any(
                 not isinstance(gid, str) or not gid or '\0' in gid

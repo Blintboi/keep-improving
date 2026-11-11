@@ -11,6 +11,8 @@ import java.util.concurrent.Executors;
 
 public final class CollectionJob extends JobService {
     static final ExecutorService WORK=Executors.newSingleThreadExecutor();
+    // Network waits must never hold up timer transitions or foreground protection.
+    static final ExecutorService LOAD=Executors.newSingleThreadExecutor();
     private static final int ID=100;
     static void schedule(Context context) {
         try(PhoneStore store=new PhoneStore(context)) {
@@ -21,7 +23,7 @@ public final class CollectionJob extends JobService {
         }
     }
     @Override public boolean onStartJob(JobParameters params) {
-        WORK.execute(()->{ try(PhoneStore store=new PhoneStore(this)) { PhoneUsage.collect(this,store); } catch(RuntimeException ignored) {
+        WORK.execute(()->{ try {PhoneRuntime.refresh(this,false);PhoneRuntime.changed(this);} catch(RuntimeException ignored) {
             // Revoked access, locked profiles and transient storage errors leave the checkpoint intact.
         } finally { jobFinished(params,false); } });
         return true;

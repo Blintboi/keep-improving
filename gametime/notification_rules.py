@@ -13,7 +13,7 @@ BUILTIN_IDS={kind:uuid.uuid5(uuid.NAMESPACE_URL,'keep-improving/notification/'+k
 
 
 def normalized(item):
-    return {'trigger':'time','count':4,'action':{'kind':'none'},'timeout':None,'template':'',**item}
+    return {'trigger':'time','count':4,'action':{'kind':'none'},'timeout':None,'template':'','days':list(range(7)),**item}
 
 
 def builtin(settings,kind):
@@ -48,9 +48,13 @@ def validate_action(action):
 
 def validate_item(item):
     required={'id','title','text','icon','minute','enabled'}
-    if not isinstance(item,dict) or not required<=set(item) or set(item)-required-{'trigger','count','action','timeout','template'}:
+    if not isinstance(item,dict) or not required<=set(item) or set(item)-required-{'trigger','count','action','timeout','template','devices','days'}:
         raise ValueError('Invalid notification.')
     rule=normalized(item)
+    from .device_scopes import validate as validate_scope
+    validate_scope(rule.get('devices'))
+    days=rule['days']
+    if not isinstance(days,list) or any(type(d) is not int or not 0<=d<7 for d in days) or len(set(days))!=len(days):raise ValueError('Choose distinct weekdays.')
     if not isinstance(rule['id'],str) or not re.fullmatch('[0-9a-f]{32}',rule['id']): raise ValueError('Invalid notification.')
     for key,limit in (('title',80),('text',1000),('icon',32767)):
         if not isinstance(rule[key],str) or len(rule[key])>limit or '\0' in rule[key]: raise ValueError('Invalid notification.')

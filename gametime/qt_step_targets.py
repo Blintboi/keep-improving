@@ -93,6 +93,10 @@ class TargetFields(QWidget):
 
     def update_controls(self):
         item=self.card.value; kind=item['kind']; t=self.card.owner.app.t
+        choosing=bool(item.get('session_choice')); self.body.setVisible(not choosing)
+        if choosing:
+            self.enabled.setText(t('Ask for applications' if self.scope=='app' else 'Ask for websites'))
+            self.enabled.show(); self.heading.hide(); return
         active=self.enabled.isChecked(); self.body.setEnabled(active)
         is_break=kind=='break'; notice=kind=='notify'
         titles={'site': ('Warn when using websites','Pause websites','Restrict websites'),
@@ -127,6 +131,7 @@ class TargetFields(QWidget):
         self.note.setText(t(note)); self.note.setVisible(bool(note))
 
     def needs_consent(self):
+        if self.card.value.get('session_choice'): return False
         if not self.enabled.isChecked() or self.card.value['kind']=='notify': return False
         is_break=self.card.value['kind']=='break'
         mode=self.break_mode.currentData() if is_break else self.mode.currentData()

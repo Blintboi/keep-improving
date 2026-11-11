@@ -1,14 +1,14 @@
 # README screenshots
 
-Captured from Keep Improving **2.39.21** on 2026-11-01, in English (`-en`)
-and Hungarian (`-hu`). These are captures of the application's Qt widgets,
-including complete action cards for the break and restriction examples.
+The current README images were rendered from Keep Improving **2.46.0** on
+2026-11-11 in English (`-en`) and Hungarian (`-hu`). They show production Qt
+widgets, without retouching or desktop screen capture.
 
-Each language used a separate temporary, offline demonstration profile.
-Usage totals, time budgets and focus lists are illustrative examples, not
-the maintainer's activity history. No personal settings, connection codes
-or synchronization credentials were loaded into these profiles.
+The isolated offline demonstration profile contains synthetic usage, sessions,
+budgets and focus lists. No personal history, settings or credentials were copied.
+Only public game titles and artwork locations were read from installed-game
+metadata; artwork belongs to the respective owners.
 
-The game names and artwork came from locally installed games. Artwork belongs
-to the respective game owners. The same shipped icons, styles and controls
-were used in both languages; the images were not retouched.
+Current views: `statistics`, `sessions`, `library`, `budgets`, `budget-editor`,
+`session-choices`, `break` and `focus`. Action-card images show the complete real
+widget so its settings remain readable. The README links only these current views.

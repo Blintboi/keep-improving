@@ -7,7 +7,7 @@
     <string name="devices_sync">Devices and sync</string><string name="connect">Connect devices</string><string name="sync_now">Sync now</string>
     <string name="disconnect">Disconnect this phone</string><string name="disconnect_detail">The phone’s history stays here. Downloaded copies from other devices will be removed from this phone.</string>
     <string name="connection_code">Connection code</string><string name="code_help">Enter the connection code from Statistics → Devices and sync in the desktop app.</string>
-    <string name="sync_explainer">Each device shares its own measured time. Your connection code encrypts the data before upload.</string>
+    <string name="sync_explainer">Link your devices to share data and settings.</string>
     <string name="invalid_code">Enter the complete 32-character connection code.</string><string name="connect_action">Connect</string>
     <string name="cancel">Cancel</string><string name="save">Save</string><string name="refresh">Refresh</string>
     <string name="permission_title">Measure your phone use</string><string name="permission_detail">Allow usage access to see time spent in apps and games. No messages, typed text or screen contents are read.</string>
@@ -23,7 +23,7 @@
     <string name="sync_invalid">Could not verify synchronized data. Existing history was kept.</string>
     <string name="last_sync">Last sync: %1$s</string><string name="never_synced">Not synchronized yet</string>
     <string name="read_error">Could not load the saved data. Please reopen the app.</string>
-    <string name="preview_scope">Android preview 0.1.0 · Usage measurement and encrypted device statistics. Phone time limits and blocking are not included yet.</string>
+    <string name="preview_scope">Phone budgets, focus and reminders are configured on this device. Phone browsers are measured as apps; website statistics can be imported from your computers.</string>
     <string name="sync_schedule">Sync runs when you open the app or tap Sync now. Android may delay background collection to save battery.</string>
     <string name="hours_minutes">%1$d h %2$d m</string><string name="minutes">%1$d m</string><string name="seconds">%1$d s</string>
 </resources>

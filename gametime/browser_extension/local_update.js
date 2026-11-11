@@ -30,7 +30,7 @@
       for (const record of Object.values(session.blockedTabs || {})) {
         if (!/^[a-f0-9]{32}$/.test(record?.token || '') || typeof record.url!=='string') continue;
         let url; try { url=new URL(record.url); } catch { continue; }
-        if (['http:','https:'].includes(url.protocol) && !url.username && !url.password && url.hostname===record.host)
+        if (['http:','https:'].includes(url.protocol) && !url.username && !url.password && (globalThis.SiteIdentity?.key(record.url) || url.hostname)===record.host)
           returnPages[record.token]={host:record.host,url:record.url,token:record.token,savedAt:Date.now()};
       }
       await chrome.storage.local.set({returnPages});

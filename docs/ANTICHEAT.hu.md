@@ -50,7 +50,7 @@ Az automatikus besorolás játékonkénti: ugyanazon EXE rangsorolt és offline
 módját nem próbálja játékadatok olvasásával megkülönböztetni. Az ismert védett
 játékoknál emiatt óvatos, a nem védett casual játékoknál megmarad a működés.
 
-A 2.34.1-től az **Értesítések → Megjelenítés anticheates játékokban is**
+A **Beállítások → Emlékeztetők → Megjelenítés anticheates játékokban is**
 kapcsoló szabályozza a védett játékok számlálóját és értesítéseit. Alapból
 kikapcsolt. Bekapcsoláskor rövid tájékoztató, egy üres elfogadó négyzet és külön
 engedélyező gomb jelenik meg. Az X, a Mégse és az Enter önmagában nem fogadja el.

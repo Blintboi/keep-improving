@@ -102,17 +102,23 @@ class TimerActions:
         return replace(event,total=min(value.total for value in events))
 
     def timer_menu_items(self):
-        events=self.timer_views(wall=datetime.now().astimezone()); self._tray_timer_targets={}
+        events=self.timer_views(wall=datetime.now().astimezone()); self._tray_timer_targets={};self._tray_break_targets={}
         items=[(0,self.t('Timers'))]
         for index,event in enumerate(events):
             command=1000+index; self._tray_timer_targets[command]=event.key
             caption=f'{event.name} · {event.label(self.t)} {clock(event.seconds)}'
             if event.secondary(self.t): caption+=' · '+event.secondary(self.t)
             items.append((command,caption))
+            if event.break_step:
+                action=2000+index;self._tray_break_targets[action]=(event.key,event.break_step)
+                items.append((action,str(self.t('Break now'))+' · '+event.name))
         if not events: items.append((0,self.t('No active timers')))
         return items
 
     def open_timer(self,command):
+        action=getattr(self,'_tray_break_targets',{}).get(command)
+        if action:
+            self.restrictions.start_early_break(*action);return True
         key=getattr(self,'_tray_timer_targets',{}).get(command)
         if not key: return False
         self.show()

@@ -8,7 +8,9 @@ import java.util.List;
 import java.util.Set;
 
 public final class Statistics {
-    public record Row(String day,String key,String name,String kind,double seconds,String device) {}
+    public record Row(String day,String key,String name,String kind,double seconds,String device,long sessions,String sessionsSince) {
+        public Row(String day,String key,String name,String kind,double seconds,String device){this(day,key,name,kind,seconds,device,0,"");}
+    }
     private static final Set<String> BROWSERS=new java.util.HashSet<>(java.util.Arrays.asList("brave.exe","chrome.exe","msedge.exe","firefox.exe","opera.exe","vivaldi.exe","browser.exe","iexplore.exe"));
     public static List<Row> rows(JSONObject snapshot,String category) throws Exception {
         ArrayList<Row> result=new ArrayList<>(); String device=snapshot.getString("device");
@@ -16,7 +18,7 @@ public final class Statistics {
             JSONArray games=snapshot.getJSONArray("rows");
             for(int i=0;i<games.length();i++) { JSONArray r=games.getJSONArray(i); result.add(new Row(r.getString(0),r.getString(1),r.getString(2),"game",r.getDouble(4),device)); }
         }
-        JSONArray activity=snapshot.optJSONArray("activity"); if(activity==null) return result;
+        JSONArray activity=snapshot.optJSONArray("activity"); if(activity==null) return SessionCounts.attach(result,snapshot);
         HashMap<String,Double> browsers=new HashMap<>(),sites=new HashMap<>();
         for(int i=0;i<activity.length();i++) {
             JSONArray r=activity.getJSONArray(i); String day=r.getString(0),kind=r.getString(1),key=r.getString(2); double seconds=r.getDouble(4);
@@ -38,6 +40,6 @@ public final class Statistics {
                 if(remaining>0) result.add(new Row(entry.getKey(),"browser:other","","browser",remaining,device));
             }
         }
-        return result;
+        return SessionCounts.attach(result,snapshot);
     }
 }

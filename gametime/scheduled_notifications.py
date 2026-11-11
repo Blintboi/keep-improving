@@ -3,6 +3,7 @@ import math
 from .tracker import Alert
 from .quota import current_day
 from .notification_rules import items as rule_items,validate_item,title,message,needs_interaction
+from .device_scopes import notification as selected
 
 
 def validate_notifications(items):
@@ -24,6 +25,8 @@ def initialize_startup(app):
 
 
 def triggered(app,item,current,day):
+    from datetime import date
+    if date.fromisoformat(str(day)).weekday() not in item.get('days',range(7)):return False
     trigger=item['trigger']
     if trigger=='time': return item['minute']==current.wall.hour*60+current.wall.minute
     if trigger=='startup': return item['id'] in app._notification_startup_ids and item['id'] not in app._notification_startup_shown
@@ -50,7 +53,7 @@ def tick(app,current):
         app._scheduled_delivered=app.store.alert_keys(day)
     if getattr(app,'_notification_rule_source',None) is not app.settings:
         app._notification_rule_source=app.settings
-        app._notification_rules={item['id']:item for item in rule_items(app.settings) if item['enabled']}
+        app._notification_rules={item['id']:item for item in rule_items(app.settings) if item['enabled'] and selected(app.settings,item)}
     rules=app._notification_rules; pending=app._scheduled_pending
     pending[:]=[entry for entry in pending if rules.get(entry[1]['id'])==entry[1]]
     queued={key for key,_ in pending}

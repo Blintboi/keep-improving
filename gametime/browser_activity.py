@@ -10,6 +10,7 @@ import time
 from .focus import BROWSERS, BROWSER_IDLE, domain
 from .secrets import protect, unprotect
 from . import __version__
+from .website_identity import is_local_site,compatible_local_policy
 
 
 def compatible_policy(policy, version):
@@ -93,15 +94,15 @@ class BrowserBridge:
                     return self.reply(403, {})
                 if not hmac.compare_digest(self.headers.get('Authorization', ''), 'Bearer ' + bridge.token):
                     return self.reply(401, {})
-                if self.path not in ('/activity','/restriction-extension','/control'): return self.reply(404, {})
+                if self.path not in ('/activity','/restriction-extension','/control','/continuity'): return self.reply(404, {})
                 try:
                     length = int(self.headers.get('Content-Length', '0'))
-                    if not 0 < length <= (524288 if self.path=='/control' else 2048): raise ValueError()
+                    if not 0 < length <= (524288 if self.path in ('/control','/continuity') else 2048): raise ValueError()
                     data = json.loads(self.rfile.read(length))
-                    if self.path == '/control':
+                    if self.path in ('/control','/continuity'):
                         if not isinstance(data,dict): raise ValueError()
                         if bridge.control is None: return self.reply(503,{'ok':False,'error':'Desktop controls are not ready.'})
-                        return self.reply(200,bridge.control(data))
+                        return self.reply(200,bridge.control({'action':'continuity.exchange','data':data} if self.path=='/continuity' else data))
                     if self.path == '/restriction-extension':
                         if not isinstance(data,dict) or set(data)!={'domain','token'}: raise ValueError()
                         domain(data['domain'])
@@ -112,7 +113,11 @@ class BrowserBridge:
                             bridge.requests.append((data,answer,event))
                         event.wait(2.5)
                         return self.reply(200,answer or {'ok':False})
-                    if set(data) - {'browser', 'domain', 'focused', 'private', 'idle', 'redirect_budget', 'restriction_version'}: raise ValueError()
+                    if set(data) - {'browser', 'domain', 'focused', 'private', 'idle', 'redirect_budget', 'restriction_version','choice_version','local_version'}: raise ValueError()
+                    local_version=data.get('local_version',0)
+                    if type(local_version) is not int or local_version not in (0,1):raise ValueError()
+                    choice_version=data.get('choice_version',0)
+                    if type(choice_version) is not int or choice_version not in (0,1): raise ValueError()
                     version=data.get('restriction_version',0)
                     if type(version) is not int or version not in (0,1): raise ValueError()
                     if data.get('browser') not in set(BROWSERS.values()): raise ValueError()
@@ -125,23 +130,26 @@ class BrowserBridge:
                     if data['private']: host = ''; idle=False; redirect=''
                 except (ValueError, TypeError, KeyError, AttributeError): return self.reply(400, {})
                 with bridge.lock:
+                    if is_local_site(host) and host not in bridge.current_policy.get('local_sites',()):host=''
                     now = time.monotonic()
                     bridge.last_seen = now
                     # A background browser must not overwrite the foreground browser's observation.
                     if data['focused'] or data['browser'] == bridge.observation.get('browser'):
                         if redirect:
-                            from urllib.parse import urlsplit
                             entries=bridge.current_policy.get('restrictions',())
+                            def redirect_host(entry):
+                                try:return domain(entry.get('redirect_url',''))
+                                except ValueError:return ''
                             if not any(entry.get('key')==redirect and entry.get('kind')=='redirect'
-                                       and (not host or (urlsplit(entry.get('redirect_url','')).hostname or '').rstrip('.').encode('idna').decode('ascii')==host) for entry in entries):
+                                       and (not host or redirect_host(entry)==host) for entry in entries):
                                 redirect=''
                         bridge.observation = {'browser': data['browser'], 'domain': host, 'idle':idle,
                                               'focused': data['focused'] and not data['private'], 'at': now,
-                                              'redirect_budget':redirect}
+                                              'redirect_budget':redirect,'choice_version':choice_version}
                     policy = dict(bridge.current_policy)
                 # The running desktop signals a completed upgrade; setup may
                 # still be replacing extension files while the desktop is off.
-                self.reply(200, dict(compatible_policy(policy,version),extension_version=__version__))
+                self.reply(200, dict(compatible_local_policy(compatible_policy(policy,version),local_version),extension_version=__version__,continuity_version=1))
 
         class Server(ThreadingHTTPServer):
             daemon_threads = True
@@ -160,7 +168,7 @@ class BrowserBridge:
             self.port = port
 
     def update(self, policy):
-        with self.lock: self.current_policy = policy
+        with self.lock:self.current_policy=dict(policy,local_sites=[s for s in policy.get('local_sites',()) if s!=f'127.0.0.1:{self.port}'],bridge_port=self.port)
 
     def take_requests(self):
         with self.lock:
@@ -184,6 +192,13 @@ class BrowserBridge:
                     and BROWSERS.get(ntpath.basename(path).lower())==item['browser']):
                 return item.get('redirect_budget','')
         return ''
+
+    def uses_site_choices(self,path):
+        import ntpath
+        with self.lock:
+            item=self.observation
+            return (item.get('choice_version')==1 and time.monotonic()-item.get('at',0)<20
+                    and BROWSERS.get(ntpath.basename(path).lower())==item.get('browser'))
 
     @property
     def connected(self):

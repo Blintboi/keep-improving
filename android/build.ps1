@@ -22,6 +22,7 @@ New-Item -ItemType Directory -Force $signing | Out-Null
 $credentialFile = Join-Path $signing 'credential.xml'
 $keyFile = Join-Path $signing 'keep-improving.p12'
 if (-not (Test-Path $credentialFile)) {
+    if (Test-Path (Join-Path $repo 'downloads/KeepImproving-Android.apk')) { throw 'Restore the original Android signing key and credential before building an upgrade. A published APK already exists.' }
     if (Test-Path $keyFile) { throw 'Signing credential is missing. Preserve the existing key; restore its credential.' }
     $bytes = New-Object byte[] 32
     $generator = [System.Security.Cryptography.RandomNumberGenerator]::Create()
@@ -49,11 +50,20 @@ try {
     $apk = "$env:KI_ANDROID_BUILD_ROOT/app/outputs/apk/preview/app-preview.apk"
     & "$SdkPath/build-tools/36.0.0/apksigner.bat" verify --verbose --print-certs $apk
     if ($LASTEXITCODE -ne 0) { throw 'APK signature verification failed.' }
-    $output = Join-Path $repo 'dist/KeepImproving-Android-0.1.0.apk'
+    $published = Join-Path $repo 'downloads/KeepImproving-Android.apk'
+    if (Test-Path -LiteralPath $published) {
+        $oldCert = (& "$SdkPath/build-tools/36.0.0/apksigner.bat" verify --print-certs $published | Select-String 'certificate SHA-256 digest:').Line
+        $newCert = (& "$SdkPath/build-tools/36.0.0/apksigner.bat" verify --print-certs $apk | Select-String 'certificate SHA-256 digest:').Line
+        if (-not $oldCert -or $oldCert -ne $newCert) { throw 'Signing certificate differs from the published APK. Restore the original key; do not uninstall the phone app or install this APK as an upgrade.' }
+    }
+    $version = [regex]::Match((Get-Content "$PSScriptRoot/app/build.gradle" -Raw), "versionName '([0-9.]+)'").Groups[1].Value
+    if (-not $version) { throw 'Missing Android version.' }
+    $filename = "KeepImproving-Android-$version.apk"
+    $output = Join-Path $repo "dist/$filename"
     New-Item -ItemType Directory -Force (Split-Path $output) | Out-Null
     Copy-Item -LiteralPath $apk -Destination $output -Force
     $hash = (Get-FileHash -LiteralPath $output -Algorithm SHA256).Hash.ToLowerInvariant()
-    [System.IO.File]::WriteAllText("$output.sha256", "$hash  KeepImproving-Android-0.1.0.apk`n", [System.Text.UTF8Encoding]::new($false))
+    [System.IO.File]::WriteAllText("$output.sha256", "$hash  $filename`n", [System.Text.UTF8Encoding]::new($false))
     Write-Output "Verified local APK: $output"
 } finally {
     Remove-Item Env:KI_ANDROID_STORE_PASSWORD,Env:KI_ANDROID_KEYSTORE,Env:KI_ANDROID_BUILD_ROOT -ErrorAction SilentlyContinue

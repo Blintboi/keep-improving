@@ -39,6 +39,8 @@ class Store:
             PRAGMA user_version=2;
         """)
         self.tracking_started_on()
+        from .activity_sessions import initialize
+        with self.db:initialize(self.db)
 
     def tracking_started_on(self):
         """Preserve the profile's first installation day, including legacy history."""
@@ -65,9 +67,11 @@ class Store:
         return value
 
     def settings(self):
+        from .preferences_sync import identity
+        device=identity(self)
         row = self.db.execute("SELECT value FROM settings WHERE key='config'").fetchone()
         if not row:
-            return Settings(game_budget_enabled=False,budget_setup_completed=False)
+            return Settings(game_budget_enabled=False,budget_setup_completed=False,scope_device=device)
         config = json.loads(row[0])
         # Accept old profiles without retaining the retired category-wide filter.
         config.pop("exclude_chess", None)
@@ -84,12 +88,15 @@ class Store:
             except (OSError,ValueError):
                 self.credentials_unavailable=True; self._unavailable_credential=credential
                 config['statistics_sync_group']=''; config['statistics_sync_enabled']=False
+        config['scope_device']=device
         settings=Settings(**config)
         if credential and not credential.startswith(PREFIX):
             self.save_settings(settings); self._secret_migrated=True
         return settings
 
     def save_settings(self, settings):
+        from .preferences_sync import identity
+        settings.scope_device=identity(self)
         settings.validate()
         config=asdict(settings); credential=settings.statistics_sync_group
         if credential:
@@ -101,22 +108,27 @@ class Store:
             self.credentials_unavailable=False; self._unavailable_credential=''
         elif self._unavailable_credential:
             config['statistics_sync_group']=self._unavailable_credential
+        from .device_sharing import schema,observe
+        schema(self)
         with self.db:
             self.db.execute("INSERT OR REPLACE INTO settings VALUES ('config',?)",
                             (json.dumps(config, ensure_ascii=False),))
+            observe(self,settings)
         self.observe_preferences(settings)
 
     def overview_view(self):
         """Local view choices; independent of editable and synchronized settings."""
         defaults={'combine':False,'category':'all','period':'week','scope':'all',
-                  'detail_scope':'all','custom_start':'','custom_end':'','selected_day':'','search':''}
+                  'detail_scope':'all','custom_start':'','custom_end':'','selected_day':'','search':'','sort':'time_desc','chart_metric':'time'}
         row=self.db.execute("SELECT value FROM settings WHERE key='overview_view'").fetchone()
         try: value=json.loads(row[0]) if row else {}
         except (TypeError,ValueError): value={}
         if not isinstance(value,dict): value={}
         if type(value.get('combine')) is bool: defaults['combine']=value['combine']
         if value.get('category') in ('all','games','apps','websites'): defaults['category']=value['category']
+        if value.get('chart_metric') in ('time','sessions'): defaults['chart_metric']=value['chart_metric']
         if value.get('period') in ('today','yesterday','week','month','calendar','custom'): defaults['period']=value['period']
+        if value.get('sort') in ('time_desc','time_asc','sessions_desc','sessions_asc'):defaults['sort']=value['sort']
         for name in ('scope','detail_scope'):
             item=value.get(name)
             if isinstance(item,str) and 0<len(item)<=128 and '\0' not in item: defaults[name]=item
@@ -227,6 +239,10 @@ class Store:
         return aliases
 
     def _merge(self, old_id, new_id):
+        from .activity_sessions import record
+        for start,finish,day in list(self.db.execute("SELECT start,finish,day FROM activity_sessions WHERE kind='game' AND key=?",(old_id,))):
+            record(self.db,'game',new_id,start,finish,day)
+        self.db.execute("DELETE FROM activity_sessions WHERE kind='game' AND key=?",(old_id,))
         row=self.db.execute("SELECT value FROM settings WHERE key='config'").fetchone()
         if row:
             config=json.loads(row[0]); changed=False
@@ -314,8 +330,9 @@ class Store:
         with self.db:
             self.db.execute("INSERT OR REPLACE INTO settings VALUES (?,?)", ('launch_exe:' + game_id, str(path)))
 
-    def add_usage(self, entries, budget_entries=None, independent_entries=None):
+    def add_usage(self, entries, budget_entries=None, independent_entries=None, sessions=None):
         with self.db:
+            if sessions is not None:sessions.write()
             if independent_entries:
                 self.db.executemany('''INSERT INTO independent_budget_usage VALUES (?,?,?,?)
                     ON CONFLICT(budget,day,item) DO UPDATE SET seconds=seconds+excluded.seconds''',

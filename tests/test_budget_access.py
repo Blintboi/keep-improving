@@ -131,6 +131,8 @@ class ClockInterfaceTests(unittest.TestCase):
         self.assertEqual(self.store.settings().budget_active_days,saved.budget_active_days)
         self.assertEqual(self.store.settings().budget_usage_limits,saved.budget_usage_limits)
         runtime=self.app.restrictions
+        # Start the simulated timeline independently of the UI's real-time ticks.
+        runtime._clock=None; runtime._max_now=0
         for when,blocked in ((datetime(2026,11,2,21,59),False),(datetime(2026,11,2,22),True),
                              (datetime(2026,11,3,1),True),(datetime(2026,11,3,6),False),(datetime(2026,11,4,6),False)):
             runtime.prepare(when.astimezone())
@@ -161,6 +163,7 @@ class ClockInterfaceTests(unittest.TestCase):
         editor.minutes.setValue(0); card.consent.setChecked(True); self.app.save_budgets()
         self.assertFalse(self.app.budget_error.text()); self.assertEqual(self.app.settings.game_limits[self.games[0].id],0)
         runtime=self.app.restrictions
+        runtime._clock=None; runtime._max_now=0
         before=datetime(2026,11,2,21,55).astimezone(); runtime.prepare(before)
         self.assertFalse(runtime.state.zero_budget(key)); self.assertEqual(runtime.state.action(key,'app:fixture'),'')
         counter=gameplay_budget(self.app.settings,before,{},self.games[0].id)

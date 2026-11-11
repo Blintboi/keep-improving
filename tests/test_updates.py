@@ -144,12 +144,14 @@ class UpdateInterfaceTests(unittest.TestCase):
         self.assertIn('999.1.0',update_caption)
         self.assertIn(self.app.t('No active timers'),self.app.tray.data.szTip)
 
-    def test_download_requires_click_and_uses_the_fixed_browser_url(self):
+    def test_click_downloads_then_launches_verified_installer_before_closing(self):
         updates=self.worker(); updates.state.release=release(); updates.refresh()
-        with patch('gametime.qt_updates.webbrowser.open',return_value=True) as browser,patch('os.startfile') as execute:
+        downloader=Mock();downloader.results=Queue();downloader.progress=(500,1000);downloader.request.return_value=True;updates.download_worker=downloader
+        with patch('gametime.update_install.installed_directory',return_value=Path('C:/Installed App')),patch.object(self.app,'settings_have_draft',return_value=False),patch.object(self.app,'close') as close,patch('gametime.update_install.launch') as launch:
             updates.notice_download.click()
-        browser.assert_called_once_with(DOWNLOAD_URL,new=2); execute.assert_not_called()
-        self.assertIn('böngésző',updates.status.text()); self.assertFalse(self.app.closed)
+            downloader.request.assert_called_once();launch.assert_not_called();close.assert_not_called()
+            downloader.results.put((Path('C:/Update stage/setup.ps1'),None));updates.poll();launch.assert_called_once_with(Path('C:/Update stage/setup.ps1'),Path('C:/Installed App'),self.app.data_dir)
+            close.assert_not_called();self.pump(.02);close.assert_called_once()
 
     def test_same_or_older_version_has_no_notice_or_download(self):
         updates=self.worker()
@@ -159,12 +161,21 @@ class UpdateInterfaceTests(unittest.TestCase):
             with patch('gametime.qt_updates.webbrowser.open') as browser: self.assertFalse(updates.download())
             browser.assert_not_called()
 
-    def test_browser_failure_is_reported_without_stopping_the_app(self):
-        import webbrowser
+    def test_failed_download_or_launch_does_not_stop_the_app(self):
         updates=self.worker(); updates.state.release=release(); updates.refresh()
-        with patch('gametime.qt_updates.webbrowser.open',side_effect=webbrowser.Error('fixture')),self.assertLogs('gametime.qt_updates'):
-            self.assertFalse(updates.download())
-        self.assertIn('Nem sikerült',updates.status.text()); self.assertFalse(self.app.closed)
+        downloader=Mock();downloader.results=Queue();downloader.progress=(0,0);updates.download_worker=downloader;updates.downloading=True
+        with patch.object(self.app,'close') as close,self.assertLogs('gametime.qt_updates'):
+            downloader.results.put((None,ValueError('checksum')));updates.poll();self.pump(.01);close.assert_not_called()
+        self.assertIn('Nem sikerült',updates.status.text());self.assertFalse(self.app.closed)
+        updates.ready=Path('C:/staged/setup.ps1');updates.install_dir=Path('C:/Installed')
+        with patch.object(self.app,'close') as close,patch.object(self.app,'settings_have_draft',return_value=False),patch('gametime.update_install.launch',side_effect=OSError()),self.assertLogs('gametime.qt_updates'):
+            self.assertFalse(updates.install());self.pump(.01);close.assert_not_called()
+
+    def test_new_settings_draft_keeps_verified_update_ready_without_closing(self):
+        updates=self.worker();updates.state.release=release();updates.ready=Path('C:/Update/setup.ps1')
+        with patch.object(self.app,'settings_have_draft',return_value=True),patch('gametime.update_install.launch') as launch,patch.object(self.app,'close') as close:
+            self.assertFalse(updates.install());launch.assert_not_called();close.assert_not_called()
+        self.assertIsNotNone(updates.ready)
 
     def test_later_persists_for_that_version_and_newer_release_reappears(self):
         updates=self.worker(); updates.state.release=release(); updates.refresh(); updates.dismiss()

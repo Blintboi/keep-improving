@@ -81,7 +81,7 @@ class QtInterfaceTests(unittest.TestCase):
             self.assertFalse(self.app.statistics.sync_now.isEnabled())
             from gametime.statistics_sync import StatisticsData
             restored=StatisticsData(self.store)
-            self.assertGreater(restored.sync_delay(),599)
+            self.assertGreater(restored.sync_delay(),14)
             self.app.settings=replace(self.app.settings,statistics_sync_group='f'*32)
             self.app.request_statistics_sync()
             self.assertEqual(request.call_count,1)
@@ -117,6 +117,7 @@ class QtInterfaceTests(unittest.TestCase):
         code='e'*32
         self.app.settings=replace(self.app.settings,statistics_sync_enabled=True,statistics_sync_group=code)
         start=datetime.now().astimezone()
+        self.app.update_focus_policy()
         # Activity tracking has its own event test; isolate game start/stop here.
         with patch.object(self.app,'schedule_statistics_event') as schedule,patch.object(self.app,'focus_tick'):
             with patch('gametime.controller.win32.sample',return_value=Sample(start,100,str(self.exe),'fixture:1')):
@@ -141,7 +142,7 @@ class QtInterfaceTests(unittest.TestCase):
         self.app.statistics_activity_changed(True)
         self.assertFalse(self.app.statistics_event_timer.isActive())
 
-    def test_server_delay_is_persisted_without_scheduling_error_retries(self):
+    def test_server_delay_is_persisted_and_respected_by_companion_poll(self):
         from gametime.qt_ui import SERVICE_URL
         from gametime.statistics_sync import StatisticsData
         code='f'*32
@@ -152,7 +153,8 @@ class QtInterfaceTests(unittest.TestCase):
         with patch.object(self.app.statistics_sync,'retry_delay',return_value=3600):
             self.app.poll_statistics_sync()
         self.assertGreater(StatisticsData(self.store).sync_delay(),3599)
-        self.assertFalse(self.app.statistics_event_timer.isActive())
+        self.assertTrue(self.app.statistics_event_timer.isActive())
+        self.assertGreater(self.app.statistics_event_timer.remainingTime(),3598000)
         self.assertFalse(self.app._sync_startup_pending)
 
     def test_active_game_schedules_next_sync_under_existing_cooldown(self):

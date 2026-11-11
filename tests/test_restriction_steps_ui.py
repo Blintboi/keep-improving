@@ -649,7 +649,9 @@ class StepsInterfaceTests(unittest.TestCase):
         self.app.budget_editor.show_editor('shared-games'); blocks=self.app.budget_editor.steps
         for _ in range(20): blocks.add_step.click()
         scroll=self.app.budget_scroll; deadline=time.monotonic()+3
-        while scroll.verticalScrollBar().maximum()==0 and time.monotonic()<deadline: self.pump(.05)
+        # Qt can briefly expose the old page's nonzero range while the new
+        # action cards still have deferred layouts. Wait for their actual height.
+        while (self.app.budget_editor.drafts.timer.isActive() or blocks.sort_timer.isActive() or scroll.verticalScrollBar().maximum()<blocks.sizeHint().height()-scroll.viewport().height()) and time.monotonic()<deadline: self.pump(.05)
         self.assertGreater(scroll.verticalScrollBar().maximum(),0)
         self.assertEqual(scroll.horizontalScrollBar().maximum(),0)
         self.pump(.15)  # Let the newly added cards finish their layout before scrolling.

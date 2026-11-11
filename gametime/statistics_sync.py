@@ -86,6 +86,21 @@ def validate_snapshot(value, group):
         if 'preferences' in value:
             from .preferences_sync import validate
             validate(value['preferences'])
+        if 'focus_rounds' in value:
+            from .companion_sync import validate_focus
+            validate_focus(value['focus_rounds'])
+        if 'sessions' in value:
+            from .activity_sessions import validate as validate_sessions
+            validate_sessions(value['sessions'])
+        if 'companion' in value:
+            from .companion_sync import validate
+            validate(value['companion'])
+        if 'remote_commands' in value:
+            from .companion_commands import validate
+            validate(value['remote_commands'])
+        if 'scoped_rules' in value:
+            from .device_sharing import validate
+            validate(value['scoped_rules'])
         if 'budget_clocks' in value or 'budget_usage' in value:
             clocks=value['budget_clocks']; usage=value['budget_usage']
             if not isinstance(clocks,list) or len(clocks)>2200 or not isinstance(usage,list) or len(usage)>MAX_ROWS: raise ValueError()
@@ -157,12 +172,23 @@ class StatisticsData:
               group_id TEXT NOT NULL, device_id TEXT NOT NULL, budget TEXT NOT NULL, day TEXT NOT NULL,
               game_id TEXT NOT NULL, seconds REAL NOT NULL,
               PRIMARY KEY(group_id,device_id,budget,day,game_id));
+            CREATE TABLE IF NOT EXISTS statistics_focus (
+              group_id TEXT NOT NULL,device_id TEXT NOT NULL,day TEXT NOT NULL,rounds INTEGER NOT NULL,
+              PRIMARY KEY(group_id,device_id,day));
         ''')
         self._migrate_group_labels()
         store.checkpoint_credentials()
+        from .device_sharing import schema
+        schema(store)
         row = store.db.execute("SELECT value FROM settings WHERE key='statistics_sync_not_before'").fetchone()
         try: delay = min(86400, max(0, float(row[0])-time.time())) if row else 0
         except (ValueError, TypeError): delay = 0
+        # Re-evaluate the retired daily limit once; the service retains its guards.
+        if not store.db.execute("SELECT 1 FROM settings WHERE key='responsive_sync_v1'").fetchone():
+            delay=min(delay,15)
+            with store.db:
+                store.db.execute("INSERT INTO settings VALUES ('responsive_sync_v1','1')")
+                store.db.execute("INSERT OR REPLACE INTO settings VALUES ('statistics_sync_not_before',?)",(str(time.time()+delay),))
         self._sync_not_before = time.monotonic()+delay
 
     def sync_delay(self):
@@ -220,7 +246,13 @@ class StatisticsData:
         value = dict(format=FORMAT, group=group, device=self.device_id(),
                      name=name or computer_name(), started=self.store.tracking_started_on(), rows=self.local_rows())
         settings=self.store.settings()
+        from .companion_sync import focus_rows
+        value['focus_rounds']=focus_rows(self.store)
         if settings.statistics_sync_enabled and settings.statistics_sync_group==group:
+            from .device_sharing import snapshot as shared_snapshot
+            value['scoped_rules']=shared_snapshot(self.store,settings)
+            from .companion_sync import snapshot as companion_snapshot
+            value['companion']=companion_snapshot(self.store,self.focus)
             exists=self.store.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='independent_budget_clock'").fetchone()
             if exists:
                 games={game.id:game_key(game.id,game.name,game.source) for game in self.store.games()}
@@ -253,6 +285,8 @@ class StatisticsData:
             if not self.store.db.execute('SELECT 1 FROM settings WHERE key=?',(initialized_key(group),)).fetchone():
                 state=observe(self.store,group,value['device'])
             if state: value['preferences']=state
+        from .activity_sessions import local_snapshot
+        value['sessions']=local_snapshot(self.store,portable=True)
         digest = hashlib.sha256(json.dumps(value, ensure_ascii=False, allow_nan=False).encode()).hexdigest()
         key = 'statistics_snapshot:' + local_group(group)
         row = self.store.db.execute('SELECT value FROM settings WHERE key=?', (key,)).fetchone()
@@ -277,9 +311,17 @@ class StatisticsData:
         with self.store.db:
             self.store.db.execute('INSERT OR REPLACE INTO statistics_devices VALUES (?,?,?,?,?)',
                                   (*key, value['name'], value['revision'], value['started']))
+            session_key='statistics_sessions:'+key[0]+':'+key[1]
+            self.store.db.execute('DELETE FROM settings WHERE key=?',(session_key,))
+            if 'sessions' in value:self.store.db.execute('INSERT INTO settings VALUES (?,?)',(session_key,json.dumps(value['sessions'])))
+            if 'scoped_rules' in value:
+                from .device_sharing import merge
+                merge(self.store,group,value['device'],value['scoped_rules'])
             self.store.db.execute('DELETE FROM statistics_remote WHERE group_id=? AND device_id=?', key)
             self.store.db.executemany('INSERT INTO statistics_remote VALUES (?,?,?,?,?,?,?)',
                                      [(*key, *row) for row in value['rows']])
+            self.store.db.execute('DELETE FROM statistics_focus WHERE group_id=? AND device_id=?',key)
+            self.store.db.executemany('INSERT INTO statistics_focus VALUES (?,?,?,?)',[(*key,*row) for row in value.get('focus_rounds',[])])
             self.store.db.execute('DELETE FROM statistics_remote_budget_clock WHERE group_id=? AND device_id=?',key)
             self.store.db.execute('DELETE FROM statistics_remote_budget_usage WHERE group_id=? AND device_id=?',key)
             if 'budget_clocks' in value:
@@ -292,6 +334,9 @@ class StatisticsData:
                 self.store.db.execute('DELETE FROM statistics_activity WHERE group_id=? AND device_id=?', key)
                 self.store.db.executemany('INSERT INTO statistics_activity VALUES (?,?,?,?,?,?,?)',
                                           [(*key, *row) for row in value['activity']])
+            if 'remote_commands' in value:
+                from .companion_commands import stage
+                stage(self.store,group,self.device_id(),value['device'],value['remote_commands'],transaction=False)
         if 'preferences' in value:
             from .preferences_sync import stage
             stage(self.store,group,value['preferences'])
@@ -300,6 +345,12 @@ class StatisticsData:
 
     def devices(self, group):
         return list(self.store.db.execute('SELECT device_id,name,started FROM statistics_devices WHERE group_id=? ORDER BY name,device_id', (local_group(group),)))
+
+    def completed_focus_on(self,day,group):
+        from .companion_sync import focus_rows
+        local=sum(count for when,count in focus_rows(self.store) if when==str(day))
+        remote=self.store.db.execute('SELECT COALESCE(SUM(rounds),0) FROM statistics_focus WHERE group_id=? AND day=?',(local_group(group),str(day))).fetchone()[0]
+        return local+int(remote)
 
     def device_aliases(self, group):
         """Local display preferences, scoped to the connection, never exported."""
@@ -351,6 +402,15 @@ class StatisticsData:
                 sql += ' AND r.device_id=?'; args.append(scope)
             rows += list(self.store.db.execute(sql, args))
         return rows
+
+    def session_data(self,group,scope='all'):
+        from .activity_sessions import local_snapshot
+        result={'local':local_snapshot(self.store,portable=True)} if scope in ('all','local') else {}
+        for device,name,started in self.devices(group):
+            if scope not in ('all',device):continue
+            row=self.store.db.execute('SELECT value FROM settings WHERE key=?',('statistics_sessions:'+local_group(group)+':'+device,)).fetchone()
+            if row:result[device]=json.loads(row[0])
+        return result
 
     def started_on(self, group, scope='all'):
         dates = [self.store.tracking_started_on()] if scope in ('all', 'local') else []

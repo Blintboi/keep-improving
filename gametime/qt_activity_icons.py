@@ -137,7 +137,7 @@ class ActivityIcons(QObject):
     def __init__(self,app,owner):
         super().__init__(owner); self.app=app; self.owner=owner
         self.directory=Path(app.data_dir)/'cache'/'activity-icons'
-        self.cache={}; self.resolved=set(); self.wanted={}; self.jobs={}; self.enabled=False; self.closed=False
+        self.cache={}; self.resolved=set(); self.image_keys=set(); self.wanted={}; self.jobs={}; self.enabled=False; self.closed=False
         self.provider=QFileIconProvider(); self.network=None
         self.writes=0; self.sources={}
         self.timer=QTimer(self); self.timer.setSingleShot(True); self.timer.timeout.connect(self.pump)
@@ -175,7 +175,7 @@ class ActivityIcons(QObject):
                     if member['kind']=='app': fresh=fresh and record.get('sources')==self.source_hash(key)
                     if png.is_file() and png.stat().st_size<=MAX_ICON:
                         image=decode_icon(png.read_bytes())
-                        if image is not None: self.cache[key]=tile_icon(member,name,image)
+                        if image is not None: self.cache[key]=tile_icon(member,name,image); self.image_keys.add(key)
                         else: fresh=False
                     elif record['success']: fresh=False
                     if fresh: self.resolved.add(key)
@@ -263,6 +263,7 @@ class ActivityIcons(QObject):
         self.jobs.pop(key,None)
         if job['cancelled'] or not self.visible(): return
         self.resolved.add(key)
+        if image is not None: self.image_keys.add(key)
         png,meta=self.cache_paths(job['member'])
         try:
             self.directory.mkdir(parents=True,exist_ok=True)

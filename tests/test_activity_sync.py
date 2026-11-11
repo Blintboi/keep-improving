@@ -17,6 +17,18 @@ DAY = date.today().isoformat()
 
 
 class ActivitySyncTests(unittest.TestCase):
+    def test_paused_focus_keeps_snapshot_revision_until_resumed(self):
+        from unittest.mock import patch
+        focus=self.focus[0];focus.start(100);focus.pause(110)
+        with patch('gametime.companion_sync.time.time',return_value=1000):
+            before=self.data[0].snapshot(GROUP,'Computer 0')
+        with patch('gametime.companion_sync.time.time',return_value=1030):
+            self.assertEqual(before,self.data[0].snapshot(GROUP,'Computer 0'))
+            focus.start(120);running=self.data[0].snapshot(GROUP,'Computer 0')
+        self.assertGreater(running['revision'],before['revision'])
+        self.assertTrue(running['companion']['focus_state']['running'])
+        self.assertEqual(running['companion']['focus_state']['at'],1030000)
+
     def setUp(self):
         tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
         self.stores, self.focus, self.data = [], [], []

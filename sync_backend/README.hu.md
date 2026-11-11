@@ -91,12 +91,12 @@ A saját korlátok az éles adatbázisban tranzakciósan érvényesülnek:
 | Titkosított csomag | legfeljebb 512 KiB/gép, a base64 boríték legfeljebb 699 052 bájt |
 | Tárolt base64-adat | 2 MiB/csoport, globálisan 200 MiB (nem a teljes adatbázisméret) |
 | Percenkénti kérések | 4/gép, 40/csoport, 600/IP-lenyomat |
-| Sikeres adatcserék | UTC-naponként 20, havonta min(600, 350 000 / max(25, aktív csoportok)) csoportonként ÉS tulajdonosonként; globálisan havi 350 000 |
-| Gépenkénti várakozás | Legalább 10 perc két befejezett adatcsere között, szerveroldalon is |
-| Számolt havi válaszforgalom | min(128 MiB, 3 GiB / max(25, aktív csoportok)), globálisan 4 GiB |
-| Napi fel- és válaszforgalom | irányonként 8 MiB/csoport és tulajdonos |
+| Sikeres adatcserék | UTC-naponként 10 000, havonta min(250 000, 350 000 / max(1, aktív csoportok)) csoportonként ÉS tulajdonosonként; globálisan havi 350 000 |
+| Gépenkénti várakozás | Legalább 15 másodperc két befejezett adatcsere között, szerveroldalon is |
+| Számolt havi válaszforgalom | min(768 MiB, 3 GiB / max(1, aktív csoportok)), globálisan 4 GiB |
+| Napi fel- és válaszforgalom | irányonként 32 MiB/csoport és tulajdonos |
 | Összes feltöltés | globálisan 64 MiB/UTC-nap és 1 GiB/UTC-hónap; teljes felülírásokat is számol |
-| Havi feltöltés csoportonként és tulajdonosonként | min(64 MiB, 1 GiB / max(25, aktív csoportok)) |
+| Havi feltöltés csoportonként és tulajdonosonként | min(768 MiB, 1 GiB / max(1, aktív csoportok)) |
 | Válasz | legfeljebb kb. 1 MiB titkosított pillanatkép, többlépéses felzárkózás |
 | Edge kérés | 750 000 bájt, 5 másodperces beolvasás; legfeljebb 8 párhuzamos kérés/isolate |
 | Inaktív szervermásolat | 90 nap után törlődik az óránkénti karbantartásban |
@@ -105,22 +105,25 @@ A hozzáférési kulcs és a nyers IP nem kerül az adatbázisba. Az IP az utols
 proxycím szerverkulccsal képzett HMAC-lenyomata, kiegészítő védelem; nem
 használható egyetlen megbízható felhasználói azonosítóként. A kvóta elérésekor
 a helyi követés és a letöltött statisztika megmarad. A kliens legfeljebb egy
-napos `Retry-After` értéket követ; hiba önmagában nem indít automatikus újrapróbálkozást. Az üres szinkronszál várólistán alszik.
+napos `Retry-After` értéket követ. Az üres szinkronszál várólistán alszik.
 
 A saját kvóta nem a szolgáltató fogyasztásmérője: az elutasított kérés,
 HTTP-fejléc, hálózati többlet és más Supabase-forgalom is terhelheti a keretet.
 A Free csomag jelenleg 500 000 Edge-hívást, 5 GB egress-t és 500 MB
-adatbázist tartalmaz; ez nem garantált felhasználószám. A 2.12 induláskor egyszer,
-játékkezdéskor és játék után, valamint kézzel frissít. A közeli váltásokat egy
-nyugodt perc után összevonja. Nincs rendszeres hálózati lekérdezés. Az egyszeri
-eseményidőzítő kivárja a 10 perces gépenkénti korlátot és a szerver késleltetését.
-Az újraindítás és a kódcsere nem nullázza a helyi várakozást. A szerver a gép
-várakozásán túl csoportonként és tulajdonosonként is napi 20/havi 600 sikeres
-kérést enged; a tulajdonosi keret kódcsere után megmarad.
+adatbázist tartalmaz; ez nem garantált felhasználószám. A 2.41-es asztali és
+0.4.3-as telefonos kliens a mentett beállításokat és a fókuszállapotot rögtön
+küldi, a tartós, szerveroldalon is ellenőrzött 15 másodperces gépi várakozással.
+Az asztali kliens és a megnyitott telefonos felület 30 másodpercenként ellenőrzi
+a távoli változásokat, a már feltöltött verzió és az ismert távoli verziók
+azonosítóival. A változatlan használati előzményeket nem tölti fel újra; a teljes
+használati pillanatkép 15 percenként, eseményre vagy kézi kérésre frissül.
+A háttérben az Android ütemezi a munkát; a 15 perces rendszeres feladaton felül
+a függő mentések külön egyszeri feladatot kapnak. A szerver Retry-After értéke
+elsőbbséget élvez. A frissítés egyszer felülvizsgálja a megszüntetett 20/napos
+szabály alatt eltárolt várakozást; semmilyen fogyasztásszámlálót nem nulláz.
+A tulajdonosi keret kódcsere után is megmarad. Az összesített szolgáltatói korlát,
+a titkosítás és a kizárólag szerveroldali adatbázis-jogosultság változatlan.
 
-Két naponta egyszer induló gép 30 nap alatt kb. 60 induláskori kérést jelent,
-a játékesemények, kézi frissítés és hiányzó szervermásolat javítása ezen felül jön.
-Ez kérésbecslés, nem mért kapacitás vagy támadásvédelmi garancia.
 Mindegyik gépet legalább 2.12.0-ra kell frissíteni. A régi protokoll 426 választ
 kap az adatbázis és a törzs beolvasása előtt, egynapos várakozási javaslattal.
 Az új nyilvános protokollfejléc nem hitelesítés; utánzásakor is érvényesek az

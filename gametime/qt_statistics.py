@@ -5,6 +5,7 @@ from dataclasses import replace
 from pathlib import Path
 from sqlite3 import Error as SQLiteError
 import hashlib
+import json
 import time
 import unicodedata
 from PySide6.QtCore import Qt,QDate,QLocale,QEvent,QTimer,QPoint,QRect,QSize
@@ -12,6 +13,7 @@ from PySide6.QtGui import QColor,QIcon,QPainter,QPixmap,QTextCharFormat,QPalette
 from PySide6.QtWidgets import QWidget,QScrollArea,QVBoxLayout,QHBoxLayout,QGridLayout,QHeaderView,QAbstractItemView,QDateEdit,QCalendarWidget,QToolButton,QListWidget,QListWidgetItem,QListView,QSpinBox,QAbstractSpinBox
 from .statistics import date_range,summarize
 from .quota import current_day
+from .qt_scroll import preserving
 from .qt_widgets import label,button,panel,duration,DailyChart
 from .qt_widgets import NoWheelComboBox as QComboBox
 from .statistics_sync import computer_name
@@ -68,7 +70,28 @@ class StatisticsColors:
     """Reuse series colors across refreshes, filters and translated page rebuilds."""
     palette=('#73c7ff','#f0ba68','#b9a1ff','#7de5bf','#f58fa7','#74d8db',
              '#d7dc7a','#f4a67c','#9faef4','#e4a1e0','#a1d99b','#dcc6a1')
-    def __init__(self): self.colors={'game':{},'computer':{}}; self.icons={}; self._lab_cache={}
+    def __init__(self,store=None):
+        self.store=store; self.colors={'game':{},'computer':{}}; self.icons={}; self._lab_cache={}
+        if store:
+            row=store.db.execute("SELECT value FROM settings WHERE key='statistics_series_colors_v1'").fetchone()
+            try: saved=json.loads(row[0]) if row else {}
+            except (ValueError,TypeError): saved={}
+            if isinstance(saved,dict):
+                for kind in self.colors:
+                    values=saved.get(kind,{})
+                    if isinstance(values,dict):
+                        self.colors[kind]={key:value for key,value in values.items() if isinstance(key,str) and isinstance(value,str)
+                                           and len(value)==7 and value.startswith('#') and QColor(value).isValid()}
+
+    @staticmethod
+    def identity(key,kind):
+        # Executable install/update directories are history origins, not new
+        # applications. Keep raw report rows intact and normalize only color IDs.
+        from .activity_identity import app_identity,site_identity
+        if kind=='game':
+            if key.startswith('activity:app:'): return 'activity:app:'+app_identity(key[len('activity:app:'):])
+            if key.startswith('activity:site:'): return 'activity:site:'+site_identity(key[len('activity:site:'):])
+        return key
 
     def lab(self,color):
         if color in self._lab_cache: return self._lab_cache[color]
@@ -85,6 +108,7 @@ class StatisticsColors:
         return sum((a-b)**2 for a,b in zip(self.lab(one),self.lab(two)))
 
     def color(self,key,kind):
+        key=self.identity(key,kind)
         colors=self.colors[kind]
         if key not in colors:
             number=int.from_bytes(hashlib.sha256((kind+':'+key).encode()).digest()[:4],'big')
@@ -101,6 +125,9 @@ class StatisticsColors:
                 colors[key]=next((candidate for i in range(3600)
                                   if (candidate:=QColor.fromHslF(((number+i*1373)%3600)/3600,.66,.72).name()) not in used),
                                  QColor.fromHslF((number%3600)/3600,.66,.72).name())
+            if self.store:
+                with self.store.db:
+                    self.store.db.execute("INSERT OR REPLACE INTO settings VALUES ('statistics_series_colors_v1',?)",(json.dumps(self.colors),))
         return colors[key]
     def icon(self,key,kind):
         color=self.color(key,kind); cache=(color,kind)
@@ -239,7 +266,8 @@ class StatisticsPage(QWidget):
         self.scope=view['scope']; self._requested_scope=view['scope']; self._requested_detail=view['detail_scope']
         self.selected_day=view['selected_day'] or None
         self._game_scope='all'; self._category=view['category']
-        if not hasattr(app,'statistics_colors'): app.statistics_colors=StatisticsColors()
+        self.chart_metric=view.get('chart_metric','time')
+        if not hasattr(app,'statistics_colors'): app.statistics_colors=StatisticsColors(app.store)
         self.colors=app.statistics_colors; t=app.t
         self.setStyleSheet("""
             QDateEdit {background:#182126; color:#edf4f2; border:1px solid #2e3b42; border-radius:10px; padding:9px 10px;}
@@ -256,7 +284,7 @@ class StatisticsPage(QWidget):
         heading.addWidget(label(t('See where your time goes.'),'muted')); header.addLayout(heading,1)
         self.computers_button=button(t('Computers & sync'),self.toggle_computers,'quiet')
         self.computers_button.setCheckable(True); header.addWidget(self.computers_button)
-        header.addWidget(button(t('What is measured?'),self.explain,'quiet')); header.addWidget(app.page_settings_button('overview')); layout.addLayout(header)
+        header.addWidget(button(t('What is measured?'),self.explain,'quiet')); layout.addLayout(header)
         self.computer_panel=panel(); computer_box=QVBoxLayout(self.computer_panel); computer_box.setContentsMargins(18,14,18,14)
         self.sync_label=label(app.statistics_sync_status(),'muted'); self.sync_label.setWordWrap(True); computer_box.addWidget(self.sync_label)
         actions=QHBoxLayout(); actions.addWidget(button(t('Link computers'),app.statistics_sync_dialog))
@@ -267,8 +295,11 @@ class StatisticsPage(QWidget):
         filters=panel(); filter_box=QVBoxLayout(filters); filter_box.setContentsMargins(18,15,18,15); filter_box.setSpacing(10)
         grid=QGridLayout(); grid.setHorizontalSpacing(14); grid.setVerticalSpacing(6)
         self.category=QComboBox(); self.category.setAccessibleName(t('Show activity'))
-        for name,key in (('Games','games'),('Applications','apps'),('Websites','websites'),('Everything','all')): self.category.addItem(t(name),key)
-        self.category.setCurrentIndex(self.category.findData(view['category']))
+        for metric in ('time','sessions'):
+            for name,key in (('Games','games'),('Applications','apps'),('Websites','websites'),('Everything','all')):
+                self.category.addItem(t(name)+' · '+t('Time' if metric=='time' else 'Sessions'),key)
+                self.category.setItemData(self.category.count()-1,metric,Qt.UserRole+1)
+        self.category.setCurrentIndex(self.category.findData(view['category'])+(4 if self.chart_metric=='sessions' else 0))
         self.period=QComboBox(); self.period.setAccessibleName(t('Period'))
         for name,key in (('Today','today'),('Yesterday','yesterday'),('Last 7 days','week'),('Last 30 days','month'),('This month','calendar'),('Custom dates…','custom')):
             self.period.addItem(t(name),key)
@@ -290,9 +321,6 @@ class StatisticsPage(QWidget):
         dates.addWidget(button(t('Show period'),self.apply_dates)); dates.addStretch()
         filter_box.addWidget(self.custom_range); self.custom_range.setVisible(view['period']=='custom')
         self.activity_note=label('','muted'); self.activity_note.setWordWrap(True); filter_box.addWidget(self.activity_note); self.activity_note.hide()
-        self.tracking=QCheckBox(t('Measure application and website time'))
-        self.tracking.setChecked(app.focus.settings.tracking); self.tracking.toggled.connect(self.tracking_changed)
-        filter_box.addWidget(self.tracking)
         layout.addWidget(filters)
         self.category.currentIndexChanged.connect(self.choose_category)
         self.period.currentIndexChanged.connect(self.choose_period)
@@ -300,13 +328,16 @@ class StatisticsPage(QWidget):
         self.error=label('','danger'); self.error.setWordWrap(True); self.error.hide(); layout.addWidget(self.error)
         metrics=QHBoxLayout(); metrics.setSpacing(12)
         self.total_label,self.average_label,self.top_label=label('—','metric'),label('—','metric'),label('—','section')
+        self.sessions_label=label('—','metric'); self.session_data={}
         self.metric_titles={}
-        for title,value in [('Total play time',self.total_label),('Daily average',self.average_label),('Most played',self.top_label)]:
+        for title,value in [('Total play time',self.total_label),('Daily average',self.average_label),('Total sessions',self.sessions_label),('Most played',self.top_label)]:
             card=panel(); box=QVBoxLayout(card); box.setContentsMargins(18,14,18,14); box.setSpacing(7)
             caption=label(t(title),'muted'); self.metric_titles[title]=caption; box.addWidget(caption)
             value.setWordWrap(True); box.addWidget(value); metrics.addWidget(card,1)
             if title=='Most played': self.top_detail=label('','muted'); box.addWidget(self.top_detail)
         layout.addLayout(metrics)
+        self.session_note=label(t('A session is continuous foreground use, counted on its starting day.'),'muted')
+        self.session_note.setWordWrap(True); layout.addWidget(self.session_note)
         chart_box=panel(); chart_layout=QVBoxLayout(chart_box); chart_layout.setContentsMargins(18,15,18,14); chart_layout.setSpacing(8)
         self.chart_title=label(t('Time by day'),'section'); chart_layout.addWidget(self.chart_title)
         self.chart_summary=label('','muted'); self.chart_summary.setWordWrap(True); chart_layout.addWidget(self.chart_summary)
@@ -339,21 +370,26 @@ class StatisticsPage(QWidget):
         self.merge_duplicates.setChecked(view['combine'])
         self.merge_duplicates.toggled.connect(self.choose_combining); detail_filters.addWidget(self.merge_duplicates)
         detail_filters.addStretch(); details_box.addLayout(detail_filters)
+        sort_row=QHBoxLayout(); sort_row.addWidget(label(t('Sort by'),'muted'))
+        self.session_sort=QComboBox(); self.session_sort.setAccessibleName(t('Sort by'))
+        for key,title in [('time_desc','Time: most first'),('time_asc','Time: least first'),('sessions_desc','Sessions: most first'),('sessions_asc','Sessions: least first')]:self.session_sort.addItem(t(title),key)
+        self.session_sort.setCurrentIndex(max(0,self.session_sort.findData(view.get('sort','time_desc'))))
+        self.session_sort.currentIndexChanged.connect(self.choose_sort);sort_row.addWidget(self.session_sort);sort_row.addStretch();details_box.addLayout(sort_row)
         self.breakdown_note=label('','muted'); details_box.addWidget(self.breakdown_note)
         self.details_panel=details
-        self.games_table=QTableWidget(0,5); self.games_table.verticalHeader().hide(); self.games_table.setShowGrid(False)
+        self.games_table=QTableWidget(0,6); self.games_table.verticalHeader().hide(); self.games_table.setShowGrid(False)
         self.games_table.setSelectionBehavior(QAbstractItemView.SelectRows); self.games_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.games_table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
         self.games_table.verticalScrollBar().setSingleStep(12)
         self.games_table.setProperty('revealOnWheel',True)
         self.games_table.setProperty('revealParentBottomOnWheel',True)
         self.games_table.horizontalHeader().setSectionResizeMode(0,QHeaderView.Stretch)
-        for column,width in ((1,165),(2,110),(3,94),(4,68)): self.games_table.setColumnWidth(column,width)
+        for column,width in ((1,150),(2,100),(3,94),(4,68),(5,120)): self.games_table.setColumnWidth(column,width)
         self.games_table.setStyleSheet('QTableWidget::item {padding:9px 6px;}'); self.games_table.setWordWrap(False)
         details_box.addWidget(self.games_table)
         self.games_table.itemSelectionChanged.connect(self.update_exclusion_action)
         budget_actions=QHBoxLayout()
-        self.budget_button=button(t('Set time budget…'),self.set_selected_budget)
+        self.budget_button=button(t('Set budget…'),self.set_selected_budget)
         self.group_budget_button=button(t('Shared budget for selection…'),lambda:self.set_selected_budget(shared=True))
         self.budget_button.setToolTip(t('Select an activity available on this computer to set its daily limit.'))
         self.group_budget_button.setToolTip(t('Select multiple rows with Ctrl or Shift to share one daily budget on this computer.'))
@@ -459,10 +495,6 @@ class StatisticsPage(QWidget):
         if not hours: return self.app.t('{minutes} min',minutes=minutes)
         return self.app.t('{hours} h {minutes} min',hours=hours,minutes=minutes) if minutes else self.app.t('{hours} h',hours=hours)
 
-    def tracking_changed(self,enabled):
-        self.app.focus.configure(replace(self.app.focus.settings,tracking=enabled))
-        self.app.update_focus_policy()
-
     def toggle_computers(self,checked=False):
         self.computer_panel.setVisible(bool(checked)); self.app.update_statistics_sync_controls()
 
@@ -528,6 +560,9 @@ class StatisticsPage(QWidget):
                 *self._range,group,self.scope,category,self.app.settings.statistics_device_name)
         self.refresh_category_text()
         self.report=summarize((row[:5] for row in self.computer_history),*self._range,started_on=started,as_of=current_day(self.app.settings).isoformat())
+        from .activity_sessions import count_rows,display
+        self.session_data=self.app.statistics_data.session_data(group,self.scope)
+        self.sessions_label.setText(display(*count_rows(self.computer_history,self.session_data,self._range[0])))
         self.total_label.setText(self.friendly_time(self.report.total)); self.average_label.setText(self.friendly_time(self.report.average))
         self.top_label.setText(self.item_name(self.report.games[0][0],self.report.games[0][1]) if self.report.games else '—')
         self.top_detail.setText(self.friendly_time(self.report.games[0][3])+' · '+self.share(self.report.games[0][3],self.report.total) if self.report.games else self.app.t('No activity yet'))
@@ -574,9 +609,13 @@ class StatisticsPage(QWidget):
 
     def choose_category(self,*_):
         category=self.category.currentData()
+        metric=self.category.currentData(Qt.UserRole+1)
+        changed=category!=self._category
+        self.chart_metric=metric
         self._category=category
-        self.save_view(category=category,selected_day='')
-        self.selected_day=None; self.refresh(live=True)
+        self.save_view(category=category,chart_metric=metric,**({'selected_day':''} if changed else {}))
+        if changed: self.selected_day=None; self.refresh(live=True)
+        else: self.refresh_category_text(); self.update_chart(); self.show_breakdown()
 
     def item_name(self,key,name):
         return self.app.t(name) if key=='activity:browser:other' else name
@@ -585,9 +624,10 @@ class StatisticsPage(QWidget):
         t=self.app.t; games=self.category.currentData()=='games'
         self.metric_titles['Total play time'].setText(t('Total time in period'))
         self.metric_titles['Most played'].setText(t('Most played' if games else 'Most used'))
-        self.chart_title.setText(t('Time by day')); self.chart.setAccessibleName(t('Time by day'))
+        title=t('Sessions by day' if self.chart_metric=='sessions' else 'Time by day')
+        self.chart_title.setText(title); self.chart.setAccessibleName(title)
         category=self.category.currentData()
-        self.games_table.setHorizontalHeaderLabels([t({'games':'Game','apps':'Application','websites':'Website','all':'Activity'}[category]),t('Computer'),t('Type'),t('Time'),t('Share')])
+        self.games_table.setHorizontalHeaderLabels([t({'games':'Game','apps':'Application','websites':'Website','all':'Activity'}[category]),t('Computer'),t('Type'),t('Time'),t('Share'),t('Sessions')])
         self.activity_note.setVisible(category in ('apps','websites','all'))
         self.activity_note.setText(t('Applications exclude recognized games. Linked computers share these records when sync is enabled.' if category=='apps' else
                                      'Website time is part of browser time; it is counted once.' if category=='all' else
@@ -597,14 +637,25 @@ class StatisticsPage(QWidget):
     def update_chart(self,*args):
         if not self.report: return
         kind='game'; totals=Counter(); names={}; segments={}; computers={}
+        from .activity_sessions import index,display
+        counts,since=index(self.session_data); day_counts=Counter(); day_partial={}; activity_sessions={}
+        session_mode=self.chart_metric=='sessions'; time_computers={}
         self.chart_summary.setText(self.app.t('{start} to {end}',start=self._range[0],end=self._range[1]))
         # Build once when data or grouping changes; selecting a day only repaints.
         for day,gid,name,source,seconds,identity,device_name in self.computer_history:
             if seconds<=0: continue
             key=gid
             names[key]=self.item_name(gid,name)
-            segments.setdefault(day,Counter())[key]+=seconds; totals[key]+=seconds
-            computers.setdefault(day,{}).setdefault(identity,Counter())[key]+=seconds
+            time_computers.setdefault(day,{}).setdefault(identity,Counter())[key]+=seconds
+            session_key=(day,key,identity)
+            value=0 if session_key in activity_sessions else counts.get(session_key,0)
+            if not session_mode: value=seconds
+            segments.setdefault(day,Counter())[key]+=value; totals[key]+=value
+            computers.setdefault(day,{}).setdefault(identity,Counter())[key]+=value
+            if session_key not in activity_sessions:
+                count=counts.get(session_key,0); partial=identity not in since or day<=since[identity]
+                day_counts[day]+=count; day_partial[day]=day_partial.get(day,False) or partial
+                activity_sessions[session_key]=display(count,partial)
         for key in sorted(totals): self.colors.color(key,kind)
         series={key:(names[key],self.colors.color(key,kind)) for key in sorted(totals,key=lambda key:(-totals[key],names[key].casefold(),key))}
         order={key:i for i,key in enumerate(series)}
@@ -617,11 +668,21 @@ class StatisticsPage(QWidget):
         if self.scope!='all': identities=[identity for identity in identities if identity==self.scope]
         active={identity for per_day in computers.values() for identity in per_day}
         device_colors={identity:self.colors.color(identity,'computer') for identity in active.union(identities)}
-        self.chart.set_days(self.report.days,self.selected_day,segments,series,computers,self.computer_names,device_colors,show_computer_markers=multi)
+        day_sessions={day:display(day_counts[day],day_partial.get(day,False)) for day in self.report.days}
+        values={day:day_counts[day] for day in self.report.days} if session_mode else self.report.days
+        self.chart.axis_format=(lambda value:str(int(value))) if session_mode else self.friendly_time
+        self.chart.time_format=self.friendly_time
+        self.chart.empty_text='No sessions in this period.' if session_mode else 'No time recorded for this selection.'
+        self.chart.set_days(values,self.selected_day,segments,series,computers,self.computer_names,device_colors,show_computer_markers=multi,
+                            day_sessions=day_sessions,activity_sessions=activity_sessions,metric=self.chart_metric,time_days=self.report.days,time_computers=time_computers)
         self.computer_legend.setAccessibleName(self.app.t('Computer colors'))
         self.computer_legend.set_computers(identities,self.computer_names,self.colors)
         self.chart_hint.setText(self.app.t('The side color identifies the computer. Spaces separate computers; activity colors match the list below.' if multi else
-                                          'Each color is one activity. Click a day to see its details.'))
+                                          'Each color is one activity. Click a day to see its details.')+' '+self.chart_measure_hint())
+
+    def chart_measure_hint(self):
+        return self.app.t('Column height shows session counts. Hover over a block for details.' if self.chart_metric=='sessions' else
+                          'Column height shows recorded time. Hover over a block for details.')
 
     def refresh_devices(self):
         remote=self.app.statistics_data.devices(self.app.settings.statistics_sync_group)
@@ -672,25 +733,32 @@ class StatisticsPage(QWidget):
         if not self.report or day not in self.report.days: return
         self.selected_day=day; self.save_view(selected_day=day)
         self.refresh_day_selector(); self.show_breakdown()
-        if self.isVisible(): self.scroll.ensureWidgetVisible(self.details_panel,0,16)
 
     def show_period(self):
         self.selected_day=None; self.save_view(selected_day=''); self.refresh_day_selector(); self.show_breakdown()
+
+    @preserving(lambda self:(self.scroll,self.games_table))
+    def choose_sort(self,*_):
+        self.save_view(sort=self.session_sort.currentData());self.show_breakdown()
 
     def show_breakdown(self,*_):
         if not self.report: return
         scope=self.detail_devices.currentData() or 'all'
         combine=self.merge_duplicates.isChecked()
         grouped={}
+        from .activity_sessions import index,display
+        counts,since=index(self.session_data)
         for day,gid,name,source,seconds,identity,device_name in self.computer_history:
             if self.selected_day and day!=self.selected_day: continue
             if seconds<=0 or (scope!='all' and scope!=identity): continue
             kind=source if source in ('Application','Website','Browser') else 'Game'
             normalized=' '.join(unicodedata.normalize('NFKC',name).casefold().split())
             group=(kind,normalized) if combine else (gid,identity)
-            row=grouped.setdefault(group,[gid,name,source,0,identity,device_name,set(),set()])
+            row=grouped.setdefault(group,[gid,name,source,0,identity,device_name,set(),set(),0,False])
             row[3]+=seconds; row[6].add(identity); row[7].add(gid)
-        rows=sorted(grouped.values(),key=lambda row:(-row[3],row[1].casefold(),row[0],row[4]))
+            row[8]+=counts.get((day,gid,identity),0);row[9]|=identity not in since or day<=since[identity]
+        order=self.session_sort.currentData();column=8 if order.startswith('sessions') else 3;direction=-1 if order.endswith('desc') else 1
+        rows=sorted(grouped.values(),key=lambda row:(direction*row[column],row[1].casefold(),row[0],row[4]))
         total=sum(row[3] for row in rows)
         query=self.search.text().strip().casefold(); count=len(rows)
         if query:
@@ -698,7 +766,8 @@ class StatisticsPage(QWidget):
         self.breakdown_title.setText(self.app.t('Where did the time go?')); self.whole_period_button.setVisible(self.selected_day is not None)
         self.breakdown_note.setText(self.app.t('Matches: {count} of {total}',count=len(rows),total=count) if query else
                                     self.app.t('{period} · {time}',period=self.selected_day,time=self.friendly_time(total)) if self.selected_day else
-                                    self.app.t('Items: {count} · largest first',count=count))
+                                    self.app.t('Items: {count}',count=count))
+        self.breakdown_note.setText(self.breakdown_note.text()+' · '+self.app.t('Sessions')+': '+display(sum(row[8] for row in rows),any(row[9] for row in rows)))
         self.empty_details.setText(self.app.t('No matching entries. Try another name.' if query else 'No activity here yet. Try a different period or activity type.'))
         if combine:
             self.chart_hint.setText(self.app.t('Combined list entries may include several chart colors.'))
@@ -706,6 +775,7 @@ class StatisticsPage(QWidget):
             multi=len(self.computer_names)>1
             self.chart_hint.setText(self.app.t('The side color identifies the computer. Spaces separate computers; activity colors match the list below.' if multi else
                                               'Each color is one activity. Click a day to see its details.'))
+        self.chart_hint.setText(self.chart_hint.text()+' '+self.chart_measure_hint())
         identities={identity for row in rows for identity in row[6]}
         self.games_table.setColumnHidden(1,len(identities)<=1 and len(self.chart.device_colors)<=1)
         self.games_table.setColumnHidden(2,self.category.currentData()!='all')
@@ -716,12 +786,12 @@ class StatisticsPage(QWidget):
         selected={previous[index.row()] for index in self.games_table.selectionModel().selectedRows() if index.row()<len(previous)}
         self.games_table.setRowCount(len(rows))
         if keys!=previous: self.games_table.clearSelection()
-        for i,(gid,name,source,seconds,identity,device_name,identities,item_ids) in enumerate(rows):
+        for i,(gid,name,source,seconds,identity,device_name,identities,item_ids,sessions,partial) in enumerate(rows):
             share=self.share(seconds,total)
             source=self.app.t(source) if source in ('Application','Website','Browser') else self.app.t('Game')
             name=self.item_name(gid,name)
             computer=self.computer_names.get(identity,device_name) if len(identities)==1 else self.app.t('Multiple computers')
-            for col,value in enumerate((name,computer,source,duration(seconds),share)):
+            for col,value in enumerate((name,computer,source,duration(seconds),share,display(sessions,partial))):
                 item=self.games_table.item(i,col)
                 if item is None:
                     item=QTableWidgetItem(); self.games_table.setItem(i,col,item)

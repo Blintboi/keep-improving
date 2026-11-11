@@ -56,8 +56,8 @@ class BudgetDrafts(QObject):
         data.update({name:sorted(getattr(e,name)) for name in SETS})
         data['periods']=deepcopy(e.periods.items)
         data['schedule']={'plans':deepcopy(e.schedule._plans),'edits':deepcopy(e.schedule._edits)}
-        data['access']={name:deepcopy(getattr(e.access,name)) for name in ('active_days','usage_limits')}
-        data['access'].update({name:sorted(getattr(e.access,name)) for name in ('changed_days','changed_limits')})
+        data['access']={name:deepcopy(getattr(e.access,name)) for name in ('active_days','usage_limits','device_scopes')}
+        data['access'].update({name:sorted(getattr(e.access,name)) for name in ('changed_days','changed_limits','changed_scopes')})
         return data
 
     def restore(self,data):
@@ -69,8 +69,8 @@ class BudgetDrafts(QObject):
         e.periods.items=deepcopy(state['periods'])
         e.schedule._plans={int(k):v for k,v in state['schedule']['plans'].items()}
         e.schedule._edits={int(k):v for k,v in state['schedule']['edits'].items()}; e.schedule.load_selection()
-        for name in ('active_days','usage_limits'): setattr(e.access,name,deepcopy(state['access'][name]))
-        for name in ('changed_days','changed_limits'): setattr(e.access,name,set(state['access'][name]))
+        for name in ('active_days','usage_limits','device_scopes'): setattr(e.access,name,deepcopy(state['access'].get(name,{})))
+        for name in ('changed_days','changed_limits','changed_scopes'): setattr(e.access,name,set(state['access'].get(name,[])))
         self.raw=data.get('raw',{})
         e.refresh(data.get('key')); e.views.setCurrentIndex(data.get('view',0)); self.apply_raw()
 
@@ -98,6 +98,7 @@ class BudgetDrafts(QObject):
             result.update({'schedule:'+key:w.lineEdit() for key,w in schedule._fields.items() if hasattr(w,'lineEdit')})
         for card in e.steps.cards:
             result['step:'+card.value['id']]=card.minutes.lineEdit()
+            result['sessions:'+card.value['id']]=card.session_limit.lineEdit()
         return result
 
     def flush(self):
@@ -116,6 +117,7 @@ class BudgetDrafts(QObject):
             if hasattr(e.app,'budget_draft_note'):
                 e.app.budget_draft_note.setText(e.app.t('Draft saved on this computer. Save changes to apply.') if value else '')
                 e.app.budget_discard.setVisible(bool(value))
+                e.app.update_budget_save()
             from .budget_conflicts import warning
             e.conflicts.setText(warning(e)); e.conflicts.setVisible(bool(e.conflicts.text()))
         except (ValueError,OSError,SQLiteError):
@@ -129,6 +131,7 @@ class BudgetDrafts(QObject):
         with self.editor.app.store.db: self.editor.app.store.db.execute('DELETE FROM settings WHERE key=?',(KEY,))
         if hasattr(self.editor.app,'budget_draft_note'):
             self.editor.app.budget_draft_note.clear(); self.editor.app.budget_discard.hide()
+            self.editor.app.update_budget_save()
 
     def prepare_save(self):
         self.remember()

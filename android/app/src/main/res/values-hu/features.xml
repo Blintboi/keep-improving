@@ -1,0 +1,6 @@
+<resources>
+    <string name="overview">Áttekintés</string><string name="budgets">Keretek</string><string name="notifications">Értesítések</string><string name="focus">Fókusz</string><string name="more">Továbbiak</string>
+    <string name="protection_label">Keep Improving · Alkalmazáskorlátok</string>
+    <string name="protection_description">Választható alkalmazáskorlátok és fókuszvédelem. Az előtérben lévő alkalmazás nevét figyeli, és a saját szabályaid szerint eltakarja a kijelölt alkalmazásokat. Képernyőtartalmat és begépelt szöveget nem olvas, nem kattint és nem gépel helyetted. A telefonálás, az Android beállításai és a kezdőképernyő elérhetők maradnak. Itt bármikor kikapcsolhatod.</string>
+    <string name="pc_devices">Számítógépek</string>
+</resources>

@@ -1,11 +1,23 @@
 ﻿param([Parameter(Mandatory=$true)][string]$PackageDir,
       [Parameter(Mandatory=$true)][string]$ReportPath,
-      [string]$PythonPath='python.exe')
+      [string]$PythonPath='python.exe',
+      [string]$FixtureRoot='')
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot '..\packaging\defender_scan.ps1')
 # Check the extracted package before setup can start its bundled executable.
 Assert-DefenderReleaseScan ([IO.Path]::GetFullPath($PackageDir)) ([IO.Path]::GetFullPath($ReportPath)+'.defender.json')
-$taskRoot = Join-Path $env:TEMP ('GameTimeMonitor-bundle-test-' + [guid]::NewGuid().ToString('N'))
+# An explicit fresh fixture makes its executable path reviewable before testing.
+# Keep both explicit and generated fixtures disposable and inside TEMP.
+if ($FixtureRoot) {
+    $taskRoot = [IO.Path]::GetFullPath($FixtureRoot).TrimEnd('\')
+    $tempRoot = [IO.Path]::GetFullPath($env:TEMP).TrimEnd('\')
+    if (-not $taskRoot.StartsWith($tempRoot + '\', [StringComparison]::OrdinalIgnoreCase) -or
+        (Test-Path -LiteralPath $taskRoot)) {
+        throw 'FixtureRoot must be a new directory inside TEMP.'
+    }
+} else {
+    $taskRoot = Join-Path $env:TEMP ('GameTimeMonitor-bundle-test-' + [guid]::NewGuid().ToString('N'))
+}
 $app = Join-Path $taskRoot 'App with spaces'
 $data = Join-Path $taskRoot 'Profile with spaces'
 $games = Join-Path $taskRoot 'Games with spaces'
@@ -106,7 +118,9 @@ try {
 import json,sqlite3,sys
 from datetime import date
 from gametime.statistics_sync import local_group
+from gametime.secrets import protect
 d=sqlite3.connect(sys.argv[1]); code='1'*32; day='2026-01-01'
+d.execute("INSERT OR REPLACE INTO settings VALUES ('browser_pairing',?)",(protect('b'*64),))
 c=json.loads(d.execute("SELECT value FROM settings WHERE key='config'").fetchone()[0])
 c.update(overlay_rtss_details=False,bedtime_caps_budget=True,notification_sound='silent',notification_sound_path=r'C:\Fixture\saved.wav',weekend_enabled=True,weekend_schedule={'limit_seconds':10800,'warning_seconds':9000,'bedtime_minute':60,'bedtime_resume_minute':480},game_overlays={'test:hidden':{'overlay_enabled':False,'overlay_font_size':36,'overlay_x':0.1,'overlay_y':0.9,'overlay_color_normal':'#aabbcc','overlay_color_warning':'#dd5566'}})
 c.update(daily_schedules={'1':{'limit_seconds':13200,'warning_seconds':12000,'bedtime_minute':90}})
@@ -122,11 +136,13 @@ c.update(budget_reset_overrides={'shared-games':420,'game:test:hidden':540})
 c.update(budget_active_days={'website-fixture':[0,2,4],'game:test:hidden':[5,6]},budget_usage_limits={'website-fixture':False})
 c.update(wellbeing_rules=[{'id':'website-fixture','name':'Fixture website','members':[{'kind':'site','value':'example.com'}],'seconds':1800,'enabled':True,'enforce':False,'overlay':False}],
          restriction_plans={'website-fixture':{'version':1,'extension_minutes':0,'close_confirmed':False,'steps':[{'id':'break-fixture','kind':'break','offset':600,'sound':False,'popup':False,'time_mode':'usage','break_mode':'redirect','break_minutes':5,'redirect_url':'https://example.org/break'},{'id':'new-tab-fixture','kind':'break','offset':1200,'sound':False,'popup':False,'time_mode':'usage','break_mode':'redirect','break_minutes':5,'redirect_url':''}]}})
+c['restriction_plans']['website-fixture']['steps'][0]['allow_early_break']=True
 c['restriction_plans']['unified-fixture']={'version':1,'extension_minutes':5,'close_confirmed':True,'steps':[{'id':'limit-fixture','kind':'restrict','offset':1800,'sound':False,'popup':False,'time_mode':'usage'}]}
 c['restriction_plans']['unified-fixture']['steps'][0]['targets']={'app':{'mode':'restrict','extension_minutes':2},'site':{'mode':'redirect','redirect_url':'https://example.org/rest'}}
 c['restriction_plans']['legacy-fixture']={'version':1,'extension_minutes':0,'close_confirmed':False,'steps':[{'id':'old-limit-fixture','kind':'minimize','offset':1800,'sound':False,'popup':False,'time_mode':'usage'}]}
 c['restriction_plans']['website-fixture']['steps'].append({'id':'clock-fixture','kind':'cover','offset':0,'sound':False,'popup':False,'time_mode':'clock','clock_minute':1320})
 c['wellbeing_rules'].append({'id':'zero-fixture','name':'Blocked fixture','members':[{'kind':'site','value':'zero.example.com'}],'seconds':0,'enabled':True,'enforce':False,'overlay':False})
+c['wellbeing_rules'].append({'id':'local-fixture','name':'Local website fixture','members':[{'kind':'site','value':'127.0.0.1:8766'}],'seconds':1800,'enabled':False,'enforce':False,'overlay':False})
 c['game_overlays']['test:hidden']['overlay_rtss_auto']=True
 c['counter_overlays']={'website-fixture':{'overlay_font_size':31,'overlay_rtss_auto':False}}
 c['activity_overlays']={'site:example.com':{'overlay_enabled':True,'overlay_font_size':42,'overlay_x':0.3,'overlay_y':0.4}}
@@ -142,7 +158,9 @@ d.execute('INSERT INTO settings VALUES (?,?)',('statistics_snapshot:'+code,json.
 d.execute('INSERT INTO settings VALUES (?,?)',('launcher_clients',json.dumps({'version':1,'clients':[]})))
 d.execute('INSERT OR REPLACE INTO settings VALUES (?,?)',('overview_view',json.dumps({'combine':True,'category':'games','period':'custom','scope':'local','detail_scope':'local','custom_start':'2026-10-01','custom_end':'2026-10-06','selected_day':'2026-10-03','search':'fixture'})))
 d.execute('INSERT OR REPLACE INTO settings VALUES (?,?)',('focus_config',json.dumps({'work':37,'short_break':0,'long_break':0,'rounds':0,'block_groups':['games','budget:website-fixture']})))
-d.execute('INSERT OR REPLACE INTO settings VALUES (?,?)',('focus_timer',json.dumps({'phase':'focus','remaining':0,'round':1})))
+d.execute('INSERT OR REPLACE INTO settings VALUES (?,?)',('focus_timer',json.dumps({'phase':'focus','remaining':0,'round':1,'continuity_token':'c'*32,'continuity_running':False})))
+d.execute('INSERT OR REPLACE INTO browser_journals VALUES (?,?,?,?)',('a'*32,'brave',300,1762250000.0))
+d.execute('INSERT OR REPLACE INTO continuity_coverage VALUES (?,?,?)',('activity',1762249900.0,1762250000.0))
 d.execute('INSERT OR REPLACE INTO focus_completions VALUES (?,?)',(day,1))
 d.execute('INSERT OR REPLACE INTO settings VALUES (?,?)',('notification_editor_draft_v1',json.dumps({'builtin:warning':None})))
 d.execute('INSERT INTO settings VALUES (?,?)',('statistics_device_alias:'+local_group(code)+':'+'a'*32,'Fixture Laptop'))
@@ -152,6 +170,7 @@ d.commit(); d.close()
     $trackingStart = 'import sqlite3,sys; d=sqlite3.connect(sys.argv[1]); print(d.execute("SELECT value FROM settings WHERE key=?",("tracking_started_on",)).fetchone()[0])' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
     $report.startup_registered = (Get-ItemPropertyValue -LiteralPath $runKey -Name $name) -like ('"' + $exe + '" --background*')
+    $report.no_duplicate_startup_shortcut = -not (Test-Path -LiteralPath (Join-Path ([Environment]::GetFolderPath('Startup')) ($name + '.lnk')))
     $report.foreign_startup_preserved_on_install = (Get-ItemProperty -LiteralPath $runKey).PSObject.Properties[$sentinelName].Value -eq $sentinelValue
     $report.installed_apps_registered = Test-Path -LiteralPath ('HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\' + $name)
     $programLinks = @((Get-Content -LiteralPath (Join-Path $app 'bundle-install.json') -Raw | ConvertFrom-Json).Links | Where-Object { (Split-Path -Parent $_) -eq [Environment]::GetFolderPath('Programs') })
@@ -182,15 +201,35 @@ d.commit(); d.close()
     $legacyProgramPath = Join-Path ([Environment]::GetFolderPath('Programs')) ($name + '.lnk')
     $oldProgram = $shell.CreateShortcut($legacyProgramPath)
     $oldProgram.TargetPath = $exe; $oldProgram.Description = 'Game Time Monitor - GameTimeMonitor.bundle.v1'; $oldProgram.Save()
+    $legacyStartupPath = Join-Path ([Environment]::GetFolderPath('Startup')) ($name + '.lnk')
+    $legacyStartup = $shell.CreateShortcut($legacyStartupPath)
+    $legacyStartup.TargetPath = $exe; $legacyStartup.Description = 'Game Time Monitor - GameTimeMonitor.bundle.v1'; $legacyStartup.Save()
     $foreign = Join-Path $desktop 'unrelated.txt'
     'preserve' | Set-Content -LiteralPath $foreign
     # Reproduce a resident helper still mapping an identical runtime DLL.
     $lockedRuntime = Join-Path $app '_internal\VCRUNTIME140_1.dll'
     $runtimeHash = (Get-FileHash -LiteralPath $lockedRuntime).Hash
     $runtimeLock = [IO.File]::Open($lockedRuntime,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
+    $upgradeResident = Start-Process -FilePath $exe -ArgumentList @('--background','--data-dir',('"'+$data+'"')) -WindowStyle Hidden -PassThru
     try {
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $setup -InstallDir $app -DataDir $data -GamesRoot $games -DesktopDir $desktop -StartupName $name -Quiet -NoStart
+        Start-Sleep -Seconds 2
+        if ($upgradeResident.HasExited) { throw 'Upgrade fixture resident did not start.' }
+        # Omit DataDir exactly as a double-clicked installer does. The existing
+        # marker must select this custom profile and stop its resident itself.
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $setup -InstallDir $app -GamesRoot $games -DesktopDir $desktop -StartupName $name -Quiet
         if ($LASTEXITCODE -ne 0) { throw 'Upgrade failed with an unchanged locked runtime DLL.' }
+        $report.upgrade_stops_running_app_without_manual_exit = $upgradeResident.WaitForExit(10000)
+        $report.upgrade_reuses_custom_profile_from_installation = (Get-Content -LiteralPath (Join-Path $app 'bundle-install.json') -Raw -Encoding UTF8 | ConvertFrom-Json).DataDir -eq $data
+        $restartDeadline = [DateTime]::UtcNow.AddSeconds(15)
+        do {
+            $restarted = @(Get-CimInstance Win32_Process -Filter "Name = 'GameTimeMonitor.exe'" | Where-Object { $_.ExecutablePath -eq $exe -and $_.ProcessId -ne $upgradeResident.Id })
+            if ($restarted.Count) { break }
+            Start-Sleep -Milliseconds 200
+        } while ([DateTime]::UtcNow -lt $restartDeadline)
+        $report.upgrade_restarts_in_background = $restarted.Count -eq 1 -and $restarted[0].CommandLine.Contains('--background')
+        Start-Sleep -Seconds 2
+        $restartStop = Start-Process -FilePath $exe -ArgumentList @('--stop-wait','20','--data-dir',('"'+$data+'"')) -WindowStyle Hidden -Wait -PassThru
+        $report.upgraded_background_resident_stops = $restartStop.ExitCode -eq 0
         $report.locked_unchanged_runtime_preserved = (Get-FileHash -LiteralPath $lockedRuntime).Hash -eq $runtimeHash
     } finally { $runtimeLock.Dispose() }
     $report.legacy_desktop_brand_migrated = -not (Test-Path -LiteralPath $legacyHubPath) -and (Test-Path -LiteralPath $hubPath)
@@ -233,6 +272,10 @@ d.close()
     $report.global_renewal_migrates_without_losing_consumed_time = $renewals -eq 'True'
     $redirect = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); p=c["restriction_plans"]["website-fixture"]["steps"][0]; print(p["break_mode"]=="redirect" and p["redirect_url"]=="https://example.org/break")' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     $report.break_redirect_address_preserved_on_upgrade = $redirect -eq 'True'
+    $earlyBreak = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); print(c["restriction_plans"]["website-fixture"]["steps"][0].get("allow_early_break") is True)' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    $report.early_break_opt_in_preserved_on_upgrade = $earlyBreak -eq 'True'
+    $localWebsite = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); r=next(r for r in c["wellbeing_rules"] if r["id"]=="local-fixture"); print(r["members"]==[{"kind":"site","value":"127.0.0.1:8766"}] and r["seconds"]==1800 and not r["enabled"])' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    $report.local_website_port_preserved_on_upgrade = $localWebsite -eq 'True'
     $newTab = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); p=c["restriction_plans"]["website-fixture"]["steps"][1]; print(p["break_mode"]=="redirect" and p["redirect_url"]=="")' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     $report.break_redirect_new_tab_preserved_on_upgrade = $newTab -eq 'True'
     $unified = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); p=c["restriction_plans"]["unified-fixture"]; print(p["steps"][0]["kind"]=="restrict" and p["extension_minutes"]==5 and p["close_confirmed"])' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
@@ -259,6 +302,9 @@ d.close()
     $report.notification_drafts_removals_and_focus_groups_survive_upgrade = $notificationAndFocus -eq 'True'
     $singleSession = 'import sqlite3,sys; from pathlib import Path; from gametime.store import Store; from gametime.focus import Focus; s=Store(Path(sys.argv[1])); f=Focus(s); print((f.settings.work,f.settings.short_break,f.settings.long_break,f.settings.rounds)==(37,0,0,0) and f.finished and not f.running and f.remaining==0 and f.completed_rounds==1); s.close()' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     $report.single_session_zero_breaks_and_completed_state_survive_upgrade = $singleSession -eq 'True'
+    $continuity = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); f=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("focus_timer",)).fetchone()[0]); print(f["continuity_token"]=="c"*32 and not f["continuity_running"] and d.execute("SELECT browser,seq,end FROM browser_journals WHERE stream=?",("a"*32,)).fetchone()==("brave",300,1762250000.0) and d.execute("SELECT start,end FROM continuity_coverage WHERE kind=? AND start=?",("activity",1762249900.0)).fetchone()==(1762249900.0,1762250000.0))' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    $report.browser_receipts_coverage_and_timer_identity_survive_upgrade = $continuity -eq 'True'
+    $report.browser_offline_components_bundled = (Test-Path -LiteralPath (Join-Path $app '_internal\gametime\browser_extension\continuity.js')) -and (Test-Path -LiteralPath (Join-Path $app '_internal\gametime\browser_extension\offline-view.js'))
     $explorerHistory = 'import sqlite3,sys; d=sqlite3.connect(sys.argv[1]); print(d.execute("SELECT seconds FROM activity_usage WHERE day=? AND kind=? AND key=?",("2026-01-01","app",r"c:\windows\explorer.exe")).fetchone()==(900.0,))' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     $report.legacy_explorer_history_preserved_on_upgrade = $explorerHistory -eq 'True'
 
@@ -276,6 +322,7 @@ d.close()
     $report.tracking_start_preserved_on_upgrade = $trackingStartAfter -eq $trackingStart
     $upgradedHub = $shell.CreateShortcut($hubPath)
     $report.old_desktop_entries_consolidated = -not (Test-Path -LiteralPath $legacyDesktop) -and $upgradedHub.TargetPath -eq $exe -and $upgradedHub.Arguments.StartsWith('--hub ')
+    $report.duplicate_startup_removed_on_upgrade = -not (Test-Path -LiteralPath $legacyStartupPath)
     $report.foreign_desktop_file_preserved = (Get-Content -LiteralPath $foreign) -eq 'preserve'
     $value = 'import sqlite3,sys; d=sqlite3.connect(sys.argv[1]); print(d.execute("SELECT hidden FROM game_preferences WHERE game_id=?",("test:hidden",)).fetchone()[0]); print(d.execute("SELECT seconds FROM usage WHERE game_id=?",("test:hidden",)).fetchone()[0])' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     $report.upgrade_preserves_hidden_and_history = $value[0] -eq '1' -and [double]$value[1] -eq 123

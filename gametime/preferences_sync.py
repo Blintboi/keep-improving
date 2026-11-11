@@ -16,6 +16,7 @@ CONFIG_FIELDS={item.name for item in fields(Settings)}-LOCAL_FIELDS
 LOCAL_FIELDS.add('removed_notifications'); CONFIG_FIELDS.discard('removed_notifications')
 LOCAL_FIELDS.add('notification_overrides'); CONFIG_FIELDS.discard('notification_overrides')
 LOCAL_FIELDS.add('computer_periods'); CONFIG_FIELDS.discard('computer_periods')
+LOCAL_FIELDS.update(('budget_devices','device_groups','scope_device'));CONFIG_FIELDS.difference_update(('budget_devices','device_groups','scope_device'))
 CONFIG_FIELDS-={'game_limits','game_overlays','limit_seconds','warning_seconds',
                 'bedtime_warning_minute','bedtime_minute','bedtime_resume_minute'}
 PAIRED_FIELDS={'settings.play_window':('limit_seconds','warning_seconds'),
@@ -89,6 +90,8 @@ def values(store, settings=None):
     result.update({key:{name:config[name] for name in names} for key,names in PAIRED_FIELDS.items()})
     result[WARNING_DAYS]=warnings
     result[SHARED_RESET]=settings.budget_reset_overrides.get('shared-games')
+    if 'shared-games' in settings.budget_devices:
+        for field in ('settings.play_window',SHARED_RESET,'settings.game_budget_enabled'):result.pop(field,None)
     from .statistics_sync import game_key
     overrides=store.overrides(); hidden=store.hidden_ids()
     for game in store.games():
@@ -97,6 +100,7 @@ def values(store, settings=None):
         for kind,value in (('enabled',overrides.get(game.id,True)),('hidden',game.id in hidden),
                            ('limit',settings.game_limits.get(game.id)),('overlay',overlay),
                            ('reset',settings.budget_reset_overrides.get('game:'+game.id))):
+            if kind in ('limit','reset') and 'game:'+game.id in settings.budget_devices:continue
             result[f'game.{kind}.{identity}']=value
     return result
 
@@ -151,7 +155,13 @@ def observe(store, group, identity):
     """Record only changed values; unchanged syncs make no database writes."""
     name=key(group); state=read(store,name); current=values(store); default=defaults()
     clock=max((entry['clock'] for entry in state.values()),default=0)+1
-    changed=False
+    settings=store.settings();excluded=set()
+    if 'shared-games' in settings.budget_devices:excluded.update(('settings.play_window',SHARED_RESET,'settings.game_budget_enabled'))
+    from .statistics_sync import game_key
+    for game in store.games():
+        if 'game:'+game.id in settings.budget_devices:excluded.update('game.'+kind+'.'+game_key(game.id,game.name,game.source) for kind in ('limit','reset'))
+    changed=bool(excluded.intersection(state))
+    for field in excluded:state.pop(field,None)
     for field,value in current.items():
         prior=state.get(field)
         baseline=default.get(field,GAME_DEFAULTS.get(field.split('.')[1]) if field.startswith('game.') else None)
@@ -189,7 +199,8 @@ def apply(store, group, identity, focus):
         if old is None or (entry['clock'],entry['device'])>(old['clock'],old['device']): merged[field]=entry
     settings=store.settings(); config={field[9:]:entry['value'] for field,entry in merged.items() if field.startswith('settings.') and field not in PAIRED_FIELDS and field not in (WARNING_DAYS,SHARED_RESET)}
     for field in PAIRED_FIELDS:
-        if field in merged: config.update(merged[field]['value'])
+        if field in merged and not (field=='settings.play_window' and 'shared-games' in settings.budget_devices): config.update(merged[field]['value'])
+    if 'shared-games' in settings.budget_devices:config.pop('game_budget_enabled',None)
     warning=merged.get(WARNING_DAYS,{}).get('value',warning_days(asdict(settings)))
     daily={day:{k:v for k,v in plan.items() if k!='bedtime_warning_enabled'}
            for day,plan in config.get('daily_schedules',settings.daily_schedules).items()}
@@ -206,13 +217,14 @@ def apply(store, group, identity, focus):
     from .statistics_sync import game_key
     limits=dict(settings.game_limits); overlays=dict(settings.game_overlays); game_changes=[]
     resets=dict(settings.budget_reset_overrides)
-    if SHARED_RESET in merged:
+    if SHARED_RESET in merged and 'shared-games' not in settings.budget_devices:
         value=merged[SHARED_RESET]['value']
         if value is None: resets.pop('shared-games',None)
         else: resets['shared-games']=value
     for game in store.games():
         gid=game_key(game.id,game.name,game.source)
         for kind in ('enabled','hidden','limit','overlay','reset'):
+            if kind in ('limit','reset') and 'game:'+game.id in settings.budget_devices:continue
             item=merged.get(f'game.{kind}.{gid}')
             if item is None: continue
             value=item['value']

@@ -5,6 +5,8 @@ from .quota import budget_day,budget_minute,reset_at
 
 
 def active(settings,key,wall=None):
+    from .device_scopes import applies,budget
+    if not applies(budget(settings,key),settings):return False
     days=settings.budget_active_days.get(key)
     return days is None or bool(days) and budget_day(settings,key,wall).weekday() in days
 

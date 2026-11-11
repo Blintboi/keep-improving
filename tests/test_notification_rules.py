@@ -143,9 +143,11 @@ class NotificationInterfaceTests(TestCase):
         self.assertFalse(window.close_timer.isActive()); window.action_button.click()
         self.assertTrue(self.app.focus.running); self.assertEqual(self.app.focus.remaining,45*60)
         self.assertEqual(self.app.focus.settings.block_apps,before.block_apps); self.assertEqual(self.app.focus.settings.rounds,3)
-        self.assertFalse(window.action_button.isEnabled()); window.close()
+        self.assertFalse(window.isVisible()); self.assertIsNone(self.app.popup_window); self.assertIsNone(self.app.popup_day)
         window=self.popup(action={'kind':'pomodoro',**POMODORO},timeout=0); window.action_button.click()
         self.assertTrue(window.action_button.isEnabled()); self.assertEqual(self.app.focus.settings.work,45)
+        self.assertTrue(window.isVisible()); self.assertIs(self.app.popup_window,window)
+        self.assertEqual(window.action_status.text(),self.app.t('A focus timer is already running. Stop it in Focus mode before starting a new one.'))
         self.assertEqual(self.app.focus.completed_rounds,0)
 
     def test_manual_popup_survives_global_day_rollover_and_bedtime(self):
@@ -155,6 +157,27 @@ class NotificationInterfaceTests(TestCase):
         current=Sample(datetime.now().astimezone().replace(hour=12,minute=0,second=0),100)
         with patch('gametime.controller.win32.sample',return_value=current): self.app.tick()
         self.app.tick_timer.stop(); self.assertIs(self.app.popup_window,window); self.assertTrue(window.isVisible()); self.assertFalse(window.close_timer.isActive())
+
+    def test_notification_actions_leave_hidden_or_minimized_hub_unchanged(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+        for minimized in (False,True):
+            for action in ('focus','close','escape'):
+                with self.subTest(minimized=minimized,action=action):
+                    self.app.focus.stop()
+                    if minimized:self.app.showMinimized()
+                    else:self.app.hide()
+                    state=(self.app.isVisible(),self.app.isMinimized(),self.app.pages.currentIndex())
+                    window=self.popup(action={'kind':'pomodoro',**POMODORO},timeout=0)
+                    with patch.object(self.app,'show') as show:
+                        window.pomodoro_fields.inputs['work'].setValue(30)
+                        if action=='focus':window.action_button.click()
+                        elif action=='escape':QTest.keyClick(window,Qt.Key_Escape)
+                        else:window.close()
+                        self.pump(.03);show.assert_not_called()
+                    self.assertEqual((self.app.isVisible(),self.app.isMinimized(),self.app.pages.currentIndex()),state)
+                    self.assertIsNone(self.app.popup_window)
+                    self.assertEqual(self.app.focus.running,action=='focus')
 
     def test_explicit_seconds_close_and_interactive_notifications_defer_fullscreen(self):
         window=self.popup(timeout=1); self.pump(1.2); self.assertIsNone(self.app.popup_window)

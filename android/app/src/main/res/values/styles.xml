@@ -8,5 +8,15 @@
         <item name="android:textColorPrimary">#edf4f2</item>
         <item name="android:textColorSecondary">#9aafb4</item>
         <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:alertDialogTheme">@style/AppDialog</item>
+    </style>
+    <style name="AppDialog" parent="android:style/Theme.Material.Dialog.Alert">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#7de5bf</item>
+        <item name="android:colorBackground">#192328</item>
+        <item name="android:windowBackground">@drawable/dialog_background</item>
+        <item name="android:textColorPrimary">#edf4f2</item>
+        <item name="android:textColorSecondary">#9aafb4</item>
+        <item name="android:textAllCaps">false</item>
     </style>
 </resources>

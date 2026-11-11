@@ -1,5 +1,557 @@
 # Testing
 
+## Public delivery preparation — Windows 2.46.0 / Android 0.6.0
+
+- Rewrote the main and Android READMEs as current usage guides in HU/EN.
+  Sixteen current Qt captures use an offline demonstration profile with synthetic
+  usage/session data. Only public game artwork metadata was reused.
+- Release checks found an unnecessary snapshot revision change for idle/paused
+  focus timers. Stable inactive timestamps now preserve cached ciphertext; running
+  timers still carry their wall-clock anchor. A paused/resumed snapshot regression
+  and the existing HTTP reuse checks pass. Focus coverage now compares timestamps
+  so mixed local/aware wall-clock inputs do not fail at a completion boundary.
+- Android: all 96 tests, lint, encrypted interoperability and signature checks
+  passed. Upgraded the user's RMX2002 in place to 0.6.0, preserving UID and first
+  installation time. Before/after encrypted USB exchange verified imported usage,
+  sessions and the earlier corrected habit count; usage/protection permissions
+  remain enabled. The app was opened after installation.
+- Publication reports: `test-reports/publication-2460/` (kept local).
+- All 1,195 distinct Python checks passed after the fixes; large Qt groups were
+  run in isolated module processes. All 82 browser regressions and the ten-check
+  real Brave local-website integration passed. GitHub-rendered README previews
+  loaded all seven linked images without horizontal overflow at 1280/420 pixels.
+- Final Windows installer: 47,874,048 bytes, SHA-256
+  `52bfd423b2509ef8542ae63b4d3717271ad89ff87d6eb1b260bfa680933d17fb`.
+  Source/payload audits, Defender scans, SFX extraction comparisons and 102
+  isolated installer checks passed. The actual local installation was updated
+  from that package after a complete profile/program backup; all 20
+  preservation/version/payload checks passed after startup.
+
+## Explicit local websites — Windows 2.46.0 local work
+
+- Added port-specific loopback website identities, aliases, opt-in observation,
+  exact local DNR rules, local tab grants and offline history. The control bridge
+  stays excluded. Old extension workers receive public-only rules until reload.
+- 64 distinct Python checks and 73 browser regressions passed. Coverage includes
+  address normalization, private URL removal, separate ports, explicit tracking,
+  continuity, compatibility and existing public-site behavior.
+- Real headless Brave with disposable servers/profiles passed ten integration
+  checks: native-saved local member, in-page opening choice, exhausted time limit,
+  localhost/IPv6 aliases, actual DNR rules, other-port isolation, unconfigured-port
+  exclusion, bridge exclusion and restoration of the original URL.
+- Native picker renders at 720/820 pixels in HU/EN and the browser choice overlay
+  were inspected. Alias deduplication, separate ports and native save passed.
+  Reports: `test-reports/local-websites/`. Local delivery only.
+- Installer: 47,824,896 bytes, SHA-256
+  `35930ef2b025af15c1d7e30fc08056172be06447bdfdcd24f96332447aaed8ca`.
+  Source/payload audits, Defender scans, extraction hashes and all 102 isolated
+  installer checks passed, including local-port preservation. Installed locally
+  after a complete profile/program backup; all 20 preservation/version/payload
+  checks passed and the updated Hub opened at 1396×959. Public downloads unchanged.
+
+## Break action placement — Windows 2.45.1 local work
+
+- Removed the floating HUD companion window. The action is in native and
+  extension budget rows; the extension popup and tray action remain available.
+  The saved opt-in is preserved and no longer mentions the countdown.
+- 61 Python checks and 69 browser regressions passed. Native integration covers
+  starting after leaving the target application, disabling during the break,
+  retaining row widgets and avoiding refreshes while hidden. The HUD creates no
+  extra top-level window. Existing full-break/renewal behavior remains covered.
+- Real headless Brave checked both popup and budget-list actions, full break,
+  renewed usage interval, preserved daily allowance and the editor checkbox.
+  Native HU/EN renders at 1000/1280 pixels and browser row layout were inspected.
+- Reports: `test-reports/break-placement/`. Local delivery only.
+- Installer: 47,820,800 bytes, SHA-256
+  `8d37a9d4d80fee27ebc2e65412f8eb45af17e3eb3e6e45850977dc53324f44da`.
+  Source/payload audits, Defender scans, extraction hashes and all 101 isolated
+  installer checks passed. Installed locally after a full profile/program backup;
+  all 20 preservation/version/payload checks passed and the updated Hub was opened.
+  Public download hashes remained unchanged.
+
+## Early breaks — Windows 2.45.0 local work
+
+- Optional usage-time break setting, countdown companion button, browser popup
+  action and tray action. Full configured breaks renew their own usage interval;
+  daily allowance and recorded usage are preserved. Restart and day renewal,
+  disabled/stale actions, existing restrictions and mixed targets are covered.
+- 153 distinct targeted Python checks and 69 browser regressions passed. The
+  real headless Brave integration uses disposable profiles and verifies the
+  authenticated popup action, full five-minute break, website restriction policy,
+  fresh fifteen-minute interval, preserved daily allowance and editor opt-in.
+- Native HU/EN layouts at 1000/1280 pixels and the 380-pixel browser popup were
+  inspected using own-widget renders and headless screenshots. The HUD remains
+  click-through; only its companion button accepts input without activation.
+- Local reports: `test-reports/early-break/`. No public download changes.
+- Verified installer: 47,820,800 bytes, SHA-256
+  `d108e22d84115cf56603fbf37afbdb48548d21ba7e04a17e7321d5d2bc8f9ebd`.
+  Source/payload audits, Defender scans, SFX extraction/hash checks and all 101
+  isolated installation checks passed, including early-break opt-in preservation.
+  Installed locally on 2026-11-11 after a complete profile/program backup. All 20
+  data/settings/version/payload checks passed both before and after restart;
+  the updated installed Hub was observed open. Public installer/manifest hashes
+  remained unchanged.
+
+## Member selection and website choices — Windows 2.44.1 local work
+
+- 124 targeted Python checks passed, including the detached-window regression,
+  preserving maximized targets, browser choice idempotency and shared ledger,
+  allowance exhaustion, native/website routing and existing budget actions.
+- Live selected members were checked in HU at 720×650 and EN at 820×650,
+  including filtering, removing a hidden match, adding a custom site and applying.
+- The headless real-Brave integration uses a local synthetic website and a
+  disposable desktop/browser profile. It verifies unchanged viewport, scroll,
+  URL and unsaved input after acceptance; two allowed visits, disabled depleted
+  choice and continued unlimited access. HU/EN captures were inspected.
+- Reports are in `test-reports/member-selection/`. Public downloads are unchanged.
+- 55 bridge/focus/continuity checks and 48 browser regressions passed. Browser
+  worker recovery retains the active visit and removes stale overlays; same-domain
+  tabs share a visit, and private tabs and stale/subframe choices are rejected.
+- Final installer: 47,812,608 bytes, SHA-256
+  `cbc415d6990702b9c97304e5d1adc708151896aca771662b5327d50e9bdbbe87`.
+  Source/payload audits, Defender scans, SFX extraction/hash checks and all 100
+  isolated installer checks passed. Installed locally on 2026-11-11 after a full
+  profile/program backup; all 20 preservation/version/payload checks passed.
+  Config matched exactly immediately after setup; after startup the only additions
+  were explicit all-days/global-renewal metadata, preserving the prior behavior.
+  The updated installed Hub was observed open. No publication or security exclusion.
+
+## Opening choices — Windows 2.44.0 local work
+
+- 172 targeted Python checks passed, including choice validation, two-use
+  exhaustion, unlimited answers, idempotency, restart, renewal, renaming,
+  identity remapping, normal-limit priority, native scope and editor roundtrip.
+- 54 browser model/background/blocked-page checks passed. An offline choice
+  step requests the desktop rather than consuming aggregate session counts.
+- Native interaction used a disposable profile and `FixtureRestriction.exe`:
+  two accepted limited visits were recorded; the exhausted answer is disabled
+  while the unlimited answer still restores the target. Test artifacts are in
+  `test-reports/session-choices/`. Public download files remain unchanged.
+- After the focus-recovery and rendering fixes, 28 affected checks and the final
+  12 choice checks passed. The real Brave extension integration passed, including
+  editing/saving the opening question and per-answer allowance. HU/EN native
+  forms and enabled/exhausted choices were visually checked.
+- The subsequent shared/per-member option passed all 16 dedicated choice
+  checks, including two website allowances, mixed member aggregation, switching
+  modes without resetting history, subdomain identity and schema migration. The
+  real browser integration was rerun with the separate allowance selected.
+- Final scoped installer: 47,800,320 bytes, SHA-256
+  `c98a5b440a8d61fc513ed443b3e3ec1bd035e190e26096a02dcdfe0c36746aa7`.
+  Source/payload secret audits, Defender scans, actual SFX extraction and all
+  100 isolated installer checks passed. Version 2.44.0 was installed locally
+  on 2026-11-11 after a full profile/program backup. All 18 preservation,
+  version and complete installed-payload checks passed again after startup;
+  the updated Hub was observed open. No Defender exceptions or public upload.
+
+## Daily session limits — Windows 2.43.0 / Android 0.6.0 local work
+
+- Budgets replaces Time budgets / Keretek replaces Időkeretek. Action timing
+  accepts daily session counts (1–10000); five sessions are allowed and the sixth
+  triggers warning, restriction or break. Repeating breaks rearm after the same
+  number of new measured visits, and counters follow each budget's renewal.
+- Local measured ledgers include pending samples and deduplicate overlapping
+  app/game/site representations. Origin-owned shared counts are synchronized
+  without re-exporting remote counts. Browser fallback retains session counts
+  and the current visit across handoff, restart and renewal.
+- 100 targeted Python checks, 17 browser-model checks, real browser save/navigation
+  flows and 96 Android tests passed. Android lint, ciphertext interoperability
+  and APK signer checks passed. HU/EN Windows and phone forms were inspected.
+- On 2026-11-11 the corrected matching-source Windows installer passed source
+  secret auditing, frozen-payload and installer Defender scans, verified SFX
+  extraction and all 100 isolated installation/upgrade/uninstall checks. Defender
+  intelligence was 1.463.236.0, with protection enabled and no new exclusions.
+  The user's actual installation was upgraded to 2.43.0 after a consistent profile
+  backup and a separate copy of the old program. All 17 preservation/version/hash
+  checks passed; the updated native Hub opened and its resident process remained
+  running. The earlier Microsoft submissions do not constitute clearance.
+- Android 0.6.0 APK is verified but not installed: the user requested a computer-only
+  upgrade and deferred the phone. Public downloads and GitHub are unchanged.
+
+Follow-up on 2026-11-10: the user confirmed five allowed visits / action on the
+sixth and requested a computer-only upgrade. Defender security intelligence was
+updated from 1.463.222.0 to 1.463.223.0. The unchanged installer then passed fresh
+installation, diagnostic execution, GUI launch and shutdown, but the later
+legacy-upgrade fixture was blocked by the same behavior detection. The test also
+found an extension-version mismatch; manifest 2.43.0 and the remaining old budget
+wording were corrected in source. Repacking stopped at the Defender gate because
+the frozen executable was now blocked on read. The previous installer remains an
+analysis sample, not a verified delivery. The user explicitly approved Microsoft
+review; the exact tested installer and the prepared description (shortened to the
+portal's 1900-character limit) were submitted on 2026-11-10. Microsoft confirmed
+submission `ec09a622-099d-4e1a-9244-5fd7a084650c`; its final determination is Pending,
+with no analyst comments yet. Details are at
+https://www.microsoft.com/en-us/wdsi/submission/ec09a622-099d-4e1a-9244-5fd7a084650c
+and in `test-reports/session-limits/microsoft-review.json`.
+No user installation was changed, and the phone upgrade is deferred at
+the user's request. Removing the failed fixture's own startup registrations and
+shortcuts was rejected by automatic policy review; that command did not execute.
+A subsequent read-only inspection confirmed that the test autorun, legacy Startup
+shortcut and uninstall registration were already absent after Defender remediation.
+
+Further check on 2026-11-10: refreshing the Microsoft submission revealed a
+Completed case. The analyst found no positive scan or telemetry indicators and
+requested current security intelligence plus Defender diagnostic data if local
+detection continued; this did not resolve the runtime issue. The unchanged
+installer was retested with intelligence 1.463.226.0, then 1.463.227.0 obtained
+directly from MMPC. Both isolated tests reached diagnostics but GUI launch was
+blocked as `Trojan:Script/Conteban.A!ml`. See
+`installer-after-microsoft-review.json`, `installer-after-mmpc-227.json`, and the
+matching Defender event reports. Protection stayed enabled and the actual
+2.42.3 installation kept running. No arbitrary rebuild or quarantined-file
+restore was attempted. The user authorized elevated local collection of the
+Microsoft-requested support diagnostics. The user then gave separate informed
+consent to upload the 21,539,067-byte archive and the supplementary description
+to Microsoft. The follow-up references the original submission and requests
+removal on 2026-12-11. After the user completed the CAPTCHA and clicked Submit,
+Microsoft confirmed receipt as `1dab8fac-83d8-4b98-affb-de4399611f57` at the displayed
+time Nov 10, 2026 16:44:27. Case status is Submitted; final determination is Pending.
+The private archive and confirmation screenshot remain outside the repository.
+At that point the runtime block was unresolved, so the actual upgrade was withheld.
+
+Local delivery on 2026-11-11: the user explicitly authorized an application-specific
+Defender workaround. Before applying any exception, a fresh build incorporated the
+pending extension/version corrections and passed the full installer checks with
+the current Defender intelligence. No security settings were changed, no file was
+restored from quarantine, and no exception was needed. This observation does not
+isolate whether the changed artifact or the newer intelligence resolved the block.
+The original submitted installer remains intact for provenance. The verified local
+installer is `dist/session-limits-local-20261111/GameTimeMonitor-2.43.0-Setup.exe`;
+its size is 47,771,648 bytes and SHA-256 is
+`feeb3c23f214b9313cdf4b4041e085e77b0960ff0d53150eefb736c939f730de`.
+See `installer-20261111.json`, `installer-provenance-20261111.json` and `upgrade.json`
+under `test-reports/session-limits/`. The installer test accepts an optional fresh
+fixture directory within TEMP, making the tested executable path explicit while
+retaining the existing scan and cleanup checks. No publication was performed.
+
+Evidence and artifact hashes: `test-reports/session-limits/upgrade.json`,
+`installer.json`, and `defender-runtime-block.json`.
+
+## Plain measured counts — local Windows 2.42.3 / Android 0.5.3
+
+All session totals, tables, charts, legends and tooltips show the recorded count
+as a plain number, including older history. Zero recorded sessions display as 0
+and sort numerically. Coverage metadata and the counting/synchronization logic
+remain unchanged. Existing desktop, browser-model and Android fixtures exercise
+the revised formatting with partial history and HU/EN layouts. The Windows
+installer is verified with a temporary profile before the local profile upgrade.
+
+Android also retains the scroll container during refresh and anchors overview
+positions to stable section identities. A reproduced regression moved the chart
+635 pixels when a synced focus card appeared above it; appearance and removal
+now preserve its screen position. Regression checks cover scrolling momentum,
+chart filters, live totals, navigation and activity recreation. Refresh startup
+keeps an already loaded overview usable instead of rebuilding it for a temporary
+loading indicator.
+
+## Selectable chart measure — local Windows 2.42.2 / Android 0.5.2
+
+The existing Show activity list selects both category and time/session measure.
+Column and segment heights, scales and labels follow the chosen measure; the
+choice survives restart. Hover details retain original time and session counts.
+Older empty days do not mark later fully tracked activities as partial. Actual
+usage on the first tracking day or earlier, and legacy devices without counts,
+retain the conservative ≥/— notation. No historical counts are inferred from
+accumulated time. Tests verify geometric ratios, switching and persistence,
+category/device filters, complete/partial counts and HU/EN screenshots in
+desktop, real browser and Android. Delivery uses temporary installer profiles,
+profile backups and verified in-place local upgrades.
+
+## Session boundaries and charts — local Windows 2.42.1 / Android 0.5.1
+
+Android activity pause/resume callbacks inside one package no longer split an
+application session when the OS records an immediate internal transition. A
+different foreground package, screen lock/off, reboot, covered interval or an
+unexplained gap still separates sessions. The ordinary foreground-session rule
+is unchanged. On first collection, retained OS events from the last three days
+repair matching old boundaries; the original session rows remain in a local
+backup table. Usage time, budgets and history are never replayed by this repair.
+
+The desktop, browser and phone charts show daily session counts. Desktop blocks
+also expose activity/device counts on hover, with compact labels where space
+permits. Phone blocks and legends include counts. Missing/partial historical
+counts keep the existing —/≥ notation and sessions belong to their starting day.
+
+Regression fixtures reproduce 62 internal screens, real app switches, collection
+boundaries/restarts, lock/shutdown and covered intervals. An upgrade fixture
+checks historical correction without recrediting usage. Chart checks cover
+separate activities/devices/dates, partial counts and HU/EN layouts. All fixtures
+use temporary profiles; installers and real profile upgrades are verified before
+local delivery. No public downloads or GitHub publication are changed.
+
+## Activity sessions — local Windows 2.42.0 / Android 0.5.0
+
+Statistics show per-activity and total session counts, with ascending/descending
+sorting by count or time. A session is connected measured foreground use;
+switching away and returning starts another. Counts belong to the starting day.
+Daily rollover, periodic flushes and browser recovery do not duplicate sessions.
+Legacy history is unknown (—); a selection crossing the first measured day or an
+older device shows a lower bound (≥). Daily counts use the existing encrypted
+snapshot; interval timestamps remain local. No backend/schema/plan change.
+
+- 191 focused Python tests passed (8 session-ledger, 25 statistics UI, 18 sync,
+  18 focus, 21 browser control, 13 statistics/i18n, 19 renewal, 53 core and 16
+  browser continuity), plus 4 JavaScript statistics-model tests.
+- 82 Android tests, lint, APK signature and encrypted interoperability passed.
+  Migration tests preserve versions 1/2/5 profiles; new session tests cover
+  midnight, replay, covered intervals, old counts, categories and numeric sorting.
+- Real Brave with a disposable browser/profile passed statistics/device/category
+  filtering and numeric session sorting. Synthetic data is isolated from actual
+  foreground sampling. Native desktop, browser and phone HU/EN screenshots at
+  representative sizes were inspected (`test-reports/sessions/` and Android's
+  local build UI reports).
+- Windows source, frozen payload and installer audits/static Defender scans
+  passed; the extracted installer passed all 100 runtime checks. No Defender
+  1116/1117 events appeared during this verification or the real local upgrade.
+- Windows 2.42.0 was installed over the actual 2.41.1 installation and reopened.
+  A consistent SQLite backup and installer's own backup were retained. Integrity,
+  game/app history, focus completions, settings, tracking rules, game exclusions
+  and synchronization credential presence were checked after upgrading.
+- Android 0.5.0 (code 10) was installed in place on RMX2002 and started. Its UID
+  and original installation timestamp remained unchanged; no crash was logged.
+  The phone was locked, so visual checks used isolated representative UI fixtures.
+- No GitHub push or public download replacement. Local installer SHA-256:
+  `401dace454500d820bd1874c3140f5be63ab46159a7ed392fbd33d8f470e3824`.
+  Local APK SHA-256:
+  `141d40d5895ec4ffdccfdd6f4921bb5c12f651dab2ca1588d152e5e0bd430ee9`.
+
+## Statistics colors — local Windows 2.41.2 / Android 0.4.5
+
+Applications use a canonical executable basename for color assignment, so versioned
+installation directories keep the same color. Website www aliases share a color.
+Windows stores assignments locally across restarts; the browser statistics use the
+same desktop allocator. Android migrates existing colors without deleting their
+preferences and combines matching app versions in its chart/ranking, preserving
+all recorded time. Devices and different activity types retain separate identities.
+
+- 24 Windows statistics usability tests passed, including two dates/different app
+  paths, unchanged totals, alias colors and persisted assignments.
+- 78 Android tests, lint, encrypted protocol interoperability and APK signature
+  checks passed. HU/EN screenshots at representative desktop/phone sizes were
+  inspected. Android 0.4.5 was installed in place on RMX2002; the original install
+  timestamp and profile were retained.
+- Windows 2.41.2 source/payload/static Defender checks passed, but the actual
+  isolated installer runtime was blocked by `Behavior:Win32/Persistence.A!ml` at
+  16:12–16:13 on 2026-11-05. Unlike the previous corrected builds, this test did
+  not pass. The working real 2.41.1 installation was not updated. No exclusions,
+  quarantine restoration or Defender setting changes were made. Investigation
+  evidence and installer SHA-256 are under `test-reports/stable-colors/`.
+
+No public download or GitHub publication was changed.
+
+## Local 2.41.1 / Android 0.4.4 — responsive companion and navigation
+
+- Python checks: Qt UI 50, responsive sync/exclusions/focus/paired startup 4, activity library 12,
+  focus 18, companion 11, statistics transport 12, statistics sync 18 and browser
+  control 21 passed. Node blocked-page/restriction checks: 35 passed.
+- Android: 75 tests, lint, ciphertext interoperability and APK signer verification
+  passed. Installed 0.4.4 over the real 0.4.3/0.4.2 profile on the USB-connected
+  RMX2002; first-install timestamp, pairing and history remained intact.
+- Real phone: Settings Back returns to Overview; compact menu and aligned header;
+  Settings/Notifications buttons absent from Overview. USB exchange delivered
+  today's existing PC completion (displayed as 1) and cached remote website icons.
+  Cloud sync also succeeded against the existing Game Monitor project.
+- HU/EN screenshots checked for excluded-app restore controls and the blocked
+  website screen without any saving allowance. No misleading allowance/footer
+  text remains. Remote focus tests cover elapsed, paused, finished and stop states.
+- The quota SQL fixture passed in rollback transactions before the applied policy
+  migrations. Owner accounting and server-only RPC grants were preserved; the
+  existing account accepted requests beyond the retired 20/day allowance.
+
+The first Windows installer passed static Defender/source/payload scans, but its
+isolated runtime installation triggered `Behavior:Win32/Persistence.A!ml` at
+12:15 on 2026-11-05. Defender quarantined only the temporary fixture executable
+and its startup registrations. The real Windows installation remained 2.40.4.
+This runtime result invalidates that installer test; a clean static scan alone
+is not sufficient. No exclusions or protection changes were made. Setup now
+uses one Run entry and retires its own redundant Startup-folder shortcut, with a
+backup and ownership checks. The rebuilt 2.41.0 installer passed all 100 isolated install/upgrade checks and had
+no new Defender detection. The real profile then exposed an initialization-order
+error with an existing browser pairing. Version 2.41.1 initializes shutdown state
+before enabling that bridge; both unit and bundled upgrade fixtures now cover a
+paired browser. All real profile integrity/settings/history checks passed.
+The final 2.41.1 installer passed all 100 bundled install/upgrade checks,
+including the pre-existing pairing fixture. It was installed over the real profile
+and restarted successfully. Integrity, existing settings, focus settings, pairing,
+per-game preferences/exclusions and usage/focus history all passed the before/after
+comparison. The server confirmed two recently synchronized devices. Defender
+real-time and behavior protection remained enabled, with no new detection during
+the two corrected installer tests or real upgrades. This does not retroactively
+certify the first behavioral alert as a false positive.
+
+Local evidence is under `test-reports/companion-241/`; no public files were updated.
+
+## Android 0.4.2 — unified rules and settings navigation
+
+The phone and PC budgets/notifications now share their respective feature pages.
+Device labels and filters preserve rule ownership; shared IDs collapse multiple
+copies without merging independent rules that happen to have the same name or
+native ID. Tombstones suppress stale remote copies. Lists render at most 40 rules
+at once, with Show more. PC editor saves still queue a command for the exact PC.
+
+Synchronization, connection management and device groups are in Settings.
+General/focus PC settings and delivery status remain under Linked devices there.
+The hamburger menu has six entries; legacy links to Computers open Settings.
+Temporary-profile tests cover these paths, shared-rule deduplication, targeted
+editing, unchanged local rules, saved filters and retained scroll positions.
+HU/EN native captures use 393 × 851 and 320 × 640 logical pixels.
+
+Main pages use concise labels; optional measurement, privacy and synchronization
+details open separately. Accessibility consent remains before permission setup.
+Nested PC settings open one level at a time, with 40-item pagination instead of
+a flattened text dump. A temporary-profile test opens the 45th entry, checks its
+value, and returns to the preserved list.
+
+Local verification: 68 Android tests pass, lint passes, encrypted Android/Python
+interchange passes, and the APK verifies with the existing signing certificate.
+The signed 0.4.2 (code 6) was installed with `adb install -r` on the connected
+Realme RMX2002. The original first-install timestamp, connection and measurement
+setting remain; the updated Hungarian Settings screen was checked on-device.
+No public download was replaced.
+
+## 2.40.4 / Android 0.4.1 — scroll position and visible local usage
+
+Android checks cover chart selection, consecutive redraws before layout, page
+navigation, activity recreation and fresh local usage appearing without moving
+the page. Hidden activities do not run the visible refresh. The full Android
+suite, lint, APK signature and encrypted Python/Android interchange are checked
+by `android/build.ps1`.
+
+Desktop regression cases retain the budget/notification list position after
+edits and toggles, activity list selection after refresh, and the chart position
+when choosing a day. `tests/browser_panel_smoke.cjs --scroll` uses isolated Brave
+and desktop profiles to check selections, asynchronous refresh and returning to
+a page at 1000- and 600-pixel widths. Add `--language` for HU/EN visual checks.
+Usage refreshes every 15 seconds only while the relevant Android page is visible;
+it does not request cloud sync or scan the installed app catalog.
+
+Local delivery passed 57 desktop regressions, 64 Android tests and 98 extracted
+installer checks. The Realme RMX2002 kept the chart at the same position after
+changing its coloring; a 65-second calculator trial changed today's measured
+usage from 22 to 23 minutes without moving the page on return. Android 0.4.1
+was installed with the original signing key and `adb install -r`. Windows
+2.40.4 was installed into the real local installation and verified running in
+the background, with profile settings, credentials, history and usage preserved.
+Two encrypted USB exchanges succeeded. HU/EN native screenshots and isolated
+Brave checks are under ignored `test-reports/scroll-*`; this is local delivery.
+
+## 2.40.3 — upgrades restart in the background
+
+Upgrades restart the existing installation with `--background`, retaining startup
+notifications without opening a Hub behind them. Fresh installations still open
+the Hub. Temporary-profile notification checks cover editing durations, starting
+focus, closing and Escape with a hidden/minimized Hub. The installer smoke check
+also verifies the restarted resident's background launch and graceful shutdown.
+
+## 2.40.2 / Android 0.4.0 — local shared rules and managed updates
+
+Shared-rule checks cover device/group selection, origin-only counters, repeated
+imports, edits and deletion, stale drafts, custom daily renewal, covered time,
+and Python/Android encrypted interchange. Preferences keep unchanged snapshots
+free of database writes. Desktop selectors are rendered in Hungarian at
+1000 × 700 and English at 1280 × 850 with disposable profiles.
+
+Android tests exercise the single ongoing budget notification in both running
+and paused states; its countdown uses the system chronometer. The APK build
+runs the Java/Robolectric suite, lint and persistent signing-key verification.
+Shared totals use the last successful exchange while offline; they are not an
+online reservation service and simultaneous disconnected use can exceed a cap.
+
+Updater checks cover truncated/oversized/invalid downloads, checksum mismatch,
+cancellation, HTTPS redirect restrictions, verified cache reuse, unsaved drafts,
+and failed installer startup without closing the app. The bundled installer
+smoke test upgrades a running resident in an isolated installation, retains its
+custom profile without a repeated DataDir argument, and verifies history and
+runtime file preservation. Public download files remain unchanged.
+
+## 2.40.0 browser continuity without duplicate accounting — local verification
+
+The paired extension keeps browser usage, Pomodoro and web budget enforcement
+working while the desktop is stopped. Durable ordered records and native
+coverage intervals reconcile missing time once; mixed browser/site groups also
+count once. Timer generations reject stale controls. Receipt and counter writes
+commit together, including completion and warning/break state. A failed local
+storage write rolls back controls and one-time allowances.
+
+The 67 focused Python checks, 107 additional regressions and 60 JavaScript checks pass. Coverage includes
+lost replies, repeated batches, multiple streams, large catch-up, transaction
+rollback, native overlap, midnight, lock/private exclusions, timer completion,
+stale commands, chunk persistence and storage failures. Additional restriction,
+control and budget tests are recorded under `test-reports/browser-continuity-2400/`.
+
+A real Brave test uses isolated browser and desktop profiles: stop the desktop,
+finish a Pomodoro and enforce a website limit, restart the extension worker,
+use offline start/pause, restart the desktop, then replay the imported batch.
+Totals and completed rounds stay unchanged on replay. HU/EN offline panels are
+visually checked at 1000 × 700 and 1280 × 850. The full existing panel/popup smoke
+also passes navigation, drafts, timers, hidden-idle and reconnect checks.
+Public download artifacts remain unchanged pending a publication request.
+
+## 2.39.36 dismiss a notification after starting Pomodoro — local verification
+
+Successful Pomodoro actions close their source notification immediately and release the popup slot while the timer continues with the selected timing and existing blacklist. An already-running timer, invalid duration or save failure leaves the notification and its error visible for correction. Application-launch actions retain their current behavior.
+
+All 43 notification-rule, scheduled-notification, single-session and focus tests pass. Temporary-profile mouse-click checks also cover error recovery, a following notification and Hungarian/English captures at 1000 × 700 and 1280 × 850. Evidence is under ignored `test-reports/pomodoro-dismiss-23936/`. Public download artifacts remain unchanged.
+
+## 2.39.35 browser language menu and stable switching — local verification
+
+The language menu uses bundled HU/EN flag images in both the trigger and options, with keyboard selection, selected-state semantics, Escape/outside-click dismissal and viewport-aware opening direction. Selecting the active language does not write settings; failed saves restore the saved selection. Language changes preserve scrolling, keep drafts, and serialize against live polling/stale state responses.
+
+Statistics reuse a bounded, pairing-scoped cache while refreshing, and period changes keep the old result until its replacement arrives. Game artwork also reuses bounded thumbnails across language/tab changes. Temporary-profile Brave checks delay responses and sample every animation frame to verify statistics/artwork do not disappear during switches; late responses cannot overwrite another page. Both languages and 760/1000/1280-pixel widths are captured under ignored `test-reports/language-picker-23935/`. Public Windows/Android downloads are unchanged.
+
+## Android 0.1.0 — local preview, 2026-11-03
+
+The independently versioned Android app builds as a locally signed, non-debuggable APK (minimum API 26, target/compile API 36). All 18 Java/Robolectric tests pass: foreground switches, late pauses, screen lock/off, unexpected restart, midnight/DST, checkpoint deduplication, permission revocation, paused/locked collection, SQLite reopen, bounded/authenticated cross-runtime encryption, validation, browser/site deduplication and a phone plus two independent desktop devices. HU/EN native graphics were inspected at 393 × 851 and 320 × 640 dp. Android lint reports zero errors; three notices concern newer available build/test dependencies.
+
+Python decrypts the Java export and imports an actual Android PhoneStore snapshot into a disposable desktop database. Repeated imports do not add time, and imported time never enters a local upload. Tests use synthetic connection codes and do not call the live statistics endpoint or read the user's profile. The existing backend and Windows installation are unchanged.
+
+APK v2 signing verifies with the persistent private local RSA-3072 key. The copied `dist/KeepImproving-Android-0.1.0.apk` is 50,610 bytes, SHA-256 `a840ed50590ac33ccc3ed28b946658aa70566f3187f993bd281b08bd5965a532`; its adjacent checksum matches. Packaging confirms the expected application ID, version, launch activity, permissions, disabled cleartext and backup, with no debuggable flag. Evidence and UI renders are under ignored `test-reports/android-010/`.
+
+No physical phone was attached. Hardware emulator acceleration is unavailable and software emulation failed; runtime UI/API/storage checks use Robolectric, not a booted emulator. Actual-phone installation, Android Keystore behavior, live phone-to-service exchange and manufacturer background scheduling remain device acceptance checks. No public APK/GitHub delivery was performed.
+
+## 2.39.34 browser activity icons and budget save visibility — local verification
+
+Application and website images use the existing desktop icon provider and favicon cache in the browser's activity lists, focus lists, budget members and selectors. Custom notification images are projected from saved notification definitions. Requests accept known identities only, resolve executable paths from local inventory, and return bounded thumbnails. Visible browser views have separate five-second loading leases, so a hidden Hub does not stop an open browser view; hidden/closed browser views release pending work. Icon requests and in-memory caches are bounded, and reads do not launch applications or change user settings.
+
+The native budget overview shows Save changes only for an unapplied draft. Editors retain their save action, and deletions/enabling remain explicit draft changes. Isolated tests cover hidden-Hub loading, cached images, unknown identities, separate browser leases, cancellation, draft visibility and shared-budget values matching the desktop configuration. Real Brave checks cover decoded app/site icons, focus and budget rows, selectors, both languages, hidden-view idling and the existing dashboard flows. Installer and profile-preservation evidence is under ignored `test-reports/activity-icons-23934/`.
+
+## 2.39.33 popup focus shortcut — local verification
+
+The current-website card omits “Block during focus” when the desktop focus list already covers the domain, a parent domain, a selected website group or all websites. Adding a site hides the action after the save succeeds; removing its coverage makes it available again on the normal revision refresh. Read-only effective rules come from the existing desktop focus model. The website and budget shortcut remain visible. Temporary-profile browser captures and installer/profile-preservation evidence are under ignored `test-reports/popup-focus-23933/`.
+
+## 2.39.32 browser statistics and library — local verification
+
+Browser statistics default to all linked computers and preserve each computer's daily segments, names, aliases and desktop colors. The detail list includes computer/type columns, independent computer filtering and optional matching-name grouping. Website-only queries use the desktop category; imported-history revisions invalidate cached reports. Tiny activities retain proportional height without a minimum pixel per entry.
+
+The library uses current discovery metadata and the desktop's installed-or-used-today visibility rule. Retired records remain available to history, while separate installed copies show their source. Artwork batches accept known historical games so one retired entry cannot reject all visible images. Image retries remain bounded and stop when hidden.
+
+Temporary-profile checks compare all four statistics categories and both computer scopes against the native report, exercise mixed current/retired image batches, and run real Brave with two computers, forty tiny activities, a retired duplicate and decoded images. HU/EN captures at 1000/1280 pixels and installer/profile-preservation evidence are under ignored `test-reports/statistics-library-23932/`. No publication is part of this local delivery.
+
+## 2.39.31 centralized settings and browser pairing — local verification
+
+General activity measurement, fullscreen display, RTSS detail and game-folder settings live in Settings. The other pages omit repeated settings shortcuts; computer linking remains on the Statistics main page. Measurement edits support save/cancel and retain history. Display permissions retain their explicit confirmation and immediate revocation. Browser permission changes keep a settings draft's revision guard and do not discard other unsaved fields. The browser linking page returns to Statistics and retains input during background refresh.
+
+The real Brave test starts with an unpaired disposable profile and follows the README flow from the popup, pasting the temporary desktop pairing code into the connection form. It verifies persisted pairing, bidirectional controls, settings navigation, linking return and drafts, display-permission cancellation and revocation, and live timers. Native settings, navigation, display, notification, statistics, activity and browser-control checks use temporary profiles. HU/EN visual and installer/upgrade evidence is under ignored `test-reports/settings-navigation-23931/`.
+
+## 2.39.30 simpler popup — local verification
+
+Removed the explanatory ordering caption above the live popup timers in both languages. The existing disposable-profile browser checks and HU/EN captures cover countdown behavior and layout. Installer and profile-preserving local upgrade evidence is stored under ignored `test-reports/popup-caption-23930/`.
+
+## 2.39.29 live popup timers — local verification
+
+The extension popup shows all relevant non-focus timers, earliest event first, with restriction precedence for equal deadlines. Focus retains its separate controls. The popup refreshes names, event labels, remaining time and secondary budget text from the lightweight live API while open. Unchanged controls and timer cards are reused; hidden popups stop polling, and disconnected popups clear stale timers and reconnect automatically. Live projections use the current wall clock even when the last foreground sample is older.
+
+Temporary-profile browser-control tests cover fresh timestamps and translated timer payloads. The real Brave dashboard/popup test checks multiple timers, ticking without DOM replacement or full-state reads, reordered events, running breaks, save allowances, zero-time restrictions, inactive usage budgets, timer removal, hidden polling suspension and reconnect. Hungarian and English popup captures cover 380- and 340-pixel widths, including a scrolling multi-timer layout. Installer and local profile-preserving upgrade evidence is stored under ignored `test-reports/popup-timers-23929/`.
+
+## 2.39.28 desktop and browser visual consistency — local verification
+
+The browser dashboard follows the desktop navigation, typography, colors, activity cards, statistics, budget rows, notification rows, compact focus controls and four settings sections. The Settings item and language selector sit at the bottom of the sidebar. The one-click popup remains available; the worker clears legacy toolbar badge text even while offline or unpaired. Game artwork is requested only for visible cards, restricted to catalog IDs and bounded batches, cached at thumbnail resolution, and cancelled on navigation or hidden tabs. Visible activity counts refresh without rebuilding cards.
+
+All 35 focused Python checks and 34 JavaScript checks passed. They cover notification controls and actions, local browser authentication and edits, game-quota summaries, bounded catalog-only artwork, restriction recovery and automatic upgrades. Real Brave tests use disposable desktop and browser profiles and verify populated statistics, navigation, creation and saving, zero-break focus, drafts and language switching. Automatic dashboard and covered-page restoration passed in a disposable browser.
+
+Native pages and browser pages were visually compared in Hungarian and English at 1280 × 850 and 1000 × 700. The native notification icon picker now has equal-width, full-row choices and a compact custom-image button; the browser picker uses the same arrangement. Installer and local-upgrade verification are recorded under ignored `test-reports/extension-parity-23928/`. Public download files and README release headers remain on the published version until publication is requested.
+
+The verified 2.39.28 installer passed all 92 temporary-profile install/upgrade checks and the 22-check RTSS self-test. Extraction verified all 310 packaged files. The local upgrade preserved all 21 database tables and settings, verified the installed payload, and reopened the Hub. Brave registered and started the updated 2.39.28 worker automatically. Installer SHA-256: `4857e50ed397c40249524c7ac6ffd04c773837357ce594dcd8e38796896e8e90`.
+
 ## 2.39.27 browser dashboard — 2026-11-02
 
 Sixteen temporary-profile control tests cover the authenticated loopback API, extension-origin and host checks, body limits, GUI-thread dispatch, conflict detection, idempotent commands, atomic validation, full-path activity exclusions, budget and notification CRUD, zero-break focus sessions, local icon uploads and explicit application/removal actions. Account sessions remain redacted, reads and previews do not launch applications, native unsaved settings survive, and existing desktop forms reload after browser saves.

@@ -1,4 +1,4 @@
-"""Activity identities and countdown appearance, independent of time budgets."""
+"""Activity identities and countdown appearance, independent of budgets."""
 from dataclasses import replace
 import ntpath
 from .wellbeing import target,applies,counter_settings

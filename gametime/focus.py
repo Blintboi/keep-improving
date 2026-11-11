@@ -2,16 +2,16 @@
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from datetime import date,datetime
-import ipaddress
 import json
 import math
 import ntpath
 import re
-from urllib.parse import urlsplit
+import uuid
 
 from .tracker import day_slices
 from .activity_identity import is_idle_app
 from .quota import period_day
+from .website_identity import domain
 
 BROWSERS = {'brave.exe': 'brave', 'chrome.exe': 'chrome', 'msedge.exe': 'edge',
             'firefox.exe': 'firefox', 'vivaldi.exe': 'vivaldi', 'opera.exe': 'opera'}
@@ -22,28 +22,6 @@ SHELLS = {'explorer.exe', 'shellexperiencehost.exe', 'startmenuexperiencehost.ex
 
 def app_key(path):
     return ntpath.normcase(ntpath.normpath(path)) if path else ''
-
-
-def domain(value):
-    """Only public HTTP(S) hostnames. Never retain URL paths, queries or titles."""
-    if not isinstance(value, str) or len(value) > 2048:
-        raise ValueError('Enter a website domain, for example youtube.com.')
-    raw = value.strip().lower()
-    if raw.startswith('*.'): raw = raw[2:]
-    parsed = urlsplit(raw if '://' in raw else 'https://' + raw)
-    if parsed.scheme not in ('http', 'https') or parsed.username or parsed.password:
-        raise ValueError('Enter a website domain, for example youtube.com.')
-    host = (parsed.hostname or '').rstrip('.')
-    try: host = host.encode('idna').decode('ascii')
-    except UnicodeError: host = ''
-    try:
-        ipaddress.ip_address(host)
-        host = ''  # Do not collect local network addresses or numeric hosts.
-    except ValueError: pass
-    if (len(host) > 253 or '.' not in host or host.endswith(('.local', '.localhost', '.internal', '.test', '.invalid'))
-            or any(not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', part) for part in host.split('.'))):
-        raise ValueError('Enter a website domain, for example youtube.com.')
-    return host
 
 
 def matches(host, rule):
@@ -61,6 +39,7 @@ class FocusSettings:
     block_groups: list = field(default_factory=list)
     block_sites: list = field(default_factory=list)
     excluded_apps: list = field(default_factory=list)
+    included_apps: list = field(default_factory=list)
 
     def validate(self):
         if (not isinstance(self.block_groups,list) or len(self.block_groups)>200 or
@@ -75,7 +54,7 @@ class FocusSettings:
             value = getattr(self, key)
             if type(value) is not int or not (1 if key=='work' else 0) <= value <= maximum:
                 raise ValueError('Invalid focus settings.')
-        for key in ('block_apps', 'block_sites', 'excluded_apps'):
+        for key in ('block_apps', 'block_sites', 'excluded_apps', 'included_apps'):
             items = getattr(self, key)
             if not isinstance(items, list) or len(items) > 200:
                 raise ValueError('Use at most 200 entries in each focus list.')
@@ -120,13 +99,20 @@ class FocusSettings:
         return bool(host) and (all_sites or any(matches(host,item) for item in sites))
 
     def app_excluded(self, path):
-        return app_key(path) in self.excluded_apps
+        from .activity_identity import automatic_exclusion
+        key=app_key(path)
+        return key in self.excluded_apps or (automatic_exclusion(key) and key not in self.included_apps)
 
 
 class Focus:
     """Single GUI-thread owner. Buffer writes; browser bridge owns no database handle."""
     def __init__(self, store):
         self.store = store
+        from .activity_sessions import Sessions
+        self.sessions=Sessions(store)
+        from .continuity_ledger import Coverage
+        self.coverage=Coverage(store.db,'activity')
+        self.timer_coverage=Coverage(store.db,'timer')
         store.db.executescript('''
             CREATE TABLE IF NOT EXISTS activity_items (
                 kind TEXT NOT NULL, key TEXT NOT NULL, name TEXT NOT NULL,
@@ -147,6 +133,10 @@ class Focus:
         self._started_dirty=False
         with store.db: self._save('activity_started_on', self.started_on)
         state = self._load('focus_timer', {})
+        self.continuity_token=state.get('continuity_token') or uuid.uuid4().hex
+        self.continuity_running=state.get('continuity_running') is True
+        self.timer_last_wall=None
+        self.timer_coverage.kind='timer:'+self.continuity_token
         self.phase = state.get('phase', 'focus')
         if self.phase not in ('focus', 'short_break', 'long_break'): self.phase = 'focus'
         self.remaining = float(state.get('remaining', self.settings.work * 60))
@@ -163,6 +153,7 @@ class Focus:
         self.last_flush = None
         self.pending = defaultdict(float)
         self.items = {}
+        self._known_items=set(store.db.execute('SELECT kind,key FROM activity_items'))
         self.revision = 0
         self.notice = ''
         self._dirty = False
@@ -170,6 +161,22 @@ class Focus:
     def _load(self, key, default):
         row = self.store.db.execute('SELECT value FROM settings WHERE key=?', (key,)).fetchone()
         return json.loads(row[0]) if row else default
+
+    def excluded_paths(self):
+        paths=set(self.settings.excluded_apps)
+        paths.update(key for (key,) in self.store.db.execute("SELECT key FROM activity_items WHERE kind='app'") if self.settings.app_excluded(key))
+        return sorted(paths)
+
+    def set_app_tracking(self,key,enabled):
+        from dataclasses import replace
+        from .activity_identity import app_identity
+        paths=[path for (path,) in self.store.db.execute("SELECT key FROM activity_items WHERE kind='app'") if app_identity(path)==app_identity(key)]
+        if not paths and ntpath.isabs(key):paths=[app_key(key)]
+        if not paths:raise ValueError('No applications detected yet. Use the computer with activity tracking enabled, or choose an executable.')
+        excluded=[path for path in self.settings.excluded_apps if app_identity(path)!=app_identity(key)]
+        included=[path for path in self.settings.included_apps if app_identity(path)!=app_identity(key)]
+        (included if enabled else excluded).extend(paths)
+        self.configure(replace(self.settings,excluded_apps=excluded,included_apps=included))
 
     def _save(self, key, value):
         self.store.db.execute('INSERT OR REPLACE INTO settings VALUES (?,?)', (key, json.dumps(value)))
@@ -214,6 +221,7 @@ class Focus:
         self.flush()
 
     def start(self, awake):
+        if not self.running: self._new_continuity(True)
         if self.finished:
             self.remaining=self.settings.work*60; self.round=0
         self.running = True
@@ -225,10 +233,12 @@ class Focus:
     def pause(self, awake):
         self.advance(awake)
         self.running = False
+        self._new_continuity(False)
         self._dirty = True
         self.flush()
 
     def stop(self):
+        self._new_continuity(False)
         self.running = False
         self.phase = 'focus'
         self.remaining = self.settings.work * 60
@@ -237,19 +247,30 @@ class Focus:
         self._dirty = True
         self.flush()
 
-    def advance(self, awake, wall=None):
+    def _new_continuity(self,running):
+        self.flush()
+        self.continuity_token=uuid.uuid4().hex; self.continuity_running=running
+        self.timer_coverage.kind='timer:'+self.continuity_token
+        self.timer_last_wall=datetime.now().astimezone()
+
+    def advance(self, awake, wall=None, *, persist=True, record=True):
         delta = 0 if self.last_awake is None else max(0, awake - self.last_awake)
         self.last_awake = awake
+        current_wall=wall or datetime.now().astimezone()
+        previous_wall=self.timer_last_wall; self.timer_last_wall=current_wall
         if not self.running: return
+        if record and previous_wall and delta>0 and abs(current_wall.timestamp()-previous_wall.timestamp()-delta)<1.5:
+            self.timer_coverage.record(previous_wall.timestamp(),current_wall.timestamp())
         self.remaining = max(0, self.remaining - delta)
         self._dirty = True
         if self.remaining > 0: return
         if self.phase == 'focus':
             self.round += 1
             day = str(self.day(wall or datetime.now().astimezone()))
-            with self.store.db:
-                self.store.db.execute('INSERT INTO focus_completions VALUES (?,1) '
-                                      'ON CONFLICT(day) DO UPDATE SET rounds=rounds+1', (day,))
+            # The completion, checkpoint and covered interval share the flush
+            # transaction, so a crash cannot persist just the completed round.
+            self.store.db.execute('INSERT INTO focus_completions VALUES (?,1) '
+                                  'ON CONFLICT(day) DO UPDATE SET rounds=rounds+1', (day,))
             self.completed_rounds+=1
             self._daily_completed.pop(day,None)
             if self.settings.rounds==0:
@@ -268,12 +289,22 @@ class Focus:
             self.remaining = self.settings.work * 60
             self.running = False
             self.notice = 'Break complete. Start the next focus session when ready.'
-        self.flush()
+        self.continuity_running=self.running
+        if persist: self.flush()
 
     def tick(self, sample, website=''):
         self.advance(sample.awake, sample.wall)
         previous = self.previous
         self.previous = (sample, website)
+        if self.settings.tracking and sample.interactive and sample.path:
+            from .activity_identity import automatic_exclusion
+            key=app_key(sample.path)
+            if automatic_exclusion(key) and ('app',key) not in self._known_items:
+                self._known_items.add(('app',key));self.items['app',key]=ntpath.basename(sample.path);self._dirty=True
+        if previous:
+            prev=previous[0]; delta=sample.awake-prev.awake; wall=sample.wall.timestamp()-prev.wall.timestamp()
+            if 0<delta<=3 and wall>0 and abs(wall-delta)<=1.5:
+                self.coverage.record(prev.wall.timestamp(),sample.wall.timestamp())
         if previous and self.settings.tracking:
             prev, prev_site = previous
             delta = sample.awake - prev.awake
@@ -287,6 +318,8 @@ class Focus:
                     # Website totals are a breakdown of browser time, not additional screen time.
                     if prev_site and ntpath.basename(key) in BROWSERS:
                         self._credit('site', prev_site, prev_site, prev.wall, sample.wall, delta)
+                    elif ntpath.basename(key) in BROWSERS:
+                        self.sessions.credit('browser','other',prev.wall.timestamp(),sample.wall.timestamp(),self.day(prev.wall))
         if self.last_flush is None: self.last_flush = sample.awake
         if sample.awake - self.last_flush >= 10:
             self.flush()
@@ -294,33 +327,42 @@ class Focus:
 
     def _credit(self, kind, key, name, start, end, seconds):
         self.items[(kind, key)] = name
+        self.sessions.credit(kind,key,start.timestamp(),end.timestamp(),self.day(start))
         for day, amount in day_slices(start, end, seconds,self.day_start_minute):
             self.pending[(day, kind, key)] += amount
             if day<self.started_on: self.started_on=day; self._started_dirty=True
         self.revision += 1
 
     def flush(self):
-        if not self.pending and not self._dirty: return
+        if not self.pending and not self._dirty and not self.coverage.pending and not self.timer_coverage.pending: return
         with self.store.db:
             self.store.db.executemany('INSERT OR IGNORE INTO activity_items VALUES (?,?,?)',
                                      [(kind, key, name) for (kind, key), name in self.items.items()])
             self.store.db.executemany('INSERT INTO activity_usage VALUES (?,?,?,?) ON CONFLICT(day,kind,key) '
                                      'DO UPDATE SET seconds=seconds+excluded.seconds',
                                      [(*key, value) for key, value in self.pending.items()])
-            self._save('focus_timer', {'phase': self.phase, 'remaining': self.remaining, 'round': self.round})
+            self.save_timer()
+            self.coverage.write(); self.timer_coverage.write()
+            self.sessions.write()
             if self._started_dirty: self._save('activity_started_on',self.started_on)
         self._started_dirty=False
         self.pending.clear()
         self.items.clear()
         self._dirty = False
+        self.coverage.clear(); self.timer_coverage.clear()
+        self.sessions.clear()
+
+    def save_timer(self):
+        self._save('focus_timer', {'phase':self.phase,'remaining':self.remaining,'round':self.round,
+                   'continuity_token':self.continuity_token,'continuity_running':self.running or self.continuity_running})
 
     def usage(self, day):
         rows = {(kind, key): [name, seconds] for kind, key, name, seconds in self.store.db.execute(
             'SELECT u.kind,u.key,i.name,u.seconds FROM activity_usage u '
             'JOIN activity_items i ON i.kind=u.kind AND i.key=u.key WHERE u.day=?', (str(day),))
-                if kind!='app' or not is_idle_app(key)}
+                if kind!='app' or not (is_idle_app(key) or self.settings.app_excluded(key))}
         for (pending_day, kind, key), seconds in self.pending.items():
-            if pending_day != str(day) or kind=='app' and is_idle_app(key): continue
+            if pending_day != str(day) or kind=='app' and (is_idle_app(key) or self.settings.app_excluded(key)): continue
             row = rows.setdefault((kind, key), [self.items.get((kind, key), key), 0])
             row[1] += seconds
         return [(kind, key, name, seconds) for (kind, key), (name, seconds) in rows.items()]

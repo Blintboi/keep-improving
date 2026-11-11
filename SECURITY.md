@@ -8,9 +8,15 @@ Only newer versions are offered. Check cadence and public metadata are cached
 locally; failed automatic requests stay in the log. The manifest may contain
 only the fixed official installer URL, byte size and SHA-256. These hashes
 describe release integrity; they are not an independent publisher signature.
-The app never runs a remotely supplied command or automatically downloads or
-installs executable code. The download button opens the official URL in the
-user's browser, preserving the browser/Windows download checks. A compromised
+The app never accepts a remotely supplied command. Automatic checks do not
+download or install executable code. The explicit **Download and install update**
+action downloads the fixed official URL through HTTPS redirects restricted to
+GitHub's download hosts, checks its byte size and SHA-256, and extracts that
+verified installer's setup into a separate local staging folder. Only then does
+it launch setup with literal local paths and close the application gracefully.
+Incomplete downloads and failed verification leave the application running.
+The existing profile is backed up and retained; setup reopens the updated app.
+A compromised
 repository/distribution account remains a distribution risk; HTTPS and a hash
 hosted by the same account are not independent proof of authenticity.
 
@@ -205,24 +211,27 @@ New objects created by postgres no longer automatically grant public client
 table/sequence/function access; migrations explicitly grant the required roles.
 
 Each group has 2 MiB stored ciphertext. Monthly requests per group AND owner are
-min(600, floor(350,000/max(25, enabled groups))); monthly response bytes are
-min(128 MiB, floor(3 GiB/max(25, enabled groups))). Daily ingress/response caps
-are 8 MiB per group and owner. Upload churn has a global 64 MiB/UTC day and
+min(250,000, floor(350,000/max(1, enabled groups))); monthly response bytes are
+min(768 MiB, floor(3 GiB/max(1, enabled groups))). Daily ingress/response caps
+are 32 MiB per group and owner. Upload churn has a global 64 MiB/UTC day and
 1 GiB/UTC month ceiling; each group AND owner gets monthly upload bytes of
-min(64 MiB, floor(1 GiB/max(25, enabled groups))). These count accepted full
+min(768 MiB, floor(1 GiB/max(1, enabled groups))). These count accepted full
 payloads, including replacements, not just net stored growth; they limit WAL,
 dead tuples and write pressure. The new counters were seeded from retained bytes
 at rollout because earlier uploads were not recorded monthly. Global 200 MiB storage, 350,000 exchanges and
 4 GiB response ceilings remain. Owner counters survive rotation. The fair share
 can shrink as users join; it does not reserve upstream capacity against floods.
 
-The 2.12 client exchanges once at startup, on tracked gameplay start/stop events,
-and manually. A one-minute quiet period combines nearby stops. Requests share a
-ten-minute guard, persisted locally across restarts and checked independently per
-device in PostgreSQL. Pending gameplay events wait for the guard; errors alone do
-not schedule retries. Each linked group AND code owner is limited to 20 successful
-requests per UTC day and 600 per UTC month, including missing-copy probes. Owner
-daily/monthly ledgers survive code rotation; changing device IDs cannot reset them.
+The 2.41 desktop and 0.4.3 Android clients send settings/focus edits promptly,
+subject to a 15-second device guard persisted across restarts and checked in SQL.
+The desktop and visible phone poll remote revisions every 30 seconds without
+re-uploading unchanged history. Android background work is OS-batched; pending
+edits also schedule a one-shot network job. Server Retry-After takes precedence.
+The upgrade rechecks a refusal cached under the retired 20/day policy once,
+without resetting accounting. Each linked group AND owner gets 10,000 successful
+requests per UTC day, with the adaptive monthly limit above. Owner ledgers survive
+code rotation and device-ID changes. Pending gameplay events coalesce for a minute;
+full history refreshes at most 15 minutes apart, plus events/manual requests.
 The existing service-only core exchange is called only through the limited RPC by
 the Edge handler. Public client roles cannot invoke either function directly.
 
@@ -233,10 +242,9 @@ or proof of an authentic binary. A caller that imitates it still meets the SQL
 guards. Existing codes, encrypted snapshots and cached/local history remain valid.
 Rejected traffic still consumes provider invocations; this is not flood protection.
 
-Two computers each starting once a day generate about 60 startup requests per
-30 days, plus gameplay events, manual requests and any missing-copy repairs. The
-600 monthly cap is a fair-use ceiling, not predicted consumption or measured user
-capacity. No increase to the 100-group admission ceiling or paid hosting is made.
+These are application ceilings, not measured provider capacity. Rejected requests,
+headers and other project traffic still count upstream. The 100-group admission
+ceiling and Free hosting remain unchanged.
 
 Set up operator MFA on Supabase and GitHub, restrict project/repository admins,
 retain offline backups, monitor provider invocations/egress/database usage and

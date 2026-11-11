@@ -10,10 +10,19 @@ def is_idle_app(value):
 
 def app_identity(value):
     name=ntpath.basename(ntpath.normpath(value)).casefold() if value else ''
-    # Named installers belong to their application, including versioned downloads.
-    # A generic setup.exe has no known product identity and stays separate.
-    installer=re.fullmatch(r'(.+?)(?:[- _]+v?\d+(?:\.\d+){1,3})?[- _]+(?:setup|installer)(?:[- _]+v?\d+(?:\.\d+){1,3})?\.exe',name)
-    return installer[1]+'.exe' if installer else name
+    # A setup program must remain independently restorable from its application.
+    return name
+
+
+def automatic_exclusion(value):
+    """Conservative defaults: installers and explicit maintenance executables."""
+    name=ntpath.basename(ntpath.normpath(str(value))).casefold()
+    if name in {'msiexec.exe','trustedinstaller.exe','tiworker.exe','werfault.exe',
+                'wermgr.exe','consent.exe','dllhost.exe','runtimebroker.exe',
+                'applicationframehost.exe','shellexperiencehost.exe','startmenuexperiencehost.exe',
+                'searchhost.exe','lockapp.exe','dxsetup.exe','vcredist_x86.exe','vcredist_x64.exe'}:return True
+    return bool(re.fullmatch(r'(?:setup|install|installer|uninstall|unins\d*)\.exe',name)
+                or re.search(r'(?:^|[-_ .])(?:setup|installer|uninstall)(?:[-_ .](?:v?\d[\w.-]*|x64|x86|arm64|win64|win32))*\.exe$',name))
 
 
 def site_identity(value):

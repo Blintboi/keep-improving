@@ -25,7 +25,7 @@ async function fixture(options={}) {
       async update(id,data){Object.assign(tabs.get(id),data); return copy(tabs.get(id));},
       async remove(id){tabs.delete(id);state.removed.push(id);},onActivated:event(),onUpdated:event(),onRemoved:event()},
     declarativeNetRequest:{async getSessionRules(){return state.rules;},async updateSessionRules(data){state.rules=copy(data.addRules);}},
-    action:{async setBadgeText(){},onClicked:event()},alarms:{create(){},onAlarm:event()},webNavigation:{onBeforeNavigate:event()},
+    action:{async setBadgeText(value){state.badge=value.text;},onClicked:event()},alarms:{create(){},onAlarm:event()},webNavigation:{onBeforeNavigate:event()},
     runtime:{id:'fixture',getURL:path=>'chrome-extension://fixture/'+path,getManifest:()=>({version:options.loadedVersion || '2.39.23'}),
       reload(){state.reloads=(state.reloads||0)+1;state.reloadedLocal=copy(local);},onMessage:event(),onStartup:event(),onInstalled:event(),openOptionsPage(){throw Error('No options page expected');}}};
   const context=vm.createContext({chrome,URL,crypto,AbortSignal,console,setTimeout:()=>1,clearTimeout:()=>{},
@@ -263,4 +263,14 @@ test('a save grant spanning renewal keeps the tab usable while the break continu
   f.state.policy.restrictions.shift();
   await vm.runInContext('sync()',f.context);
   assert.deepEqual(f.state.removed,[1]);
+});
+
+
+test('toolbar keeps the app icon clear online, offline and before pairing',async()=>{
+  for(const options of [{},{offline:true},{local:{pairing:null}}]) {
+    const f=await fixture(options);
+    assert.equal(f.state.badge,'');
+    await vm.runInContext('sync()',f.context);
+    assert.equal(f.state.badge,'');
+  }
 });

@@ -12,6 +12,55 @@ class StatisticsUsabilityTests(unittest.TestCase):
     tearDown=fixtures.QtInterfaceTests.tearDown
     pump=fixtures.QtInterfaceTests.pump
 
+    def test_sessions_total_numeric_sort_filter_and_restart(self):
+        from gametime.activity_sessions import record
+        from datetime import datetime
+        from pathlib import Path
+        today=date.today().isoformat();start=datetime.now().astimezone().timestamp()
+        with self.store.db:self.store.db.execute("UPDATE settings SET value=? WHERE key='sessions_since'",(str(start-3600),))
+        for game,count,seconds in zip(self.games,(2,12,1),(100,80,120)):
+            self.store.add_usage({(today,game.id):seconds})
+            with self.store.db:
+                for i in range(count):record(self.store.db,'game',game.id,start+i*2,start+i*2+1,today)
+        self.app.switch_page(1);page=self.app.statistics
+        page.period.setCurrentIndex(page.period.findData('today'));page.refresh()
+        self.assertEqual(page.sessions_label.text(),'15')
+        self.assertEqual(page.chart.day_sessions[today],'15')
+        page.chart.resize(800,240);page.chart.grab()
+        for rect,day,key,device in page.chart.session_regions:
+            expected={'Fixture Alpha':'2','Fixture Beta':'12','Fixture Gamma':'1'}[page.chart.series[key][0]]
+            self.assertEqual(page.chart.activity_sessions[day,key,device],expected)
+            self.assertIn('Munkamenetek: '+expected,page.chart.tooltip_at(rect.center()))
+        self.assertIn('15',page.chart.accessibleDescription())
+        self.assertEqual(page.chart.days[today],300)
+        self.assertIn('a mért időt',page.chart_hint.text())
+        page.category.setCurrentIndex(page.category.currentIndex()+4)
+        self.assertEqual(page.chart.days[today],15)
+        self.assertEqual(page.chart.axis_format(10),'10')
+        self.assertIn('a munkamenetek számát',page.chart_hint.text())
+        page.chart.grab()
+        heights={page.chart.series[key][0]:rect.height() for rect,day,key,device in page.chart.session_regions}
+        self.assertAlmostEqual(heights['Fixture Beta']/heights['Fixture Alpha'],6)
+        for rect,day,key,device in page.chart.session_regions:
+            self.assertIn('Idő: ',page.chart.tooltip_at(rect.center()))
+        page.session_sort.setCurrentIndex(page.session_sort.findData('sessions_desc'))
+        self.assertEqual([page.games_table.item(i,5).text() for i in range(3)],['12','2','1'])
+        page.session_sort.setCurrentIndex(page.session_sort.findData('sessions_asc'))
+        self.assertEqual([page.games_table.item(i,5).text() for i in range(3)],['1','2','12'])
+        page.search.setText('Beta');self.assertEqual(page.games_table.rowCount(),1);self.assertIn('12',page.breakdown_note.text())
+        page.search.clear();page.session_sort.setCurrentIndex(page.session_sort.findData('sessions_desc'))
+        page=self.restart_app();self.assertEqual(page.session_sort.currentData(),'sessions_desc');self.assertEqual(page.sessions_label.text(),'15');self.assertEqual(page.chart_metric,'sessions');self.assertEqual(page.chart.days[today],15)
+        page.period.setCurrentIndex(page.period.findData('month'));self.assertEqual(page.sessions_label.text(),'15')
+        page.period.setCurrentIndex(page.period.findData('week'))
+        output=Path(__file__).resolve().parents[1]/'test-reports'/'measured-counts';output.mkdir(parents=True,exist_ok=True)
+        for lang,width,height in [('hu',1280,960),('en',1024,768)]:
+            self.app.set_language(lang);page=self.app.statistics;page.refresh();self.app.resize(width,height);self.app.show();self.pump(.05)
+            for metric in ('time','sessions'):
+                page.category.setCurrentIndex(page.category.findData('all')+(4 if metric=='sessions' else 0))
+                self.assertIn('Munkamenetek' if lang=='hu' else 'Sessions',page.category.itemText(7))
+                page.scroll.verticalScrollBar().setValue(0);self.pump(.03);self.assertTrue(self.app.grab().save(str(output/f'desktop-{metric}-{lang}.png')))
+            page.scroll.ensureWidgetVisible(page.games_table);self.pump(.03);self.assertTrue(self.app.grab().save(str(output/f'desktop-details-{lang}.png')))
+
     def test_overview_starts_with_everything_and_compact_filters(self):
         page=self.app.statistics; today=date.today().isoformat()
         self.store.add_usage({(today,self.games[0].id):120})
@@ -246,6 +295,26 @@ class StatisticsUsabilityTests(unittest.TestCase):
             self.assertEqual(len(set(first)),len(first))
             self.assertGreater(min(colors.difference(a,b)**.5 for i,a in enumerate(first[:5]) for b in first[:i]),25)
             self.assertEqual(first,[colors.color(key,kind) for key in keys])
+
+    def test_updated_application_keeps_daily_chart_color_and_persists_it(self):
+        from gametime.qt_statistics import StatisticsColors
+        paths=[r'c:\users\fixture\discord\app-1.0\discord.exe',r'c:\users\fixture\discord\app-2.0\discord.exe']
+        days=[(date.today()-timedelta(days=1)).isoformat(),date.today().isoformat()]
+        with self.store.db:
+            for day,path in zip(days,paths):
+                self.store.db.execute('INSERT INTO activity_items VALUES (?,?,?)',('app',path,'Discord'))
+                self.store.db.execute('INSERT INTO activity_usage VALUES (?,?,?,?)',(day,'app',path,120))
+        page=self.app.statistics;page.category.setCurrentIndex(page.category.findData('apps'));page.refresh(live=True)
+        keys=['activity:app:'+path for path in paths]
+        color=page.chart.series[keys[0]][1]
+        self.assertEqual(page.chart.series[keys[1]][1],color)
+        self.assertEqual(sum(seconds for day,gid,name,source,seconds,*rest in page.computer_history),240)
+        page.colors.color('activity:app:editor.exe','game')
+        reopened=StatisticsColors(self.store)
+        self.assertEqual(reopened.color(r'activity:app:D:\Apps\Discord\app-3.0\DISCORD.EXE','game'),color)
+        self.assertNotEqual(reopened.color('activity:app:editor.exe','game'),color)
+        self.assertEqual(reopened.color('activity:site:www.example.com','game'),reopened.color('activity:site:example.com','game'))
+        self.assertNotEqual(reopened.color('activity:site:discord.exe','game'),color)
 
     def test_removed_chart_mode_falls_back_to_activity_breakdown(self):
         # This test replaces the whole widget tree; retire its application-wide

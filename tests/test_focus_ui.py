@@ -382,7 +382,8 @@ class FocusInterfaceTests(unittest.TestCase):
         self.app.switch_page(1); page=self.app.statistics
         page.category.setCurrentIndex(page.category.findData('apps')); self.assertEqual(page.report.total,2)
         page.category.setCurrentIndex(page.category.findData('websites')); self.assertEqual(page.report.total,2)
-        page.tracking.setChecked(False); self.assertFalse(self.app.focus.settings.tracking)
+        self.app.open_settings_section('general');self.app.activity_tracking.setChecked(False)
+        self.app.save_settings(scope='general');self.assertFalse(self.app.focus.settings.tracking)
         self.assertEqual(self.store.totals(now.date()), {})
 
     def test_timer_pause_reset_and_immediate_policy_updates(self):
@@ -416,7 +417,7 @@ class FocusInterfaceTests(unittest.TestCase):
         current = Sample(datetime.now().astimezone(), 100, r'C:\Brave\brave.exe', '12:345')
         with patch('gametime.qt_ui.win32.minimize_game') as minimize, patch.object(self.app, 'minimization_allowed', return_value=True):
             self.app.focus_tick(current); minimize.assert_not_called()
-            fake = SimpleNamespace(website=lambda path: 'docs.example.com', update=lambda _: None)
+            fake = SimpleNamespace(port=47853,website=lambda path: 'docs.example.com', update=lambda _: None,close=lambda:None)
             self.app.browser_bridge = fake
             self.app.focus_tick(current); minimize.assert_not_called()
             self.app.browser_bridge = None

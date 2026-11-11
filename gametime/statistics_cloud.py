@@ -16,7 +16,7 @@ from .statistics_sync import ID, MAX_BYTES, MAX_DEVICES, SyncWorker, validate_sn
 
 CLOUD_FORMAT = 'GameTimeMonitor.sync.v2'
 SYNC_POLICY = 'event-driven-v2'
-SYNC_COOLDOWN = 600
+SYNC_COOLDOWN = 15
 CLOUD_CODE = re.compile(r'[0-9a-f]{32}')
 MAX_ENCRYPTED = 512 * 1024
 MAX_RESPONSE = 2 * 1024 * 1024

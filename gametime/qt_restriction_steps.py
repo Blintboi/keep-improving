@@ -29,18 +29,24 @@ class StepCard(QWidget):
         self.kind.setCurrentIndex(self.kind.findData(current)); heading.addWidget(self.kind,1)
         self.remove=button('',lambda:owner.remove_step(self),'quiet'); self.remove.setIcon(glyph('trash')); self.remove.setIconSize(QSize(20,20)); self.remove.setFixedSize(40,40)
         self.remove.setAccessibleName(t('Remove step')); self.remove.setToolTip(t('Remove step')); heading.addWidget(self.remove); box.addLayout(heading)
+        self.choice_heading=label(t('Opening choice'),'section'); heading.insertWidget(1,self.choice_heading,1)
         choice=QHBoxLayout(); choice.addWidget(label(t('When should it happen?'),'muted'),1)
         self.time_mode=NoWheelComboBox(); self.time_mode.setAccessibleName(t('Action timing'))
         self.time_mode.addItem(t('After accumulated use'),'usage'); self.time_mode.addItem(t('At a daily time'),'clock')
+        self.time_mode.addItem(t('Daily session limit'),'sessions')
         self.time_mode.setCurrentIndex(self.time_mode.findData(value.get('time_mode','usage'))); choice.addWidget(self.time_mode,2); box.addLayout(choice)
         timing=QHBoxLayout(); self.time_label=label(t('After use (minutes)'),'muted'); timing.addWidget(self.time_label,1)
         self.minutes=NoWheelDoubleSpinBox(); self.minutes.setDecimals(2); self.minutes.setRange(.01,1440); self.minutes.setKeyboardTracking(False)
         self.minutes.setAccessibleName(t('After use (minutes)')); self.minutes.setValue(max(.01,owner.step_time(value)/60)); timing.addWidget(self.minutes); box.addLayout(timing)
         self.clock_time=NoWheelTimeEdit(); self.clock_time.setDisplayFormat('HH:mm'); self.clock_time.setAccessibleName(t('Daily action time'))
         minute=value.get('clock_minute',22*60); self.clock_time.setTime(QTime(minute//60,minute%60)); timing.addWidget(self.clock_time)
+        self.session_limit=NoWheelDoubleSpinBox(); self.session_limit.setDecimals(0); self.session_limit.setRange(1,10000); self.session_limit.setKeyboardTracking(False)
+        self.session_limit.setAccessibleName(t('Allowed sessions')); self.session_limit.setValue(int(value['offset']) if value.get('time_mode')=='sessions' else 5); timing.addWidget(self.session_limit)
         self.clock_note=label('','muted'); self.clock_note.setWordWrap(True); box.addWidget(self.clock_note)
         self.old_time=label(t('Previous timing is preserved. Change the minutes to use active-use timing.'),'muted'); self.old_time.setWordWrap(True); box.addWidget(self.old_time)
         self.convert_time=button(t('Use active-use timing'),lambda:self.time_changed(self.minutes.value()),'quiet'); box.addWidget(self.convert_time,0,Qt.AlignLeft)
+        from .qt_session_choices import ChoiceFields
+        self.choices=ChoiceFields(self); box.addWidget(self.choices)
         from .qt_step_targets import TargetFields
         self.targets={}
         for scope in owner.target_types():
@@ -50,9 +56,15 @@ class StepCard(QWidget):
             setattr(self,name,getattr(primary,name))
         self.hint=label(t('Breaks repeat after the same amount of use, only while time remains in the budget. The break ends after this time even in another application.'),'muted')
         self.hint.setWordWrap(True); box.addWidget(self.hint)
+        self.early_break=QCheckBox(t('Allow “Break now”'))
+        self.early_break.setChecked(value.get('allow_early_break',False));box.addWidget(self.early_break)
+        self.early_note=label(t('After the full break, a fresh usage interval begins. Unused minutes do not carry over; the daily budget is not reset.'),'muted')
+        self.early_note.setWordWrap(True);box.addWidget(self.early_note)
+        self.early_break.toggled.connect(self.early_break_changed)
         self.consent=QCheckBox(t('I understand that closing can lose unsaved work.')); box.addWidget(self.consent)
         self.minutes.valueChanged.connect(self.time_changed); self.kind.currentIndexChanged.connect(self.kind_changed); self.kind.activated.connect(self.kind_changed)
         self.time_mode.currentIndexChanged.connect(self.timing_changed); self.time_mode.activated.connect(self.timing_changed); self.clock_time.timeChanged.connect(self.clock_changed)
+        self.session_limit.valueChanged.connect(self.sessions_changed)
         self.consent.toggled.connect(owner.consent_changed)
         self.sync_plan()
 
@@ -63,10 +75,13 @@ class StepCard(QWidget):
         self.update_controls()
 
     def update_controls(self):
-        clock=self.value.get('time_mode')=='clock'; legacy=self.value.get('time_mode') not in ('usage','clock'); t=self.owner.app.t
+        clock=self.value.get('time_mode')=='clock'; sessions=self.value.get('time_mode')=='sessions'; legacy=self.value.get('time_mode') not in ('usage','clock','sessions'); t=self.owner.app.t
+        choosing=sessions and bool(self.value.get('session_choice'))
+        self.choices.setVisible(sessions); self.kind.setVisible(not choosing); self.choice_heading.setVisible(choosing)
         self.old_time.setVisible(legacy); self.convert_time.setVisible(legacy)
-        self.minutes.setVisible(not clock); self.clock_time.setVisible(clock); self.clock_note.setVisible(clock)
-        self.time_label.setText(t('Daily action time' if clock else 'After use (minutes)'))
+        self.minutes.setVisible(not clock and not sessions); self.clock_time.setVisible(clock); self.session_limit.setVisible(sessions); self.clock_note.setVisible(clock or sessions)
+        self.time_label.setText(t('Daily action time' if clock else 'Allowed sessions' if sessions else 'After use (minutes)'))
+        if sessions:self.clock_note.setText(t('Allows {count} sessions; the action starts on session {next}. The count resets at the budget renewal.',count=self.value['offset'],next=self.value['offset']+1))
         if clock:
             renewal=self.owner.editor.reset_overrides.get(self.owner.key,self.owner.app.settings.budget_reset_minute)
             minute=self.value['clock_minute']; start=f'{renewal//60:02d}:{renewal%60:02d}'; end=f'{minute//60:02d}:{minute%60:02d}'
@@ -74,21 +89,42 @@ class StepCard(QWidget):
             self.clock_note.setText(t(text,start=start,end=end))
         for fields in self.targets.values(): fields.update_controls()
         self.hint.setVisible(self.value['kind']=='break')
-        self.hint.setText(t('This break starts once on each selected day, at the chosen time.' if clock else
+        early=self.value['kind']=='break' and self.value.get('time_mode')=='usage'
+        self.early_break.setVisible(early);self.early_note.setVisible(early and self.early_break.isChecked())
+        self.hint.setText(t('After the break, the same number of new sessions is allowed before the next break.' if sessions else 'This break starts once on each selected day, at the chosen time.' if clock else
                            'Breaks repeat after the same amount of use, only while time remains in the budget. The break ends after this time even in another application.'))
         self.consent.setVisible(any(fields.needs_consent() for fields in self.targets.values()))
+        if choosing:
+            self.session_limit.hide(); self.time_label.hide(); self.clock_note.hide(); self.hint.hide(); self.consent.hide()
+        else: self.time_label.show()
 
     def time_changed(self,value):
+        self.choices.suspend()
         self.value['offset']=value*60; self.value['time_mode']='usage'
         self.value.pop('clock_minute',None)
         blocked=self.time_mode.blockSignals(True); self.time_mode.setCurrentIndex(self.time_mode.findData('usage')); self.time_mode.blockSignals(blocked)
         self.update_controls(); self.owner.changed(); self.owner.queue_sort()
 
+    def early_break_changed(self,enabled):
+        if enabled:self.value['allow_early_break']=True
+        else:self.value.pop('allow_early_break',None)
+        self.update_controls();self.owner.changed()
+
     def timing_changed(self,*args):
         if self.time_mode.currentData()=='clock': self.clock_changed(self.clock_time.time())
+        elif self.time_mode.currentData()=='sessions': self.sessions_changed(self.session_limit.value())
         else: self.time_changed(self.minutes.value())
 
+    def sessions_changed(self,value):
+        self.early_break.setChecked(False)
+        self.value.pop('allow_early_break',None)
+        self.value.update(time_mode='sessions',offset=int(value)); self.value.pop('clock_minute',None)
+        self.update_controls(); self.owner.changed(); self.owner.queue_sort()
+
     def clock_changed(self,value):
+        self.early_break.setChecked(False)
+        self.value.pop('allow_early_break',None)
+        self.choices.suspend()
         self.value.update(time_mode='clock',clock_minute=value.hour()*60+value.minute(),offset=0)
         self.update_controls(); self.owner.changed(); self.owner.queue_sort()
 
@@ -98,6 +134,7 @@ class StepCard(QWidget):
         old=self.value['kind']
         if kind=='restrict' and not self.application_budget: kind='cover'
         self.value['kind']=kind
+        if kind!='break':self.early_break.setChecked(False);self.value.pop('allow_early_break',None)
         if kind!=old: self.value.pop('targets',None)
         if kind=='restrict' and old!='cover' and not self._defaulted_allowance:
             self._defaulted_allowance=True
@@ -110,7 +147,7 @@ class StepCard(QWidget):
                 blocked=self.kind.blockSignals(True); self.kind.removeItem(index); self.kind.blockSignals(blocked)
             self.legacy_kind=None
         if kind=='break':
-            if self.value.get('time_mode') not in ('usage','clock'): self.value.update(offset=self.minutes.value()*60,time_mode='usage')
+            if self.value.get('time_mode') not in ('usage','clock','sessions'): self.value.update(offset=self.minutes.value()*60,time_mode='usage')
             self.value.setdefault('break_mode','minimize'); self.value.setdefault('break_minutes',5)
         else:
             for key in ('break_mode','break_minutes','redirect_url'): self.value.pop(key,None)
@@ -184,7 +221,7 @@ class RestrictionBlocks(QWidget):
                         schedule._edits.setdefault(day,{})['warning_seconds']=plan['warning_seconds']; adjusted=True
                 if adjusted: schedule.load_selection()
             for card in self.cards:
-                if card.value.get('time_mode') not in ('usage','clock'):
+                if card.value.get('time_mode') not in ('usage','clock','sessions'):
                     blocked=card.minutes.blockSignals(True)
                     card.minutes.setValue(max(.01,self.step_time(card.value)/60))
                     card.minutes.blockSignals(blocked)
@@ -265,6 +302,7 @@ class RestrictionBlocks(QWidget):
         return self.editor.minutes.value()*60
 
     def step_time(self,value):
+        if value.get('time_mode')=='sessions':return 172800+value['offset']
         if value.get('time_mode')=='clock':
             renewal=self.editor.reset_overrides.get(self.key,self.app.settings.budget_reset_minute)
             return ((value['clock_minute']-renewal)%1440)*60

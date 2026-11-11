@@ -1,138 +1,109 @@
-# Keep Improving — 2.39.27
+# Keep Improving — 2.46.0
 
-**[Download for Windows x64 — 2.39.27](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 checksum](downloads/GameTimeMonitor-Setup.exe.sha256) · [Magyar](README.hu.md)
+**[Download for Windows x64 — 2.46.0](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256](downloads/GameTimeMonitor-Setup.exe.sha256) · [Magyar](README.hu.md)
 
-**[Download for Android — 0.1.0 preview (.apk)](https://github.com/Blintboi/keep-improving/raw/refs/heads/main/downloads/KeepImproving-Android.apk)** · [SHA-256 checksum](downloads/KeepImproving-Android.apk.sha256) · [Android installation guide](android/README.md)
+**[Download for Android — 0.6.0 (.apk)](https://github.com/Blintboi/keep-improving/raw/refs/heads/main/downloads/KeepImproving-Android.apk)** · [SHA-256](downloads/KeepImproving-Android.apk.sha256) · [Phone setup](android/README.md)
 
-**Android 8.0+:** open this page on your phone, download the APK above and open it to install. The preview measures phone app usage and syncs statistics with your computers. Phone time limits and blocking are not included yet.
+See where your time goes, choose how often you return, and make room for breaks. Keep Improving measures foreground activity and offers time budgets, daily session limits, reminders and focus timers. It is free and open source, with English and Hungarian interfaces.
 
-See where your computer time goes, decide when to stop, and make room for breaks. Keep Improving tracks games, applications and websites, with individual or shared time budgets, reminders and focus sessions. Free and open source, with English and Hungarian interfaces.
+![Overview with time, measured sessions and a daily activity chart](docs/images/statistics-en.png)
+*Screenshots show the current Windows application with an isolated demonstration profile. All usage, budgets and choices are examples; no personal history or connection codes are shown.*
 
-![Activities: games, applications and websites in Keep Improving 2.39.21](docs/images/library-en.png)
-*All screenshots show version 2.39.21 with an isolated example profile. Times and budgets are illustrative. Game artwork belongs to its respective owners.*
+## Start here
 
-## Get started
+1. Install on **Windows 11 x64**. Python and administrator rights are not required for a normal installation. Upgrades preserve your profile.
+2. Review your games, applications and websites under **Activities**. Add missing games by choosing their executable.
+3. Open **Budgets → Add new**, select the members, choose active days and add the limits or reminders you want. The picker keeps your current selection visible while you search.
+4. For websites, [pair the browser extension](#browser-extension). On Android 8.0 or newer, install the APK and follow the [phone guide](android/README.md).
 
-1. On **Windows 11 x64**, install the download above. Python and administrator rights are not required for a normal installation.
-2. Open **Activities** to review your games, applications and websites. Add a missing game by selecting its executable. Choose your language at the bottom of the sidebar.
-3. Open **Time budgets → Add new** and choose what belongs in the budget. A group can share one allowance across games, applications and websites.
-4. Choose the active days and daily allowance, then add the actions you want. Set the common day boundary under **Settings → General**. New profiles start without a compulsory budget.
-5. For website measurement and restrictions, [connect the browser extension](#browser-extension).
+Closing the Windows window leaves the monitor running in the tray. **Exit monitor** stops it. New profiles have no compulsory budget. The Windows installer is unsigned; see the [Windows trust guide](docs/WINDOWS-TRUST.hu.md).
 
-Closing the window leaves the monitor running in the system tray. Choose **Exit monitor** there to stop it. The monitor starts with Windows, and upgrades preserve your profile.
+## Understand your usage
 
-The installer is currently **unsigned**. See the [Windows trust guide](docs/WINDOWS-TRUST.hu.md); do not disable antivirus protection to install a flagged file.
+**Overview** can show either time or **session counts** in its chart. Choose the activity type and measure in **Show activity**, then filter by period and device. The activity list can be searched, sorted by time or sessions, and combined by matching names. Filters are remembered.
 
-## Build your own time budgets
-
-Every budget has its own **active weekdays** and optional **minute allowance**. All budgets renew at the single **Day starts at** time under **Settings → General**. For different weekend limits, add a separate budget with those days selected. The editor flags overlapping budgets; all applicable restrictions remain in force.
-
-An action can happen **after accumulated use** or **at a daily time**. For example, renew at 06:00 and restrict at 22:00 to allow use within that window. Disable the minute allowance if the time window alone is enough. An enabled **0-minute budget blocks access immediately**, without an extra restriction action.
-
-![Budget editor with active weekdays, renewal time and a saved draft](docs/images/budget-editor-en.png)
-
-Unfinished budget changes are kept as local **drafts**, including when you leave the editor or restart the app. **Save changes** applies them; **Discard draft** removes them after confirmation. General settings are outside draft storage. Removing a budget and saving preserves its recorded activity history.
-
-Use **Add action** to choose what happens. In a mixed budget, one action contains separate application/game and website settings. Only the relevant types are shown.
-
-| Action | Applications and games | Websites |
-| --- | --- | --- |
-| Warning | Sound, popup, or both | Sound, popup, or both |
-| Break | Minimize, cover and mute, or close for the chosen break | Blocking overlay, redirect, or close the tab |
-| Restriction | Close now or request a one-time save allowance, then close automatically | Blocking overlay, redirect, or close the tab |
-
-A usage-based **break repeats** after the same amount of additional use, while time remains in the budget. It ends after the configured real-time duration, including while you use something else. A running break survives a restart or daily renewal. For a website redirect, enter an HTTP or HTTPS address, or leave it empty to open a new tab. After the break, the original website can be opened again, subject to other active limits.
-
-Where an action closes an application, its **one-time save allowance** can be set to **0–60 minutes**. With 0, it closes immediately. Otherwise you can request that time or close now; the application becomes usable for saving and closes automatically when the time ends. A website allowance applies to the original tab. The allowance cannot be renewed by restarting the monitor. When restrictions overlap, all must permit the allowance and the shortest applies. A restriction takes priority over a simultaneous break, which also permits the approved save interval.
-
-Closing can lose unsaved work and requires explicit acknowledgement in the editor. System processes, launchers and recognized protected games have exclusions; fullscreen and audio behavior also depend on the application. Previously saved legacy actions keep their behavior until edited. See the [restriction details](docs/RESTRICTION-PLAN.hu.md). This is a personal time-management tool, not tamper-resistant parental control.
+A session is a continuous measured foreground visit, counted on its starting day. The app shows the number it could measure; it does not invent counts for older history. Only foreground use counts: reading and game menus are included, while sleep, locked desktops and background applications are not. Website time is a breakdown of browser time, not extra time.
 
 <details>
-<summary>Examples: separate budgets, mixed breaks and save time</summary>
+<summary>Session chart and activity library</summary>
 
-![Separate weekday, weekend, zero-minute and computer-use budgets](docs/images/budgets-en.png)
-*One place for individual and shared budgets, including separate weekend settings.*
+![The same overview chart displaying session counts](docs/images/sessions-en.png)
 
-![A repeating break covers and mutes games, and redirects websites to a new tab](docs/images/break-en.png)
-*After 30 minutes: cover and mute the game, redirect websites, and take a five-minute break.*
-
-![Restriction with a three-minute application save allowance and immediate website blocking](docs/images/restriction-en.png)
-*After 60 minutes: allow one three-minute save interval for the application; block websites immediately.*
+![Detected games in the activity library](docs/images/library-en.png)
+*Game artwork belongs to the respective owners.*
 
 </details>
 
-**Computer-use periods** can also be added independently. Choose their days and start/end times, then add a reminder or window minimization. For example, a 22:00–06:00 restriction period can remind you at 21:55 and minimize the active window during the night. Multiple periods can have different days and names.
+## Set boundaries that fit the activity
 
-<details>
-<summary>Example: a computer-use period</summary>
+A budget can contain one activity, several games/apps/websites, or a whole category. Choose its **active days**, optional daily minute allowance and actions. All daily budgets follow **Settings → General → Day starts at**. A zero-minute budget blocks immediately; the minute allowance can also be disabled when another type of limit is enough.
 
-![Computer-use period with weekday selection and optional warning and restriction](docs/images/computer-period-en.png)
+| Trigger | Example |
+| --- | --- |
+| Accumulated usage time | Take a five-minute break after every fifteen minutes of use. |
+| Daily time | Restrict an activity from 22:00. |
+| Daily session limit | Allow five visits; trigger the action on the sixth opening. |
 
-</details>
+Choose a **warning**, **break** or **restriction**. For games/apps, actions can minimize, cover and mute, or close as supported. Websites can be blocked, redirected or closed. Mixed budgets have separate settings for application and website behavior. Closing requires explicit acknowledgement and can provide a one-time save allowance. Overlapping limits remain in force.
 
-## Countdown and reminders
+![Budget list with separate rules and a Break now action](docs/images/budgets-en.png)
 
-The countdown shows **time until the next event**, with the remaining daily allowance underneath when it differs. Equal times appear only once, in the larger countdown. For a one-hour budget with breaks every 30 minutes, it first counts down to the break. Running breaks remain visible in the tray tooltip and named timer menu, even after a website redirects to a new tab.
+### Ask why before opening
 
-**Countdown settings…** controls visibility, position, size and colors. A group can have a default appearance and separate settings for each member. Games can use separately installed **RTSS 7.3.7 or later** where supported. Turn off **Detailed RTSS countdown** under **Notifications** to show only the next-event time in the RTSS countdown. Desktop and tray details remain available. See the [anti-cheat and compatibility guide](docs/ANTICHEAT.hu.md).
+Under **Daily session limit**, enable **Ask why when opening** and write your question and 2–8 answers. Each answer can be unlimited or have a daily allowance. For example, “For work” can be unlimited while “Just checking” allows two visits. A used-up answer stays visible but disabled.
 
-**Notifications** uses the same editor for every reminder. Choose a time of day, Keep Improving startup, a daily completed Pomodoro goal, or a game-budget/bedtime event. Daily goals count completed focus rounds and follow the global day start. Choose a preset icon or your own image, a closing delay in seconds or manual closing, and an optional button to open a local application or start a Pomodoro. Pomodoro times can also be adjusted in the displayed reminder before starting; it uses the current focus blacklist and preserves a running timer. Interactive reminders wait for a desktop where their controls can be used.
+Choose **Shared allowance** to pool answers across all budget members, or **Separate allowance per member** to give each app/site its own allowance. These answer counts remain local to this computer and survive restarts. The question appears over a website's existing page; it needs the paired extension and running desktop app.
 
-Use **Add new**, edit a card, or use its trash button, then **Save changes**. Unfinished drafts survive navigation and restart. Any reminder can be deleted and recreated; its time budget and activity history remain. A restriction does **not** automatically add an expiry warning: add a **Warning** action when you want one. The save-time dialog still appears when configured.
+![Opening-purpose editor with custom answers and shared daily allowances](docs/images/session-choices-en.png)
 
-Pomodoro timing accepts zero for either break and for rounds in Focus mode, notification defaults and the notification itself. Zero rounds means one focus interval of any supported positive duration, ending at 00:00 with restrictions released; zero-minute breaks are skipped. Completed focus rounds still count toward daily notification goals. Invalid work durations show a message and retain the entered value. Application buttons can be configured from a searchable list of detected programs and Windows App Paths, with an executable picker available for other programs. Selecting an application does not launch it.
+### Take a break early
 
-## Overview: see where the time went
+Enable **Allow “Break now”** on a repeating usage-time break. The button appears in the matching **Budgets** row in the app and extension; it is also available from the extension popup and tray. The floating countdown stays a countdown.
 
-Filter recorded time by activity type, period and computer. Select a day for its details, search the activity list, or combine matching names. **Overview remembers these choices** on this computer, including filters and the matching-name checkbox. Relative periods keep following the current day.
+A complete early break starts a fresh full usage interval. For a 15-minute / 5-minute rule, starting the break after 12 minutes gives a full five-minute break, then a new fifteen-minute interval. Unused minutes do not carry over, and the daily allowance is preserved. Active breaks survive restarts.
 
-![Overview with daily activity totals, filters and the matching-name setting](docs/images/statistics-en.png)
-*Illustrative seven-day history from the example profile.*
+![Repeating break settings with the early-break option](docs/images/break-en.png)
 
-Only foreground activity is measured. Reading and game menus count without input; background applications, locked sessions and sleep do not. Windows Explorer and shell screens count as idle. Website time is part of browser time and is counted once. The extension recognizes Brave's new-tab screen as idle; other unclassified browser time can remain in the totals.
+### Include local websites
 
-Private-tab domains, page titles and page contents are not recorded. Application and website measurement can be disabled. Application exclusions hide previous records and prevent new measurement; game exclusions remain separate. **Settings → General → Day starts at** sets the shared boundary for statistics, all budgets and daily reminders. Changing it preserves consumed time; older daily totals cannot be split retrospectively without interval timestamps.
+Add an address such as `http://127.0.0.1:8766/` in the member picker. `localhost:8766` and `[::1]:8766` use the same allowance; another port is a separate website. Local endpoints are measured only after you explicitly add them to a budget or focus block list. URL paths, parameters and page contents are not recorded in activity history.
+
+Unfinished budget edits stay in a local draft until **Save changes** or **Discard draft**. Deleting a budget preserves activity history. You can also add independent **computer-use periods**, with chosen days, start/end times, warnings and window minimization.
+
+## Focus, reminders and countdowns
+
+**Focus mode** provides a configurable Pomodoro timer and selected application, website and budget-group restrictions during work intervals. Pause, stop and breaks release focus restrictions. Zero rounds means a single focus interval; zero-minute breaks are skipped.
+
+![Focus timer and an example website block list](docs/images/focus-en.png)
+
+**Notifications** supports reminders by clock time, app startup and daily completed focus goals, with optional sound, custom icons and buttons to start a timer or open an application. Reminders are configured separately from restrictions.
+
+The countdown shows time until the next event and the remaining daily allowance when different. Change its visibility, position, size and colors in **Countdown settings…**. Supported games can use separately installed RTSS; see [game compatibility and anti-cheat guidance](docs/ANTICHEAT.hu.md).
 
 ## Browser extension
 
-The extension icon opens quick focus controls, the current countdown and shortcuts to add the current website to a budget or focus blocklist. **Open dashboard** gives you Overview, Activities, Time budgets, Notifications, Focus mode and Settings in a full browser tab. Review statistics, manage games and applications, edit budgets and reminders, start a Pomodoro, and manage computer linking from there. Both interfaces use the same running desktop app and profile; saved changes apply immediately in both.
+For **Brave, Chrome and Edge**:
 
-The dashboard supports English and Hungarian, saves unfinished editor drafts locally, and preserves its open tabs through extension upgrades. Keep the desktop monitor running. If it is unavailable, the extension shows a connection message and cannot apply changes until it reconnects.
-
-For Brave, Chrome and Edge:
-
-1. Keep the monitor running and open **Activities → Websites → Browser connection**.
-2. Open `brave://extensions`, `chrome://extensions` or `edge://extensions` and enable **Developer mode**.
+1. In the running app, open **Activities → Websites → Connect browser**.
+2. Open the browser's extensions page and enable **Developer mode**.
 3. Choose **Load unpacked** and select the `browser_extension` folder shown by the app.
-4. Click the extension icon and open its dashboard. On the connection screen, paste the app's pairing code, choose your browser and select **Save & connect**.
-5. Repeat for each browser/profile. Keep the pairing code private.
+4. Open the extension, choose **Connect browser**, enter the pairing code and select your browser. Keep the code private.
+5. Repeat for every browser/profile you use. **Open dashboard** gives you the full interface in a browser tab.
 
-From 2.39.23, the paired extension automatically reloads after a completed application upgrade, preserving pairing and covered pages. It uses the existing local connection and opens no update tab. A worker loaded before this version needs one initial reload, by opening its connection page or restarting the browser. Original return URLs remain in local browser storage so covered tabs can recover after restart; they are not sent to desktop statistics. Disabling the extension stops website measurement and blocking; browser restrictions are released if the monitor connection fails.
+The app and browser dashboard share the same profile. The paired extension reloads automatically after an app upgrade, preserving pairing and covered-page recovery. If the desktop app stops, **Browser mode** can continue cached web limits, browser measurement and focus timing. Reconnection merges recovered activity once. Editing settings, opening-purpose questions and control of other Windows apps require the desktop app. Disabling the extension stops its measurement and enforcement.
 
-## Focus sessions and linked computers
+## Use your phone and other computers
 
-**Focus mode** has configurable work, short-break and long-break intervals. During work, it blocks selected websites and minimizes selected foreground applications. Its **Groups** tab can add whole time-budget groups or categories, following their current application, game and website members. Pausing, stopping or taking a break releases those focus restrictions. A budget's save allowance does not override a separate active focus restriction. Completed rounds shows the lifetime total on this computer, including earlier days and sessions.
+Android has its own application measurement, session limits, breaks, focus timer and reminders. It can show synchronized PC website history, but measures its own browser as an application. Enable usage access for measurement and the optional covering service for responsive limits. The Windows opening-purpose chooser and early-break button are not yet available on Android. [Android features and permissions](android/README.md).
 
-**Activities** is second in the sidebar, with a direct **Game folders** button. Its games summary shows the remaining daily game budget. Global preferences are in the sidebar's **Settings** tab.
+Link devices using **Overview → Computers & sync** on Windows and **Settings → Devices & sync** on Android. Sign in with GitHub to create a connection code, then use that code on your other devices. History and supported settings are encrypted before upload; keep the code private.
 
-Members of added focus groups also appear under **Websites** and **Applications**, with their source groups shown. Shared members appear once. Membership follows group edits automatically; edit inherited members in **Time budgets** or remove the group under **Groups**.
-
-<details>
-<summary>Focus timer and website list</summary>
-
-![Focus timer with a configurable website blocklist](docs/images/focus-en.png)
-*Example list before connecting a browser; connect the extension to activate website blocking.*
-
-</details>
-
-Optionally link your own computers under **Overview → Computers & sync**. Sign in with GitHub on the first PC, then use its connection code on the others. Keep that code private: it grants access to the shared data. History and supported preferences are encrypted on the client before upload.
-
-Shared and per-game budgets count synchronized game time; update all linked computers for consistent accounting. Other activity budgets, restriction plans and save allowances stay local. Requests are at least ten minutes apart, with limits of 20 successful requests per UTC day and 600 per month. Remote history can lag or be unavailable offline; local tracking continues offline.
+Budgets can select a device, a device group or all linked devices. Selected devices share the allowance; simultaneous usage adds together. An Android app and a Windows executable must be selected separately. Remote usage and edits appear after synchronization. Offline devices use the last received totals, so a shared limit can temporarily be exceeded. The interface reports sync status; background delivery also depends on Android scheduling and service quotas.
 
 ## Data, updates and help
 
-Your profile is in `Documents\GameTimeMonitor\data`. Exit the monitor before copying the folder for backup. Uninstalling preserves it. Local history is not encrypted. There is no advertising or general analytics telemetry; see [Privacy](PRIVACY.md) and [Security](SECURITY.md).
+The Windows profile is in `Documents\GameTimeMonitor\data`. Exit the monitor and copy the whole folder to back it up; uninstalling preserves it. Local history is not encrypted. There are no ads or general analytics telemetry. Private-tab domains, page titles and page contents are not recorded. See [Privacy](PRIVACY.md) and [Security](SECURITY.md).
 
-Update checks contact GitHub at most once a day and can be disabled. You choose when to download and install. The direct installer link at the top of this README is the primary download.
+Update checks contact GitHub at most once per day and can be disabled. You choose when to install. The direct downloads at the top of this page are the primary distribution path.
 
-Report bugs in [GitHub Issues](https://github.com/Blintboi/keep-improving/issues), without codes, tokens or profile databases. See the [MIT license](LICENSE), [third-party notices](THIRD-PARTY-NOTICES.md), [development guide](docs/DEVELOPMENT.md), [architecture](ARCHITECTURE.md) and [testing](TESTING.md).
+This is a voluntary personal time-management tool. Report problems in [GitHub Issues](https://github.com/Blintboi/keep-improving/issues), without codes, tokens or profile databases. More: [MIT license](LICENSE), [third-party notices](THIRD-PARTY-NOTICES.md), [development](docs/DEVELOPMENT.md), [architecture](ARCHITECTURE.md), [testing](TESTING.md).

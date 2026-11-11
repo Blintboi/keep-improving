@@ -165,7 +165,6 @@ class CountdownOverlay(QWidget):
             if not win32.u.SetWindowPos(hwnd, win32.W.HWND(-1), 0, 0, 0, 0, 0x53):
                 raise OSError("Could not display the countdown")
             self._raised_at = now
-
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)

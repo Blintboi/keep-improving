@@ -1,12 +1,19 @@
+import { nativeHu } from "./desktop-text.js";
 export let language = "hu";
 export function setLanguage(value) {
   language = value === "en" ? "en" : "hu";
   document.documentElement.lang = language;
 }
 const hu = {
+  "Browser mode": "Böngészős mód",
+  "The desktop application is unavailable. Browser tracking, focus and saved website budgets continue here.": "Az asztali alkalmazás nem érhető el. A böngészős mérés, a fókusz és a mentett webes keretek itt működnek tovább.",
+  "Recorded time transfers automatically when the application returns, without counting it twice.": "A mért idő az alkalmazás visszatérésekor automatikusan átkerül, dupla elszámolás nélkül.",
+  "Other applications and settings need the desktop application.": "Más alkalmazások figyeléséhez és a beállítások módosításához az asztali alkalmazás szükséges.",
+  "This action needs the desktop application.": "Ehhez a művelethez az asztali alkalmazás szükséges.",
+  "Browser storage is full. Reconnect the desktop application.": "A böngészős tárhely megtelt. Indítsd el az asztali alkalmazást az adatok átvételéhez.",
   Overview: "Áttekintés",
   Activities: "Tevékenységek",
-  "Time budgets": "Időkeretek",
+  "Budgets": "Keretek",
   Notifications: "Értesítések",
   "Focus mode": "Fókusz mód",
   Settings: "Beállítások",
@@ -23,6 +30,7 @@ const hu = {
     "A helyi alkalmazás nem érhető el. Indítsd el a Keep Improving programot, majd próbáld újra.",
   "Pair this browser first.": "Először csatlakoztasd ezt a böngészőt.",
   "Open dashboard": "Kezelőfelület megnyitása",
+  "No active timers": "Nincs aktív időzítő",
   "Open desktop application": "Asztali alkalmazás megnyitása",
   Refresh: "Frissítés",
   "Save changes": "Módosítások mentése",
@@ -74,10 +82,10 @@ const hu = {
   Restore: "Visszaállítás",
   Hide: "Elrejtés",
   "Show in library": "Megjelenítés",
-  "Set budget": "Időkeret beállítása",
+  "Set budget": "Keret beállítása",
   Countdown: "Számláló",
-  "Shared budget": "Közös időkeret",
-  "Budget name": "Időkeret neve",
+  "Shared budget": "Közös keret",
+  "Budget name": "Keret neve",
   Enabled: "Bekapcsolva",
   Members: "Tagok",
   "Add member": "Tag hozzáadása",
@@ -132,8 +140,8 @@ const hu = {
   "Closing may lose unsaved work.":
     "A bezárás mentetlen munka elvesztésével járhat.",
   "I allow closing applications and tabs for this budget.":
-    "Engedélyezem az alkalmazások és lapok bezárását ennél az időkeretnél.",
-  "No time budgets yet.": "Még nincs időkeret.",
+    "Engedélyezem az alkalmazások és lapok bezárását ennél a keretnél.",
+  "No budgets yet.": "Még nincs keret.",
   "No notifications yet.": "Még nincs értesítés.",
   Title: "Cím",
   Message: "Szöveg",
@@ -176,11 +184,11 @@ const hu = {
   Remove: "Eltávolítás",
   "From groups": "Csoportból",
   "Direct entry": "Külön hozzáadva",
-  "Change inherited members in Time budgets, or remove their group.":
-    "A csoportból származó tagokat az Időkereteknél módosíthatod, vagy vedd ki a csoportjukat.",
+  "Change inherited members in Budgets, or remove their group.":
+    "A csoportból származó tagokat az Kereteknél módosíthatod, vagy vedd ki a csoportjukat.",
   "Day starts at": "Napváltás",
   "This day boundary applies to all budgets, statistics and daily reminders.":
-    "Ez a naphatár minden időkeretre, statisztikára és napi értesítésre érvényes.",
+    "Ez a naphatár minden keretre, statisztikára és napi értesítésre érvényes.",
   General: "Általános",
   Language: "Nyelv",
   "Track applications and websites": "Alkalmazások és weboldalak mérése",
@@ -279,7 +287,7 @@ Object.assign(hu, {
   "More…": "Továbbiak…",
 });
 export function t(key) {
-  return language === "hu" ? (hu[key] ?? key) : key;
+  return language === "hu" ? (nativeHu[key] ?? hu[key] ?? key) : key;
 }
 export const clone = (value) => structuredClone(value);
 export const uid = () => crypto.randomUUID().replaceAll("-", "");
@@ -340,7 +348,7 @@ export function field(
   if (options) {
     input = el(
       "select",
-      {},
+      rest,
       options.map((option) => {
         const [v, label] = Array.isArray(option) ? option : [option, option];
         return el("option", { value: v }, t(label));
@@ -379,7 +387,13 @@ export function icon(name) {
     clock: "M12 7v5l4 2",
     focus: "M12 2v3m0 14v3M2 12h3m14 0h3M7 12a5 5 0 1 0 10 0 5 5 0 0 0-10 0",
     bell: "M5 17h14l-2-3V9a5 5 0 0 0-10 0v5zM10 21h4",
-    settings: "M4 12h16M12 4v16M6 6l12 12M18 6 6 18",
+    settings:
+      "M10 3h4l1 3 3 1 2 3v4l-2 3-3 1-1 3h-4l-1-3-3-1-2-3v-4l2-3 3-1zM9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0",
+    trash: "M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7",
+    dots: "M5 12h.1M12 12h.1M19 12h.1",
+    play: "m8 5 11 7-11 7z",
+    folder: "M3 5h7l2 3h9v12H3z",
+    refresh: "M20 7v5h-5M4 17v-5h5M5 8a8 8 0 0 1 14-1M19 16a8 8 0 0 1-14 1",
     moon: "M20 15A9 9 0 0 1 9 4 9 9 0 1 0 20 15",
     water: "M12 3c-3 5-7 9-7 13a7 7 0 0 0 14 0c0-4-4-8-7-13z",
     book: "M12 5v16M3 4h6l3 2 3-2h6v15h-6l-3 2-3-2H3z",
@@ -411,6 +425,14 @@ export async function api(action, data = {}, revision) {
     !/^[a-f0-9]{64}$/.test(pairing.token)
   )
     throw Error(t("Pair this browser first."));
+  const fallback=async()=>{
+    const result=await chrome.runtime.sendMessage({action:'continuity.control',command:action}).catch(()=>null);
+    return result?.ok?result:null;
+  };
+  const connection=await chrome.storage.session.get('connected');
+  if(connection.connected===false) {
+    const offline=await fallback();if(offline) return offline;
+  }
   let response;
   try {
     response = await fetch(`http://127.0.0.1:${pairing.port}/control`, {
@@ -424,18 +446,21 @@ export async function api(action, data = {}, revision) {
       body: JSON.stringify({ action, data, revision, id: crypto.randomUUID() }),
     });
   } catch {
+    const offline=await fallback();if(offline) return offline;
     throw Error(
       t(
         "The local application is unavailable. Start Keep Improving and try again.",
       ),
     );
   }
-  if (!response.ok)
+  if (!response.ok) {
+    if(![401,403].includes(response.status)) {const offline=await fallback();if(offline) return offline;}
     throw Error(
       t(
         "The local application is unavailable. Start Keep Improving and try again.",
       ),
     );
+  }
   const result = await response.json();
   if (!result.ok) {
     const error = Error(result.error || t("Invalid request."));

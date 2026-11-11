@@ -51,7 +51,7 @@ class DisplaySwitchTests(TestCase):
                 self.assertFalse(Consents(self.store).display_enabled)
 
     def test_switch_cancel_explicit_accept_revoke_and_save_failure(self):
-        page=self.app.notifications_page; self.app.switch_page(6)
+        page=self.app.display_settings; self.app.open_settings_section('reminders')
         for accepted in (False,True):
             with patch('gametime.qt_overlay_consent.request_display_consent',return_value=accepted): page.protected.click()
             self.assertEqual(page.protected.isChecked(),accepted)
@@ -93,7 +93,7 @@ class DisplaySwitchTests(TestCase):
             self.assertFalse(self.app.overlay_consents.allows(game))
             present(self.app,alert,current); active=self.app._fullscreen_alert; self.assertIsNotNone(active)
             active.tick(); self.assertTrue(active.confirmed)
-            self.app.notifications_page.protected.click(); self.assertTrue(active.closing)
+            self.app.display_settings.protected.click(); self.assertTrue(active.closing)
             active.tick(); self.assertIsNone(self.app._fullscreen_alert)
             self.assertEqual(self.app._overlay_backend,'none'); self.assertFalse(self.app.overlay.isVisible())
             self.assertEqual(self.app._rtss_consent_paths,frozenset())

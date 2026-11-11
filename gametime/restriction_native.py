@@ -101,6 +101,8 @@ def restore_target(path, identity):
     try:
         candidates = windows(identity)
         if not candidates: return False
-        u.ShowWindowAsync(candidates[0], 9)
+        # An overlay does not minimize its target. SW_RESTORE would unmaximize
+        # an already visible browser; only restore a genuinely minimized window.
+        if u.IsIconic(candidates[0]): u.ShowWindowAsync(candidates[0], 9)
         return bool(u.SetForegroundWindow(candidates[0]))
     finally: k.CloseHandle(handle)

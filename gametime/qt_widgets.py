@@ -544,18 +544,23 @@ class DailyChart(QWidget):
         super().__init__(); self.t=t; self.days={}; self.selected=None; self.regions=[]; self.segment_regions=[]
         self.segments={}; self.series={}; self.computer_segments={}; self.computer_names={}; self.device_colors={}; self.computer_regions=[]
         self.show_computer_markers=False
+        self.day_sessions={}; self.activity_sessions={}; self.session_regions=[]; self.display_metric='time'; self.time_days={}; self.time_computers={}
         self.setMinimumHeight(220)
         self.setAccessibleName(t('Daily play time'))
-    def set_days(self,days,selected=None,segments=None,series=None,computers=None,computer_names=None,device_colors=None,show_computer_markers=None):
+    def set_days(self,days,selected=None,segments=None,series=None,computers=None,computer_names=None,device_colors=None,show_computer_markers=None,day_sessions=None,activity_sessions=None,metric='time',time_days=None,time_computers=None):
         self.days=days; self.selected=selected; self.segments=segments or {}; self.series=series or {}
         self.computer_segments=computers or {}; self.computer_names=computer_names or {}; self.device_colors=device_colors or {}
         self.show_computer_markers=len(self.device_colors)>1 if show_computer_markers is None else show_computer_markers
+        self.day_sessions=day_sessions or {}; self.activity_sessions=activity_sessions or {}
+        self.display_metric=metric; self.time_days=days if time_days is None else time_days; self.time_computers=self.computer_segments if time_computers is None else time_computers
+        self.setAccessibleDescription('\n'.join(day+' · '+self.t('Sessions')+': '+value for day,value in self.day_sessions.items()))
         self.update()
     def paintEvent(self,event):
-        p=QPainter(self); p.setRenderHint(QPainter.Antialiasing); self.regions=[]; self.segment_regions=[]; self.computer_regions=[]
+        p=QPainter(self); p.setRenderHint(QPainter.Antialiasing); self.regions=[]; self.segment_regions=[]; self.computer_regions=[]; self.session_regions=[]
         if not self.days: return
         peak=max(self.days.values())
         unit=60 if peak<=60 else 120 if peak<=600 else 600 if peak<=3600 else 1800 if peak<=14400 else 3600
+        if self.display_metric=='sessions': unit=2 if peak<=10 else 10 if peak<=100 else 100 if peak<=1000 else 1000
         maximum=max(unit,ceil(peak/unit)*unit)
         multiple=self.show_computer_markers
         left,right,top,bottom=68,max(69,self.width()-12),24,self.height()-30
@@ -587,6 +592,10 @@ class DailyChart(QWidget):
                     segment_height=filled*value/seconds
                     rect=QRectF(bar.left(),cursor-segment_height,bar.width(),segment_height)
                     p.fillRect(rect,QColor(self.series[key][1]))
+                    self.session_regions.append((rect,day,key,identity))
+                    count=self.activity_sessions.get((day,key,identity))
+                    if self.display_metric=='sessions' and count is not None and rect.height()>=20 and rect.width()>=p.fontMetrics().horizontalAdvance(count)+4:
+                        p.setPen(QColor('#101619')); p.drawText(rect,Qt.AlignCenter,count)
                     self.segment_regions.append((rect,day,key)); cursor-=segment_height
                 group=QRectF(bar.left(),cursor,bar.width(),group_bottom-cursor)
                 if day==self.selected:
@@ -595,8 +604,9 @@ class DailyChart(QWidget):
                     if rail: p.fillRect(QRectF(bar.left()-spacing-rail,cursor,rail,group.height()),QColor(self.device_colors[identity]))
                     self.computer_regions.append((QRectF(bar.left()-spacing-rail,cursor,bar.width()+spacing+rail,group.height()),day,identity))
                 if index<len(groups)-1: cursor-=block_gap
-            if seconds and step>=65:
-                p.setPen(QColor(TEXT)); p.drawText(QRectF(x,bar.top()-21,step,18),Qt.AlignCenter,getattr(self,'axis_format',duration)(seconds))
+            if step>=65 and (seconds or self.display_metric=='sessions'):
+                text=self.day_sessions.get(day,str(int(seconds))) if self.display_metric=='sessions' else getattr(self,'axis_format',duration)(seconds)
+                p.setPen(QColor(TEXT)); p.drawText(QRectF(x,bar.top()-21,step,18),Qt.AlignCenter,text)
             self.regions.append((QRectF(x,top,step,bottom-top),day,seconds))
             if i%every==0 or i==len(self.days)-1:
                 p.setPen(QColor(TEXT if day==self.selected else MUTED)); p.drawText(QRectF(x-10,bottom+7,step+20,20),Qt.AlignCenter,day[5:])
@@ -607,3 +617,24 @@ class DailyChart(QWidget):
         if event.button()!=Qt.LeftButton: return
         for rect,day,seconds in self.regions:
             if rect.contains(event.position()): self.day_clicked.emit(day); break
+    def tooltip_at(self,point):
+        for rect,day,key,identity in self.session_regions:
+            if rect.contains(point):
+                seconds=self.time_computers.get(day,{}).get(identity,{}).get(key,self.segments.get(day,{}).get(key,0))
+                lines=[day,self.computer_names.get(identity,''),self.series[key][0],self.t('Time')+': '+getattr(self,'time_format',duration)(seconds)]
+                count=self.activity_sessions.get((day,key,identity))
+                if count is not None: lines.append(self.t('Sessions')+': '+count)
+                return '\n'.join(line for line in lines if line)
+        for rect,day,seconds in self.regions:
+            if rect.contains(point):
+                text=day+'\n'+getattr(self,'time_format',duration)(self.time_days.get(day,0))
+                if day in self.day_sessions: text+='\n'+self.t('Sessions')+': '+self.day_sessions[day]
+                return text
+        return ''
+    def event(self,event):
+        if event.type()==QEvent.ToolTip:
+            text=self.tooltip_at(event.pos())
+            if text: QToolTip.showText(event.globalPos(),text,self)
+            else: QToolTip.hideText()
+            return True
+        return super().event(event)

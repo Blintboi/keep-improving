@@ -15,6 +15,23 @@ class SettingsUsabilityTests(unittest.TestCase):
     tearDown=fixture.QtInterfaceTests.tearDown
     pump=fixture.QtInterfaceTests.pump
 
+    def test_measurement_setting_saves_and_cancels_without_losing_history(self):
+        app=self.app; app.open_settings_section('general')
+        before=app.focus.settings; games=self.store.games()
+        app.activity_tracking.setChecked(False)
+        self.assertEqual(app.focus.settings,before); self.assertTrue(app.settings_have_draft())
+        app.cancel_general_settings(); self.assertTrue(app.activity_tracking.isChecked())
+        self.assertFalse(app.settings_have_draft())
+        app.open_settings_section('general'); app.activity_tracking.setChecked(False)
+        app.show_settings_section('reminders'); app.display_settings.details.click()
+        self.assertFalse(app.activity_tracking.isChecked()); self.assertTrue(app.settings_have_draft())
+        app.save_settings(scope='general')
+        self.assertFalse(app.focus.settings.tracking); self.assertFalse(app.settings_have_draft())
+        self.assertEqual(self.store.games(),games)
+        from gametime.browser_control import BrowserControl
+        control=BrowserControl(app); control.settings_save({'tracking':True})
+        self.assertTrue(app.activity_tracking.isChecked()); self.assertTrue(app.focus.settings.tracking)
+
     def test_first_visit_fits_small_window_and_only_shows_common_time_fields(self):
         self.app.resize(1020,740); self.app.show(); self.app.open_budget(); self.pump(.05)
         self.assertEqual(self.app.pages.currentIndex(),5)

@@ -1,4 +1,4 @@
-"""One editor for category, individual and mixed shared time budgets."""
+"""One editor for category, individual and mixed shared budgets."""
 from copy import deepcopy
 from dataclasses import replace
 from datetime import datetime
@@ -11,6 +11,7 @@ from .qt_widgets import label,button,back_button,panel,glyph,NoWheelComboBox,NoW
 from .wellbeing import target,validate_rules
 from .activities import known_activities
 from .activity_identity import canonical_member,activity_key
+from .qt_scroll import preserving,position,restore
 
 
 def new_rule(name,members,identity=None):
@@ -58,7 +59,7 @@ class TimeBudgets(QWidget):
         self.add_button=button(app.t('Add new'),self.create_new,'primary'); header.addWidget(self.add_button); listing.addLayout(header)
         self.rows_widget=QWidget(); self.rows_layout=QVBoxLayout(self.rows_widget); self.rows_layout.setContentsMargins(0,0,0,0); self.rows_layout.setSpacing(10); self.rows_layout.setAlignment(Qt.AlignTop)
         listing.addWidget(self.rows_widget); self.row_keys=[]; self._rows_signature=None
-        self.empty=label(app.t('No time budgets yet. Add one for a game, application, website or a group.'),'muted'); self.empty.setWordWrap(True); listing.addWidget(self.empty)
+        self.empty=label(app.t('No budgets yet. Add one for a game, application, website or a group.'),'muted'); self.empty.setWordWrap(True); listing.addWidget(self.empty)
         self.views.addWidget(overview)
         editor=QWidget(); edit_layout=QVBoxLayout(editor); edit_layout.setContentsMargins(0,0,0,0); edit_layout.setSpacing(12); edit_layout.setAlignment(Qt.AlignTop)
         # Stable identities for the editor; the public navigation is the list.
@@ -105,7 +106,7 @@ class TimeBudgets(QWidget):
         edit_layout.insertWidget(0,self.conflicts); self.conflicts.hide()
         self.usage_limit.toggled.connect(self.access.usage_changed); self.shared_usage_limit.toggled.connect(self.access.usage_changed)
         empty=panel(); empty_layout=QVBoxLayout(empty); empty_layout.setContentsMargins(22,24,22,24); empty_layout.setAlignment(Qt.AlignTop)
-        empty_layout.addWidget(label(app.t('Start with a time budget'),'section'))
+        empty_layout.addWidget(label(app.t('Start with a budget'),'section'))
         empty_note=label(app.t('Set a daily budget for one game, application or website, or let several share a group budget. You can add a countdown to each budget.'),'muted')
         empty_note.setWordWrap(True); empty_layout.addWidget(empty_note); self.stack.addWidget(empty)
         self.stack.addWidget(self.periods.page)
@@ -142,17 +143,19 @@ class TimeBudgets(QWidget):
         self.edit_countdown()
 
     def show_editor(self,key=None):
+        if self.views.currentIndex()==0 and hasattr(self.app,'budget_scroll'):self._list_scroll=position(self.app.budget_scroll)
         self.collect()
         if key is not None: self.refresh(key)
         self.views.setCurrentIndex(1)
-        if hasattr(self.app,'budget_scroll'): self.app.budget_scroll.verticalScrollBar().setValue(0)
+        if hasattr(self.app,'budget_scroll'): restore(self.app.budget_scroll,0)
 
     def show_list(self):
+        if self.views.currentIndex()==0 and hasattr(self.app,'budget_scroll'):self._list_scroll=position(self.app.budget_scroll)
         if hasattr(self,'drafts'): self.drafts.remember()
         self.collect()
         self.current=None; self.refresh(); self.views.setCurrentIndex(0)
         if hasattr(self,'drafts'): self.drafts.flush()
-        if hasattr(self.app,'budget_scroll'): self.app.budget_scroll.verticalScrollBar().setValue(0)
+        if hasattr(self.app,'budget_scroll'): restore(self.app.budget_scroll,getattr(self,'_list_scroll',0))
 
     def cancel_edit(self):
         """Discard this budget's draft, retaining drafts for other budgets."""
@@ -201,7 +204,7 @@ class TimeBudgets(QWidget):
         if self.app.settings_error.text()==self.app.budget_error.text(): self.app.settings_error.clear()
         self.app.budget_error.clear()
         self.refresh(); self.views.setCurrentIndex(0)
-        self.app.budget_scroll.verticalScrollBar().setValue(0)
+        restore(self.app.budget_scroll,getattr(self,'_list_scroll',0))
         self.app.set_status('Changes discarded.')
         if hasattr(self,'drafts'): self.drafts.flush()
 
@@ -255,12 +258,15 @@ class TimeBudgets(QWidget):
             adjusted.append((key,name,members,amount,enabled,overlay))
         return adjusted
 
+    @preserving(lambda self:getattr(self.app,'budget_scroll',None))
     def refresh_rows(self):
         if hasattr(self,'drafts'): self.drafts.queue()
         self.add_computer.show()
         rows=self.list_rows(); signature=tuple(tuple(map(str,row)) for row in rows)
-        if signature==self._rows_signature: return
+        if signature==self._rows_signature:
+            self.refresh_breaks();return
         self._rows_signature=signature; self.row_keys=[row[0] for row in rows]
+        self.break_buttons={}
         while self.rows_layout.count():
             item=self.rows_layout.takeAt(0); item.widget().hide(); item.widget().deleteLater()
         for key,name,members,amount,enabled,shown in rows:
@@ -270,6 +276,9 @@ class TimeBudgets(QWidget):
             description=label(members,'muted'); description.setWordWrap(True); text.addWidget(description); row.addLayout(text,1)
             summary=QVBoxLayout(); summary.addWidget(label(amount if enabled else self.app.t('Disabled')))
             row.addLayout(summary)
+            pause=button(self.app.t('Break now'),lambda checked=False,k=key:self.start_break(k),'primary')
+            pause.setAccessibleName(self.app.t('Break now')+' · '+str(name));row.addWidget(pause)
+            self.break_buttons[key]=pause;pause.hide()
             if not enabled and key not in ('shared-games','computer-window') and not key.startswith('game:'):
                 activate=button(self.app.t('Enable'),lambda checked=False,k=key:self.enable_rule(k))
                 activate.setAccessibleName(self.app.t('Enable {name}',name=name)); row.addWidget(activate)
@@ -280,6 +289,24 @@ class TimeBudgets(QWidget):
             delete.setAccessibleName(self.app.t('Delete {name}',name=name)); delete.setToolTip(self.app.t('Delete {name}',name=name))
             row.addWidget(delete); self.rows_layout.addWidget(card)
         self.empty.setVisible(not rows)
+        self.refresh_breaks()
+
+    def refresh_breaks(self):
+        runtime=getattr(self.app,'restrictions',None)
+        actions=runtime.early_break_actions() if runtime else {}
+        from .timer_view import clock
+        for key,pause in getattr(self,'break_buttons',{}).items():
+            action=actions.get(key,{})
+            pause.setVisible(bool(action));pause.setEnabled(bool(action.get('step')))
+            text=self.app.t('Break remaining: {time}',time=clock(action['remaining'])) if action.get('remaining') else self.app.t(
+                'Start the full break now. A fresh usage interval begins when it ends.' if action.get('step') else 'This break is no longer available.')
+            if pause.toolTip()!=text:pause.setToolTip(text)
+
+    def start_break(self,key):
+        action=self.app.restrictions.early_break_actions().get(key,{})
+        if not action.get('step') or not self.app.restrictions.start_early_break(key,action['step']):
+            self.app.set_status('This break is no longer available.')
+        self.refresh_breaks()
 
     def enable_rule(self,key):
         if self.periods.is_extra(key):
@@ -400,7 +427,7 @@ class TimeBudgets(QWidget):
 
     def enable_tracking(self):
         self.app.focus.configure(replace(self.app.focus.settings,tracking=True)); self.app.update_focus_policy()
-        self.app.statistics.tracking.setChecked(True); self.controls()
+        self.app.activity_tracking.setChecked(True); self.controls()
 
     def saved(self,settings):
         from .computer_periods import split_weekly
@@ -599,14 +626,17 @@ class TimeBudgets(QWidget):
         self.refresh('shared-games'); self.views.setCurrentIndex(0)
 
     def pick_members(self,initial,accept,individual=False):
-        app=self.app; window=app._dialog(app.t('Choose budget members'),720); window.resize(720,650)
+        app=self.app; window=app._dialog(app.t('Choose budget members'),820); window.resize(820,650)
         layout=QVBoxLayout(window); layout.setContentsMargins(24,22,24,22); layout.setSpacing(12)
         layout.addWidget(back_button(app.t,window.reject),0,Qt.AlignLeft)
         prompt=('Choose one game, application or website.' if individual else
                 'Choose activities to share a budget, or choose a scheduled computer-use period.')
-        layout.addWidget(label(app.t(prompt)))
-        search=QLineEdit(); search.setPlaceholderText(app.t('Search…')); layout.addWidget(search)
-        listing=QListWidget(); listing.setAccessibleName(app.t('Budget members')); layout.addWidget(listing,1)
+        note=label(app.t(prompt)); note.setWordWrap(True); layout.addWidget(note)
+        columns=QHBoxLayout(); columns.setSpacing(18); layout.addLayout(columns,1)
+        available=QVBoxLayout(); available.setSpacing(10); columns.addLayout(available,1)
+        available.addWidget(label(app.t('Available activities'),'section'))
+        search=QLineEdit(); search.setPlaceholderText(app.t('Search…')); available.addWidget(search)
+        listing=QListWidget(); listing.setAccessibleName(app.t('Budget members')); available.addWidget(listing,1)
         listing.setStyleSheet('QListWidget::indicator {width:17px;height:17px;border:1px solid #607c77;border-radius:4px;background:#172227;} '
                              'QListWidget::indicator:checked {background:#7de5bf;border-color:#7de5bf;}')
         choices={}
@@ -641,6 +671,8 @@ class TimeBudgets(QWidget):
                 for item in choices.values():
                     if item is not changed: item.setCheckState(Qt.Unchecked)
             listing.itemChanged.connect(select_one)
+        from .qt_member_selection import SelectedMembers
+        selected=SelectedMembers(listing,app.t,window); columns.addWidget(selected,1)
         search.textChanged.connect(lambda text:[item.setHidden(text.casefold() not in (item.text()+' '+item.toolTip()).casefold()) for item in choices.values()])
         error=label('','danger'); error.setWordWrap(True)
         row=QHBoxLayout(); site=QLineEdit(); site.setPlaceholderText(app.t('Website domain, e.g. youtube.com')); row.addWidget(site,1)

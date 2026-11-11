@@ -1,17 +1,17 @@
 """Built-in and user-scheduled reminders in one local, cached list."""
 from .quota import current_day
-from dataclasses import replace
 from sqlite3 import Error as SQLiteError
 from PySide6.QtCore import Qt,QSize,QTimer
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QScrollArea
-from .qt_widgets import label,button,back_button,panel,glyph,ACCENT,separator
-from .qt_translation import QCheckBox,QDialog
+from PySide6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QScrollArea,QLayout
+from .qt_widgets import label,button,back_button,panel,glyph,ACCENT
+from .qt_translation import QDialog
 from . import notification_drafts
 from .notification_text import KINDS,notification_text
 from .schedule import day_settings,week_plans
 from .budget import quota_plan
 from .restriction_policy import legacy_warning_active
+from .qt_scroll import preserving,position,restore
 
 TITLES=dict(zip(KINDS,('Before the daily limit','Daily limit reached',
                        'Playing again after the limit','Bedtime reminder')))
@@ -26,27 +26,13 @@ class NotificationsPage(QWidget):
         header=QHBoxLayout(); self.back=back_button(app.t,self.show_list); self.back.hide(); header.addWidget(self.back)
         header.addWidget(label(app.t('Notifications'),'title'),1)
         self.add_button=button(app.t('Add new'),self.create,'primary'); header.addWidget(self.add_button)
-        header.addWidget(app.page_settings_button('notifications')); outer.addLayout(header)
+        outer.addLayout(header)
         note=label(app.t('Create reminders with your own triggers and actions.'),'muted')
         note.setWordWrap(True); outer.addWidget(note)
-        display=panel(); self.display=display; display_layout=QVBoxLayout(display); display_layout.setContentsMargins(18,14,18,14); display_layout.setSpacing(10)
-        self.fullscreen=QCheckBox(app.t('Show over fullscreen games')); self.fullscreen.setAccessibleName(app.t('Show over fullscreen games'))
-        display_layout.addWidget(self.fullscreen)
-        self.protected=QCheckBox(app.t('Also show in anti-cheat games')); self.protected.setAccessibleName(app.t('Also show in anti-cheat games'))
-        display_layout.addWidget(self.protected)
-        self.display_note=label(app.t('Applies to countdowns and notifications.'),'muted'); self.display_note.setWordWrap(True); display_layout.addWidget(self.display_note)
-        display_layout.addWidget(separator())
-        self.details=QCheckBox(app.t('Detailed RTSS countdown')); self.details.setAccessibleName(app.t('Detailed RTSS countdown'))
-        display_layout.addWidget(self.details)
-        detail_note=label(app.t('Show the event name and daily budget remaining. Turn off to show only the countdown.'),'muted')
-        detail_note.setWordWrap(True); display_layout.addWidget(detail_note)
-        self.display_status=label('','muted'); self.display_status.setWordWrap(True); self.display_status.hide(); display_layout.addWidget(self.display_status)
-        outer.addWidget(display)
-        self.fullscreen.clicked.connect(self.toggle_fullscreen); self.protected.clicked.connect(self.toggle_protected)
-        self.details.clicked.connect(self.toggle_details)
         self.scroll=QScrollArea(); self.scroll.setWidgetResizable(True)
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff); outer.addWidget(self.scroll,1)
         body=QWidget(); body_layout=QVBoxLayout(body); body_layout.setContentsMargins(0,0,8,0); body_layout.setAlignment(Qt.AlignTop)
+        body_layout.setSizeConstraint(QLayout.SetMinAndMaxSize)
         self.list_widget=QWidget(); self.rows=QVBoxLayout(self.list_widget); self.rows.setContentsMargins(0,0,0,0)
         self.rows.setSpacing(10); self.rows.setAlignment(Qt.AlignTop); body_layout.addWidget(self.list_widget); self.scroll.setWidget(body)
         self.empty=label(app.t('No notifications yet. Add one to get started.'),'muted'); self.empty.setWordWrap(True); body_layout.addWidget(self.empty)
@@ -89,10 +75,8 @@ class NotificationsPage(QWidget):
             entries.append((key,title(item,t),timing+' · '+t('Enabled' if item['enabled'] else 'Disabled'),message(item,plan),item['icon']))
         return entries
 
+    @preserving(lambda self:self.scroll)
     def refresh(self):
-        for widget,checked in ((self.fullscreen,self.app.settings.overlay_rtss_auto),(self.protected,self.app.overlay_consents.display_enabled),
-                               (self.details,self.app.settings.overlay_rtss_details)):
-            blocked=widget.blockSignals(True); widget.setChecked(checked); widget.blockSignals(blocked)
         self.discard.setVisible(bool(self.changes))
         self.draft_note.setText(self.app.t('Draft saved on this computer. Save changes to apply.') if self.changes else '')
         if self._settings is self.app.settings and self._day==current_day(self.app.settings) and self._rows_revision==self._revision: return
@@ -120,41 +104,6 @@ class NotificationsPage(QWidget):
             self.rows.addWidget(card); self.row_keys.append(key)
         self.empty.setVisible(not self.row_keys and self.editor.isHidden())
 
-    def display_saved(self,enabled):
-        self.app.apply_display_settings()
-        message='If a game is already running, save and restart it after enabling this.' if enabled else ''
-        if enabled and not self.app.rtss_available(): message='Install RTSS 7.3.7 or newer first.'
-        self.display_status.setText(self.app.t(message) if message else ''); self.display_status.setVisible(bool(message))
-
-    def toggle_fullscreen(self,enabled):
-        try:
-            settings=replace(self.app.settings,overlay_rtss_auto=enabled).validate()
-            self.app.store.save_settings(settings); self.app.settings=self.app.catalog.settings=settings
-            self.display_saved(enabled)
-        except (ValueError,OSError,SQLiteError): self.display_error()
-
-    def toggle_protected(self,enabled):
-        # Keep the switch off until the user has explicitly accepted and saved.
-        self.refresh()
-        if enabled:
-            from .qt_overlay_consent import request_display_consent
-            if not request_display_consent(self.app,self): return
-        try:
-            self.app.overlay_consents.set_display_enabled(enabled)
-            self.display_saved(enabled)
-        except (ValueError,OSError,SQLiteError): self.display_error()
-
-    def toggle_details(self,enabled):
-        try:
-            settings=replace(self.app.settings,overlay_rtss_details=enabled).validate()
-            self.app.store.save_settings(settings); self.app.settings=self.app.catalog.settings=settings
-            self.app.update_overlay(); self.refresh()
-            self.display_status.clear(); self.display_status.hide()
-        except (ValueError,OSError,SQLiteError): self.display_error()
-
-    def display_error(self):
-        self.refresh(); self.display_status.setText(self.app.t('Could not save settings. Try again.')); self.display_status.show()
-
     def draft_settings(self): return notification_drafts.apply(self.app.settings,self.changes)
 
     def record(self,key,item):
@@ -181,14 +130,16 @@ class NotificationsPage(QWidget):
         self.edit('scheduled:'+uuid.uuid4().hex,new=True)
 
     def edit(self,key,new=False):
+        if self.editor.isHidden():self._list_scroll=position(self.scroll)
         from copy import deepcopy
         self.editor.before=deepcopy(self.changes)
-        self.editor.open(key,new); self.editor.show(); self.list_widget.hide(); self.empty.hide(); self.display.hide()
-        self.back.show(); self.add_button.hide(); self.scroll.verticalScrollBar().setValue(0)
+        self.editor.open(key,new); self.editor.show(); self.list_widget.hide(); self.empty.hide()
+        self.back.show(); self.add_button.hide(); restore(self.scroll,0)
 
     def show_list(self):
-        self.editor.hide(); self.list_widget.show(); self.display.show(); self.back.hide(); self.add_button.show()
-        self.flush_draft(); self.refresh(); self.scroll.verticalScrollBar().setValue(0)
+        if self.editor.isHidden():self._list_scroll=position(self.scroll)
+        self.editor.hide(); self.list_widget.show(); self.back.hide(); self.add_button.show()
+        self.flush_draft(); self.refresh(); restore(self.scroll,getattr(self,'_list_scroll',0))
 
     def cancel_edit(self):
         self.editor.restore_previous(); self._revision+=1; self.error.clear(); self.show_list()
@@ -199,7 +150,7 @@ class NotificationsPage(QWidget):
         layout=QVBoxLayout(dialog); layout.setContentsMargins(26,24,26,24); layout.setSpacing(14)
         title=label(t('Discard all unfinished notification changes?' if discard else 'Delete “{name}”?',**({} if discard else {'name':name})),'section')
         title.setWordWrap(True); layout.addWidget(title)
-        note=label(t('Saved notifications will be kept.' if discard else 'Time budgets and recorded activity history will be kept. Save changes to apply.'),'muted')
+        note=label(t('Saved notifications will be kept.' if discard else 'Budgets and recorded activity history will be kept. Save changes to apply.'),'muted')
         note.setWordWrap(True); layout.addWidget(note); actions=QHBoxLayout(); actions.addStretch()
         cancel=button(t('Cancel'),dialog.reject); cancel.setDefault(True); actions.addWidget(cancel)
         delete=button(t('Discard draft' if discard else 'Delete'),dialog.accept,'danger-action'); delete.setAutoDefault(False); actions.addWidget(delete)

@@ -29,6 +29,93 @@ class BrowserControlTests(unittest.TestCase):
         raw=json.dumps(value); self.assertNotIn('fixture-secret',raw); self.assertNotIn('access_token',raw)
         self.assertEqual(len(value['games']),3); self.assertEqual(len(value['notifications']),4)
         self.assertTrue(value['icons']); self.assertTrue(value['triggers'])
+    def test_library_summary_uses_game_quota_not_bedtime_and_keeps_usage(self):
+        self.app.settings=replace(self.app.settings,limit_seconds=3600,bedtime_enabled=True,bedtime_minute=0)
+        gid=self.games[0].id
+        with patch.object(self.app.tracker,'totals',return_value={gid:900}),patch.object(self.app.tracker,'quota_totals',return_value={gid:900}):
+            result=self.ok('state')['library']
+            self.assertEqual(result['remaining'],2700);self.assertEqual(result['total'],900)
+            self.app.settings=replace(self.app.settings,game_budget_enabled=False)
+            self.assertIsNone(self.ok('state')['library']['remaining'])
+
+    def test_live_timers_use_current_wall_time_and_keep_all_translated_events(self):
+        from datetime import datetime,timedelta
+        from gametime.tracker import Sample
+        from gametime.timer_view import TimerView
+        now=datetime.now().astimezone()
+        self.app.restrictions.current=Sample(now-timedelta(minutes=2),100,r'C:\Fixture\browser.exe','fixture')
+        events=[TimerView('sleep','Sleep mode','clock_limit',300,wall_clock=True),
+                TimerView('web','Web','break_active',10,wall_clock=True),
+                TimerView('focus','Focus','focus',60,wall_clock=True)]
+        for language,label in (('hu','Szünetből hátra'),('en','Break remaining')):
+            self.app.settings=replace(self.app.settings,language=language)
+            with patch.object(self.app,'timer_views',return_value=events) as views:
+                live=self.ok('live')
+            self.assertGreaterEqual(views.call_args.kwargs['wall'],now)
+            self.assertEqual(len(live['timers']),3)
+            self.assertEqual(live['timers'][1]['label'],label)
+            self.assertTrue(live['timers'][1]['wall_clock'])
+            self.assertIsNone(live['timers'][1]['total'])
+
+    def test_artwork_is_catalog_scoped_bounded_and_does_not_load_during_state_reads(self):
+        from PySide6.QtGui import QPixmap,QImage
+        from PySide6.QtCore import QByteArray
+        gid=self.games[0].id;pixmap=QPixmap(400,600);pixmap.fill()
+        with patch.object(self.app.art,'artwork',return_value=(pixmap,None)) as artwork:
+            self.ok('state');artwork.assert_not_called()
+            first=self.ok('artwork',{'ids':[gid]})[gid]
+            self.assertTrue(first['cover']);self.assertTrue(first['image'].startswith('data:image/png;base64,'))
+            image=QImage.fromData(QByteArray(base64.b64decode(first['image'].split(',')[1])))
+            self.assertLessEqual(max(image.width(),image.height()),192)
+            self.assertEqual(first,self.ok('artwork',{'ids':[gid,gid]})[gid]);self.assertEqual(len(self.control.library.images),1)
+            for ids in ([gid]*25,['C:/private/image.png'],[{}],'invalid'):
+                self.assertFalse(self.request('artwork',{'ids':ids})['ok'])
+
+    def test_retired_game_does_not_reject_other_visible_artwork(self):
+        from PySide6.QtGui import QPixmap
+        old=replace(self.games[0],id='retired:alpha',installed=False)
+        self.store.upsert([old])
+        # Current discovery may have fresher metadata than the database.
+        current=replace(self.games[0],metadata='current discovery')
+        self.app.catalog.games[current.id]=current
+        state=self.ok('state')
+        self.assertEqual(next(g for g in state['games'] if g['id']==current.id)['metadata'],current.metadata)
+        self.assertFalse(next(g for g in state['games'] if g['id']==old.id)['installed'])
+        icon=QPixmap(48,48);icon.fill()
+        with patch.object(self.app.art,'artwork',return_value=(None,icon)):
+            images=self.ok('artwork',{'ids':[old.id,current.id]})
+        self.assertEqual(set(images),{old.id,current.id})
+        self.assertTrue(all(row['image'] and not row['cover'] for row in images.values()))
+
+    def test_two_computer_statistics_match_desktop_in_every_category(self):
+        from datetime import datetime,timedelta
+        from gametime.statistics_sync import FORMAT
+        now=datetime.now().astimezone();day=now.date().isoformat();group='ab'*16;remote='12'*16
+        self.app.settings=self.app.catalog.settings=replace(self.app.settings,statistics_sync_group=group,statistics_device_name='Desktop')
+        self.store.add_usage({(day,self.games[0].id):120})
+        self.app.focus._credit('app',r'C:\Brave\brave.exe','brave.exe',now,now+timedelta(seconds=60),60)
+        self.app.focus._credit('site','example.com','example.com',now,now+timedelta(seconds=40),40)
+        snapshot=dict(format=FORMAT,group=group,device=remote,name='Remote',revision=1,started=day,
+                      rows=[[day,'remote-game',self.games[0].name,'Steam',240]],activity_started=day,
+                      activity=[[day,'app','brave.exe','brave.exe',90],[day,'site','example.com','example.com',70]])
+        db=self.app.statistics_data;db.ingest(snapshot,group);db.set_device_alias(group,remote,'Laptop')
+        self.app.switch_page(1);native=self.app.statistics
+        for category in ('all','games','apps','websites'):
+            native.category.setCurrentIndex(native.category.findData(category));native.refresh()
+            data=self.ok('statistics',dict(start=day,end=day,category=category))
+            self.assertEqual(data['total'],native.report.total)
+            self.assertEqual({tuple(row) for row in data['rows']},{tuple(row) for row in native.computer_history})
+            self.assertEqual(data['computer_names'],{key:str(value) for key,value in native.computer_names.items()})
+            self.assertEqual(data['computer_colors'],native.chart.device_colors)
+            self.assertEqual(data['colors'],{key:value[1] for key,value in native.chart.series.items()})
+            for scope in ('local',remote):
+                scoped=self.ok('statistics',dict(start=day,end=day,category=category,scope=scope))
+                self.assertEqual(scoped['total'],sum(row[4] for row in data['rows'] if row[5]==scope))
+        self.assertEqual(self.ok('statistics',dict(start=day,end=day,category='sites'))['total'],110)
+        before=self.ok('statistics',dict(start=day,end=day))['total']
+        snapshot['revision']=2;snapshot['rows'][0][4]+=60;db.ingest(snapshot,group)
+        self.assertEqual(self.ok('statistics',dict(start=day,end=day))['total'],before+60)
+
     def test_budget_roundtrip_normalizes_domains_and_keeps_native_forms_current(self):
         self.ok('budget.save',self.budget())
         self.assertEqual(self.app.settings.wellbeing_rules[0]['members'],[dict(kind='site',value='youtube.com')])

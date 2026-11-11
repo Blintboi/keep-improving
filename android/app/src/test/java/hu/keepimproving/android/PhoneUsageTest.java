@@ -20,6 +20,20 @@ import android.os.UserManager;
 public class PhoneUsageTest {
     private void allow(Context c,int mode) {Shadows.shadowOf(c.getSystemService(AppOpsManager.class)).setMode(AppOpsManager.OPSTR_GET_USAGE_STATS,Process.myUid(),c.getPackageName(),mode);}
     private void event(Context c,long time,int type) {Shadows.shadowOf(c.getSystemService(UsageStatsManager.class)).addEvent(EventBuilder.buildEvent().setPackage("com.example.game").setClass("Game").setTimeStamp(time).setEventType(type).build());}
+    @Test public void upgradeRepairsOldLifecycleBoundariesWithoutReplayingTime()throws Exception {
+        Context c=RuntimeEnvironment.getApplication();long now=System.currentTimeMillis();allow(c,AppOpsManager.MODE_ALLOWED);Shadows.shadowOf(c.getSystemService(UserManager.class)).setUserUnlocked(true);
+        event(c,now-10000,1);event(c,now-8000,2);event(c,now-7980,1);event(c,now-6000,16);
+        try(var store=new PhoneStore(c)) {
+            store.put("enabled","true");store.put("sessions_since",Long.toString(now-11000));
+            SessionCounts.record(store,"com.example.game",now-10000,now-8000);SessionCounts.record(store,"com.example.game",now-7980,now-6000);
+            String day=PhoneRules.day(now-10000,0,java.time.ZoneId.systemDefault());store.add(new UsageLedger.Slice(day,"com.example.game",3980),"Game",false);
+            store.resetCursor(now-1000);PhoneUsage.collect(c,store);
+            assertEquals(1,SessionCounts.snapshot(store).getJSONArray("rows").getJSONArray(0).getLong(3));
+            assertEquals(3.98,store.rows(false).getJSONArray(0).getDouble(4),.001);
+            assertEquals("true",store.get("session_activity_boundaries_v1",""));PhoneUsage.collect(c,store);
+            assertEquals(3.98,store.rows(false).getJSONArray(0).getDouble(4),.001);
+        }
+    }
     @Test public void permissionCollectionReopenAndRevocation() throws Exception {
         Context c=RuntimeEnvironment.getApplication();long now=System.currentTimeMillis();allow(c,AppOpsManager.MODE_ALLOWED);Shadows.shadowOf(c.getSystemService(UserManager.class)).setUserUnlocked(true);
         event(c,now-10000,UsageEvents.Event.ACTIVITY_RESUMED);event(c,now-5000,UsageEvents.Event.SCREEN_NON_INTERACTIVE);

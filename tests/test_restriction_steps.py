@@ -460,6 +460,17 @@ class StepsTests(unittest.TestCase):
 
 
 class NativeOwnershipTests(unittest.TestCase):
+    def test_focusing_an_overlay_target_preserves_its_existing_window_size(self):
+        from gametime import restriction_native as native
+        for minimized in (False,True):
+            with (patch.object(native,'open_target',return_value=123),patch.object(native,'windows',return_value=[456]),
+                  patch.object(native.u,'IsIconic',return_value=minimized),patch.object(native.u,'ShowWindowAsync') as show,
+                  patch.object(native.u,'SetForegroundWindow',return_value=True) as focus,patch.object(native.k,'CloseHandle')):
+                self.assertTrue(native.restore_target(r'C:\Fixture\fixture.exe','12:34'))
+                if minimized:show.assert_called_once_with(456,9)
+                else:show.assert_not_called()
+                focus.assert_called_once_with(456)
+
     def test_critical_processes_and_own_python_are_never_targets(self):
         from gametime.restriction_native import permitted
         for name in (r'C:\Windows\System32\winlogon.exe',r'C:\Apps\steam.exe',r'C:\Apps\python.exe',

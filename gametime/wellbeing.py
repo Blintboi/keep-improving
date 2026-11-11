@@ -40,20 +40,20 @@ def target(kind,value):
 
 
 def validate_rules(rules):
-    if not isinstance(rules,list) or len(rules)>100: raise ValueError('Use at most 100 time budgets.')
+    if not isinstance(rules,list) or len(rules)>100: raise ValueError('Use at most 100 budgets.')
     ids=set()
     for rule in rules:
         if not isinstance(rule,dict) or set(rule)!={'id','name','members','seconds','enabled','enforce','overlay'}:
-            raise ValueError('Invalid time budget.')
+            raise ValueError('Invalid budget.')
         if not isinstance(rule['id'],str) or not re.fullmatch(r'[a-zA-Z0-9_-]{1,64}',rule['id']) or rule['id'] in ids:
-            raise ValueError('Invalid time budget.')
+            raise ValueError('Invalid budget.')
         ids.add(rule['id'])
         if not isinstance(rule['name'],str) or not rule['name'].strip() or len(rule['name'])>80 or '\0' in rule['name']:
             raise ValueError('Give the budget a name (up to 80 characters).')
         value=rule['seconds']
         if type(value) not in (int,float) or not math.isfinite(value) or not 0<=value<=86400:
             raise ValueError('Choose a daily limit between 0 and 1440 minutes.')
-        if any(type(rule[key]) is not bool for key in ('enabled','enforce','overlay')): raise ValueError('Invalid time budget.')
+        if any(type(rule[key]) is not bool for key in ('enabled','enforce','overlay')): raise ValueError('Invalid budget.')
         if not isinstance(rule['members'],list) or not 1<=len(rule['members'])<=200:
             raise ValueError('Choose between 1 and 200 members for a shared budget.')
         seen=set()
@@ -115,6 +115,8 @@ class BudgetState:
 class Wellbeing:
     def __init__(self,store,catalog,focus):
         self.store,self.catalog,self.focus=store,catalog,focus
+        from .continuity_ledger import Coverage
+        self.coverage=Coverage(store.db,'wellbeing')
         store.db.execute('''CREATE TABLE IF NOT EXISTS wellbeing_usage (
             day TEXT NOT NULL, game_id TEXT NOT NULL, app TEXT NOT NULL, site TEXT NOT NULL,
             seconds REAL NOT NULL, PRIMARY KEY(day,game_id,app,site))''')
@@ -198,6 +200,7 @@ class Wellbeing:
         self.previous=(sample,tagged); self.current=(sample,atom); self.current_redirect=redirect_budget
         if previous:
             prev,old=previous; delta=sample.awake-prev.awake; wall=sample.wall.timestamp()-prev.wall.timestamp()
+            if 0<delta<=3 and wall>0 and abs(wall-delta)<=1.5: self.coverage.record(prev.wall.timestamp(),sample.wall.timestamp())
             if old and self.atom(prev,old[2].split('\0',1)[0]) and sample.interactive and 0<delta<=3 and wall>0 and abs(wall-delta)<=1.5:
                 self.configure(prev.wall)
                 overrides=self.catalog.settings.budget_reset_overrides
@@ -225,7 +228,8 @@ class Wellbeing:
 
     def states(self,wall,atom=None,exclude=''):
         self.configure(wall)
-        return [BudgetState(rule,self.totals.get(rule['id'],0),budget_access.usage_enabled(self.catalog.settings,rule['id']),
+        from .device_sharing import remote_seconds
+        return [BudgetState(rule,self.totals.get(rule['id'],0)+remote_seconds(self.store,self.catalog.settings,rule['id'],wall),budget_access.usage_enabled(self.catalog.settings,rule['id']),
                             budget_access.clock_remaining(self.catalog.settings,rule['id'],wall)) for rule in self.rules
                 if rule['id']!=exclude and budget_access.active(self.catalog.settings,rule['id'],wall) and (atom is None or applies(rule['members'],atom))]
 
@@ -262,11 +266,13 @@ class Wellbeing:
         return policy
 
     def flush(self):
-        if not self.pending and not self.periods.pending: return
+        if not self.pending and not self.periods.pending and not self.coverage.pending: return
         with self.store.db:
             self.periods.write_pending()
             self.store.db.executemany('''INSERT INTO wellbeing_usage VALUES (?,?,?,?,?)
                 ON CONFLICT(day,game_id,app,site) DO UPDATE SET seconds=seconds+excluded.seconds''',
                 [(*key,value) for key,value in self.pending.items()])
+            self.coverage.write()
         self.pending.clear()
         self.periods.pending.clear()
+        self.coverage.clear()

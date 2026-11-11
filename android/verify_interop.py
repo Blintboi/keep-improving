@@ -32,6 +32,17 @@ def main():
         target.write_text(json.dumps(dict(code=code, authorization=keys(code)[1], entry=entry)), encoding='utf-8')
         print('Generated synthetic desktop fixture')
     else:
+        value=json.loads((args.build_dir/'sessions-phone-export.json').read_text(encoding='utf-8'))
+        snapshot=unseal(value['entry'],value['code']);validate_snapshot(snapshot,value['code'])
+        assert sum(row[3] for row in snapshot['sessions']['rows'])==2
+        with tempfile.TemporaryDirectory() as directory:
+            store=Store(Path(directory)/'sessions.sqlite3')
+            try:
+                data=StatisticsData(store);assert data.ingest(snapshot,value['code'])
+                assert data.session_data(value['code'])[snapshot['device']]==snapshot['sessions']
+                assert data.snapshot(value['code'],'Desktop')['sessions']['rows']==[]
+            finally:store.close()
+        print('Encrypted Android session counts imported without echoing remote counts')
         value = json.loads((args.build_dir / 'interop-export.json').read_text(encoding='utf-8'))
         snapshot = unseal(value['entry'], value['code'])
         validate_snapshot(snapshot, value['code'])
@@ -51,6 +62,22 @@ def main():
             finally:
                 store.close()
         print('Desktop imported the real Android phone store exactly once; imported history was not re-exported')
+        value=json.loads((args.build_dir/'shared-phone-export.json').read_text(encoding='utf-8'))
+        phone=unseal(value['entry'],value['code'])
+        from dataclasses import replace
+        from gametime import device_sharing
+        with tempfile.TemporaryDirectory() as directory:
+            store=Store(Path(directory)/'shared.sqlite3')
+            try:
+                store.save_settings(replace(store.settings(),statistics_sync_enabled=True,statistics_sync_group=value['code']))
+                data=StatisticsData(store);assert data.ingest(phone,value['code']);assert not data.ingest(phone,value['code'])
+                device_sharing.apply(store)
+                assert len(store.settings().wellbeing_rules)==1
+                assert len(store.settings().device_groups)==1
+                assert phone['scoped_rules']['usage'][0][3]==300
+                assert data.snapshot(value['code'],'PC')['scoped_rules']['usage']==[]
+            finally:store.close()
+        print('Desktop accepted Android shared rules and groups; remote usage was not echoed or duplicated')
 
 if __name__ == '__main__':
     main()

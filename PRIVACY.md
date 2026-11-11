@@ -4,6 +4,18 @@ Keep Improving is a personal project maintained by [Blintboi](https://github.com
 
 ## Local use
 
+Optional opening questions store your custom question/answers in the budget
+settings. Accepted choices are recorded locally as budget, action and answer
+IDs, member application/domain/game identity, renewal day, visit ID and timestamp so daily allowances survive restarts.
+These choice receipts are not included in synchronized usage statistics.
+
+For website opening choices, the extension inserts its own isolated dialog over
+the active page using the scripting permission and its existing website access.
+It does not inspect or transmit the site's text, form entries or full URL. Only
+the domain, browser, random visit token and selected budget/action/answer IDs
+are sent through the authenticated loopback connection to the desktop. The page
+is not navigated or reloaded when a choice is accepted.
+
 Automatic update checks are enabled by default and can be turned off in
 **Settings → Application updates**. At most once per day, the app requests a
 small public version file from this project's GitHub repository over HTTPS.
@@ -16,12 +28,13 @@ record, last-attempt time and a dismissed version may be cached locally.
 Turning checks off stops future automatic requests; an in-progress request may
 finish. Tracking remains available offline.
 
-**Download update** opens the fixed official GitHub installer URL in your normal
-browser only after you click it. The browser handles the download and its normal
-security checks. The app does not download or install executables in the
-background. Installing an update is a separate action you choose. Requests for
-the installer and any browser security checks follow the browser/provider's
-normal data handling.
+**Download and install update** starts only after you click it. The app requests
+the fixed official GitHub installer URL with the `KeepImproving/updates-v2` user
+agent and verifies its published size and checksum. This request sends no profile,
+account or activity data. After verification it closes gracefully, starts the
+installer and opens the updated app with your existing profile. Files are staged
+under your local application data directory; automatic version checks do not
+start this download or installation.
 
 The app reads the foreground process identity and executable path, installed-game metadata and local shortcuts to identify a tracked game. It records daily play time by game, settings, exclusions and game availability in a local SQLite profile. There is no general analytics or advertising telemetry.
 
@@ -29,10 +42,20 @@ The app also records daily time by application executable path,
 enabled by default and switchable in Statistics. Only the foreground application
 counts, even while reading without keyboard or mouse input; locked desktops and
 sleep gaps pause this activity measurement. Input contents are never captured. The app
-stores daily aggregates, not a chronological activity timeline.
+stores daily aggregates. A local coverage ledger stores already counted time
+intervals without application names or domains to prevent duplicate imports.
+
+From version 2.42.0 (Android 0.5.0), a local session ledger also retains the
+start/end of connected measured foreground intervals per game, application or
+domain. It merges adjacent measurement batches and recovered browser intervals
+without counting them again. Session counts are attributed to the starting day;
+old aggregate-only history has no reconstructed counts. Optional synchronization
+includes encrypted daily session counts and their availability date, without
+the local session start/end timestamps.
 
 Website tracking requires manually loading and pairing the included browser
-extension. It sends only the focused tab's HTTP(S) domain and browser family
+extension. It sends only the focused tab's HTTP(S) domain (or explicitly
+configured loopback host and port) and browser family
 to an authenticated server bound to `127.0.0.1` on this computer. URL paths,
 queries, fragments, page titles and contents are not sent to the desktop app or
 recorded in activity history. For a blocked page, the extension can temporarily
@@ -41,13 +64,30 @@ daily renewal or one-time allowance can return to the same page. An opaque token
 identifies the cover; the address stays in the extension and is never synchronized.
 Closing an individual tab removes its recovery record. Window closure retains
 records for session restore; stale records are bounded to 1024 entries, excluding live tabs. Private
-tabs and local/numeric hosts are excluded. Website time is a breakdown of browser
+tabs, unconfigured loopback endpoints and other numeric/private hosts are excluded.
+Adding a loopback website to a budget or focus block list opts that endpoint into
+tracking. `localhost`, `127.0.0.1` and `[::1]` at the same port share a canonical
+`127.0.0.1:port` identity; different ports stay separate. The application's own
+authenticated control bridge is excluded. These endpoint identities follow the
+same local history and optional encrypted synchronization rules as public domains;
+URL paths, queries and page contents are not included. Website time is a breakdown of browser
 time. Application/site aggregates are stored in the local SQLite profile and, when computer linking is enabled, synchronize in encrypted snapshots. Completed-round counts and timer state remain local. Focus preferences
 and blacklists also synchronize in encrypted snapshots; application rules can contain
   executable paths and may not match paths on another computer. Focus group selections
   stay local because they refer to this computer's time budgets.
 The pairing token is Windows-user protected in the desktop profile and stored
 in the extension's local browser storage after pairing. It is not a cloud key.
+
+After connecting once, the extension caches the local browser rules and timer
+checkpoint. While the desktop application is stopped, it can continue browser
+time tracking, Pomodoro and website restrictions. Its bounded local journal
+contains interval timestamps, the active domain, timer identifiers and budget
+actions, never page contents or full visited URLs. The browser idle permission
+detects a locked computer; the notifications permission displays local timer
+and budget notices. On reconnection the desktop imports only time it has not
+already counted, and acknowledged journal records are removed. Closing the
+browser or sleeping the computer does not create guessed usage. Monitoring
+other Windows applications and desktop-only reminders requires the desktop app.
 The extension has host permissions to redirect blocked sites during focus and
 does not contact an internet service. Disabling activity tracking stops new
 aggregates; existing local history is retained. Focus restrictions release on

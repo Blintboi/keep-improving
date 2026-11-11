@@ -143,8 +143,8 @@ class AutomaticRTSSInterfaceTests(unittest.TestCase):
 
     def test_automatic_mode_can_be_disabled_and_persists_without_erasing_legacy_data(self):
         self.app.settings=replace(self.app.settings,overlay_rtss_paths=[str(self.exe)])
-        self.app.rtss_dialog(); self.assertEqual(self.app.pages.currentIndex(),6)
-        self.app.notifications_page.fullscreen.click()
+        self.app.rtss_dialog(); self.assertEqual(self.app.pages.currentIndex(),2)
+        self.app.display_settings.fullscreen.click()
         saved=self.store.settings(); self.assertFalse(saved.overlay_rtss_auto)
         self.assertEqual(saved.overlay_rtss_paths,[str(self.exe)])
         self.backend.cancel_preparation.assert_called_once()

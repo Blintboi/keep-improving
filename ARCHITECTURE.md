@@ -1,5 +1,61 @@
 # Architecture
 
+## Opening choices (2.44.0, desktop)
+
+Session-timed restriction steps can contain a validated `session_choice`
+question and 2–8 stable-ID options. These steps are handled by
+`qt_choice_runtime.py`, not the ordinary raw-session threshold engine.
+The native cover surface gates each foreground visit to a matching app/site;
+other limits keep priority. A committed choice consumes one local allowance.
+`session_choices.py` stores idempotent visit receipts in SQLite with budget,
+step, renewal day, choice ID and timestamp. Renaming an answer retains usage;
+budget identity remapping retains receipts. Cached daily counts avoid repeated
+queries while the question is visible. Leaving without choosing consumes none.
+
+Browser focus recovery after the native question does not create another visit.
+Without the desktop, the extension shows an explicit desktop-required cover
+for these steps; it never substitutes the aggregate session count for a choice.
+Each question can use a shared allowance or a separate allowance per member.
+Every receipt retains its activity identity, so changing allocation keeps prior
+usage. Explicit domains include their subdomains; the most specific configured
+domain wins. Category members use each application/site/game identity. A site
+match takes precedence over an overlapping browser-app match, avoiding two
+questions for one step. Choice allowances are local, separate from synchronized measured-session totals.
+The Android client is not updated by this desktop-only local delivery.
+
+## Local device rules and update delivery (2.40.2 / Android 0.4.0)
+
+`device_sharing.py` and `PhoneShared` exchange optional `scoped_rules` inside
+the existing encrypted statistics envelope. Per-rule and per-group registers
+converge by logical clock and writer ID, retain deletion tombstones, and use
+stable native aliases so an echo cannot create another budget or reminder.
+Group membership includes Android device IDs. Local-only rules retain existing
+behavior until explicitly scoped. Credentials and native executable actions
+are excluded; protected-game consent and advanced actions stay local.
+
+Shared usage is keyed by measuring device, rule, period and renewal minute.
+Imports replace that device's previous snapshot and are never exported as
+local usage. PC disjoint foreground atoms and Android visible intervals avoid
+double counting category/member overlaps. Cached peer usage contributes to
+local restriction and browser-continuity decisions. Disconnected devices cannot
+enforce an instantaneous global ceiling; forms show the last received sync.
+Desktop projection uses the existing unsaved-draft gate. Android rejects a
+saved draft if its shared revision changed while the editor was open.
+
+Android's quiet ongoing budget notification uses the OS chronometer. Window,
+screen and deadline events change its running/paused state; no one-second
+background notification loop is needed.
+
+The explicit update action uses `update_install.py` to download the official
+installer, check the published size/SHA-256 and prepare its external setup.
+The GUI exits only after starting setup, which retains the installation's
+profile, waits for its processes to release files and restarts the updated app.
+Since 2.40.3, upgrades resume in the background with startup reminders; only a
+fresh installation opens the Hub automatically.
+Automatic checks never start installation. Failed download/validation keeps
+the running app available; unsaved settings block installation and keep the
+verified package ready for a later click.
+
 Notifications share title/icon selection across desktop and fullscreen rendering. The Notifications page owns immediate fullscreen and protected-game display switches; the latter is a versioned, local-only opt-in, separate from legacy per-game image-preview/minimization consent. Revocation stops active displays and clears RTSS authorizations. Desktop reminders keep a native close/drag title bar and reject mouse activation, preserving foreground keyboard input. Combo popups are positioned before Show, with the language selector opening upwards; cursor changes are event-driven.
 
 Statistics defaults to Everything, with one daily bar split by computer and activity. Category, period and computer are independent filters; custom calendar drafts apply explicitly and live refresh uses the committed range. The chart retains every activity and full report totals. A day selector and searchable ranking replace the permanent day sidebar, and irrelevant table columns hide automatically. Computer/sync management is collapsible. The Focus page contains the timer and blacklist; application and website history lives in Statistics. Focus ticks do not query activity history. The visible blacklist reuses its items until settings or language change. Launchers are a collapsed library panel, loaded only when opened or explicitly refreshed; the old internal navigation index redirects to that panel.
@@ -26,7 +82,8 @@ profile. It reuses the one-second foreground sample, validates awake/wall-clock
 continuity, splits at the shared local day boundary and buffers writes for ten seconds. Idle detection
 uses GetLastInputInfo without reading input contents. Activity never becomes a
 game catalog entry or contributes to game quotas/cloud payloads. Timer state
-checkpoints resume paused after restart; work starts breaks automatically, while
+checkpoints resume paused after restart until a paired browser reconciles its
+running timer journal; work starts breaks automatically, while
 the next work interval requires an explicit start. App restrictions minimize only
 the exact current process identity and retain the protected-game consent gate.
 
@@ -38,9 +95,36 @@ unpaired requests. Pairing tokens are random and DPAPI-protected in the profile.
 The MV3 extension uses tab/window events plus a ten-second heartbeat (two seconds
 during focus, with a 30-second wake alarm). Session DNR rules redirect blocked
 top-level navigations, and the extension rechecks already open tabs. Failed local
-connections clear browser restrictions. No content script or browsing-history
+connections use the extension's cached browser rules and durable journal when
+available. No content script or browsing-history
 API is used. FocusPage does not query activity history during timer refreshes;
 the explicit detected-application chooser queries the local item index on demand.
+
+`website_identity.py` and extension `sites.js` normalize explicitly configured
+loopback websites to `127.0.0.1:port`. Localhost/IPv6 aliases share that identity;
+ports remain distinct and paths/parameters never enter activity keys. Budget
+members and focus block lists opt local endpoints into observation. The paired
+bridge port is always excluded. Local DNR conditions use exact-origin regexes
+instead of domain filters; all-site rules include only configured local ports.
+The `local_version` capability keeps old workers on public-only policy/snapshots
+until their automatic extension reload completes.
+
+`browser_continuity.py` reconciles authenticated, bounded `/continuity` batches
+on the GUI thread. Native activity, wellbeing and timer writes commit coverage
+intervals alongside their counters. A browser stream uses monotonically ordered
+sequence numbers; its receipt, uncovered usage and timer transitions commit in
+one SQLite transaction. Active native uptime owns foreground accounting, so
+stale browser samples cannot credit time spent in another application. Timer
+generation identifiers reject commands based on a stopped or replaced session.
+Browser and site membership share one wellbeing atom. The extension journals
+observed awake intervals, caches budget steps and presents Pomodoro controls
+when disconnected. Chunked local storage survives worker restarts; acknowledged
+chunks are removed, and pairing changes isolate the journal. Browser lifetime
+identifiers and bounded sample gaps prevent guessed closed-browser/sleep time.
+Browser-only operation does not monitor other Windows processes or replace
+desktop scheduled reminders. Public URLs and provider credentials do not enter
+this protocol. The browser journal is local and capped at 25,000 pending records;
+storage errors are surfaced instead of silently dropping pending records.
 
 `Settings.game_limits` stores optional per-game caps in seconds, separately
 from countdown appearance. It uses the existing quota-period per-game totals,
@@ -313,7 +397,7 @@ Only during interactive account sign-in, an ephemeral loopback callback listens 
 
 `statistics_sync.py` keeps imported daily measurements in separate SQLite tables keyed by connection group and computer UUID. The game budget combines the local quota totals with cached remote daily game totals from the active group; warnings, restrictions and overlays share that calculation. Each computer exports only its local history as a complete versioned snapshot, never imported data. A newer snapshot transactionally replaces that computer's prior rows; repeated or stale revisions are ignored. Launcher IDs remain stable across computers, and manual/standalone titles use a normalized source/title key. The statistics page can select local, all linked or one remote computer and uses the selected computers' earliest monitoring date for averages.
 
-`statistics_cloud.py` exchanges compressed AES-256-GCM snapshots over HTTPS with the Supabase Edge Function in `sync_backend`. A random 128-bit connection code derives separate encryption and authorization keys with domain-separated HMAC-SHA-256; only the authorization key is transmitted. The server selects a group using its SHA-256 hash, stores opaque ciphertext, and has no code/encryption key. Per-device revisions are decimal strings on the wire to retain 64-bit precision in JavaScript. Unchanged snapshots are not reuploaded and known remote revisions are omitted. Only the GUI thread prepares snapshots or applies queue results to SQLite; network I/O and authenticated bounded decompression run in a daemon worker. Invalid responses retain the cache, redirects are refused, configuration generations discard retired results, and shutdown has a bounded join. Protocol v2 runs at startup and on tracked foreground transitions, plus manual requests; while a game remains active, successful exchanges schedule another. A one-shot timer coalesces transitions and waits out the ten-minute per-computer guard or server Retry-After. The guard persists across restarts and the service's request quotas still apply. Ciphertext format and associated data remain v1 so existing codes/caches remain compatible. Daily application and website aggregates and supported preference registers are optional fields in the encrypted snapshot; older clients ignore them. Imports stay separate from local usage and are not republished. Browser time is allocated per computer when aggregating activities. Application block/exclusion paths can be included, but account credentials, per-game consent, local folders, launch metadata and monitor names remain local. Legacy folder codes remain usable only for cached history and require a new opt-in internet code. SQLite is always local.
+`statistics_cloud.py` exchanges compressed AES-256-GCM snapshots over HTTPS with the Supabase Edge Function in `sync_backend`. A random 128-bit connection code derives separate encryption and authorization keys with domain-separated HMAC-SHA-256; only the authorization key is transmitted. The server selects a group using its SHA-256 hash, stores opaque ciphertext, and has no code/encryption key. Per-device revisions are decimal strings on the wire to retain 64-bit precision in JavaScript. Unchanged snapshots are not reuploaded and known remote revisions are omitted. Only the GUI thread prepares snapshots or applies queue results to SQLite; network I/O and authenticated bounded decompression run in a daemon worker. Invalid responses retain the cache, redirects are refused, configuration generations discard retired results, and shutdown has a bounded join. Protocol v2 runs at startup and on tracked foreground transitions, plus manual requests; while a game remains active, successful exchanges schedule another. A one-shot timer coalesces transitions and waits out the 15-second per-computer guard or server Retry-After. The guard persists across restarts and the service's request quotas still apply. Ciphertext format and associated data remain v1 so existing codes/caches remain compatible. Daily application and website aggregates and supported preference registers are optional fields in the encrypted snapshot; older clients ignore them. Imports stay separate from local usage and are not republished. Browser time is allocated per computer when aggregating activities. Application block/exclusion paths can be included, but account credentials, per-game consent, local folders, launch metadata and monitor names remain local. Legacy folder codes remain usable only for cached history and require a new opt-in internet code. SQLite is always local.
 
 `preferences_sync.py` tracks changes per field with logical clocks and device IDs, merging independent changes deterministically. Related warning/limit and bedtime fields are grouped to retain valid combinations; per-game settings use the same cross-device identity as statistics. It stages remote changes until no settings drafts or dialogs are being edited, then validates the complete result before updating the local profile. Preference metadata rides on existing sync snapshots and does not schedule extra network requests. Local time consumption and activity history never enter preference synchronization.
 
@@ -479,3 +563,6 @@ activity statistics and other budgets continue to count the destination.
 The Overview stores its display, activity, period, computer, selected-day and list-search preferences in a separate local SQLite settings record. Explicit changes are saved without rewriting the application configuration or scheduling synchronization; search typing is debounced and flushed on exit. Relative periods are resolved against the current logical day at startup.
 
 The website activity list owns the browser-connection entry point. Individual and shared budget editors show usage and an editable daily renewal time directly, without a separate options disclosure. The same local browser bridge continues to serve activity measurement and focus rules.
+
+
+Responsive companion synchronization (2.41 / Android 0.4.3) uses 30-second lightweight polls of the last published revision. Full usage snapshots are refreshed after 15 minutes or a relevant local event. Settings and focus transitions request an immediate upload, subject to the 15-second guard and server Retry-After. Android uses a persisted one-shot job for pending edits and OS-batched periodic background sync. The encrypted companion includes remote focus display state and bounded cached icons; it never starts a second local timer. Automatic installer/helper exclusions preserve discovery and historical rows, and explicit restore overrides the default.

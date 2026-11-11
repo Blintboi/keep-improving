@@ -183,7 +183,7 @@ class BudgetListTests(unittest.TestCase):
             else: next(b for b in buttons if b.text()==answer).click()
         QTimer.singleShot(0,lambda:respond('Mégse'))
         self.assertFalse(editor.ask_delete('Játék <teszt>'))
-        self.assertEqual(observed[0][0],'Időkeret törlése')
+        self.assertEqual(observed[0][0],'Keret törlése')
         self.assertTrue(any('Játék <teszt>' in text and fmt==Qt.PlainText for text,fmt in observed[0][1]))
         self.assertEqual(observed[0][2],['Mégse']); self.assertIn(('Törlés','danger-action'),observed[0][3]); self.assertEqual(observed[0][4],'Surface')
         QTimer.singleShot(0,lambda:respond('Escape'))

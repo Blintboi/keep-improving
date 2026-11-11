@@ -54,7 +54,7 @@ class DetailsInterfaceTests(unittest.TestCase):
         return current
 
     def test_switch_updates_game_rtss_immediately_and_preserves_next_event_and_tray(self):
-        current=self.configure_game(); page=self.app.notifications_page
+        current=self.configure_game(); page=self.app.display_settings
         with patch('gametime.qt_ui.win32.sample',return_value=current),patch.object(self.app,'rtss_available',return_value=True), \
              patch.object(self.app.rtss,'present',return_value=True) as present,patch.object(self.app,'apply_display_settings') as restart:
             page.details.click(); self.app._overlay_desktop_until=0; self.app.update_overlay()
@@ -82,7 +82,7 @@ class DetailsInterfaceTests(unittest.TestCase):
         self.assertTrue(self.app.overlay.isVisible()); self.assertEqual(self.app.overlay.caption,'Szünetig')
 
     def test_failed_save_restores_switch_and_language_changes_keep_saved_choice(self):
-        page=self.app.notifications_page
+        page=self.app.display_settings
         with patch.object(self.store,'save_settings',side_effect=OSError('fixture')),patch.object(self.app,'update_overlay') as update:
             page.details.click(); update.assert_not_called()
         self.assertTrue(page.details.isChecked()); self.assertTrue(self.app.settings.overlay_rtss_details)

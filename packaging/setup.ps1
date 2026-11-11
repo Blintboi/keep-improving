@@ -32,6 +32,12 @@ try {
         if ($old.Marker -ne 'GameTimeMonitor.bundle.v1' -or [IO.Path]::GetFullPath($old.InstallDir) -ne $InstallDir) {
             throw 'Invalid installation marker. No files were replaced.'
         }
+        # A relocated Documents/OneDrive folder must not select a new profile
+        # when an existing installation is upgraded by double-clicking its EXE.
+        if (-not $PSBoundParameters.ContainsKey('DataDir') -and $old.DataDir) {
+            $DataDir = [IO.Path]::GetFullPath([string]$old.DataDir).TrimEnd('\')
+            if ($DataDir -eq $InstallDir -or $DataDir.StartsWith($InstallDir + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'The existing data folder is inside the program folder.' }
+        }
     }
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $archive = [IO.Compression.ZipFile]::OpenRead((Join-Path $PSScriptRoot 'payload.zip'))
@@ -53,6 +59,16 @@ try {
     $stageExe = Join-Path $taskStage 'GameTimeMonitor.exe'
     $process = Start-Process -FilePath $stageExe -ArgumentList @('--stop-wait','20','--data-dir',('"' + $DataDir + '"')) -WindowStyle Hidden -Wait -PassThru
     if ($process.ExitCode -ne 0) { throw 'The running monitor could not be stopped. Close it from its tray menu and retry.' }
+    # The profile mutex can be released just before Windows unloads the runtime.
+    # Wait for all processes of this exact installation, without killing them.
+    $taskInstalledExe = Join-Path $InstallDir 'GameTimeMonitor.exe'
+    $taskExitDeadline = [DateTime]::UtcNow.AddSeconds(20)
+    do {
+        $taskRemaining = @(Get-Process -Name GameTimeMonitor -ErrorAction SilentlyContinue | Where-Object { $_.Path -and [StringComparer]::OrdinalIgnoreCase.Equals($_.Path, $taskInstalledExe) })
+        if (-not $taskRemaining.Count) { break }
+        if ([DateTime]::UtcNow -ge $taskExitDeadline) { throw 'The application is still releasing its files. No program files were replaced; retry the update.' }
+        Start-Sleep -Milliseconds 200
+    } while ($true)
     $backup = Join-Path $DataDir ('backups\before-' + $payload.Version + '-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
     New-Item -ItemType Directory -Path $backup -Force | Out-Null
     foreach ($name in @('usage.sqlite3','usage.sqlite3-wal','usage.sqlite3-shm','hub-state.json')) {
@@ -128,8 +144,19 @@ try {
     finally { $runRegistry.Dispose() }
     $shell = New-Object -ComObject WScript.Shell
     $links = @()
-    foreach ($directory in @([Environment]::GetFolderPath('Startup'),[Environment]::GetFolderPath('Programs'))) {
-        $shortcutName = if ($directory -eq [Environment]::GetFolderPath('Programs')) { 'Keep Improving' } else { $StartupName }
+    # One Windows startup registration is sufficient. Older versions also
+    # created a Startup-folder shortcut, launching the resident twice at login.
+    # Retire only our own shortcut; preserve unrelated links and a backup.
+    $legacyStartup = Join-Path ([Environment]::GetFolderPath('Startup')) ($StartupName + '.lnk')
+    if (Test-Path -LiteralPath $legacyStartup) {
+        $priorStartup = $shell.CreateShortcut($legacyStartup)
+        if ($priorStartup.TargetPath -eq $exe -and $priorStartup.Description -eq 'Game Time Monitor - GameTimeMonitor.bundle.v1') {
+            Copy-Item -LiteralPath $legacyStartup -Destination (Join-Path $backup 'previous-startup.lnk')
+            Remove-Item -LiteralPath $legacyStartup
+        }
+    }
+    foreach ($directory in @([Environment]::GetFolderPath('Programs'))) {
+        $shortcutName = 'Keep Improving'
         $linkPath = Join-Path $directory ($shortcutName + '.lnk')
         $oldProgramLink = Join-Path $directory ($StartupName + '.lnk')
         if ($linkPath -ne $oldProgramLink -and (Test-Path -LiteralPath $oldProgramLink)) {
@@ -151,7 +178,7 @@ try {
         }
         $link = $shell.CreateShortcut($linkPath)
         $link.TargetPath = $exe
-        $link.Arguments = if ($directory -eq [Environment]::GetFolderPath('Startup')) { '--background --data-dir "' + $DataDir + '"' } else { '--data-dir "' + $DataDir + '"' }
+        $link.Arguments = '--data-dir "' + $DataDir + '"'
         $link.WorkingDirectory = $InstallDir
         $link.Description = 'Game Time Monitor - GameTimeMonitor.bundle.v1'
         $link.IconLocation = $exe + ',0'
@@ -221,7 +248,11 @@ try {
     }
     "Installed $($payload.Version) to $InstallDir. Data: $DataDir" | Set-Content -LiteralPath $taskLog -Encoding UTF8
     if (-not $NoStart) {
-        Start-Process -FilePath $exe -ArgumentList @('--data-dir',('"' + $DataDir + '"')) -WindowStyle Hidden -WorkingDirectory $InstallDir
+        # An upgrade resumes monitoring and startup reminders in the tray. It
+        # must not leave a Hub behind the reminder that appears when dismissed.
+        $taskStartArguments = @('--data-dir',('"' + $DataDir + '"'))
+        if ($old) { $taskStartArguments = @('--background') + $taskStartArguments }
+        Start-Process -FilePath $exe -ArgumentList $taskStartArguments -WindowStyle Hidden -WorkingDirectory $InstallDir
     }
     if (-not $Quiet) {
         Add-Type -AssemblyName PresentationFramework

@@ -1,87 +1,44 @@
-# Keep Improving Android – 0.1.0 előzetes
+# Keep Improving Androidra — 0.6.0
 
-**[Android telepítő letöltése — 0.1.0 előzetes (.apk)](https://github.com/Blintboi/keep-improving/raw/refs/heads/main/downloads/KeepImproving-Android.apk)** · [SHA-256 ellenőrzőösszeg](../downloads/KeepImproving-Android.apk.sha256) · [English](README.md)
+**[Letöltés Android 8.0 vagy újabb rendszerre (.apk)](https://github.com/Blintboi/keep-improving/raw/refs/heads/main/downloads/KeepImproving-Android.apk)** · [SHA-256](../downloads/KeepImproving-Android.apk.sha256) · [English](README.md) · [Windows-alkalmazás](../README.hu.md)
 
-A telefon önálló eszköz: saját használatot mér, és ugyanahhoz a titkosított
-statisztikai csoporthoz csatlakozik, mint a számítógépek. Android 8.0 vagy újabb
-rendszerre készül. A Windows-verzió számozásától független.
+Mérd a telefonhasználatodat, nézd meg az időt és a munkameneteket, és állíts napi kereteket. A telefon önállóan működik, de titkosított statisztikákat és támogatott szabályokat is megoszthat a számítógépeiddel. Verziószámozása a Windowstól független.
 
-## Kipróbálás
+## Telepítés és összekapcsolás
 
-1. A telefonodon koppints a fenti **Android telepítő letöltése** hivatkozásra,
-   majd nyisd meg a letöltött APK-t. Az Android szükség esetén engedélyt kér a fájlt
-   megnyitó alkalmazásból történő telepítéshez.
-2. Az alkalmazásban engedélyezd a használati hozzáférést. A mérés ettől kezdődik;
-   üzeneteket, begépelt szöveget és képernyőtartalmat nem olvas.
-3. A **Statisztikák → Eszközök és szinkron** részen add meg a PC-n már használt
-   összekapcsolási kódot. Ez nem a böngészőkiterjesztés párosítási kódja.
-4. A PC-n is indíts szinkronizálást, amikor a telefon feltöltése befejeződött.
-   A telefon külön eszközként jelenik meg. A szolgáltatás tízperces korlátja és
-   a csoport közös szinkronizálási kerete továbbra is érvényes.
+1. Töltsd le az APK-t a telefonon, és nyisd meg. Szükség esetén engedélyezd a csomag telepítését a letöltéshez használt alkalmazásnak. A meglévő appra telepíts, hogy megmaradjanak az adatok; előtte ne távolítsd el.
+2. Nyisd meg a Keep Improvingot, és engedélyezd a **használati hozzáférést** a méréshez.
+3. Gyors korlátozáshoz kapcsold be a **Beállítások → Alkalmazások eltakarása** lehetőséget. Az opcionális kisegítő szolgáltatás az alkalmazás és ablak azonosságát használja, nem olvas képernyőszöveget, bevitelt vagy gesztusokat. Az Android-beállítások megnyitása előtt elmagyarázza az engedélyt.
+4. Add meg az értesítési engedélyt, amikor kéri. Android 12-től az **Ébresztések és emlékeztetők** engedélye is kellhet a pontos háttéridőzítéshez; nélküle az időzítés közelítő.
+5. A **Beállítások → Eszközök és szinkron** alatt add meg a Windows-programban használt kapcsolati kódot. Ez nem a böngészőbővítmény párosítási kódja. Tartsd titokban.
 
-Az előzetes közvetlen APK-letöltéssel telepíthető, nem alkalmazásboltból.
+Az alkalmazás közvetlen APK-letöltéssel érhető el, nem alkalmazásboltból. A frissítések ugyanazt az aláírókulcsot használják. A telefon energiatakarékossága késleltetheti a gyűjtést és az emlékeztetőket; kényszerített leállítás után újra meg kell nyitni az appot a háttérműködéshez.
 
-## Az első előzetes tartalma
+## Mire használhatod?
 
-- Alkalmazások és Android által játékként jelölt programok használati ideje,
-  napi bontásban, helyi SQLite-előzményekkel és telefonos alkalmazásikonokkal.
-- Összesített és eszközönkénti statisztikák; napos, heti és havi nézet,
-  alkalmazás-, játék- és weboldalszűrő. Weboldaladatot a PC-ktől tud átvenni;
-  a telefon böngészőjét alkalmazásként méri.
-- Csatlakozás a meglévő kóddal; kézi és megnyitáskori szinkron, offline cache.
-- Magyar és angol felület. A mérés, az eszköznév és a nyelv a Beállításokban van.
+- **Áttekintés:** idő vagy munkamenetszám választható, dátumra, eszközre és tevékenységtípusra szűrhetsz, kereshetsz, rendezhetsz és CSV-t exportálhatsz az Android fájlválasztójával. A mért számok legalábbjel nélkül jelennek meg; frissítéskor megmarad a görgetés helye.
+- **Alkalmazások:** kijelölheted a telepített appokat, játékot jelölhetsz és kizárhatsz tevékenységeket a mérésből. A saját felület és a rendszerképernyők nem számítanak a használati összegbe.
+- **Keretek:** alkalmazások vagy kategóriák, érvényes napok, megújulási idő és opcionális perckeret választható. Figyelmeztetés, korlátozás vagy szünet használati idő, időpont vagy napi munkamenetszám alapján is indulhat. Öt engedélyezett munkamenetnél a hatodik váltja ki a műveletet. Az átfedő kijelölések egyszer számolják az alkalmazást.
+- **Fókusz:** Pomodoro, szüneteltetés és folytatás, rövid és hosszú szünetek, valamint kijelölt alkalmazások kitakarása. Az időzítő és a befejezett körök újraindítás után is megmaradnak.
+- **Értesítések:** időponthoz, alkalmazásmegnyitáshoz és napi fókuszcélhoz kapcsolódó emlékeztetők hanggal, bezárási idővel, fókuszt vagy alkalmazást indító művelettel.
+- **Eszközök:** a telefonos és PC-s keretek, emlékeztetők közös listában látszanak, eszközjelöléssel és szűréssel. Egy szabály egy eszközre, elnevezett csoportra vagy minden kapcsolt eszközre vonatkozhat. Az egyes platformok alkalmazásait külön kell kijelölni.
 
-Telefonos időkeretek, értesítések, fókusztiltás, webhelyenkénti telefonos mérés,
-PC-beállítások távoli szerkesztése és új összekapcsolási kód létrehozása még nincs
-ebben az előzetesben. A meglévő PC-beállításokat nem módosítja.
+A számláló csendes, folyamatos értesítés. Bekapcsolt védelemnél követi az előtérbeli appváltást; rábökve megnyílnak a Keretek. A Beállításokban kikapcsolható. A kezdőlap, beállítások, engedélykérő és tárcsázó képernyők nem takarhatók ki. A védelem önkéntes, nem megkerülhetetlen.
 
-Az Android rögzíti a használati eseményeket. Az alkalmazás megnyitáskor és az
-Android által ütemezett, legalább 15 perces helyi háttérfeladatban menti őket.
-Nincs folyamatos figyelőszolgáltatás vagy háttérbeli hálózati lekérdezés. Az Android
-késleltetheti a feladatot; ha több nap eseménye már nem kérhető le, a hiányzó időt
-nem találjuk ki. Megosztott képernyőn a legutóbb előtérbe került alkalmazást méri.
-Ez alkalmazásban töltött idő, nem a lezárt képernyő vagy a háttérben szóló zene ideje.
+A telefon a saját böngészőjét alkalmazásként méri. Weboldal-előzmények a kapcsolt PC-kről érkezhetnek; a telefon böngészőlapjait nem méri és tiltja külön. A Windows megnyitási célválasztója, válaszonkénti kerete és **Szünet most** művelete Androidon még nem érhető el.
 
-## Adatok és frissítés
+## Munkamenetek és szinkron
 
-A szinkron a meglévő Free csomagos Game Monitor szolgáltatást használja.
-A kódból külön HMAC-SHA256 hitelesítési és AES-256-GCM titkosítási kulcs származik;
-a formátum a PC-vel azonos. A szerver nem kapja meg a kódot vagy a titkosítási
-kulcsot. A telefon kódját az Android Keystore védi. Nincsenek szolgáltatói
-adminisztrátori kulcsok az APK-ban. Más eszközről letöltött idő nem kerül a telefon
-saját feltöltésébe. A leválasztás megtartja a helyi telefonos előzményeket.
+Egy munkamenet folyamatos, mért előtérbeli használat, a kezdőnapjára számítva. Egy app belső képernyői közötti váltás nem hoz létre új munkamenetet. A régebbi előzmények csak a ténylegesen mérhető adatot tartalmazzák.
 
-A frissítés ugyanazzal a csomagnévvel és aláírókulccsal, eltávolítás nélkül
-telepítendő. A helyi építés tartós saját kulcsot tárol a
-`%LOCALAPPDATA%/KeepImprovingAndroidSigning` mappában, a jelszót Windows DPAPI-val
-védve. Ezt meg kell őrizni a későbbi frissítésekhez; nem kerül a forráskódba vagy
-az APK mellé. A telefonos felhőmentés és automatikus eszközmásolás ki van kapcsolva,
-mert a Keystore-kulcs és az eszközazonosság nem másolható biztonságosan így.
+Csak a telefon saját használata töltődik fel; az átvett gépadat nem kerül fel még egyszer. A pillanatképek a készüléken, a meglévő kapcsolati kóddal titkosítódnak. A kapcsolódási titkokat az Android Keystore védi. A helyi előzmény az app saját adatbázisában marad; önmagában nincs titkosítva.
 
-## Fejlesztés és ellenőrzés
+A megnyitott eszközök időszakosan keresnek változásokat; szerkesztéskor korábbi szinkronkérés indul. Az Android a háttérmunkát kötegelheti, a szolgáltatás kvótái és újrapróbálási ideje elsőbbséget élveznek. Kapcsolat nélkül a helyi mérés és időzítés folytatódik. A közös keret az utolsó átvett összesítéssel számol, ezért az offline eszközök átmenetileg túlléphetik az együttes határt. A szinkron állapota látható az alkalmazásban.
 
-JDK 21, Android SDK 36 / Build Tools 36.0.0 és a projekt Python-környezete kell.
-A Gradle 8.14 wrapper SHA-256-tal ellenőrzött, a függőségek verziója rögzített.
-Nincsenek külső futásidejű Android-függőségek.
+Engedélyezett USB-hibakeresési kapcsolatnál fejlesztőként a `build/venv-security/Scripts/python.exe android/usb_sync.py` paranccsal is szinkronizálhatsz a projektmappából. Mindkét eszközön ugyanaz a kapcsolati kód és futó Windows-app kell. A korlátozott méretű, titkosított átvitel törli az ideiglenes fájljait; a felhős kvótákat nem nullázza.
 
-```powershell
-.\android\build.ps1
-```
+## Fejlesztés és adatvédelem
 
-A script külön, ASCII elérési utas építési környezetet használ; nem javítja vagy
-törli más projektek Gradle-cache-ét. Lefuttatja a Java/Robolectric teszteket,
-az Android lintet, a Python–Java titkosítási és valódi SQLite-importpróbát,
-majd ellenőrzi az APK aláírását és kiírja a helyi APK-t a SHA-256 fájllal.
-A tesztek szintetikus adatokat használnak, nem a felhasználó profilját vagy
-éles szinkronkódját. Natív renderelésű HU/EN képek a helyi építés után:
-`%LOCALAPPDATA%/KeepImprovingDev/android-build/app/ui/`.
+Az `android/build.ps1` teszteket, lintet, APK-építést, Android/Windows titkosítási együttműködési és aláírás-ellenőrzést futtat. JDK 21-et és Android SDK 36-ot használ. Az aláírókulcs és jelszava a repón kívül marad; frissítéshez őrizd meg az eredeti kulcsot.
 
-A fizikai telefonos telepítést és a gyártó energiatakarékossági viselkedését külön
-ki kell próbálni. A helyi gép Android-emulátorához nincs hardveres gyorsítás;
-a szoftveres emulátor nem indult el, ezért ez a build Robolectric-eszköztesztekkel
-és natív grafikus rendereléssel ellenőrzött, nem fizikai telefonon.
-
-Alapul szolgáló dokumentáció: [UsageStatsManager](https://developer.android.com/reference/android/app/usage/UsageStatsManager),
-[használati események](https://developer.android.com/reference/android/app/usage/UsageEvents.Event),
-[Android build kompatibilitás](https://developer.android.com/build/releases/agp-8-11-0-release-notes),
-[Robolectric kompatibilitás](https://robolectric.org/compatibility_table/).
+[Adatvédelem](../PRIVACY.md), [biztonság](../SECURITY.md), [teszteredmények](../TESTING.md), [GitHub Issues](https://github.com/Blintboi/keep-improving/issues). Hibajelentésbe ne tegyél kapcsolati kódot, tokent vagy személyes használati adatbázist.

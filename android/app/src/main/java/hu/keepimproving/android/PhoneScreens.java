@@ -1,0 +1,84 @@
+package hu.keepimproving.android;
+
+import android.app.*;
+import android.content.*;
+import android.net.Uri;
+import android.os.Build;
+import android.provider.Settings;
+import android.view.*;
+import android.widget.*;
+import org.json.*;
+import java.util.*;
+
+final class PhoneScreens {
+    static void note(MainActivity a,LinearLayout box,String en,String hu){box.addView(a.text(a.t(en,hu),14,MainActivity.MUTED));}
+    static void details(MainActivity a,LinearLayout box,String title,String en,String hu){box.addView(a.button(title,()->new AlertDialog.Builder(a).setTitle(title).setMessage(a.t(en,hu)).setPositiveButton(a.t("Close","Bezárás"),null).show()));}
+    static void overview(MainActivity a){
+        RemoteFocus.show(a);
+        if(a.state==null)return;
+        LinearLayout box=a.card();box.setTag("overview-day");a.heading(box,a.t("Your day","A mai napod"));PhoneScreens.note(a,box,"All devices · latest sync","Minden eszköz · legutóbbi szinkron szerint");box.addView(a.text(a.state.rounds()+a.t(" completed focus rounds"," befejezett fókuszkör"),18,MainActivity.ACCENT));
+        if(a.state.focus().optBoolean("running")){box.addView(a.text(phase(a)+" · "+PhoneLocale.timer(PhoneFocus.remaining(a.state.focus(),PhoneRuntime.now(a))),20,MainActivity.TEXT));box.addView(a.button(R.string.focus,()->a.showPage(4)));}
+        else box.addView(a.button(a.t("Start a focus session","Fókuszidő indítása"),()->a.showPage(4)));
+        int active=0;for(var b:UnifiedRules.rows(a,"budget",RemoteScreens.pcs(a)))if(b.value().optBoolean("enabled"))active++;box.addView(a.text(active+a.t(" enabled budgets"," bekapcsolt keret"),14,MainActivity.MUTED));
+    }
+    static String phase(MainActivity a){return switch(a.state.focus().optString("phase")){case "short"->a.t("Short break","Rövid szünet");case "long"->a.t("Long break","Hosszú szünet");default->a.t("Focus","Fókusz");};}
+    static void readiness(MainActivity a){
+        boolean usage=PhoneUsage.allowed(a),protection=ShieldService.connected(),notifications=PhoneNotifications.allowed(a),exact=PhoneAlarms.exact(a);
+        if(usage&&protection&&notifications&&exact)return;LinearLayout box=a.card();a.heading(box,a.t("Permissions","Engedélyek"));
+        if(!usage)note(a,box,"Usage access is needed to measure app time.","Az alkalmazásidő méréséhez használati hozzáférés szükséges.");
+        if(!protection)note(a,box,"App covering is off. You can enable it separately in Accessibility settings.","Az eltakarás kikapcsolva. Külön engedélyezheted a Kisegítő lehetőségeknél.");
+        if(!notifications)note(a,box,"Notifications are off.","Az értesítések ki vannak kapcsolva.");
+        if(!exact)note(a,box,"Allow alarms and reminders for timely background alerts.","A pontos háttérjelzésekhez engedélyezd az ébresztőket és emlékeztetőket.");
+        box.addView(a.button(a.t("Review permissions","Engedélyek beállítása"),()->a.showPage(5)));
+    }
+    static void focus(MainActivity a){
+        RemoteFocus.show(a);
+        if(a.state==null)return;LinearLayout box=a.card();a.heading(box,phase(a));a.countdown=a.text(PhoneLocale.timer(PhoneFocus.remaining(a.state.focus(),PhoneRuntime.now(a))),52,MainActivity.ACCENT);a.countdown.setGravity(Gravity.CENTER);box.addView(a.countdown);
+        box.addView(a.text(a.t("Today: ","Ma: ")+a.state.rounds()+a.t(" rounds · Session: "," kör · Ebben a sorozatban: ")+a.state.focus().optInt("round"),14,MainActivity.MUTED));
+        boolean running=a.state.focus().optBoolean("running");box.addView(a.button(running?a.t("Pause","Szüneteltetés"):a.t("Start / continue","Indítás / folytatás"),()->command(a,running?"pause":"start")));
+        box.addView(a.button(a.t("Stop and reset","Leállítás és újrakezdés"),()->new AlertDialog.Builder(a).setTitle(a.t("Reset this timer?","Alaphelyzetbe állítod az időzítőt?")).setMessage(a.t("Completed rounds remain in your history.","A befejezett körök megmaradnak az előzményekben.")).setNegativeButton(R.string.cancel,null).setPositiveButton(a.t("Reset","Alaphelyzet"),(d,w)->command(a,"stop")).show()));
+        LinearLayout config=a.card();a.heading(config,a.t("Your rhythm","A saját ritmusod"));config.addView(a.text(a.state.config().optInt("work")+" / "+a.state.config().optInt("short")+" / "+a.state.config().optInt("long")+a.t(" min"," perc"),24,MainActivity.TEXT));
+        note(a,config,"Focus / short break / long break","Fókusz / rövid szünet / hosszú szünet");config.addView(a.button(a.t("Timer and blocked apps","Időzítő és eltakart alkalmazások"),()->PhoneEditor.focus(a)));readiness(a);
+    }
+    static void command(MainActivity a,String command){String token=a.state.focus().optString("token");a.edit(()->PhoneRuntime.command(a,command,token));}
+    static void budgets(MainActivity a){UnifiedRules.show(a,"budget");}
+    static void budgetCard(MainActivity a,PhoneRuntime.BudgetView item,UnifiedRules.Labels labels){
+            JSONObject b=item.rule();LinearLayout box=a.card();box.setTag("rule:phone:"+b.optString("id"));a.heading(box,b.optString("name"));labels.badge(a,box,b,labels.local);String label=!b.optBoolean("enabled")?a.t("Disabled","Kikapcsolva"):!PhoneRules.active(b,java.time.LocalDate.now().toString())?a.t("Rest day","Ma nem aktív"):item.result().pause()?a.t("Break until ","Szünet eddig: ")+java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(new Date(item.result().until())):item.result().blocked()?a.t("Time reached","Keret elérve"):a.t("Available","Felhasználható");box.addView(a.text(label,14,MainActivity.ACCENT));
+            long limit=b.optLong("minutes")*60000;box.addView(a.text(b.optBoolean("limit")?a.duration(Math.max(0,limit-item.used())/1000):a.duration(item.used()/1000),30,MainActivity.TEXT));box.addView(a.text(a.t("Used: ","Felhasználva: ")+a.duration(item.used()/1000)+(b.optBoolean("limit")?" / "+a.duration(limit/1000):a.t(" · no daily time limit"," · napi időkorlát nélkül")),14,MainActivity.MUTED));
+            if(PhoneRules.sessionSteps(b))box.addView(a.text(a.t("Sessions today: ","Mai munkamenetek: ")+item.sessions(),18,MainActivity.TEXT));
+            if(b.optBoolean("limit")&&limit>0){ProgressBar bar=new ProgressBar(a,null,android.R.attr.progressBarStyleHorizontal);bar.setProgress((int)Math.min(100,item.used()*100/limit));box.addView(bar);}
+            switchRule(a,box,"budget",b);box.addView(a.button(a.t("Edit budget","Keret szerkesztése"),()->PhoneEditor.budget(a,b)));delete(a,box,"budget",b);
+    }
+    static void switchRule(MainActivity a,LinearLayout box,String kind,JSONObject value){Switch on=new Switch(a);on.setText(a.t("Enabled","Bekapcsolva"));on.setTextColor(MainActivity.TEXT);on.setMinHeight(a.dp(48));on.setChecked(value.optBoolean("enabled"));on.setOnCheckedChangeListener((button,enabled)->{JSONObject saved=PhoneRules.copy(value);PhoneRules.set(saved,"enabled",enabled);a.edit(()->{try(PhoneStore store=new PhoneStore(a)){store.saveRule(kind,saved);}});});box.addView(on);}
+    static void delete(MainActivity a,LinearLayout box,String kind,JSONObject value){box.addView(a.button(a.t("Delete","Törlés"),()->new AlertDialog.Builder(a).setTitle(a.t("Delete this rule?","Törlöd ezt a szabályt?")).setMessage(value.optString(kind.equals("budget")?"name":"title")).setNegativeButton(R.string.cancel,null).setPositiveButton(a.t("Delete","Törlés"),(d,w)->a.edit(()->{try(PhoneStore store=new PhoneStore(a)){store.deleteRule(kind,value.optString("id"));}a.getSharedPreferences("drafts",0).edit().remove(kind+":"+value.optString("id")).apply();})).show()));}
+    static void reminders(MainActivity a){UnifiedRules.show(a,"notification");RemoteScreens.receiving(a);}
+    static void reminderCard(MainActivity a,JSONObject r,UnifiedRules.Labels labels){
+        LinearLayout box=a.card();box.setTag("rule:phone:"+r.optString("id"));a.heading(box,r.optString("title").isBlank()?RemoteLabels.label(a,r.optString("trigger")):r.optString("title"));labels.badge(a,box,r,labels.local);box.addView(a.text(r.optString("text"),15,MainActivity.MUTED));String trigger=switch(r.optString("trigger")){case "startup"->a.t("On opening · once a day","Megnyitáskor · naponta egyszer");case "rounds"->r.optInt("rounds")+a.t(" focus rounds today"," mai fókuszkör után");default->String.format(Locale.ROOT,"%02d:%02d",r.optInt("clock")/60,r.optInt("clock")%60);};box.addView(a.text(trigger,16,MainActivity.ACCENT));switchRule(a,box,"reminder",r);box.addView(a.button(a.t("Edit reminder","Emlékeztető szerkesztése"),()->PhoneEditor.reminder(a,r)));delete(a,box,"reminder",r);
+    }
+    static void activities(MainActivity a){
+        LinearLayout box=a.card();note(a,box,"Manage the apps on this phone. Tap an app to change its category, exclude its time or add it to a budget.","A telefon alkalmazásai. Koppints egy alkalmazásra a kategóriához, a mérésből kizáráshoz vagy kerethez adáshoz.");EditText search=new EditText(a);search.setHint(a.t("Search applications","Alkalmazás keresése"));search.setSingleLine(true);box.addView(search);LinearLayout rows=a.column();box.addView(rows);int[] limit={40};
+        Runnable[] render={null};render[0]=()->{rows.removeAllViews();String query=search.getText().toString().toLowerCase(Locale.ROOT);int n=0;for(var app:a.apps){if(!app.name().toLowerCase(Locale.ROOT).contains(query)&&!app.pkg().contains(query))continue;if(n++>=limit[0])continue;LinearLayout line=new LinearLayout(a);line.setGravity(Gravity.CENTER_VERTICAL);line.setPadding(0,a.dp(6),0,a.dp(6));ImageView icon=new ImageView(a);try{icon.setImageDrawable(a.getPackageManager().getApplicationIcon(app.pkg()));}catch(Exception ignored){icon.setImageResource(R.drawable.ic_launcher);}icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);line.addView(icon,new LinearLayout.LayoutParams(a.dp(36),a.dp(36)));Button label=a.button(app.name()+"\n"+(app.excluded()?a.t("Excluded","Mérésből kizárva"):app.game()?a.getString(R.string.games):a.getString(R.string.apps)),()->app(a,app));label.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);line.addView(label,new LinearLayout.LayoutParams(0,-2,1));rows.addView(line);}if(n==0)rows.addView(a.text(a.t("No matching applications","Nincs találat"),14,MainActivity.MUTED));if(n>limit[0])rows.addView(a.button(R.string.show_more,()->{limit[0]+=40;render[0].run();}));};search.addTextChangedListener(PhoneEditor.watcher(s->{limit[0]=40;render[0].run();}));render[0].run();
+    }
+    static void app(MainActivity a,AppCatalog.Item app){
+        LinearLayout box=a.column();box.setPadding(a.dp(20),a.dp(8),a.dp(20),a.dp(16));box.addView(a.text(app.pkg(),12,MainActivity.MUTED));
+        try(PhoneStore store=new PhoneStore(a)){JSONObject one=PhoneRules.budget();PhoneRules.set(one,"apps",new JSONArray().put(app.pkg()));box.addView(a.text(a.t("Today: ","Ma: ")+a.duration(store.used(one,PhoneRuntime.day(store,System.currentTimeMillis()))/1000),22,MainActivity.ACCENT));}
+        Switch excluded=new Switch(a);excluded.setText(a.t("Exclude from measurement","Kizárás a mérésből"));excluded.setMinHeight(a.dp(48));excluded.setChecked(app.excluded());box.addView(excluded);Switch game=new Switch(a);game.setText(a.t("Treat as game","Játékként kezelve"));game.setMinHeight(a.dp(48));game.setChecked(app.game());box.addView(game);
+        if(a.state!=null){boolean chosen=PhoneRules.contains(a.state.config().optJSONArray("apps"),app.pkg());box.addView(a.button(chosen?a.t("Remove from focus block","Kivétel a fókusztiltásból"):a.t("Cover during focus","Eltakarás fókusz közben"),()->a.edit(()->{try(PhoneStore store=new PhoneStore(a)){JSONObject config=store.json("focus_config",PhoneFocus.defaults());PhoneRules.set(config,"apps",membership(config.optJSONArray("apps"),app.pkg(),!chosen));store.put("focus_config",config.toString());}})));
+            box.addView(a.button(a.t("Add to budget","Kerethez adás"),()->{String[] names=new String[a.state.budgets().size()+1];names[0]=a.t("New budget","Új keret");for(int i=1;i<names.length;i++)names[i]=a.state.budgets().get(i-1).rule().optString("name");new AlertDialog.Builder(a).setTitle(a.t("Choose budget","Keret kiválasztása")).setItems(names,(d,index)->{JSONObject b=index==0?PhoneRules.budget():PhoneRules.copy(a.state.budgets().get(index-1).rule());if(index==0)PhoneRules.set(b,"name",app.name());PhoneRules.set(b,"apps",membership(b.optJSONArray("apps"),app.pkg(),true));PhoneEditor.budget(a,b);}).setNegativeButton(R.string.cancel,null).show();}));}
+        new AlertDialog.Builder(a).setTitle(app.name()).setView(box).setNegativeButton(R.string.cancel,null).setPositiveButton(R.string.save,(d,w)->a.edit(()->{try(PhoneStore store=new PhoneStore(a)){PhoneUsage.collect(a,store);store.put("excluded",membership(PhoneRules.array(store.get("excluded","[]")),app.pkg(),excluded.isChecked()).toString());store.put("game_apps",membership(PhoneRules.array(store.get("game_apps","[]")),app.pkg(),game.isChecked()).toString());store.put("nongame_apps",membership(PhoneRules.array(store.get("nongame_apps","[]")),app.pkg(),!game.isChecked()).toString());store.getWritableDatabase().execSQL("UPDATE usage SET game=? WHERE package=?",new Object[]{game.isChecked()?1:0,app.pkg()});}})).show();
+    }
+    static JSONArray membership(JSONArray old,String id,boolean add){LinkedHashSet<String> values=new LinkedHashSet<>();if(old!=null)for(int i=0;i<old.length();i++)values.add(old.optString(i));if(add)values.add(id);else values.remove(id);return new JSONArray(values);}
+    static void open(MainActivity a,Intent intent){try{a.startActivity(intent);}catch(ActivityNotFoundException e){Toast.makeText(a,a.t("Open this permission in Android Settings.","Nyisd meg ezt az engedélyt az Android beállításaiban."),Toast.LENGTH_LONG).show();}}
+    static void permissions(MainActivity a){
+        LinearLayout box=a.card();a.heading(box,a.t("Permissions and protection","Engedélyek és védelem"));
+        box.addView(a.button((PhoneUsage.allowed(a)?"✓ ":"○ ")+a.t("Usage access","Használati hozzáférés"),()->open(a,new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS,Uri.parse("package:"+a.getPackageName())))));
+        box.addView(a.button((PhoneNotifications.allowed(a)?"✓ ":"○ ")+a.t("Notifications","Értesítések"),()->{if(Build.VERSION.SDK_INT>=33&&!PhoneNotifications.allowed(a))a.requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},201);else open(a,new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,a.getPackageName()));}));
+        if(Build.VERSION.SDK_INT>=31)box.addView(a.button((PhoneAlarms.exact(a)?"✓ ":"○ ")+a.t("Alarms and reminders","Ébresztők és emlékeztetők"),()->open(a,new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,Uri.parse("package:"+a.getPackageName())))));
+        box.addView(a.button((ShieldService.connected()?"✓ ":"○ ")+a.t("App covering","Alkalmazások eltakarása"),()->new AlertDialog.Builder(a).setTitle(R.string.protection_label).setMessage(R.string.protection_description).setNegativeButton(R.string.cancel,null).setPositiveButton(a.t("Open settings","Beállítások megnyitása"),(d,w)->open(a,new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))).show()));
+    }
+    static void settings(MainActivity a){
+        LinearLayout counter=a.card();a.heading(counter,a.t("Budget counter","Keret számlálója"));Switch enabled=new Switch(a);enabled.setText(a.t("Show the counter in a notification","Számláló megjelenítése értesítésben"));enabled.setTextColor(MainActivity.TEXT);enabled.setMinHeight(a.dp(48));try(PhoneStore s=new PhoneStore(a)){enabled.setChecked(s.get("budget_counter","true").equals("true"));}enabled.setOnCheckedChangeListener((b,on)->a.edit(()->{try(PhoneStore s=new PhoneStore(a)){s.put("budget_counter",Boolean.toString(on));}}));counter.addView(enabled);note(a,counter,"Shows the active budget silently.","Az aktív keretet mutatja, hangjelzés nélkül.");
+        LinearLayout box=a.card();a.heading(box,a.t("Daily reset","Napi megújulás"));int minute;try(PhoneStore store=new PhoneStore(a)){minute=(int)store.number("day_start",0);}box.addView(a.button(String.format(Locale.ROOT,"%02d:%02d",minute/60,minute%60),()->new TimePickerDialog(a,(picker,h,m)->a.edit(()->{try(PhoneStore store=new PhoneStore(a)){PhoneUsage.collect(a,store);store.put("day_start",Integer.toString(h*60+m));}}),minute/60,minute%60,true).show()));note(a,box,"Phone budgets renew at this time.","Ekkor újulnak meg a telefon keretei.");
+        LinearLayout data=a.card();a.heading(data,a.t("Data and privacy","Adatok és adatvédelem"));details(a,data,a.t("Privacy","Adatvédelem"),"Shared usage and rules are encrypted. App exclusions and protection permissions stay on each device.","A megosztott használati adatok és szabályok titkosítottak. A kizárások és a védelmi engedélyek az adott eszközön maradnak.");data.addView(a.button(a.t("Export statistics (CSV)","Statisztikák exportálása (CSV)"),a::export));a.content.addView(a.text("Keep Improving · Android 0.4.2",13,MainActivity.MUTED));
+    }
+}

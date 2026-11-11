@@ -74,7 +74,7 @@ def game_overlay_dialog(app,gid=None,*,targets=None):
     layout=QVBoxLayout(window); layout.setContentsMargins(26,24,26,24); layout.setSpacing(12)
     layout.addWidget(back_button(t,window.reject),0,Qt.AlignLeft)
     note=label(t('Choose the budget default or a member to customize its countdown.' if budget else
-                 'This appearance belongs to the activity. Activities sharing a time budget can have different countdowns.'),'muted'); note.setWordWrap(True); layout.addWidget(note)
+                 'This appearance belongs to the activity. Activities sharing a budget can have different countdowns.'),'muted'); note.setWordWrap(True); layout.addWidget(note)
     targets=targets or CountdownTargets(app)
     games=NoWheelComboBox(); games.setAccessibleName(t('Countdown target'))
     games.setSizePolicy(QSizePolicy.Expanding,QSizePolicy.Fixed)

@@ -1,4 +1,6 @@
-importScripts('policy.js', 'dashboard_update.js', 'local_update.js');
+importScripts('sites.js','policy.js', 'dashboard_update.js', 'local_update.js', 'continuity.js','site-choices.js');
+const continuity = new BrowserContinuityWorker();
+const websiteChoices = new WebsiteChoices();
 let timer, busy = false, rerun = false, signature = '', leaseUntil = 0;
 let policy = {active: false, tracking: true, allow: [], block: [], mode: 'blocklist'};
 let blockedTabs = {};
@@ -100,14 +102,52 @@ async function activeTab() {
 
 function publicHost(tab) {
   if (!tab || tab.incognito) return '';
-  try {
-    const url = new URL(tab.url || '');
-    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return '';
-    const host = url.hostname.toLowerCase().replace(/\.$/, '');
-    if (!host.includes('.') || /^[\d.]+$/.test(host) || host.includes(':') ||
-      /\.(local|localhost|internal|test|invalid)$/.test(host)) return '';
-    return host;
-  } catch { return ''; }
+  return SiteIdentity.key(tab.url || '');
+}
+function trackedHost(tab) {
+  const host=publicHost(tab);
+  return SiteIdentity.local(host) && !(policy.local_sites || []).includes(host)?'':host;
+}
+
+async function applyPolicyTabs(tab) {
+  // Include matching background media tabs; re-read before each mutation.
+  for (const candidate of await chrome.tabs.query({})) {
+    const recordBefore = blockedTabs[candidate.id];
+    if (isRedirectLanding(recordBefore,candidate.url)) continue;
+    const blockedPage = blockKey(candidate.url)!==null;
+    const fromRedirect=atRedirectDestination(recordBefore,candidate.url) &&
+      !!siteDecision(recordBefore.host,policy,recordBefore.token).kind;
+    const host = fromRedirect ? recordBefore.host : trackedHost(candidate) || (blockedPage ? recordBefore?.host : '');
+    if (!host || candidate.incognito) continue;
+    let record = recordBefore;
+    if (!record || record.host !== host) record = {host, url: candidate.url, token: crypto.randomUUID().replaceAll('-', '')};
+    const decision = siteDecision(host, policy, record.token);
+    if (!decision.kind) continue;
+    if (blockedPage && decision.kind !== 'close' && decision.kind !== 'redirect') {
+      if ((!blockKey(candidate.url) || candidate.url.startsWith('http://127.0.0.1:')) && validRecord(record)) {
+        const current=await chrome.tabs.get(candidate.id).catch(()=>null);
+        if (current && current.url===candidate.url && !current.incognito)
+          await chrome.tabs.update(current.id,{url:chrome.runtime.getURL('blocked.html')+'?key='+record.token});
+      }
+      continue;
+    }
+    const current = await chrome.tabs.get(candidate.id).catch(() => null);
+    if (!current || current.url !== candidate.url || current.incognito) continue;
+    let target='';
+    if (decision.kind === 'redirect') {
+      target=redirectTarget({host:record.host,token:record.token,url:decision.redirect_url},policy);
+      if (target) record.redirect_url=decision.redirect_url;
+      else delete record.redirect_url;
+    } else delete record.redirect_url;
+    blockedTabs[current.id] = record; await saveBlocked();
+    if (decision.kind === 'close') await chrome.tabs.remove(current.id);
+    else if (target) {
+      await setPolicy(policy);
+      await chrome.tabs.update(current.id, {url: target});
+      if (current.id === tab?.id) rerun = true;
+    } else if (!blockedPage) await chrome.tabs.update(current.id, {url: chrome.runtime.getURL('blocked.html') + '?key=' + record.token});
+  }
+  await restoreReleasedTabs();
 }
 
 async function sync() {
@@ -118,77 +158,52 @@ async function sync() {
     await restored;
     await recoverTabs();
     const {pairing, browser = 'brave'} = await chrome.storage.local.get(['pairing', 'browser']);
+    await continuity.load(pairing,browser);
     if (!pairing) {
       await setPolicy({active: false, tracking: true, allow: [], block: [], mode: 'blocklist'});
       await restoreReleasedTabs();
       return;
     }
     const tab = await activeTab();
-    const host = publicHost(tab);
+    const host = trackedHost(tab);
     const landing=tab && blockedTabs[tab.id];
     const redirectBudget=isRedirectLanding(landing,tab?.url) ? siteDecision(landing.host,policy,landing.token).redirect_key : '';
+    // A full journal must still be able to reconnect and drain its durable
+    // records. sample rolls back unsaved mutations before this recovery path.
+    const choosing=websiteChoices.pending?.tabId===tab?.id && websiteChoices.pending?.host===host;
+    try {await continuity.sample(tab,choosing?'':host,redirectBudget || '');}
+    catch {continuity.error='Browser storage is full. Reconnect the desktop application.';}
     const response = await fetch(`http://127.0.0.1:${pairing.port}/activity`, {
       method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(3000),
       headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + pairing.token},
-      body: JSON.stringify({browser, restriction_version: 1, domain: policy.tracking ? host : '', focused: !!tab, private: !!tab?.incognito,
+      body: JSON.stringify({browser, restriction_version: 1, choice_version:1, local_version:1, domain: policy.tracking ? host : '', focused: !!tab, private: !!tab?.incognito,
         idle: braveNewTab(tab, browser), redirect_budget: policy.tracking ? redirectBudget || '' : ''})
     });
+    if ([401,403].includes(response.status)) {continuity.model.value.snapshot=null;await continuity.save();}
     if (!response.ok) throw new Error('Connection unavailable');
-    await setPolicy(await response.json());
+    const next=await response.json();
+    if(next.continuity_version===1) await continuity.exchange(pairing);
+    const selected=next.continuity_version===1 && continuity.model.value.snapshot ?
+      (continuity.connected ? continuity.policy || next : offlinePolicy(continuity.model.value.snapshot)) : next;
+    await setPolicy(selected);
+    if(host!==trackedHost(tab))rerun=true;
     if (redirectBudget && !isRedirectLanding(landing,tab?.url)) rerun = true;
-    await chrome.action.setBadgeText({text: policy.active ? 'LIMIT' : ''});
-    // Include matching background media tabs; re-read before each mutation.
-    for (const candidate of await chrome.tabs.query({})) {
-      const recordBefore = blockedTabs[candidate.id];
-      if (isRedirectLanding(recordBefore,candidate.url)) continue;
-      const blockedPage = blockKey(candidate.url)!==null;
-      const fromRedirect=atRedirectDestination(recordBefore,candidate.url) &&
-        !!siteDecision(recordBefore.host,policy,recordBefore.token).kind;
-      const host = fromRedirect ? recordBefore.host : publicHost(candidate) || (blockedPage ? recordBefore?.host : '');
-      if (!host || candidate.incognito) continue;
-      let record = recordBefore;
-      if (!record || record.host !== host) record = {host, url: candidate.url, token: crypto.randomUUID().replaceAll('-', '')};
-      const decision = siteDecision(host, policy, record.token);
-      if (!decision.kind) continue;
-      if (blockedPage && decision.kind !== 'close' && decision.kind !== 'redirect') {
-        if ((!blockKey(candidate.url) || candidate.url.startsWith('http://127.0.0.1:')) && validRecord(record)) {
-          const current=await chrome.tabs.get(candidate.id).catch(()=>null);
-          if (current && current.url===candidate.url && !current.incognito)
-            await chrome.tabs.update(current.id,{url:chrome.runtime.getURL('blocked.html')+'?key='+record.token});
-        }
-        continue;
-      }
-      const current = await chrome.tabs.get(candidate.id).catch(() => null);
-      if (!current || current.url !== candidate.url || current.incognito) continue;
-      let target='';
-      if (decision.kind === 'redirect') {
-        target=redirectTarget({host:record.host,token:record.token,url:decision.redirect_url},policy);
-        if (target) record.redirect_url=decision.redirect_url;
-        else delete record.redirect_url;
-      } else delete record.redirect_url;
-      blockedTabs[current.id] = record; await saveBlocked();
-      if (decision.kind === 'close') await chrome.tabs.remove(current.id);
-      else if (target) {
-        await setPolicy(policy);
-        await chrome.tabs.update(current.id, {url: target});
-        if (current.id === tab?.id) rerun = true;
-      } else if (!blockedPage) await chrome.tabs.update(current.id, {url: chrome.runtime.getURL('blocked.html') + '?key=' + record.token});
-    }
-    await restoreReleasedTabs();
-    await chrome.storage.session.set({connected: true, lastContact: Date.now()});
+    await applyPolicyTabs(tab);
+    await websiteChoices.sync(tab,host,selected,pairing,browser);
+    await chrome.storage.session.set({connected: next.continuity_version===1 ? continuity.connected : true, lastContact: Date.now()});
     await saving;
-    await checkLocalExtensionUpdate(policy.extension_version);
-  } catch {
-    // A closed monitor, expired pairing or network error must release browser restrictions.
-    await setPolicy({active: false, tracking: true, allow: [], block: [], mode: 'blocklist'});
-    await restoreReleasedTabs();
-    await chrome.action.setBadgeText({text: '!'});
+    await checkLocalExtensionUpdate(next.extension_version);
+  } catch (error) {
+    if(/storage|quota/i.test(error?.message || '')) continuity.error='Browser storage is full. Reconnect the desktop application.';
+    const fallback=await continuity.offline().catch(()=>continuity.model?.value.snapshot ? offlinePolicy(continuity.model.value.snapshot) : null);
+    await setPolicy(fallback || {active: false, tracking: true, allow: [], block: [], mode: 'blocklist'});
+    await applyPolicyTabs(null);
     await chrome.storage.session.set({connected: false});
   } finally {
     busy = false;
-    if ((policy.active || (policy.restrictions || []).length) && Date.now() >= leaseUntil)
+    if (continuity.connected && (policy.active || (policy.restrictions || []).length) && Date.now() >= leaseUntil)
       await setPolicy({...policy, active: false, restrictions: []});
-    timer = setTimeout(sync, policy.active || (policy.restrictions || []).length ? 2000 : 10000);
+    timer = setTimeout(sync, websiteChoices.pending || policy.active || (policy.restrictions || []).length || continuity.model?.value.snapshot?.focus.running ? 2000 : 10000);
     if (rerun) { rerun = false; clearTimeout(timer); timer = setTimeout(sync, 0); }
   }
 }
@@ -201,6 +216,7 @@ chrome.tabs.onRemoved.addListener(async (id,info) => {
   await saveBlocked(); sync();
 });
 chrome.windows.onFocusChanged.addListener(sync);
+chrome.idle?.onStateChanged.addListener(sync);
 chrome.storage.onChanged.addListener((changes, area) => { if (area === 'local' && (changes.pairing || changes.browser)) sync(); });
 chrome.alarms.onAlarm.addListener(sync);
 chrome.runtime.onStartup.addListener(sync);
@@ -234,6 +250,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const decision = siteDecision(record.host, policy, record.token);
     if (message.action === 'status') return {...decision, ok: true, language: policy.language || 'en'};
     if (message.action === 'extend' && decision.minutes > 0) {
+      if(!continuity.connected && continuity.model?.value.snapshot) {
+        if(!await continuity.extend(record.host,record.token)) return {ok:false};
+        await setPolicy(offlinePolicy(continuity.model.value.snapshot));await applyPolicyTabs(null);
+      } else {
       const {pairing} = await chrome.storage.local.get('pairing');
       const response = await fetch(`http://127.0.0.1:${pairing.port}/restriction-extension`, {
         method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(4000),
@@ -245,6 +265,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       while (busy && Date.now() < timeout) await new Promise(resolve => setTimeout(resolve, 50));
       if (busy) return {ok: false};
       await sync();
+      }
     }
     if (message.action === 'return' || message.action === 'extend') {
       const current = await chrome.tabs.get(sender.tab.id);
@@ -260,4 +281,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   })().then(sendResponse, () => sendResponse({ok: false}));
   return true;
 });
+chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
+  if(message.action!=='choice.accept' || sender.id!==chrome.runtime.id) return;
+  (async()=>{
+    const {pairing}=await chrome.storage.local.get('pairing');
+    const result=await websiteChoices.choose(message,sender,pairing);
+    if(result.ok) sync();
+    return result;
+  })().then(sendResponse,()=>sendResponse({ok:false}));
+  return true;
+});
+chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
+  if(message.action!=='continuity.control' || sender.id!==chrome.runtime.id ||
+      !['/panel.html','/popup.html'].includes(new URL(sender.url || chrome.runtime.getURL('/')).pathname)) return;
+  (async()=>{
+    const deadline=Date.now()+4000;
+    while(busy && Date.now()<deadline) await new Promise(resolve=>setTimeout(resolve,25));
+    if(busy || continuity.connected) return {ok:false};
+    busy=true;
+    try {return await continuity.control(message.command);}
+    finally {busy=false;}
+  })().then(sendResponse,()=>sendResponse({ok:false}));
+  return true;
+});
 sync();
+
+// Clear legacy toolbar labels once, including unpaired and offline starts.
+chrome.action.setBadgeText({text: ''});

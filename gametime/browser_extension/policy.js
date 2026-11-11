@@ -1,4 +1,17 @@
 /* Shared pure policy functions, also exercised by the Node regression tests. */
+const policySites=typeof module!=='undefined'?require('./sites.js'):globalThis.SiteIdentity;
+const localAllowed=(host,policy)=>!policySites.local(host) ||
+  host!==`127.0.0.1:${policy.bridge_port}` && (policy.local_sites || []).includes(host);
+function siteConditions(domains,policy) {
+  const result=[],publicDomains=domains.filter(s=>!policySites.local(s));
+  if(publicDomains.length)result.push({requestDomains:publicDomains});
+  for(const host of domains.filter(s=>policySites.local(s)&&localAllowed(s,policy)))result.push({regexFilter:policySites.pattern(host)});
+  return result;
+}
+function allSiteConditions(policy) {
+  return [{regexFilter:'^https?://',excludedRequestDomains:['localhost','127.0.0.1','[::1]']},
+    ...siteConditions((policy.local_sites || []).filter(s=>policySites.local(s)),policy)];
+}
 // The URL itself stays inside the extension; only a boolean is sent locally.
 function braveNewTab(tab, browser) {
   if (browser !== 'brave' || !tab || tab.incognito || !tab.url) return false;
@@ -10,6 +23,7 @@ function braveNewTab(tab, browser) {
 }
 
 function siteBlocked(host, policy) {
+  if(!localAllowed(host,policy))return false;
   const matches = rule => host === rule || host.endsWith('.' + rule);
   return policy.active && (policy.block.some(matches) ||
     (policy.mode === 'allowlist' && !policy.allow.some(matches)));
@@ -20,27 +34,22 @@ function focusRules(policy) {
   const redirect = {type: 'redirect', redirect: {extensionPath: '/blocked.html'}};
   const rules = [];
   let id = 1;
+  const add=(conditions,priority,action)=>{for(const condition of conditions)rules.push({id:id++,priority,action,condition:{...condition,resourceTypes:['main_frame']}});};
   if (policy.active && policy.mode === 'allowlist') {
-    rules.push({id: id++, priority: 1, action: redirect,
-      condition: {regexFilter: '^https?://', excludedRequestDomains: ['localhost', '127.0.0.1'], resourceTypes: ['main_frame']}});
-    if (policy.allow.length) rules.push({id: id++, priority: 2, action: {type: 'allow'},
-      condition: {requestDomains: policy.allow, resourceTypes: ['main_frame']}});
+    add(allSiteConditions(policy),1,redirect);
+    add(siteConditions(policy.allow,policy),2,{type:'allow'});
   }
-  if (policy.active && policy.block.length) rules.push({id: id++, priority: 3, action: redirect,
-    condition: {requestDomains: policy.block, resourceTypes: ['main_frame']}});
+  if (policy.active)add(siteConditions(policy.block,policy),3,redirect);
   for (const entry of policy.restrictions || []) {
     if (entry.grant_only) continue;
     if (!entry.all && !entry.domains.length) continue;
-    const condition = {resourceTypes: ['main_frame']};
-    if (entry.all) Object.assign(condition, {regexFilter: '^https?://', excludedRequestDomains: ['localhost', '127.0.0.1']});
-    else condition.requestDomains = entry.domains;
-    rules.push({id: id++, priority: 3, action: redirect, condition});
+    add(entry.all?allSiteConditions(policy):siteConditions(entry.domains,policy),3,redirect);
   }
   for (const grant of policy.tabGrants || []) {
     if (siteDecision(grant.host, policy, grant.token).kind) continue;
     rules.push({id: id++, priority: 4, action: {type: 'allow'},
-      condition: {tabIds: [grant.tabId], requestDomains: [grant.host], resourceTypes: ['main_frame'],
-        regexFilter: '^https?://' + grant.host.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?::[0-9]+)?/'}});
+      condition: {tabIds: [grant.tabId],...(!policySites.local(grant.host)?{requestDomains:[grant.host]}:{}),resourceTypes: ['main_frame'],
+        regexFilter:policySites.pattern(grant.host)}});
   }
   for (const grant of policy.redirectGrants || []) {
     const allowed = redirectTarget(grant, policy);
@@ -65,12 +74,13 @@ function redirectTarget(grant, policy) {
     const target = new URL(grant.url);
     if (!['http:', 'https:'].includes(target.protocol) || target.username || target.password) return '';
     const others = {...policy, restrictions: (policy.restrictions || []).filter(e => e.key !== decision.redirect_key)};
-    if (siteDecision(target.hostname.toLowerCase().replace(/\.$/, ''), others).kind) return '';
+    if (siteDecision(policySites.key(target.href), others).kind) return '';
     return target.href;
   } catch { return ''; }
 }
 
 function siteDecision(host, policy, token = '', now = Date.now() / 1000) {
+  if(!localAllowed(host,policy))return {kind:'',minutes:0,names:[]};
   if (siteBlocked(host, policy)) return {kind: 'cover', minutes: 0, names: []};
   const matches = entry => (!entry.grant_only || entry.grant && entry.grant.subject === `site:${host}:${token}` && entry.grant.until > now) &&
     (entry.all || entry.domains.some(rule => host === rule || host.endsWith('.' + rule)));
@@ -86,6 +96,7 @@ function siteDecision(host, policy, token = '', now = Date.now() / 1000) {
     names: active.map(e => e.name)};
   if (kind === 'redirect') { result.redirect_url = redirect.redirect_url; result.redirect_key = redirect.key; }
   const breakUntil = Math.max(0, ...active.map(e => e.break_until || 0));
+  if (active.some(e => e.requires_desktop)) result.requires_desktop = true;
   if (breakUntil > now) result.break_until = breakUntil;
   return result;
 }

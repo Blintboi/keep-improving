@@ -21,10 +21,13 @@ class BudgetAccess:
         row.addStretch(); box.addLayout(row)
         self.widget.setToolTip(self.t('A selected day starts at this budget’s daily renewal time.'))
         self.none=label(self.t('This budget is inactive until you select a day.'),'muted'); self.none.setWordWrap(True); box.addWidget(self.none)
+        from .qt_device_scope import DeviceScope
+        self.devices=DeviceScope(editor.app,budget=True);box.addWidget(self.devices);self.devices.changed.connect(self.scope_changed)
 
     def saved(self,settings):
         self.active_days=deepcopy(settings.budget_active_days); self.usage_limits=dict(settings.budget_usage_limits)
         self.changed_days=set(); self.changed_limits=set()
+        self.device_scopes=deepcopy(settings.budget_devices);self.changed_scopes=set()
 
     def choose(self,key):
         self.loading=True
@@ -33,6 +36,7 @@ class BudgetAccess:
         enabled=self.usage_limits.get(key,True)
         self.editor.usage_limit.setChecked(enabled); self.editor.shared_usage_limit.setChecked(enabled)
         self.none.setVisible(not values); self.widget.setVisible(bool(key))
+        self.devices.set_value(self.device_scopes.get(key));self.devices.setVisible(bool(key) and key!='computer-window' and not key.startswith('computer-'))
         self.loading=False
 
     def select(self,days):
@@ -55,9 +59,16 @@ class BudgetAccess:
         else: self.usage_limits[key]=False
         self.changed_limits.add(key); self.editor.controls(); self.editor.steps.refresh_state()
 
+    def scope_changed(self):
+        key=self.editor.current
+        if self.loading or not key:return
+        self.device_scopes[key]=self.devices.value();self.changed_scopes.add(key)
+        if hasattr(self.editor,'drafts'):self.editor.drafts.queue()
+
     def discard(self,key,settings):
         for destination,source,changed in ((self.active_days,settings.budget_active_days,self.changed_days),
-                                           (self.usage_limits,settings.budget_usage_limits,self.changed_limits)):
+                                           (self.usage_limits,settings.budget_usage_limits,self.changed_limits),
+                                           (self.device_scopes,settings.budget_devices,self.changed_scopes)):
             if key in source: destination[key]=deepcopy(source[key])
             else: destination.pop(key,None)
             changed.discard(key)
@@ -65,10 +76,11 @@ class BudgetAccess:
     def remove(self,key):
         self.active_days.pop(key,None); self.usage_limits.pop(key,None)
         self.changed_days.add(key); self.changed_limits.add(key)
+        self.device_scopes.pop(key,None);self.changed_scopes.add(key)
 
     def values(self,base):
         result={}
-        for field,draft,changed in (('budget_active_days',self.active_days,self.changed_days),('budget_usage_limits',self.usage_limits,self.changed_limits)):
+        for field,draft,changed in (('budget_active_days',self.active_days,self.changed_days),('budget_usage_limits',self.usage_limits,self.changed_limits),('budget_devices',self.device_scopes,self.changed_scopes)):
             values=deepcopy(getattr(base,field))
             for key in changed:
                 if key in draft: values[key]=deepcopy(draft[key])

@@ -22,6 +22,7 @@ public final class SyncProtocol {
         text(value.getString("name"),80); date(value.getString("started"));
         validateRows(value.getJSONArray("rows"),false);
         if(value.has("activity")) { date(value.getString("activity_started")); validateRows(value.getJSONArray("activity"),true); }
+        if(value.has("sessions"))SessionCounts.validate(value.getJSONObject("sessions"));
         return value;
     }
     private static void validateRows(JSONArray rows,boolean activity) throws Exception {

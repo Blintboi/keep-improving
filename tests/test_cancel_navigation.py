@@ -18,22 +18,26 @@ class CancelNavigationTests(unittest.TestCase):
         buttons=[button for button in window.findChildren(QPushButton) if button.accessibleName()==self.app.t('Back without saving') and not button.text()]
         self.assertTrue(buttons); self.assertFalse(buttons[0].autoDefault()); buttons[0].click(); self.pump(.02)
 
-    def test_contextual_settings_direct_folders_and_global_day_start(self):
+    def test_global_settings_only_in_sidebar_and_linking_stays_on_statistics(self):
         app=self.app; app.show()
-        self.assertIn(2,app.nav)
-        for index,context in ((1,'overview'),(5,'budgets'),(6,'notifications')):
-            app.switch_page(index); self.pump(.02)
-            controls=[w for w in app.pages.currentWidget().findChildren(QPushButton) if w.property('settingsContext')==context]
-            self.assertEqual(len(controls),1)
-            self.assertTrue(controls[0].isVisible()); self.assertEqual(controls[0].accessibleName(),app.t('Page settings'))
-        for index in (0,4):
-            app.switch_page(index)
-            self.assertFalse(any(w.property('settingsContext') for w in app.pages.currentWidget().findChildren(QPushButton)))
-        app.nav[2].click(); self.assertTrue(app.nav[2].isChecked()); self.assertTrue(app.global_day_start.isVisible())
-        app.switch_page(0); self.assertTrue(app.game_folders_button.isVisible()); app.game_folders_button.click()
-        self.assertEqual(app.pages.currentIndex(),2); self.assertTrue(app.settings_sections['games'].isVisible())
-        self.assertEqual(app.settings_back.text(),''); self.assertEqual(app.settings_back.accessibleName(),app.t('Back without saving'))
-        app.settings_back.click(); self.assertEqual(app.pages.currentIndex(),0)
+        for language in ('hu','en'):
+            app.set_language(language)
+            for index in (0,1,4,5,6):
+                app.switch_page(index); self.pump(.02)
+                controls=app.pages.currentWidget().findChildren(QPushButton)
+                self.assertFalse(any(w.property('settingsContext') for w in controls))
+                self.assertFalse(any(w.isVisible() and w.text()==app.t('Game folders') for w in controls))
+            app.switch_page(1); app.statistics.computers_button.click()
+            self.assertTrue(app.statistics.computer_panel.isVisible())
+            self.assertTrue(any(w.isVisible() and w.text()==app.t('Link computers') for w in app.statistics.findChildren(QPushButton)))
+            app.statistics.computers_button.click()
+            app.nav[2].click(); self.assertTrue(app.global_day_start.isVisible())
+            self.assertTrue(app.activity_tracking.isVisible())
+            self.assertFalse(any(w.text()==app.t('Link computers') for w in app.settings_page.findChildren(QPushButton)))
+            app.show_settings_section('reminders'); self.assertTrue(app.display_settings.isVisible())
+            self.assertEqual(app.display_settings.parentWidget(),app.settings_sections['reminders'])
+            app.show_settings_section('games'); self.assertTrue(app.games_path.isVisible())
+            app.settings_back.click(); self.assertEqual(app.pages.currentIndex(),1)
 
     def test_exclusive_fullscreen_does_not_mark_invisible_notification_delivered(self):
         from gametime.tracker import Sample,Alert

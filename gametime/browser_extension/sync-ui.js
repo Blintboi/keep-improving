@@ -12,8 +12,11 @@ import {
 } from "./client.js";
 
 export async function syncPanel(ctx) {
-  const root = ctx.content;
-  let state = (await api("sync.state")).result,
+  const root = ctx.subview("Computers & sync", "overview");
+  const response = await api("sync.state");
+  if (!root.isConnected) return;
+  ctx.acceptRevision(response.revision);
+  let state = response.result,
     code = "",
     enabled = state.enabled,
     name = state.name;
@@ -29,7 +32,6 @@ export async function syncPanel(ctx) {
   const actions = el("div", { class: "row" }),
     devices = el("div", { class: "list" });
   root.replaceChildren(
-    button("Back", () => ctx.go("settings"), "quiet"),
     card(
       el("h2", {}, t("Linked computers")),
       account,

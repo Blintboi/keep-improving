@@ -2,12 +2,13 @@
 import ntpath
 from PySide6.QtCore import Qt,QSize,QPoint,QTimer
 from PySide6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QListWidget,QListWidgetItem,QFileDialog,QInputDialog
-from .qt_translation import QLineEdit
+from .qt_translation import QLineEdit,QCheckBox
 from .qt_widgets import label,button,panel
 from .activities import activity_key,activity_settings,has_budget,known_activities,matching_rules
 from .wellbeing import target
 from .activity_identity import canonical_member
 from .qt_activity_icons import ActivityIcons
+from .qt_scroll import preserving
 
 
 class ActivityList(QWidget):
@@ -20,6 +21,9 @@ class ActivityList(QWidget):
             self.browser_connection=button(app.t('Browser connection'),lambda:app.focus_page.browser_dialog())
             search.addWidget(self.browser_connection)
         box.addLayout(search)
+        self.show_excluded=QCheckBox(app.t('Show excluded'));self.show_excluded.toggled.connect(self.filter)
+        if kind=='app':box.addWidget(self.show_excluded)
+        else:self.show_excluded.hide()
         self.note=label(app.t('Measured activities appear here automatically. You can also add one with the Add button.'),'muted'); self.note.setWordWrap(True); box.addWidget(self.note)
         self.list=QListWidget(); self.list.setAccessibleName(app.t('Applications' if kind=='app' else 'Websites')); self.list.setIconSize(QSize(42,42))
         self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -30,7 +34,8 @@ class ActivityList(QWidget):
         self.name=label('','section'); self.name.setWordWrap(True); heading.addWidget(self.name,1); detail.addLayout(heading)
         self.status=label('','muted'); self.status.setWordWrap(True); detail.addWidget(self.status)
         self.countdown=button(app.t('Countdown settings…'),self.edit_countdown,'primary'); detail.addWidget(self.countdown)
-        self.budget=button(app.t('Set time budget…'),self.edit_budget); detail.addWidget(self.budget)
+        self.budget=button(app.t('Set budget…'),self.edit_budget); detail.addWidget(self.budget)
+        self.tracking=button(app.t('Restore'),self.toggle_tracking);detail.addWidget(self.tracking);self.tracking.setVisible(kind=='app')
         side=QVBoxLayout(); side.addWidget(self.detail); side.addStretch(); content.addLayout(side); self.detail.hide()
         self.search.textChanged.connect(self.filter); self.list.currentItemChanged.connect(self.select)
         self.list.itemDoubleClicked.connect(lambda *_:self.edit_countdown() if self.countdown.isEnabled() else self.edit_budget())
@@ -82,11 +87,20 @@ class ActivityList(QWidget):
         sources={}
         self.entries=[(member,name) for member,name in known_activities(self.app.store,self.app.settings,self.app.catalog,sources) if member['kind']==self.kind]
         self.icons.set_sources(sources)
+        self.sources=sources
         self.filter()
 
+    def excluded(self,member):
+        return member['kind']=='app' and all(self.app.focus.settings.app_excluded(path) for path in getattr(self,'sources',{}).get(activity_key(member),[member['value']]))
+
+    def toggle_tracking(self):
+        if member:=self.selected():
+            self.app.focus.set_app_tracking(member['value'],self.excluded(member));self.refresh();self.app.update_focus_policy()
+
+    @preserving(lambda self:self.list)
     def filter(self,*args):
         selected=self.selected(); key=activity_key(selected) if selected else None; query=self.search.text().strip().casefold()
-        rows=[(member,name) for member,name in self.entries if query in (name+' '+member['value']).casefold()]
+        rows=[(member,name) for member,name in self.entries if query in (name+' '+member['value']).casefold() and (self.show_excluded.isChecked() or not self.excluded(member))]
         signature=(self.app.settings.language,[(activity_key(m),n,self.summary(m)) for m,n in rows])
         if signature!=self.signature:
             self.signature=signature; self.list.blockSignals(True); self.list.clear(); self._items={}; self._displayed_icons={}
@@ -102,16 +116,18 @@ class ActivityList(QWidget):
         self.empty.setVisible(not rows); self.list.setVisible(bool(rows)); self.select(); self.schedule_icons()
 
     def summary(self,member):
+        if self.excluded(member):return self.app.t('Excluded')
         rules=matching_rules(self.app.settings,member)
-        return ', '.join(rule['name'] for rule in rules) if rules else self.app.t('No time budget')
+        return ', '.join(rule['name'] for rule in rules) if rules else self.app.t('No budget')
 
     def select(self,*args):
         member=self.selected(); self.detail.setVisible(member is not None)
         if not member: return
+        self.tracking.setText(self.app.t('Restore' if self.excluded(member) else 'Exclude'))
         self.name.setText(next((name for item,name in self.entries if item==member),member['value']))
         available=has_budget(self.app.settings,member); self.countdown.setEnabled(available)
         self.status.setText(self.app.t('Countdown on' if activity_settings(self.app.settings,member).overlay_enabled else 'Countdown off') if available else
-                            self.app.t('Set an individual or shared time budget first to use a countdown.'))
+                            self.app.t('Set an individual or shared budget first to use a countdown.'))
         self.display_icon(activity_key(member),self.icons.icon(member,self.name.text())); self.schedule_icons()
 
     def edit_countdown(self):

@@ -58,7 +58,7 @@ A korlátozás nem ad hozzá automatikus figyelmeztetést. Az egyéni keret elfo
 
 ## Állapot és erőforrások
 
-Az Értesítések megjelenítési beállításainál a **Részletes RTSS-számláló** kikapcsolható. Ekkor az RTSS-számlálón csak a következő eseményig hátralévő idő látszik; az esemény neve és a kisebb napi keret sor elmarad. Az asztali számláló és a tálca továbbra is részletes marad. A választás újraindítás után is megmarad.
+A **Beállítások → Emlékeztetők** alatt a **Részletes RTSS-számláló** kikapcsolható. Ekkor az RTSS-számlálón csak a következő eseményig hátralévő idő látszik; az esemény neve és a kisebb napi keret sor elmarad. Az asztali számláló és a tálca továbbra is részletes marad. A választás újraindítás után is megmarad.
 
 A tervek és az egyszeri jogosultságok helyiek, nem szinkronizálódnak. A `restriction_state` SQLite-tábla megőrzi az adott napra kiadott értesítéseket, lejáratot és hosszabbítást; a hosszabbítás tranzakciója újra ellenőrzi, hogy azt nem használták-e már el. A meglévő egy másodperces előtérmintavétel indítja a lépéseket. A bezárás háttérszálon vár, nem fagyasztja a felületet. Hangkezelő csak aktív némításkor fut, a böngésző pedig csak aktív tiltáskor ellenőriz sűrűbben.
 

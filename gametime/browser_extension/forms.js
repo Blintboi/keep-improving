@@ -15,13 +15,14 @@ import {
   modal,
   confirmAction,
 } from "./client.js";
-import { syncPanel } from "./sync-ui.js";
 import {
   rulesPanel,
   protectedDisplay,
   updatesPanel,
   iconUpload,
 } from "./library-ui.js";
+import { activityImage } from "./activity-images.js";
+import { choiceFields } from './session-choice-fields.js';
 const grid = (...items) => el("div", { class: "grid" }, items);
 const number = (name, obj, key, min, max, scale = 1) =>
   field(name, obj[key] / scale, (v) => (obj[key] = v * scale), {
@@ -49,6 +50,28 @@ function weekdays(value, changed) {
       ),
     ),
   );
+}
+
+function deviceScope(ctx, rule, budget, changed) {
+  const data = ctx.state.device_scopes;
+  if (!data) return note("Devices");
+  const selections = (data.devices || []).map(d => [{mode: "device", device: d.id}, d.name]);
+  if (data.connection) {
+    selections.push([{mode: "all"}, t("All linked devices")]);
+    for (const [id, group] of Object.entries(data.groups || {}))
+      if (group.connection === data.connection) selections.push([{mode: "group", group: id}, group.name]);
+  }
+  const key = s => s.mode + ":" + (s.device || s.group || "");
+  const current = rule.devices || {mode: "device", device: data.local};
+  if (!selections.some(([s]) => key(s) === key(current))) selections.push([current, t("Unavailable device or group")]);
+  return el("div", {class: "stack"},
+    field("Devices", key(current), value => {
+      rule.devices = clone(selections.find(([s]) => key(s) === value)[0]);
+      if (data.connection) rule.devices.connection = data.connection;
+      if (budget) rule.devices.accounting = "shared";
+      changed();
+    }, {options: selections.map(([s, name]) => [key(s), name])}),
+    note(budget ? "Selected devices share one allowance. Offline totals use the last synchronization." : "This notification appears on the selected devices."));
 }
 
 export function budgetEditor(ctx, source) {
@@ -148,6 +171,7 @@ export function budgetEditor(ctx, source) {
             el(
               "div",
               { class: "item" },
+              activityImage(m, name),
               el("span", { class: "grow" }, name),
               b.kind === "group"
                 ? button(
@@ -194,6 +218,7 @@ export function budgetEditor(ctx, source) {
         el("div", { class: "separator" }),
         weekdays(b.days, changed),
       );
+      if (b.kind !== "computer") basic.append(deviceScope(ctx, b, true, changed));
       body.append(basic);
       if (b.kind !== "computer")
         body.append(
@@ -311,18 +336,19 @@ function actionsEditor(ctx, b, redraw, changed) {
       el(
         "div",
         { class: "row spread" },
-        field(
+        s.session_choice ? el('h3', {}, t('Opening choice')) : field(
           "Actions",
           type,
           (v) => {
             const fresh = clone(ctx.state.default_step);
             fresh.id = s.id;
+            if (s.time_mode) {fresh.time_mode=s.time_mode;fresh.offset=s.offset;if(s.time_mode==='clock')fresh.clock_minute=s.clock_minute;}
             fresh.kind = v === "restrict" ? "cover" : v;
             if (v === "notify") fresh.popup = true;
             if (v === "break")
               Object.assign(fresh, {
-                time_mode: "usage",
-                offset: 1800,
+                time_mode: s.time_mode || "usage",
+                offset: s.time_mode ? s.offset : 1800,
                 break_mode: "cover",
                 break_minutes: 5,
               });
@@ -360,13 +386,15 @@ function actionsEditor(ctx, b, redraw, changed) {
           "When",
           s.time_mode || "relative",
           (v) => {
+            if (v !== 'sessions') delete s.session_choice;
+            if (v !== 'usage') delete s.allow_early_break;
             if (v === "relative") {
               delete s.time_mode;
               delete s.clock_minute;
               s.offset = 0;
             } else {
               s.time_mode = v;
-              s.offset = v === "usage" ? (type === "break" ? 1800 : 0) : 0;
+              s.offset = v === "sessions" ? 5 : v === "usage" ? (type === "break" ? 1800 : 0) : 0;
               if (v === "clock") s.clock_minute = 1200;
               else delete s.clock_minute;
             }
@@ -379,11 +407,13 @@ function actionsEditor(ctx, b, redraw, changed) {
                 ? [
                     ["usage", "After usage (minutes)"],
                     ["clock", "At a time of day"],
+                    ["sessions", "Daily session limit"],
                   ]
                 : [
                     ["usage", "After usage (minutes)"],
                     ["relative", "Relative to limit (minutes)"],
                     ["clock", "At a time of day"],
+                    ["sessions", "Daily session limit"],
                   ],
           },
         ),
@@ -394,7 +424,7 @@ function actionsEditor(ctx, b, redraw, changed) {
               (v) => (s.clock_minute = minutes(v)),
               { type: "time", required: true },
             )
-          : number(
+          : s.time_mode === "sessions" ? (s.session_choice ? null : number("Allowed sessions",s,"offset",1,10000)) : number(
               s.time_mode === "usage"
                 ? "After usage (minutes)"
                 : "Relative to limit (minutes)",
@@ -412,6 +442,10 @@ function actionsEditor(ctx, b, redraw, changed) {
             ),
       ),
     );
+    if(s.time_mode==='sessions') section.append(choiceFields(s,changed,redraw));
+    if (s.session_choice) {box.append(section);continue;}
+    if(s.time_mode==='sessions') section.append(note("The action starts on the next session after the allowed count. The count resets at the budget renewal."));
+    if(s.time_mode==='sessions' && type==='break') section.append(note("After the break, the same number of new sessions is allowed before the next break."));
     if (type === "notify")
       section.append(
         el(
@@ -425,6 +459,11 @@ function actionsEditor(ctx, b, redraw, changed) {
       section.append(
         number("Break length (minutes)", s, "break_minutes", 1, 1440),
       );
+    if(type==='break' && s.time_mode==='usage') section.append(
+      check('Allow “Break now”',!!s.allow_early_break,v=>{
+        if(v)s.allow_early_break=true;else delete s.allow_early_break;changed();redraw();
+      }),
+      ...(s.allow_early_break?[note('After the full break, a fresh usage interval begins. Unused minutes do not carry over; the daily budget is not reset.')]:[]));
     const targets = el("div", { class: "grid" });
     for (const scope of ["app", "site"]) {
       const options = s.targets?.[scope] || {},
@@ -528,6 +567,7 @@ function actionsEditor(ctx, b, redraw, changed) {
 export function notificationEditor(ctx, source) {
   const data = clone({ key: source.key, value: source.value });
   data.value.id ||= data.key.slice(10);
+  data.value.days ||= [0,1,2,3,4,5,6];
   ctx.edit(
     source.title || "Notifications",
     "notification:" + data.key,
@@ -538,10 +578,11 @@ export function notificationEditor(ctx, source) {
           el(
             "div",
             { class: "row spread" },
-            el("h2", {}, t("Notifications")),
+            el("span", {}, t("Title")),
             check("Enabled", n.enabled, (v) => (n.enabled = v)),
           ),
-          field("Title", n.title, (v) => (n.title = v), {
+          field("", n.title, (v) => (n.title = v), {
+            "aria-label": t("Title"),
             maxLength: 80,
             required: !n.template,
             placeholder: source.title || "",
@@ -564,6 +605,9 @@ export function notificationEditor(ctx, source) {
             { options: ctx.state.triggers.map((v) => [v.id, v.name]) },
           ),
         );
+      first.classList.add("notification-editor");
+      first.append(deviceScope(ctx, n, false, changed));
+      first.append(weekdays(n.days, changed));
       if (n.trigger === "time")
         first.append(
           field("Time", timeText(n.minute), (v) => (n.minute = minutes(v)), {
@@ -574,7 +618,7 @@ export function notificationEditor(ctx, source) {
       if (n.trigger === "pomodoros")
         first.append(number("Completed rounds today", n, "count", 1, 1000));
       first.append(
-        el("h3", {}, t("Icon")),
+        el("div", {}, t("Icon")),
         el(
           "div",
           { class: "icons" },
@@ -598,10 +642,15 @@ export function notificationEditor(ctx, source) {
             ),
           ),
         ),
+        iconUpload(ctx, (result) => {
+          n.icon = result.path;
+          changed();
+          redraw();
+        }),
         el(
           "details",
           {},
-          el("summary", {}, t("Icon")),
+          el("summary", {}, t("Custom icon path")),
           field(
             "Icon",
             n.icon.startsWith("preset:") ? "" : n.icon,
@@ -609,13 +658,6 @@ export function notificationEditor(ctx, source) {
             { placeholder: "C:\\Pictures\\icon.png" },
           ),
         ),
-      );
-      first.append(
-        iconUpload(ctx, (result) => {
-          n.icon = result.path;
-          changed();
-          redraw();
-        }),
       );
       body.append(first);
       const action = card(
@@ -833,59 +875,143 @@ export function appearanceEditor(ctx, member) {
   );
 }
 
-export function settingsEditor(ctx) {
+let settingsSection = "general";
+export function settingsEditor(ctx, requested = settingsSection) {
+  settingsSection = requested;
   ctx.edit(
     "Settings",
     "settings",
     { ...ctx.state.settings, tracking: ctx.state.focus.tracking },
-    (body, s, redraw, changed) => {
-      body.append(
+    (body, s, redraw, changed, editorCommand) => {
+      const pages = {};
+      const navigation = el("div", { class: "segments settings-tabs" });
+      function select(key) {
+        settingsSection = key;
+        for (const [id, node] of Object.entries(pages))
+          node.hidden = id !== key;
+        for (const b of navigation.children)
+          b.classList.toggle("selected", b.dataset.section === key);
+      }
+      for (const [key, title] of [
+        ["general", "General"],
+        ["reminders", "Reminders"],
+        ["games", "Game folders"],
+        ["other", "Updates"],
+      ]) {
+        const b = button(title, () => select(key));
+        b.dataset.section = key;
+        navigation.append(b);
+        pages[key] = el("div", {
+          class: "settings-section",
+          hidden: key !== settingsSection,
+        });
+      }
+      body.append(navigation, ...Object.values(pages));
+      pages.general.append(
         card(
-          el("h2", {}, t("General")),
-          grid(
-            field("Language", s.language, (v) => (s.language = v), {
-              options: [
-                ["hu", "Magyar"],
-                ["en", "English"],
-              ],
-            }),
-            field(
-              "Day starts at",
-              timeText(s.budget_reset_minute),
-              (v) => (s.budget_reset_minute = minutes(v)),
-              { type: "time", required: true },
-            ),
-          ),
+          el("h2", {}, t("Day starts at")),
           note(
-            "This day boundary applies to all budgets, statistics and daily reminders.",
+            "One daily boundary for statistics, all budgets and daily reminders.",
           ),
-          check(
-            "Check for updates automatically",
-            s.check_updates,
-            (v) => (s.check_updates = v),
+          field(
+            "",
+            timeText(s.budget_reset_minute),
+            (v) => (s.budget_reset_minute = minutes(v)),
+            { type: "time", required: true, "aria-label": t("Day starts at") },
           ),
+          note("Earlier statistics and already used time are kept."),
+          check("Measure application and website time", s.tracking,
+            (v) => (s.tracking = v)),
         ),
       );
-      body.append(
-        card(
-          el("h2", {}, t("Activities")),
-          check(
-            "Track applications and websites",
-            s.tracking,
-            (v) => (s.tracking = v),
+      const sound = card(
+        el("h2", {}, t("Notification sound")),
+        field(
+          "",
+          s.notification_sound,
+          (v) => {
+            s.notification_sound = v;
+            changed();
+            redraw();
+          },
+          {
+            "aria-label": t("Notification sound"),
+            options: [
+              ["default", "Default sound"],
+              ["information", "Information sound"],
+              ["error", "Attention sound"],
+              ["silent", "Silent"],
+              ["custom", "Custom WAV file"],
+            ],
+          },
+        ),
+      );
+      if (s.notification_sound === "custom")
+        sound.append(
+          field(
+            "Sound file path",
+            s.notification_sound_path,
+            (v) => (s.notification_sound_path = v),
+            { required: true },
           ),
-          field("Games folder", s.games_root, (v) => (s.games_root = v), {
-            required: true,
+        );
+      const protectedToggle = check("Also show in anti-cheat games",
+        ctx.state.protected_display.enabled, () => {
+          const enabled = ctx.state.protected_display.enabled;
+          protectedToggle.querySelector("input").checked = enabled;
+          protectedDisplay({ ...ctx, command: editorCommand }, () => {
+            ctx.state.protected_display.enabled = !enabled;
+            redraw();
+          });
+        });
+      pages.reminders.append(
+        sound,
+        card(
+          check("Show over fullscreen games", s.overlay_rtss_auto,
+            (v) => (s.overlay_rtss_auto = v)),
+          protectedToggle,
+          note("Applies to countdowns and notifications."),
+          el("div", { class: "separator" }),
+          check("Detailed RTSS countdown", s.overlay_rtss_details,
+            (v) => (s.overlay_rtss_details = v)),
+          note("Show the event name and daily budget remaining. Turn off to show only the countdown."),
+        ),
+        card(
+          el("h2", {}, t("Reminder messages")),
+          button("Notifications", () => ctx.go("notifications")),
+          check(
+            "Use countdown for early warning",
+            s.overlay_replace_warning,
+            (v) => (s.overlay_replace_warning = v),
+          ),
+          check(
+            "Daily limit popup",
+            s.limit_popup_enabled,
+            (v) => (s.limit_popup_enabled = v),
+          ),
+        ),
+        el(
+          "details",
+          { class: "card" },
+          el("summary", {}, t("Countdown appearance")),
+          appearanceFields(s, ctx.state.settings),
+        ),
+      );
+      pages.games.append(
+        card(
+          el("h2", {}, t("Games folder")),
+          field("", s.games_root, (v) => (s.games_root = v), {
+            "aria-label": t("Games folder"),
           }),
           check(
-            "Create game shortcuts",
+            "Maintain game shortcuts",
             s.hub_enabled,
             (v) => (s.hub_enabled = v),
           ),
           el(
             "details",
             {},
-            el("summary", {}, t("Game sources")),
+            el("summary", {}, t("Advanced")),
             note("One folder per line"),
             ...["steam_roots", "epic_manifest_dirs", "ubisoft_roots"].map(
               (key) =>
@@ -905,93 +1031,22 @@ export function settingsEditor(ctx) {
                 ),
             ),
           ),
-        ),
-      );
-      body.append(
-        card(
-          el("h2", {}, t("Countdown appearance")),
-          appearanceFields(s, ctx.state.settings),
-          check(
-            "Detailed RTSS countdown",
-            s.overlay_rtss_details,
-            (v) => (s.overlay_rtss_details = v),
-          ),
-          check(
-            "Use countdown for early warning",
-            s.overlay_replace_warning,
-            (v) => (s.overlay_replace_warning = v),
-          ),
-          check(
-            "Daily limit popup",
-            s.limit_popup_enabled,
-            (v) => (s.limit_popup_enabled = v),
-          ),
-        ),
-      );
-      const sound = card(
-        el("h2", {}, t("Notifications")),
-        field(
-          "Notification sound",
-          s.notification_sound,
-          (v) => {
-            s.notification_sound = v;
-            changed();
-            redraw();
-          },
-          {
-            options: [
-              ["default", "Default"],
-              ["information", "Information"],
-              ["error", "Error"],
-              ["silent", "Silent"],
-              ["custom", "Custom sound"],
-            ],
-          },
-        ),
-      );
-      if (s.notification_sound === "custom")
-        sound.append(
-          field(
-            "Sound file path",
-            s.notification_sound_path,
-            (v) => (s.notification_sound_path = v),
-            { required: true },
-          ),
-        );
-      body.append(sound);
-      body.append(
-        card(
-          el("h2", {}, t("Linked computers")),
-          field(
-            "Computer name",
-            s.statistics_device_name,
-            (v) => (s.statistics_device_name = v),
-            { maxLength: 80 },
-          ),
-          el(
-            "p",
-            { class: "pill" },
-            t(ctx.state.sync.enabled ? "Connected" : "Not connected"),
-          ),
-          button("Manage linked computers", () => syncPanel(ctx)),
-        ),
-      );
-      body.append(
-        card(
-          el("h2", {}, t("Advanced settings")),
-          button("Executable exclusions and assignments", () =>
-            rulesPanel(ctx),
-          ),
           button(
-            ctx.state.protected_display.enabled
-              ? "Disable display in protected games"
-              : "Display in protected games",
-            () => protectedDisplay(ctx),
+            "Executable exclusions and assignments",
+            () => rulesPanel(ctx),
+            "quiet",
           ),
         ),
-        updatesPanel(ctx),
       );
-      body.append(
+      pages.other.append(
+        card(
+          check(
+            "Check for updates automatically",
+            s.check_updates,
+            (v) => (s.check_updates = v),
+          ),
+          updatesPanel(ctx),
+        ),
         card(
           el("h2", {}, t("Browser connection")),
           note("Connected to the local application"),
@@ -1010,6 +1065,7 @@ export function settingsEditor(ctx) {
           ),
         ),
       );
+      select(settingsSection);
     },
     "settings.save",
   );
@@ -1069,6 +1125,7 @@ export async function pickApplication(ctx, choose) {
                 choose(a.path);
               },
             },
+            activityImage({ kind: "app", value: a.path }, a.name),
             el(
               "div",
               { class: "grow" },
@@ -1160,7 +1217,11 @@ export function pickMember(ctx, choose) {
               .toLowerCase()
               .includes(search.toLowerCase()),
           )
-          .map((v) => button(v.name, () => select(v.member), "quiet")),
+          .map((v) => {
+            const choice = button("", () => select(v.member), "quiet activity-choice");
+            choice.append(activityImage(v.member, v.name), el("span", {}, v.name));
+            return choice;
+          }),
       );
     }
   }

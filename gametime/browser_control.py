@@ -13,7 +13,7 @@ from PySide6.QtCore import QObject,Signal,Qt
 from . import __version__
 from .focus import FocusSettings
 
-READS={'state','live','statistics','applications','sync.state','update.state'}
+READS={'companion.export','state','live','statistics','applications','library.summary','library.icons','artwork','sync.state','update.state'}
 GENERAL={'games_root','steam_roots','epic_manifest_dirs','ubisoft_roots','hub_enabled','language',
          'check_updates','budget_reset_minute','overlay_enabled','overlay_replace_warning','limit_popup_enabled',
          'overlay_opacity','overlay_font_size','overlay_color_normal','overlay_color_warning','overlay_x','overlay_y',
@@ -75,7 +75,8 @@ class BrowserControl(QObject):
             action=request.get('action'); data=request.get('data',{})
             if not isinstance(action,str) or not isinstance(data,dict): raise ValueError('Invalid request.')
             if getattr(self.app,'closed',False): raise ValueError('The application is closing.')
-            mutating=action not in READS
+            # Journal imports have their own durable sequence and timer tokens.
+            mutating=action not in READS and action not in ('continuity.exchange','choices.status','choices.choose')
             identity=request.get('id','')
             if mutating:
                 if not isinstance(identity,str) or not re.fullmatch('[a-zA-Z0-9-]{16,80}',identity): raise ValueError('Invalid request.')
@@ -86,7 +87,9 @@ class BrowserControl(QObject):
                     return result
                 if request.get('revision')!=self.revision():
                     return {'ok':False,'conflict':True,'error':self.app.t('Settings changed in another window. Refresh before saving; your draft is kept.')}
-            handlers={'state':self.state,'live':self.live,'statistics':self.statistics,'applications':self.applications,
+            from . import companion_transfer
+            from . import browser_choices
+            handlers={'companion.export':lambda data:companion_transfer.export(self.app,data),'companion.import':lambda data:companion_transfer.receive(self.app,data),'continuity.exchange':self.continuity_exchange,'state':self.state,'live':self.live,'statistics':self.statistics,'applications':self.applications,'library.summary':lambda data:self.library.summary(),'library.icons':self.library.activity_icons,'artwork':self.library.artwork,
                       'settings.save':self.settings_save,'focus.save':self.focus_save,'focus.start':self.focus_start,
                       'focus.pause':self.focus_pause,'focus.stop':self.focus_stop,'budget.save':self.budget_save,
                       'budget.delete':self.budget_delete,'notification.save':self.notification_save,
@@ -98,7 +101,10 @@ class BrowserControl(QObject):
                       'sync.rename':self.sync.rename,'activity.add':self.library.activity_add,'game.add':self.library.game_add,
                       'rule.save':self.library.rule_save,'rule.delete':self.library.rule_delete,'library.refresh':self.library.refresh,
                       'game.removal':self.library.removal,'icon.upload':self.library.upload_icon,'update.command':self.library.update,
-                      'update.state':lambda data:self.library.update({'action':'status'}),'display.consent':self.library.display_consent}
+                      'update.state':lambda data:self.library.update({'action':'status'}),'display.consent':self.library.display_consent,
+                      'choices.status':lambda data:browser_choices.request(self.app,data),
+                      'choices.choose':lambda data:browser_choices.request(self.app,data,True),
+                      'break.start':self.break_start}
             if action not in handlers: raise ValueError('Unknown command.')
             result=clean({'ok':True,'result':handlers[action](data),'revision':self.revision()})
             if mutating:
@@ -117,8 +123,20 @@ class BrowserControl(QObject):
         return dict(version=__version__,language=app.settings.language,day=current_day(app.settings).isoformat(),
                     focus=dict(running=focus.running,finished=focus.finished,phase=focus.phase,remaining=focus.remaining,
                                rounds=focus.completed_rounds,today=focus.completed_on(focus.day(datetime.now().astimezone()))),
-                    timers=[dict(asdict(item),label=str(item.label(app.t)),detail=str(item.secondary(app.t))) for item in app.timer_views()],
+                    timers=[dict(asdict(item),label=str(item.label(app.t)),detail=str(item.secondary(app.t))) for item in app.timer_views(wall=datetime.now().astimezone())],
+                    break_actions=app.restrictions.early_break_actions(),
                     revision=self.revision(),sync_busy=bool(getattr(app,'_sync_busy',False)))
+
+    def continuity_exchange(self,data):
+        from . import win32
+        # Close the current native interval before returning a durable receipt.
+        self.app.focus_tick(win32.sample())
+        return self.app.browser_continuity.exchange(data)
+
+    def break_start(self,data):
+        if set(data)!={'key','step'} or not all(isinstance(data[k],str) for k in data):raise ValueError('Invalid request.')
+        if not self.app.restrictions.start_early_break(data['key'],data['step']):raise ValueError('This break is no longer available.')
+        return True
 
     def state(self,data):
         app=self.app; settings=app.settings
@@ -131,8 +149,9 @@ class BrowserControl(QObject):
         hidden=app.store.hidden_ids()
         from .activity_identity import activity_key
         from PySide6.QtWidgets import QApplication
+        all_focus_sites,focus_sites=app.focus.settings.site_rules(settings.wellbeing_rules)
         sources={}; activities=known_activities(app.store,settings,app.catalog,sources)
-        games=[dict(asdict(game),enabled=app.catalog.enabled(game),hidden=game.id in hidden) for game in app.store.games()]
+        games=[dict(asdict(game),enabled=app.catalog.enabled(game),hidden=game.id in hidden) for game in self.library.games().values()]
         inventory={(kind,key):name for kind,key,name in app.store.db.execute('SELECT kind,key,name FROM activity_items')}
         inventory.update(app.focus.items)
         names={'games':app.t('All games'),'apps':app.t('All applications'),'sites':app.t('All websites'),
@@ -140,18 +159,30 @@ class BrowserControl(QObject):
         notifications=[]
         for key,item in [(('builtin:'+kind),builtin(settings,kind)) for kind in KINDS]+[('scheduled:'+r['id'],r) for r in settings.scheduled_notifications]:
             if item: notifications.append(dict(key=key,value=normalized(item),title=title(item,app.t),message=message(item,settings)))
+        icon_entries=list(activities)
+        icon_entries += [(dict(kind=kind,value=value),value) for kind,values in (('app',app.focus.settings.block_apps),('site',app.focus.settings.block_sites)) for value in values]
+        icon_entries += [(dict(kind=kind,value=value),name) for (kind,value),name in inventory.items() if kind in ('app','site')]
+        icon_entries += [(dict(kind='app',value=n['value']['action']['path']),n['title']) for n in notifications if n['value']['action']['kind']=='app']
+        self.library.register_icons(icon_entries,sources,reset=True)
+        self.library.notification_images={n['key']:n['value']['icon'] for n in notifications}
         return dict(live=self.live({}),settings={k:deepcopy(getattr(settings,k)) for k in GENERAL},
-                    focus=asdict(app.focus.settings),activity_appearances=deepcopy(settings.activity_overlays),members=rows(app.focus.settings,settings.wellbeing_rules,app.catalog,inventory,names,app.t),
-                    groups=[dict(id=k,name=str(v)) for k,v in names.items()],games=games,
+                    focus=asdict(app.focus.settings),focus_site_rules=dict(all=all_focus_sites,domains=focus_sites),activity_appearances=deepcopy(settings.activity_overlays),members=rows(app.focus.settings,settings.wellbeing_rules,app.catalog,inventory,names,app.t),
+                    groups=[dict(id=k,name=str(v)) for k,v in names.items()],games=games,library=self.library.summary(),
                     activities=[dict(member=member,name=name,excluded=member['kind']=='app' and all(app.focus.settings.app_excluded(path) for path in sources[activity_key(member)]))
                                 for member,name in activities],
                     budgets=self.budgets(),notifications=notifications,
                     presets=[dict(key='builtin:'+kind,value=normalized(builtin(replace(settings,removed_notifications=[]),kind))) for kind in KINDS],
                     icons=[dict(id=k,name=str(app.t(v))) for k,v in ICONS.items()],triggers=[dict(id=k,name=str(app.t(v))) for k,v in TRIGGERS.items()],
                     default_plan=new_plan(legacy=False),default_step=step('cover',0),
-                    sync=self.sync.state(),executable_rules=dict(app.catalog.rules),
+                    sync=self.sync.state(),device_scopes=self.device_scopes(),executable_rules=dict(app.catalog.rules),
                     protected_display=dict(enabled=app.overlay_consents.display_enabled,notice=str(app.t(DISPLAY_NOTICE))),
                     screens=[screen.name() for screen in QApplication.screens()])
+
+    def device_scopes(self):
+        from .qt_device_scope import devices
+        from .device_scopes import connection
+        s=self.app.settings
+        return dict(local=s.scope_device,connection=connection(s.statistics_sync_group),devices=[dict(id=id,name=str(name)) for id,name in devices(self.app)],groups=deepcopy(s.device_groups))
 
     def budgets(self):
         s=self.app.settings
@@ -169,6 +200,7 @@ class BrowserControl(QObject):
         for entry in entries:
             key=entry['key']; entry.update(days=s.budget_active_days.get(key,list(range(7))),usage=s.budget_usage_limits.get(key,True),
                 plan=deepcopy(s.restriction_plans.get(key)),appearance=deepcopy(s.game_overlays.get(key[5:],{}) if key.startswith('game:') else s.counter_overlays.get(key,{})))
+            if key in s.budget_devices:entry['devices']=deepcopy(s.budget_devices[key])
             entry['legacy']=dict(active=legacy_active(s.restriction_plans,key),warning=key=='shared-games' and legacy_warning_active(s.restriction_plans,key),
                 warning_seconds=s.warning_seconds,restriction=key=='shared-games' and legacy_restriction_active(s.restriction_plans,key) and s.restriction_enabled,
                 restriction_seconds=s.restriction_seconds,enforce=(s.restriction_plans.get(key) or {}).get('legacy_enforce',True) if key.startswith('game:') else entry.get('enforce',False))
@@ -182,8 +214,9 @@ class BrowserControl(QObject):
         from .schedule import current_day
         end=data.get('end',current_day(app.settings).isoformat()); start=data.get('start',end)
         date_range(start,end); category=data.get('category','all'); scope=data.get('scope','all')
-        if category not in ('all','games','apps','sites') or not isinstance(scope,str) or len(scope)>100: raise ValueError('Invalid request.')
-        key=(start,end,category,scope); cached=self.cache.get(key)
+        if category=='sites': category='websites'  # Older browser clients.
+        if category not in ('all','games','apps','websites') or not isinstance(scope,str) or len(scope)>100: raise ValueError('Invalid request.')
+        key=(start,end,category,scope,app.settings.statistics_sync_group,app.settings.language,getattr(app.store,'statistics_revision',0)); cached=self.cache.get(key)
         if cached and time.monotonic()-cached[0]<10: return cached[1]
         app.tracker.flush(); app.focus.flush(); db=app.statistics_data; group=app.settings.statistics_sync_group
         rows=[]; started=db.started_on(group,scope)
@@ -192,14 +225,28 @@ class BrowserControl(QObject):
             rows+=db.activity_history_by_computer(start,end,group,scope,category,app.settings.statistics_device_name)
             other=db.activity_started_on(group,scope); started=min(started,other) if category=='all' else other
         report=summarize((row[:5] for row in rows),start,end,started_on=started,as_of=current_day(app.settings).isoformat())
-        result=dict(asdict(report),total=report.total,average=report.average,computers=db.devices(group),rows=rows)
+        from collections import Counter
+        from .statistics_sync import computer_name
+        aliases=db.device_aliases(group); devices=[(identity,aliases.get(identity,name),since) for identity,name,since in db.devices(group)]
+        counts=Counter(name for identity,name,since in devices)
+        names={'local':str(app.t('{name} (this computer)',name=app.settings.statistics_device_name or computer_name()))}
+        names.update({identity:name+(' · '+identity[:8] if counts[name]>1 else '') for identity,name,since in devices})
+        # Allocate in the same stable order as the desktop chart.
+        for identity in sorted(names): app.statistics.colors.color(identity,'computer')
+        for identity in sorted(row[0] for row in report.games): app.statistics.colors.color(identity,'game')
+        result=dict(asdict(report),total=report.total,average=report.average,computers=db.devices(group),rows=rows,
+                    sessions=db.session_data(group,scope),session_start=start,
+                    started=max(started,start),computer_names=names,computer_colors={identity:app.statistics.colors.color(identity,'computer') for identity in names},
+                    colors={row[0]:app.statistics.colors.color(row[0],'game') for row in report.games})
         self.cache[key]=(time.monotonic(),result)
         while len(self.cache)>12: self.cache.pop(next(iter(self.cache)))
         return result
 
     def applications(self,data):
         from .notification_applications import choices
-        return [dict(path=path,name=name) for path,name in choices(self.app)]
+        entries=choices(self.app)
+        self.library.register_icons([(dict(kind='app',value=path),name) for path,name in entries])
+        return [dict(path=path,name=name) for path,name in entries]
 
     def save(self,settings):
         from .global_day_start import normalize,carry_markers
@@ -237,7 +284,7 @@ class BrowserControl(QObject):
         data=dict(data); tracking=data.pop('tracking',self.app.focus.settings.tracking)
         focus=replace(self.app.focus.settings,tracking=tracking).validate()
         self.save(replace(self.app.settings,**data))
-        self.app.focus.configure(focus); self.app.update_focus_policy(); return True
+        self.app.focus.configure(focus); self.app.activity_tracking.setChecked(tracking); self.app.update_focus_policy(); return True
 
     def focus_save(self,data):
         if set(data)-set(asdict(self.app.focus.settings)): raise ValueError('Invalid focus settings.')
@@ -249,9 +296,12 @@ class BrowserControl(QObject):
 
     def budget_save(self,data):
         s=self.app.settings; key=data['key']; kind=data['kind']
-        if not isinstance(key,str) or not re.fullmatch(r'[A-Za-z0-9_:.-]{1,2100}',key): raise ValueError('Invalid time budget.')
+        if not isinstance(key,str) or not re.fullmatch(r'[A-Za-z0-9_:.-]{1,2100}',key): raise ValueError('Invalid budget.')
         values={}; days=deepcopy(s.budget_active_days); usage=dict(s.budget_usage_limits); plans=deepcopy(s.restriction_plans)
         days[key]=data.get('days',list(range(7))); usage[key]=data.get('usage',True)
+        if data.get('devices') is not None:
+            from .device_scopes import normalize
+            values['budget_devices']={**s.budget_devices,key:normalize(data['devices'],s,budget=True)}
         if data.get('plan') is not None: plans[key]=data['plan']
         else: plans.pop(key,None)
         if kind=='shared' and key=='shared-games':
@@ -279,7 +329,7 @@ class BrowserControl(QObject):
             from .wellbeing import target
             rule['members']=[target(m['kind'],m['value']) for m in rule['members']]
             values['wellbeing_rules']=[r for r in s.wellbeing_rules if r['id']!=key]+[rule]
-        else: raise ValueError('Invalid time budget.')
+        else: raise ValueError('Invalid budget.')
         if 'appearance' in data:
             if not isinstance(data['appearance'],dict) or set(data['appearance'])-APPEARANCE: raise ValueError('Invalid countdown settings.')
             if kind=='shared': values.update(data['appearance'])
@@ -289,7 +339,7 @@ class BrowserControl(QObject):
 
     def budget_delete(self,data):
         key=data['key']; s=self.app.settings
-        if key not in {item['key'] for item in self.budgets()}: raise ValueError('Invalid time budget.')
+        if key not in {item['key'] for item in self.budgets()}: raise ValueError('Invalid budget.')
         values={}
         if key=='shared-games': values['game_budget_enabled']=False
         elif key=='computer-window': values['bedtime_enabled']=False
@@ -345,14 +395,7 @@ class BrowserControl(QObject):
                 if type(hidden) is not bool: raise ValueError('Invalid request.')
                 app.store.set_hidden(key,hidden); app.hidden_ids=app.store.hidden_ids()
         elif kind=='app' and type(enabled) is bool:
-            from .activity_identity import app_identity
-            excluded=list(app.focus.settings.excluded_apps)
-            if enabled: excluded=[path for path in excluded if app_identity(path)!=app_identity(key)]
-            else:
-                paths=[row[0] for row in app.store.db.execute("SELECT key FROM activity_items WHERE kind='app'") if app_identity(row[0])==app_identity(key)]
-                if not paths: raise ValueError('No applications detected yet. Use the computer with activity tracking enabled, or choose an executable.')
-                excluded.extend(path for path in paths if path not in excluded)
-            app.focus.configure(replace(app.focus.settings,excluded_apps=excluded))
+            app.focus.set_app_tracking(key,enabled)
         else: raise ValueError('Invalid request.')
         app.last_rows=None; app.update_focus_policy()
         if app.isVisible(): app.render()

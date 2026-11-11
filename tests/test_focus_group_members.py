@@ -35,7 +35,7 @@ class FocusGroupMemberTests(TestCase):
         before=self.store.db.total_changes; page=self.app.focus_page; page.rule_tabs.setCurrentIndex(0)
         page.block_lists['site'].setCurrentItem(sites['youtube.com']); self.assertFalse(page.remove_rule_button.isEnabled())
         page.remove_rule(); self.assertEqual(self.store.db.total_changes,before)
-        self.assertIn(self.app.t('This entry comes from a group. Change its members in Time budgets or remove the group under Groups.'),page.rules_hint.text())
+        self.assertIn(self.app.t('This entry comes from a group. Change its members in Budgets or remove the group under Groups.'),page.rules_hint.text())
 
     def test_direct_and_inherited_members_merge_but_removing_direct_keeps_group(self):
         group=new_rule('Web',[target('site','youtube.com')],'web')

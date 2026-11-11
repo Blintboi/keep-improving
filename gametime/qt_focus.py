@@ -168,8 +168,8 @@ class FocusPage(QWidget):
         direct=bool(item and item.data(Qt.UserRole+1)); inherited=bool(item and item.data(Qt.UserRole+2))
         self.remove_rule_button.setEnabled(direct)
         if inherited:
-            hint=('Removing the direct entry keeps the group rule. Manage inherited members in Time budgets or remove their group under Groups.' if direct else
-                  'This entry comes from a group. Change its members in Time budgets or remove the group under Groups.')
+            hint=('Removing the direct entry keeps the group rule. Manage inherited members in Budgets or remove their group under Groups.' if direct else
+                  'This entry comes from a group. Change its members in Budgets or remove the group under Groups.')
         elif kind=='site' and 'sites' in getattr(self,'_member_categories',()): hint='All websites are included, including newly detected sites. Known members are listed above.'
         elif kind=='app' and getattr(self,'_member_categories',set())&{'apps','games'}: hint='Group members are listed above. Categories also include newly detected activities.'
         else: hint=('Select an entry to remove it.' if listing.count() else 'Add the websites you want to avoid during work.' if kind=='site' else
@@ -195,7 +195,7 @@ class FocusPage(QWidget):
 
     def choose_groups(self):
         t=self.owner.t; dialog,box=self.dialog(t('Add group'),620)
-        note=label(t('Choose a time-budget group or a whole category. All its applications, games and websites are blocked during focus. Changes to the group are followed automatically.'),'muted')
+        note=label(t('Choose a budget group or a whole category. All its applications, games and websites are blocked during focus. Changes to the group are followed automatically.'),'muted')
         note.setWordWrap(True); box.addWidget(note)
         listing=QListWidget(); listing.setAccessibleName(t('Groups')); box.addWidget(listing)
         for key,name in self.group_choices():
@@ -229,7 +229,7 @@ class FocusPage(QWidget):
         listing=QListWidget(); listing.setMinimumHeight(150); box.addWidget(listing)
         def fill():
             listing.clear()
-            for path in self.focus.settings.excluded_apps: listing.addItem(path)
+            for path in self.focus.excluded_paths(): listing.addItem(path)
         fill()
         actions=QHBoxLayout(); restore=button(t('Restore selected'),lambda: remove())
         restore.setEnabled(False); listing.itemSelectionChanged.connect(lambda: restore.setEnabled(listing.currentItem() is not None))
@@ -237,8 +237,7 @@ class FocusPage(QWidget):
         def remove():
             item=listing.currentItem()
             if not item: return
-            values=asdict(self.focus.settings); values['excluded_apps'].remove(item.text())
-            self.focus.configure(FocusSettings(**values)); fill(); self.refresh(force=True)
+            self.focus.set_app_tracking(item.text(),True); fill(); self.refresh(force=True)
             if self.owner.pages.currentIndex()==1: self.owner.statistics.refresh()
         dialog.show()
 
@@ -350,7 +349,7 @@ class FocusPage(QWidget):
         owner, t = self.owner, self.owner.t
         bridge = owner.enable_browser_bridge()
         dialog, box = self.dialog(t('Connect Brave / browser'), 720)
-        instructions = label(t('1. Open brave://extensions and enable Developer mode.\n2. Choose Load unpacked and select the extension folder below.\n3. Open the extension’s settings and paste the pairing code. Choose Brave, then Save & connect.'), 'muted')
+        instructions = label(t('1. Open brave://extensions, chrome://extensions or edge://extensions and enable Developer mode.\n2. Choose Load unpacked and select the extension folder below.\n3. Click the extension icon, then Connect your browser. Paste the pairing code, choose your browser, then Save & connect.'), 'muted')
         instructions.setWordWrap(True); box.addWidget(instructions)
         from . import __file__ as package_path
         folder = Path(package_path).parent / 'browser_extension'

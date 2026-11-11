@@ -1,138 +1,109 @@
-# Keep Improving — 2.39.27
+# Keep Improving — 2.46.0
 
-**[Letöltés Windows x64-re — 2.39.27](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256 ellenőrzőösszeg](downloads/GameTimeMonitor-Setup.exe.sha256) · [English](README.md)
+**[Letöltés Windows x64-re — 2.46.0](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256](downloads/GameTimeMonitor-Setup.exe.sha256) · [English](README.md)
 
-**[Android telepítő letöltése — 0.1.0 előzetes (.apk)](https://github.com/Blintboi/keep-improving/raw/refs/heads/main/downloads/KeepImproving-Android.apk)** · [SHA-256 ellenőrzőösszeg](downloads/KeepImproving-Android.apk.sha256) · [Android telepítési útmutató](android/README.hu.md)
+**[Android telepítő — 0.6.0 (.apk)](https://github.com/Blintboi/keep-improving/raw/refs/heads/main/downloads/KeepImproving-Android.apk)** · [SHA-256](downloads/KeepImproving-Android.apk.sha256) · [Telefonos útmutató](android/README.hu.md)
 
-**Android 8.0 vagy újabb:** nyisd meg ezt az oldalt a telefonodon, töltsd le a fenti APK-t, majd nyisd meg a telepítéshez. Az előzetes méri a telefon alkalmazáshasználatát, és szinkronizálja a statisztikákat a számítógépeiddel. Telefonos időkorlátokat és tiltást még nem tartalmaz.
+Lásd, mire megy el az időd, döntsd el, milyen gyakran térsz vissza, és iktass be szüneteket. A Keep Improving az előtérbeli használatot méri, időkereteket, napi munkamenetkorlátokat, emlékeztetőket és fókuszidőzítőt kínál. Ingyenes, nyílt forráskódú, magyar és angol felülettel.
 
-Lásd, mire megy el a gép előtt töltött időd, szabj határt a használatnak, és iktass be szüneteket. A Keep Improving játékokat, alkalmazásokat és weboldalakat mér, egyéni vagy közös időkeretekkel, emlékeztetőkkel és fókuszidőzítővel. Ingyenes, nyílt forráskódú, magyar és angol felülettel.
-
-![Tevékenységek: játékok, alkalmazások és weboldalak a Keep Improving 2.39.21-ben](docs/images/library-hu.png)
-*Minden képernyőkép a 2.39.21-es verzióból, külön bemutatóprofillal készült. Az időadatok és keretek szemléltető példák. A játékok képei a tulajdonosaikhoz tartoznak.*
+![Áttekintés időadatokkal, mért munkamenetekkel és napi tevékenységdiagrammal](docs/images/statistics-hu.png)
+*A képek az aktuális Windows-alkalmazásból, külön bemutatóprofillal készültek. Minden időadat, keret és választás példa; személyes előzmény és kapcsolódási kód nem szerepel rajtuk.*
 
 ## Első lépések
 
-1. **Windows 11 x64** rendszeren futtasd a fenti telepítőt. Normál telepítéshez nem kell Python vagy rendszergazdai jogosultság.
-2. A **Tevékenységek** oldalon nézd át a játékokat, alkalmazásokat és weboldalakat. A hiányzó játékot a futtatható fájljával adhatod hozzá. Nyelvet az oldalsáv alján választhatsz.
-3. Az **Időkeretek → Új hozzáadása** alatt válaszd ki, mire vonatkozzon a keret. Játékok, alkalmazások és weboldalak közös csoportba is kerülhetnek.
-4. Add meg az érvényes napokat és a napi keretet, majd a kívánt műveleteket. A közös napváltást a **Beállítások → Általános** oldalon adhatod meg. Új profilnál nincs kötelező alapkeret.
-5. Weboldalak méréséhez és korlátozásához [csatlakoztasd a böngészőbővítményt](#böngészőbővítmény).
+1. Telepítsd **Windows 11 x64** rendszerre. Normál telepítéshez nem kell Python vagy rendszergazdai jogosultság. A frissítés megőrzi a profilodat.
+2. A **Tevékenységek** alatt nézd át a játékokat, alkalmazásokat és weboldalakat. Hiányzó játékot a futtatható fájljával adhatsz hozzá.
+3. A **Keretek → Új hozzáadása** alatt válaszd ki a tagokat, az érvényes napokat és a kívánt korlátokat vagy emlékeztetőket. Keresés közben is látható marad, mit jelöltél már ki.
+4. Weboldalakhoz [csatlakoztasd a böngészőbővítményt](#böngészőbővítmény). Android 8.0 vagy újabb telefonra telepítsd az APK-t a [telefonos útmutató](android/README.hu.md) szerint.
 
-Az ablak bezárása után a program a tálcán fut tovább. Teljes leállításhoz válaszd a kilépést a tálcaikon menüjében. A program a Windowszal együtt indul, a frissítés pedig megőrzi a profilodat.
+Az ablak bezárásakor a Windows-program a tálcán fut tovább. A **Kilépés a figyelőből** leállítja. Új profilban nincs kötelező keret. A Windows-telepítő nincs digitálisan aláírva; lásd a [Windows bizalmi útmutatóját](docs/WINDOWS-TRUST.hu.md).
 
-A telepítő jelenleg **nincs digitálisan aláírva**. Részletek a [Windows-bizalmi útmutatóban](docs/WINDOWS-TRUST.hu.md); jelzett fájl telepítéséhez ne kapcsold ki a vírusvédelmet.
+## Értsd meg a használatodat
 
-## Állítsd össze a saját időkereteidet
+Az **Áttekintés** diagramján idő vagy **munkamenetszám** is megjeleníthető. A **Mit szeretnél látni?** listában válaszd ki a tevékenységtípust és a mértéket, majd szűrj időszakra és eszközre. A tevékenységlista kereshető, idő és munkamenetszám szerint rendezhető; az azonos nevek összevonhatók. A szűrők megmaradnak.
 
-Minden keretnek saját **napválasztója** és opcionális **perces kerete** van. Minden keret a **Beállítások → Általános** oldalon megadott egyetlen **Napváltás** időpontját követi. Eltérő hétvégi beállításhoz hozz létre másik keretet a megfelelő napokkal. A szerkesztő jelzi az átfedéseket; minden érvényes korlátozás számít.
-
-A művelet történhet **megadott percnyi használat után** vagy **napi óraidőpontban**. Például 06:00-s megújulással és 22:00-s korlátozással ebben az időablakban engedheted a használatot. A perces keret kikapcsolható, ha az időablak önmagában elég. A bekapcsolt **0 perces keret azonnal tilt**, külön korlátozó művelet nélkül.
-
-![Időkeret-szerkesztő napválasztóval, megújulási idővel és megőrzött piszkozattal](docs/images/budget-editor-hu.png)
-
-A félbehagyott módosítások helyi **piszkozatként megmaradnak**, elnavigálás és újraindítás után is. A **Módosítások mentése** érvényesíti, a **Piszkozat elvetése** megerősítés után törli őket. Az általános beállításokra ez nem vonatkozik. Egy keret törlése és mentése nem törli a mért előzményeket.
-
-A **Művelet hozzáadása** gombbal válaszd ki, mi történjen. Vegyes keretnél egy műveleten belül külön állíthatod be az alkalmazások/játékok és a weboldalak működését. Csak a keretben szereplő típusok beállításai jelennek meg.
-
-| Művelet | Alkalmazás és játék | Weboldal |
-| --- | --- | --- |
-| Figyelmeztetés | Hang, felugró értesítés vagy mindkettő | Hang, felugró értesítés vagy mindkettő |
-| Szünet | Minimalizálás, kitakarás és némítás vagy bezárás a szünet idejére | Takarófelület, átirányítás vagy a lap bezárása |
-| Korlátozás | Azonnali bezárás vagy egyszer kérhető mentési idő, utána automatikus bezárás | Takarófelület, átirányítás vagy a lap bezárása |
-
-A használathoz kötött **szünet ismétlődik** újabb ugyanennyi használat után, amíg van idő a keretben. Valós időben telik, akkor is, ha közben mást használsz. A már futó szünet újraindítás és napi megújulás után is megmarad. Weboldal átirányításához megadhatsz HTTP- vagy HTTPS-címet; üresen hagyva új lap nyílik. A szünet után az eredeti oldal ismét megnyitható, ha más aktív korlát nem tiltja.
-
-Alkalmazásbezárásnál az **egyszeri mentési idő 0–60 perc** lehet. A 0 azonnali bezárást jelent. Egyébként kérheted a megadott időt, vagy rögtön bezárhatod az alkalmazást; mentés közben újra használható, az idő lejártakor pedig automatikusan bezárul. Weboldalnál a hosszabbítás az eredeti lapra vonatkozik. Újraindítással nem kérhető újra. Több korlátozásnak is engednie kell a mentési időt, és a legrövidebb érvényesül. Egyidejű korlátozás és szünet esetén a korlátozás az erősebb; a szünet is engedi a jóváhagyott mentési időt.
-
-Bezáráskor elveszhet a nem mentett munka, ezért ehhez külön tudomásulvétel tartozik a szerkesztőben. A rendszerfolyamatok, játékindítók és felismert védett játékok kivételeket képeznek; a teljes képernyős működés és némítás az alkalmazástól is függ. A régebben mentett műveletek viselkedése átállításig megmarad. [Részletes működés](docs/RESTRICTION-PLAN.hu.md). A program személyes időkezelő, nem kijátszhatatlan szülői felügyelet.
+Egy munkamenet összefüggő, mért előtérbeli használat, a kezdőnapján számolva. Az alkalmazás azt a darabszámot mutatja, amit mérni tudott; régebbi előzményekhez nem talál ki alkalmakat. Csak az előtér számít: az olvasás és a játékmenü igen, a zárolás, alvás és háttérben hagyott alkalmazás nem. A weboldalidő a böngészőidő része, nem adódik hozzá még egyszer.
 
 <details>
-<summary>Példák: külön keretek, vegyes szünet és mentési idő</summary>
+<summary>Munkamenetdiagram és tevékenységtár</summary>
 
-![Külön hétköznapi, hétvégi, nulla perces és géphasználati keretek](docs/images/budgets-hu.png)
-*Egy helyen az egyéni és közös keretek, külön hétvégi beállítással is.*
+![Az áttekintés diagramja munkamenetszámra állítva](docs/images/sessions-hu.png)
 
-![Ismétlődő szünet: a játék kitakarása és némítása, a weboldalak átirányítása új lapra](docs/images/break-hu.png)
-*30 perc használat után: a játék kitakarása és némítása, a weboldalak átirányítása, öt perc szünet.*
-
-![Korlátozás három perc alkalmazásmentési idővel és azonnali weboldaltiltással](docs/images/restriction-hu.png)
-*60 perc után: az alkalmazásban egyszer három perc kérhető a mentéshez; a weboldalak rögtön tiltva lesznek.*
+![Felismert játékok a tevékenységtárban](docs/images/library-hu.png)
+*A játékok képei a tulajdonosaikhoz tartoznak.*
 
 </details>
 
-Külön **géphasználati időszakokat** is hozzáadhatsz. Válaszd ki a napokat, a kezdő és záró időt, majd adj hozzá figyelmeztetést vagy ablakminimalizálást. Például egy 22:00–06:00 közötti korlátozó időszak 21:55-kor emlékeztethet, éjszaka pedig minimalizálhatja az aktív ablakot. Több, eltérő nevű és napokon érvényes időszak is lehet.
+## Állíts a tevékenységhez illő kereteket
 
-<details>
-<summary>Példa géphasználati időszakra</summary>
+Egy kerethez egyetlen tevékenység, több játék, alkalmazás vagy weboldal, illetve teljes kategória is tartozhat. Állítsd be az **érvényes napokat**, az opcionális napi perckeretet és a műveleteket. A napi keretek a **Beállítások → Általános → Napváltás** szerint újulnak meg. Nulla perces kerettel azonnal tilthatsz; a perckeretet ki is kapcsolhatod, ha másfajta korlátot szeretnél.
 
-![Géphasználati időszak napválasztóval, külön figyelmeztetéssel és korlátozással](docs/images/computer-period-hu.png)
+| Mikor történjen? | Példa |
+| --- | --- |
+| Összegyűlt használati idő után | Minden tizenöt perc használat után öt perc szünet. |
+| Napi időponttól | Korlátozás 22:00-tól. |
+| Napi munkamenetkorlátnál | Öt megnyitás engedélyezett; a hatodik indítja a műveletet. |
 
-</details>
+Válassz **figyelmeztetést**, **szünetet** vagy **korlátozást**. Játékoknál és alkalmazásoknál minimalizálás, kitakarás és némítás, illetve bezárás használható a támogatott módok szerint. Weboldalnál kitakarás, átirányítás vagy lapbezárás választható. Vegyes keretben külön állítható az alkalmazások és weboldalak viselkedése. A bezárást külön jóvá kell hagyni, és egyszeri mentési idő is adható. Az átfedő korlátok együtt érvényesek.
 
-## Számlálók és értesítések
+![Keretlista külön szabályokkal és Szünet most gombbal](docs/images/budgets-hu.png)
 
-A számláló **a következő eseményig hátralévő időt** mutatja nagyban, alatta a teljes napi keret maradékát, ha az eltér. Az azonos idő csak egyszer, a nagyobb számlálón jelenik meg. Egy órás keretnél, 30 percenkénti szünettel először a szünetig számol vissza. A futó szünet a tálcaikon fölött és a keretnévvel felsorolt időzítők menüjében is követhető, új lapra átirányítás után is.
+### Kérdezd meg magadtól, miért nyitod meg
 
-A **Számláló beállításai…** alatt megadható a láthatóság, hely, méret és szín. A csoport alapbeállítása mellett minden tag külön beállítható. Játékokhoz a külön telepített **RTSS 7.3.7 vagy újabb** is használható, ahol támogatott. Az **Értesítések** oldalon kikapcsolható a **Részletes RTSS-számláló**: ekkor az RTSS-számlálón csak a következő eseményig tartó idő látszik. Az asztali és tálcás részletek megmaradnak. [Anti-cheat és kompatibilitási útmutató](docs/ANTICHEAT.hu.md).
+A **Napi munkamenetkorlát** alatt kapcsold be a **Kérdezze meg a megnyitás célját** lehetőséget. Saját kérdés és 2–8 válasz adható meg. Minden válasz lehet korlátlan vagy napi alkalomszámhoz kötött: például a „Munka miatt” korlátlan, a „Csak úgy megnézem” napi kettő. A kimerült válasz látható marad, de letiltódik.
 
-Az **Értesítések** oldalon minden emlékeztető ugyanúgy szerkeszthető. Feltétele lehet egy időpont, a Keep Improving indulása, napi Pomodoro-cél elérése, illetve játékkerethez vagy lefekvéshez kapcsolódó esemény. A napi cél a befejezett fókuszköröket számolja, és a közös napváltást követi. Választhatsz kész ikont vagy saját képet, másodpercben megadott automatikus vagy kizárólag kézi bezárást. Az értesítés gombjával helyi alkalmazást nyithatsz meg vagy Pomodorót indíthatsz. A Pomodoro időzítése a felugró értesítésben is módosítható; az aktuális fókusz-tiltólistát használja, futó időzítőt nem ír felül. A kezelést igénylő értesítések megvárják, amíg az asztalon használhatók a gombjaik.
+A **Közös keret** az összes tag között osztja el az adott válasz alkalmait; a **Tagonként külön keret** minden alkalmazásnak és weboldalnak saját keretet ad. Ezek az alkalmak ezen a számítógépen tárolódnak, és újraindítás után is megmaradnak. Weboldalnál a kérdés a megnyitott oldal fölött jelenik meg; párosított bővítmény és futó asztali alkalmazás szükséges.
 
-Az **Új hozzáadása**, a szerkesztés és a kártyák törlésgombja után a **Módosítások mentése** érvényesíti a változtatásokat. A félbehagyott piszkozat navigálás és újraindítás után is megmarad. Minden emlékeztető törölhető és újra létrehozható; az időkeretek és az előzmények megmaradnak. A korlátozás **nem kapcsol be automatikus lejárati figyelmeztetést**: ehhez adj hozzá külön **Figyelmeztetés** műveletet. A mentési idő kérésére szolgáló ablak a beállítása szerint jelenik meg.
+![Megnyitási cél szerkesztése saját válaszokkal és közös napi kerettel](docs/images/session-choices-hu.png)
 
-A Pomodoro rövid és hosszú szünete, valamint körszáma 0-ra is állítható a Fókusz oldalon, az értesítés szerkesztőjében és a felugró értesítésben. A 0 kör egyetlen, tetszőleges támogatott pozitív hosszúságú fókuszszakaszt jelent: 00:00-n megáll, és feloldja a tiltásokat. A 0 perces szünet kimarad. A befejezett fókusz beleszámít a napi értesítési célba. Hibás fókuszhossznál üzenet jelenik meg, a beírt érték megmarad. Az értesítés gombjához kereshető listából választhatsz felismert vagy a Windowsban regisztrált alkalmazást; a többi programhoz a tallózás is elérhető. A kiválasztás még nem indítja el az alkalmazást.
+### Kezdj szünetet korábban
 
-## Áttekintés: mire ment el az idő?
+Ismétlődő, használati időhöz kötött szünetnél bekapcsolható a **„Szünet most” engedélyezése**. A gomb az alkalmazás és a bővítmény **Keretek** listájában, az adott keret sorában jelenik meg; a bővítmény felugró ablakából és a tálcamenüből is elérhető. A lebegő visszaszámlálón nincs gomb.
 
-Szűrj tevékenységtípusra, időszakra és gépre, válassz napot a részletekhez, keress a listában, vagy vond össze az azonos nevű tételeket. Az **Áttekintés megjegyzi a választásaidat** ezen a gépen, a szűrőket és az összevonás jelölőnégyzetét is. A relatív időszakok mindig az aktuális naphoz igazodnak.
+A teljes szünet után új teljes használati szakasz indul. Egy 15 perc használat / 5 perc szünet szabálynál a 12. percben indított szünet is öt percig tart, majd új tizenöt perc következik. A megmaradt percek nem adódnak hozzá, a napi keret nem nullázódik. A futó szünet újraindítás után is megmarad.
 
-![Áttekintés napi időadatokkal, szűrőkkel és az azonos nevűek összevonásával](docs/images/statistics-hu.png)
-*Szemléltető hétnapos előzmény a bemutatóprofilból.*
+![Ismétlődő szünet beállítása a korábbi indítás lehetőségével](docs/images/break-hu.png)
 
-Csak az előtérben lévő tevékenységet méri. Az olvasás és a játékmenü bevitel nélkül is számít; a háttérben hagyott alkalmazás, zárolás és alvás nem. A Windows Intéző és rendszerhéj inaktív. A weboldalidő a böngészőidő része, így egyszer számít bele. A bővítmény a Brave felismert új lapját inaktívnak tekinti; más, azonosítatlan böngészőidő megmaradhat az összesítésben.
+### Helyi weboldalt is hozzáadhatsz
 
-Privát lapok domainjét, oldalcímeket és oldaltartalmat nem rögzít. Az alkalmazások és webhelyek mérése kikapcsolható. Egy alkalmazás kizárása elrejti a korábbi adatait és leállítja az új mérést; a játékok kizárása ettől külön működik. A **Beállítások → Általános → Napváltás** a statisztika, minden keret és a napi értesítések közös naphatárát adja meg. Módosításkor a már felhasznált idő megmarad; a régi napi összesítések pontos időbélyegek nélkül nem oszthatók újra visszamenőleg.
+A tagválasztóban megadhatsz például `http://127.0.0.1:8766/` címet. A `localhost:8766` és a `[::1]:8766` ugyanahhoz a kerethez számít; más port külön weboldal. Helyi címet csak akkor mér, ha külön hozzáadod egy kerethez vagy a fókusz tiltólistájához. URL-útvonal, paraméter és oldaltartalom nem kerül a használati előzménybe.
+
+A félbehagyott keretszerkesztés helyi piszkozatként megmarad a **Módosítások mentése** vagy a **Piszkozat elvetése** műveletig. A keret törlése megőrzi az előzményeket. Önálló **géphasználati időszakot** is felvehetsz érvényes napokkal, kezdő- és záróidővel, figyelmeztetéssel és ablakminimalizálással.
+
+## Fókusz, emlékeztetők és visszaszámlálás
+
+A **Fókusz mód** állítható Pomodorót kínál, munka közben a kiválasztott alkalmazások, weboldalak és keretcsoportok korlátozásával. Szüneteltetés, leállítás és pihenő feloldja a fókuszkorlátozást. Nulla kör egyetlen fókuszszakaszt jelent; a nulla perces szünet kimarad.
+
+![Fókuszidőzítő példa weboldal-tiltólistával](docs/images/focus-hu.png)
+
+Az **Értesítések** között időponthoz, programinduláshoz és napi teljesített fókuszcélhoz kapcsolódó emlékeztetők állíthatók be. Kérhetsz hangot, saját ikont és időzítőt vagy alkalmazást indító gombot. Az emlékeztetők a korlátozásoktól külön állíthatók.
+
+A számláló a következő eseményig hátralévő időt és – ha eltér – a napi maradékot mutatja. A **Számláló beállításai…** alatt módosítható a láthatóság, hely, méret és szín. Támogatott játékoknál külön telepített RTSS is használható; lásd az [anti-cheat és kompatibilitási útmutatót](docs/ANTICHEAT.hu.md).
 
 ## Böngészőbővítmény
 
-A bővítmény ikonjáról gyorsan indíthatod vagy szüneteltetheted a fókuszt, láthatod az aktuális visszaszámlálást, és időkerethez vagy fókusztiltáshoz adhatod a megnyitott weboldalt. A **Kezelőfelület megnyitása** gomb teljes böngészőlapon nyitja meg az Áttekintés, Tevékenységek, Időkeretek, Értesítések, Fókusz mód és Beállítások oldalakat. Innen is elérheted a statisztikákat, kezelheted a játékokat és alkalmazásokat, szerkesztheted a kereteket és emlékeztetőket, indíthatsz Pomodorót és összekapcsolhatod a számítógépeket. A két felület ugyanazt a futó asztali programot és profilt használja; a mentések mindkét helyen azonnal érvényesek.
+**Brave, Chrome és Edge** esetén:
 
-A kezelőfelület magyarul és angolul is használható, helyben megőrzi a félbehagyott szerkesztések piszkozatait, frissítéskor pedig a megnyitott kezelőlapokat is visszaállítja. Az asztali programnak futnia kell. Ha nem érhető el, a bővítmény kapcsolódási üzenetet mutat.
-
-Brave, Chrome és Edge esetén:
-
-1. Fusson a program; nyisd meg a **Tevékenységek → Weboldalak → Böngésző csatlakoztatása** ablakot.
-2. Nyisd meg a `brave://extensions`, `chrome://extensions` vagy `edge://extensions` oldalt, és kapcsold be a **Fejlesztői módot**.
+1. A futó programban nyisd meg a **Tevékenységek → Weboldalak → Böngésző csatlakoztatása** ablakot.
+2. A böngésző bővítménykezelőjében kapcsold be a **Fejlesztői módot**.
 3. A **Kicsomagolt bővítmény betöltése** gombbal válaszd ki a program által mutatott `browser_extension` mappát.
-4. A bővítmény ikonjáról nyisd meg a kezelőfelületet. A kapcsolódási képernyőbe illeszd be az alkalmazás párosítási kódját, válaszd ki a böngészőt, és csatlakozz.
-5. Ismételd meg minden használt böngészőben és profilban. A párosítási kód maradjon titkos.
+4. A bővítmény **Böngésző csatlakoztatása** oldalán add meg a párosítási kódot és válaszd ki a böngészőt. A kód maradjon titkos.
+5. Ismételd meg minden használt böngészőben és profilban. A **Kezelőfelület megnyitása** teljes böngészőlapon nyitja meg a felületet.
 
-A 2.39.23-as verziótól a párosított bővítmény az alkalmazás befejezett frissítése után automatikusan újratöltődik, megőrizve a párosítást és a kitakart oldalakat. A meglévő helyi kapcsolatot használja, külön frissítési lapot nem nyit. A korábban betöltött régi példány egyszeri újratöltést igényel: nyisd meg a kapcsolódási oldalát, vagy indítsd újra a böngészőt. A visszatérési címek a böngésző helyi tárolójában maradnak, így újraindítás után is helyreállíthatók; nem kerülnek az asztali statisztikába. A bővítmény kikapcsolása leállítja a webmérést és webtiltást; kapcsolathibánál a böngészős korlátozás megszűnik.
+Az alkalmazás és a böngészős kezelőfelület ugyanazt a profilt használja. Frissítés után a párosított bővítmény automatikusan újratöltődik, megőrizve a párosítást és a kitakart oldalak visszaállítását. Az asztali program leállásakor a **Böngészős mód** a tárolt webes korlátokkal, böngészőméréssel és fókuszidőzítéssel tovább működhet. Visszakapcsolódáskor a pótolt használat egyszer kerül be. A beállítások szerkesztéséhez, a megnyitási kérdésekhez és más Windows-alkalmazások vezérléséhez futó asztali program kell. A bővítmény kikapcsolása leállítja a webes mérést és korlátozást.
 
-## Fókusz és összekapcsolt gépek
+## Telefon és más számítógépek
 
-A **Fókusz mód** állítható munkaidőt, rövid és hosszú szüneteket kínál. Munka közben tiltja a kiválasztott webhelyeket, és minimalizálja az előtérbe kerülő kijelölt alkalmazásokat. A **Csoportok** fülön teljes időkeretcsoportokat vagy kategóriákat is hozzáadhatsz: a tiltás az aktuális alkalmazás-, játék- és weboldaltagjaikat követi. Szüneteltetés, leállítás és pihenő feloldja ezeket a fókuszkorlátozásokat. Egy időkeret mentési ideje nem ír felül külön aktív fókusztiltást. A befejezett körök száma az ezen a gépen eddig befejezett összes kört mutatja, a korábbi napokkal és munkamenetekkel együtt.
+Az Android-alkalmazás saját alkalmazásmérést, munkamenetkorlátokat, szüneteket, fókuszidőzítőt és emlékeztetőket kínál. A számítógépek weboldal-előzményeit is megjeleníti, de a telefon saját böngészőjét alkalmazásként méri. A méréshez használati hozzáférés, a gyors korlátozáshoz az opcionális kitakarási szolgáltatás szükséges. A Windows megnyitási célválasztója és „Szünet most” gombja Androidon még nem érhető el. [Telefonos funkciók és engedélyek](android/README.hu.md).
 
-A **Tevékenységek** az oldalsáv második helyén található, közvetlen **Játékmappák** gombbal. A játékok összesítője a napi játékkeretből hátralévő időt mutatja. A globális beállításokat az oldalsáv **Beállítások** fülén találod.
+Windows alatt az **Áttekintés → Gépek és szinkron**, Androidon a **Beállítások → Eszközök és szinkron** részen kapcsolhatsz össze eszközöket. A kapcsolati kód létrehozásához GitHub-belépés szükséges; a többi eszközön ugyanezt a kódot használd. Az előzmények és a támogatott beállítások feltöltés előtt titkosítódnak. A kódot tartsd titokban.
 
-A fókuszhoz hozzáadott csoportok tagjai a **Weboldalak** és az **Alkalmazások** között is megjelennek, a forráscsoportjaikkal együtt. A közös tagok csak egyszer szerepelnek. A lista követi a csoportok módosításait; az örökölt tagokat az **Időkeretek** alatt módosíthatod, a teljes csoportot a **Csoportok** fülön veheted ki.
-
-<details>
-<summary>Fókuszidőzítő és weboldallista</summary>
-
-![Fókuszidőzítő beállítható weboldal-tiltólistával](docs/images/focus-hu.png)
-*Példalista a böngésző csatlakoztatása előtt; a weboldaltiltáshoz csatlakoztatni kell a bővítményt.*
-
-</details>
-
-Saját gépeidet az **Áttekintés → Gépek és szinkron** alatt kapcsolhatod össze. Az első gépen lépj be GitHubbal, a többin használd az ott kapott kapcsolati kódot. A kód hozzáférést ad a közös adatokhoz, ezért tartsd titokban. Az előzmények és támogatott beállítások feltöltés előtt a gépen titkosítódnak.
-
-A közös játékkeret és a játékonkénti keretek a szinkronizált játékidőt is számolják; az egységes elszámoláshoz frissíts minden kapcsolt gépet. A többi tevékenység kerete, a korlátozási lépések és mentési hosszabbítások helyiek maradnak. A kérések között legalább tíz perc telik el; a korlát UTC-naponként 20, havonta 600 sikeres kérés. A távoli előzmény késhet vagy internet nélkül hiányozhat; a helyi mérés internet nélkül is folytatódik.
+A keret egy eszközre, eszközcsoportra vagy minden kapcsolt eszközre vonatkozhat. A kijelölt eszközök közös keretet fogyasztanak; a párhuzamos használat összeadódik. Az Android-alkalmazást és a Windows-programot külön kell kijelölni. A távoli használat és szerkesztés szinkronizálás után érkezik meg. Kapcsolat nélkül az utolsó átvett összesítés számít, ezért a közös határ átmenetileg túlléphető. A felület mutatja a szinkron állapotát; a háttérbeli kézbesítést az Android ütemezése és a szolgáltatás kvótái is befolyásolják.
 
 ## Adatok, frissítés és segítség
 
-A profil a `Documents\GameTimeMonitor\data` mappában van. Biztonsági másolathoz lépj ki a programból, és másold a teljes mappát. Az eltávolítás megőrzi. A helyi előzmények nincsenek titkosítva. Nincs reklám vagy általános analitikai követés: [adatvédelem](PRIVACY.md), [biztonság](SECURITY.md).
+A Windows-profil a `Documents\GameTimeMonitor\data` mappában van. Mentéshez lépj ki a figyelőből, és másold le a teljes mappát; az eltávolítás megőrzi. A helyi előzmény nincs titkosítva. Nincs reklám vagy általános analitikai követés. Privát lapok domainjét, oldalcímeket és oldaltartalmat nem rögzít. [Adatvédelem](PRIVACY.md), [biztonság](SECURITY.md).
 
-A frissítésellenőrzés legfeljebb naponta egyszer kapcsolódik a GitHubhoz, és kikapcsolható. Te döntöd el, mikor töltesz le és telepítesz. Az elsődleges letöltés a README tetején található közvetlen telepítőlink.
+A frissítésellenőrzés legfeljebb naponta egyszer kapcsolódik a GitHubhoz, és kikapcsolható. Te döntöd el, mikor telepítesz. Az elsődleges letöltések a lap tetején található közvetlen telepítőlinkek.
 
-Hibát a [GitHub Issues](https://github.com/Blintboi/keep-improving/issues) oldalon jelezhetsz, kódok, tokenek és profiladatbázis nélkül. További információ: [MIT-licenc](LICENSE), [külső összetevők](THIRD-PARTY-NOTICES.md), [fejlesztés](docs/DEVELOPMENT.md), [felépítés](ARCHITECTURE.md), [tesztelés](TESTING.md).
+Ez önkéntes, személyes időgazdálkodási eszköz. Hibát a [GitHub Issues](https://github.com/Blintboi/keep-improving/issues) oldalon jelezz, kódok, tokenek és profiladatbázis nélkül. További információ: [MIT-licenc](LICENSE), [külső összetevők](THIRD-PARTY-NOTICES.md), [fejlesztés](docs/DEVELOPMENT.md), [felépítés](ARCHITECTURE.md), [tesztelés](TESTING.md).

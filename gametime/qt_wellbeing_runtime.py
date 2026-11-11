@@ -51,7 +51,7 @@ class WellbeingActions:
         self._wellbeing_grace=None
         # Native helper rechecks foreground identity; never close or kill a process.
         if win32.minimize_game(current.path,current.identity,consented=True):
-            self.set_status('Time budget reached. Take a break or adjust it on the Time budgets page.')
+            self.set_status('Budget reached. Take a break or adjust it on the Budgets page.')
         return True
 
     def update_wellbeing_overlay(self):

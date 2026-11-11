@@ -40,22 +40,24 @@ Limits are enforced transactionally in the supplied migrations. They protect sto
 | Encrypted device snapshot | 512 KiB; base64 envelope up to 699,052 bytes |
 | Stored base64 data | 2 MiB per group; 200 MiB globally |
 | Requests per minute | 4 per device; 40 per group; 600 per keyed IP hash |
-| Successful exchanges | 20 per UTC day and `min(600, 350,000 / max(25, active groups))` per UTC month, per group AND owner; 350,000 globally per month |
-| Device cooldown | Ten minutes between completed exchanges; persistent server check |
-| Counted monthly response traffic | `min(128 MiB, 3 GiB / max(25, active groups))` per group; 4 GiB globally |
-| Daily upload and response traffic | 8 MiB in each direction per group and owner |
+| Successful exchanges | 10,000 per UTC day and `min(250,000, 350,000 / max(1, active groups))` per UTC month, per group AND owner; 350,000 globally per month |
+| Device cooldown | 15 seconds between completed exchanges; persistent server check |
+| Counted monthly response traffic | `min(768 MiB, 3 GiB / max(1, active groups))` per group; 4 GiB globally |
+| Daily upload and response traffic | 32 MiB in each direction per group and owner |
 | Global uploads | 64 MiB per UTC day; 1 GiB per UTC month, including overwrites |
-| Monthly uploads per group and owner | `min(64 MiB, 1 GiB / max(25, active groups))` |
+| Monthly uploads per group and owner | `min(768 MiB, 1 GiB / max(1, active groups))` |
 | HTTP request body | 750,000 bytes; 5-second read deadline; 8 concurrent requests per isolate |
 | Inactive device snapshots | Removed after 90 days by hourly maintenance |
 
-The 2.12 client syncs once at startup, on tracked gameplay start/stop events and
-manually. One quiet minute coalesces nearby stops; a single-shot event timer waits
-for the ten-minute guard or server Retry-After. No periodic network timer or
-error-only retry is scheduled. The guard is cached locally and persisted across
-restarts/code changes. SQL applies device cooldowns and combined group/owner daily
-and monthly quotas transactionally; owner quotas survive rotation. Missing-copy
-probes consume request quotas but permit an immediate repair upload.
+The 2.41 desktop and 0.4.3 phone send changed settings and focus state promptly,
+with a 15-second persistent device guard. The desktop and visible phone poll every
+30 seconds using the already published revision and known remote revisions; they
+reuse ciphertext on the server instead of re-uploading history. Full usage refreshes
+at most 15 minutes apart, plus foreground events, explicit sync and settings edits.
+Android background work remains OS-batched (periodic 15 minutes, with a one-shot
+job for pending edits). Retry-After still takes precedence. A one-time client
+upgrade rechecks refusals cached under the retired 20/day policy. Counters are not
+reset. Global request, upload, egress, isolation and server-only grants remain.
 
 All linked computers need 2.12.0 or newer. Requests without the v2 policy header
 are rejected with 426 before body/SQL work. The public header is not authentication;
@@ -64,10 +66,9 @@ history and budgets are preserved. Local tracking and cached statistics remain
 available offline. A source computer must stay online until its pending upload
 completes for its latest time to reach another computer.
 
-Two computers starting once daily generate about 60 startup requests per 30 days,
-plus gameplay/manual/repair requests. Provider metering also includes rejected
-requests, headers and other project traffic. These are request counts, not
-measured capacity or flood resistance; see [current pricing](https://supabase.com/pricing).
+Provider metering also includes rejected requests, headers and other project traffic.
+Application ceilings are not measured capacity or flood resistance; see
+[current pricing](https://supabase.com/pricing).
 
 Auth hooks and provider-table triggers also bound sessions, token issues, metadata and OAuth state. Their exact limits, upgrade checks and remaining threats are documented in [Security](../SECURITY.md). Failed registrations may reserve capacity. Code rotation preserves owner quotas and retired-code records. Do not reset accounting or erase retired records to bypass limits.
 

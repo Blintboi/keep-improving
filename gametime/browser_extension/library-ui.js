@@ -169,12 +169,12 @@ export function rulesPanel(ctx) {
   fill();
 }
 
-export function protectedDisplay(ctx) {
+export function protectedDisplay(ctx, saved = () => ctx.load()) {
   const current = ctx.state.protected_display;
   if (current.enabled) {
     ctx
       .command("display.consent", { enabled: false }, false)
-      .then(() => ctx.load());
+      .then(saved).catch(ctx.fail);
     return;
   }
   let accepted = false;
@@ -182,13 +182,15 @@ export function protectedDisplay(ctx) {
     "Enable at my own risk",
     async () => {
       if (!accepted) return;
-      await ctx.command(
-        "display.consent",
-        { enabled: true, accepted: true },
-        false,
-      );
-      dialog.close();
-      await ctx.load();
+      try {
+        await ctx.command(
+          "display.consent",
+          { enabled: true, accepted: true },
+          false,
+        );
+        dialog.close();
+        await saved();
+      } catch (error) { ctx.fail(error); }
     },
     "primary",
   );
@@ -211,8 +213,8 @@ export function protectedDisplay(ctx) {
 export function updatesPanel(ctx) {
   const status = el("p", { class: "hint" }),
     download = button(
-      "Download update",
-      () => ctx.command("update.command", { action: "download" }, false),
+      "Download and install update",
+      async () => { await ctx.command("update.command", { action: "download" }, false); poll(); },
       "primary",
     );
   download.hidden = true;
@@ -235,6 +237,7 @@ export function updatesPanel(ctx) {
       const value = (await api("update.state")).result;
       status.textContent = value.message;
       download.hidden = !value.version;
+      download.disabled = value.pending;
       if (value.pending) setTimeout(poll, 1000);
     } catch (e) {
       status.textContent = e.message;
@@ -245,9 +248,10 @@ export function updatesPanel(ctx) {
 }
 
 export function iconUpload(ctx, selected) {
-  const status = el("p", { class: "hint" });
+  const status = el("p", { class: "hint upload-status" });
   const input = el("input", {
     type: "file",
+    hidden: true,
     accept: "image/png,image/jpeg,image/webp",
     onchange: async () => {
       const file = input.files?.[0];
@@ -273,8 +277,9 @@ export function iconUpload(ctx, selected) {
   });
   return el(
     "div",
-    { class: "stack" },
-    el("label", { class: "field" }, t("Choose image"), input),
+    { class: "row" },
+    input,
+    button("Choose image…", () => input.click()),
     status,
   );
 }

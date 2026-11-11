@@ -59,6 +59,10 @@ class RestrictionRuntime:
         self.blocked = False; self.current = None; self.stopped = False; self.failed = {}
         self._clock = None; self._max_now = 0
         self.save_counter = None
+        from .budget_sessions import Counter
+        self.session_counts = Counter(app)
+        from .qt_choice_runtime import ChoiceRuntime
+        self.choices = ChoiceRuntime(self)
 
     def budgets(self, wall):
         app = self.app; totals = app.tracker.quota_totals(wall); result = []
@@ -78,7 +82,8 @@ class RestrictionRuntime:
             used=sum(app.tracker.quota_totals(wall,value.rule['id']).values()) if value.rule['id'].startswith('games-') and value.rule['members']==[{'kind':'category','value':'games'}] else value.used
             result.append(Budget(value.rule['id'], value.rule['name'], budget_access.limit(app.settings,value.rule['id'],value.rule['seconds'],wall), used, tuple(value.rule['members']),
                                  day=budget_day(app.settings,value.rule['id'],wall).isoformat()))
-        return [replace(budget,clock_deadlines=budget_access.clock_deadlines(app.settings,budget.key,wall),
+        counts=self.session_counts.counts(result,wall)
+        return [replace(budget,sessions=counts.get(budget.key,0),clock_deadlines=budget_access.clock_deadlines(app.settings,budget.key,wall),
                         breaks_allowed=budget.breaks_allowed and budget_access.clock_remaining(app.settings,budget.key,wall)>0) for budget in result]
 
     def prepare(self, wall):
@@ -184,11 +189,13 @@ class RestrictionRuntime:
                         messages.append(app.t('{name}: the daily time {time} has been reached.',name=budget.name,time=f'{minute//60:02d}:{minute%60:02d}'))
                     elif any(k==key and warning.get('time_mode')=='usage' for k,warning in pending):
                         messages.append(app.t('{name}: {minutes:g} minutes of use.',name=budget.name,minutes=round(budget.used/60,2)))
+                    elif any(k==key and warning.get('time_mode')=='sessions' for k,warning in pending):
+                        messages.append(app.t('{name}: {count} sessions today.',name=budget.name,count=budget.sessions))
                     else:
                         messages.append(app.t('{name}: {minutes:g} minutes remaining.',name=budget.name,
                             minutes=max(0,math.ceil((budget.limit-budget.used)/60))))
                 alert=Alert(self.state.day,(),'wellbeing','\n'.join(messages),app.t('OK'),
-                            title=app.t('Time budget reminder'),sound=any(w['sound'] for _,w in pending))
+                            title=app.t('Budget reminder'),sound=any(w['sound'] for _,w in pending))
                 delivered=app.popup(alert) if any(w['popup'] for _,w in pending) else play_notification(app.settings)
                 if delivered:
                     for key,warning in pending: self.state.delivered(key,warning['id'])
@@ -260,6 +267,10 @@ class RestrictionRuntime:
                 if success:
                     for key in keys: self.state.finish_grant(key,'app:'+app_key(target.path),identity)
                 self.jobs.pop(identity)
+        choosing = self.choices.tick(current, website, bool(display) or self.blocked or bedtime)
+        if choosing and self.choices.target:
+            mute.append({'path': self.choices.target.path, 'identity': self.choices.target.identity})
+            self.blocked = True
         try: self.audio.update(mute)
         except (OSError, ValueError): self.audio.close(); app.set_status('Application audio could not be muted.')
         if display: self.present(*display)
@@ -306,6 +317,9 @@ class RestrictionRuntime:
         else:
             screen.status.setText(app.t('Applications close when the save allowance ends.') if minutes else app.t('This budget is blocked until it renews.'))
         if self.audio.status.get('ok') is False: screen.status.setText(app.t('Application audio could not be muted.'))
+        self.position_screen(screen, target, same)
+
+    def position_screen(self, screen, target, same=False):
         if same and getattr(screen,'fullscreen',False): return
         rectangle = native.target_rect(target.path, target.identity, background=same)
         if not rectangle: return
@@ -356,7 +370,9 @@ class RestrictionRuntime:
             remaining=self.state.break_remaining(key,'site:')
             if remaining and is_break: entry['break_until']=self.state.now+remaining
             entries.append(entry)
-        policy.update(restriction_version=1, restrictions=entries, language=self.app.settings.language, lease_seconds=30)
+        from .browser_choices import rules as choice_rules
+        policy.update(restriction_version=1, restrictions=entries, language=self.app.settings.language, lease_seconds=30,
+                      choice_rules=choice_rules(self))
         # An unpacked extension can keep its old worker after a desktop upgrade.
         # Zero budgets have no exceptions, so the original blocking protocol can
         # enforce them too, including on an already-open tab. Never activate
@@ -369,6 +385,25 @@ class RestrictionRuntime:
                           block=list(dict.fromkeys([*(base.get('block',()) if active else ()), *zero_domains])),
                           remaining=max(base.get('remaining',0) if active else 0,30))
         return policy
+
+    def early_break_actions(self):
+        from .restriction_policy import target_steps
+        result={}
+        for key,plan in self.app.settings.restriction_plans.items():
+            if not any(s['kind']=='break' and s.get('time_mode')=='usage' and s.get('allow_early_break') for s in target_steps(plan)):continue
+            steps=self.state.early_break_steps(key)
+            states=self.state.rows.get(key,{}).get('breaks',{})
+            upcoming=min(steps,key=lambda s:(states.get(s['id'],{}).get('next_at',s['offset']),s['id']),default=None)
+            result[key]=dict(step=upcoming['id'].split(':')[-1] if upcoming else '',remaining=self.state.break_remaining(key))
+        return result
+
+    def start_early_break(self,key,step):
+        self.prepare(datetime.now().astimezone())
+        if not self.state.start_early_break(key,step):return False
+        self.app._timer_budget_key=None
+        self.app.update_focus_policy()
+        self.tick(win32.sample());self.app.update_overlay()
+        return True
 
     def delegated_website_rules(self):
         return {key for key,budget in self.state.budgets.items() if self.state.has_restriction(key,'site:')
@@ -394,6 +429,7 @@ class RestrictionRuntime:
 
     def close(self):
         self.stopped = True
+        self.choices.close()
         for future, cancel, _, _ in self.jobs.values(): cancel.set()
         self.audio.close()
         if self.screen: self.screen.hide(); self.screen.deleteLater(); self.screen = None

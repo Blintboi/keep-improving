@@ -1,4 +1,4 @@
-"""Read-only projections of the next real event in each time budget."""
+"""Read-only projections of the next real event in each budget."""
 from dataclasses import dataclass,replace
 import math
 from .restriction_policy import target_steps
@@ -20,6 +20,7 @@ class TimerView:
     wall_clock: bool=False
     scope: str=''
     active: bool=False
+    break_step: str=''
 
     @property
     def order(self): return (max(0,self.seconds),PRIORITY[self.event],self.name.casefold(),self.key,self.scope)
@@ -53,9 +54,11 @@ def project(budget,plan,row,now,subject,elapsed=0,identity=None,*,running_only=F
     choices=[item('quota',total)] if math.isfinite(total) and not running_only else []
     regular=[]; breaks=[]
     for step in target_steps(plan or {'steps':[]},subject):
+        if step.get('session_choice'): continue
         kind=step['kind']; mode=step.get('time_mode'); wall=mode=='clock'
         if kind=='notify' and (step['id'] in row.get('delivered',()) or not (step['sound'] or step['popup'])): continue
         if wall: seconds=(budget.clock_deadlines or {}).get(step['clock_minute'],math.inf)-now
+        elif mode=='sessions': seconds=0 if budget.sessions>step['offset'] else math.inf
         elif mode=='usage': seconds=step['offset']-used
         elif step['offset']<=0: seconds=max(0,budget.limit+step['offset'])-used
         else: seconds=(row['expired']+step['offset']-now) if row.get('expired') is not None else total+step['offset']
@@ -63,6 +66,7 @@ def project(budget,plan,row,now,subject,elapsed=0,identity=None,*,running_only=F
             state=row.get('breaks',{}).get(step['id'],{}); until=state.get('until')
             if until is not None and until>now:
                 breaks.append(item('break_active',until-now,True)); continue
+            if mode=='sessions': continue
             if not budget.breaks_allowed or used>=budget.limit: continue
             if wall:
                 # A missed/finished clock break never restarts later that day.
@@ -73,7 +77,11 @@ def project(budget,plan,row,now,subject,elapsed=0,identity=None,*,running_only=F
                 if until is not None: threshold=used+step['offset']
                 if threshold>=budget.limit: continue
                 seconds=threshold-used
-            if math.isfinite(seconds): breaks.append(item('break',seconds,wall))
+            if math.isfinite(seconds):
+                event=item('break',seconds,wall)
+                if seconds>0 and mode=='usage' and step.get('allow_early_break'):
+                    event=replace(event,break_step=step['id'].split(':')[-1])
+                breaks.append(event)
         elif math.isfinite(seconds) and (not running_only or wall or seconds<=0 or mode is None and step['offset']>0 and row.get('expired') is not None):
             event='warning' if kind=='notify' else 'clock_limit' if wall else 'limit'
             event_item=item(event,seconds,wall or mode is None and step['offset']>0 and row.get('expired') is not None); choices.append(event_item)

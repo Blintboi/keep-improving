@@ -47,6 +47,8 @@ class Tracker:
 
     def __init__(self, store, catalog):
         self.store, self.catalog = store, catalog
+        from .activity_sessions import Sessions
+        self.sessions=Sessions(store)
         self.previous = None
         self.unclassified = deque()
         self.pending = defaultdict(float)
@@ -129,6 +131,16 @@ class Tracker:
 
     def quota_totals(self, wall, key='shared-games'):
         self.configure_budget(wall)
+        if key in self.catalog.settings.budget_devices:
+            from .device_sharing import remote_seconds
+            settings=self.catalog.settings;minute=settings.budget_reset_overrides.get(key)
+            day=period_day(wall,reset_clock(settings))
+            source=self.totals(day) if self.budget_clock is None else self._budget_totals(day)
+            if minute is not None:source=self.periods.totals('quota:'+key,minute,wall,lambda:dict(source),marker_key=key,previous_day=str(day))
+            result=({key[5:]:source.get(key[5:],0)} if key.startswith('game:') else dict(source))
+            remote_key=key[5:] if key.startswith('game:') else 'remote:shared-rule'
+            result[remote_key]=result.get(remote_key,0)+remote_seconds(self.store,settings,key,wall)
+            return result
         minute=self.catalog.settings.budget_reset_overrides.get(key)
         if minute is not None:
             day=period_day(wall,reset_clock(self.catalog.settings))
@@ -240,6 +252,7 @@ class Tracker:
             self.unclassified.append((path, start, end, seconds))
 
     def _credit(self, game, start, end, seconds):
+        self.sessions.credit('game',game.id,start.timestamp(),end.timestamp(),period_day(start,reset_clock(self.catalog.settings)))
         self.configure_budget(start)
         overrides=self.catalog.settings.budget_reset_overrides
         extra=[r['id'] for r in self.catalog.settings.wellbeing_rules if r['id'].startswith('games-') and r['members']==[{'kind':'category','value':'games'}]]
@@ -380,7 +393,8 @@ class Tracker:
     def flush(self):
         if self.pending or self.budget_pending or self.periods.pending:
             self.store.upsert(self.catalog.games.values())
-            self.store.add_usage(self.pending, self.budget_pending,self.periods.pending)
+            self.store.add_usage(self.pending, self.budget_pending,self.periods.pending,self.sessions)
+            self.sessions.clear()
             self.pending.clear()
             self.budget_pending.clear()
             self.periods.pending.clear()

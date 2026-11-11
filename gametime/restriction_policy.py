@@ -93,21 +93,29 @@ def validate_plans(plans):
             raise ValueError('Invalid restriction plan.')
         seen = set()
         for step in plan['steps']:
-            if (not isinstance(step, dict) or set(step)-{'targets','clock_minute'} not in ({'id', 'kind', 'offset', 'sound', 'popup'}, {'id', 'kind', 'offset', 'sound', 'popup', 'time_mode'}, {'id', 'kind', 'offset', 'sound', 'popup', 'time_mode', 'break_mode', 'break_minutes'}, {'id', 'kind', 'offset', 'sound', 'popup', 'time_mode', 'break_mode', 'break_minutes', 'redirect_url'})
+            if (not isinstance(step, dict) or set(step)-{'targets','clock_minute','session_choice','allow_early_break'} not in ({'id', 'kind', 'offset', 'sound', 'popup'}, {'id', 'kind', 'offset', 'sound', 'popup', 'time_mode'}, {'id', 'kind', 'offset', 'sound', 'popup', 'time_mode', 'break_mode', 'break_minutes'}, {'id', 'kind', 'offset', 'sound', 'popup', 'time_mode', 'break_mode', 'break_minutes', 'redirect_url'})
                     or not isinstance(step['id'], str) or not re.fullmatch(r'[a-zA-Z0-9_-]{1,64}', step['id'])
                     or step['id'] in seen or step['kind'] not in KINDS
                     or type(step['offset']) not in (float, int) or not math.isfinite(step['offset'])
                     or not -86400 <= step['offset'] <= 86400
-                    or ('time_mode' in step and (step['time_mode'] not in ('usage','clock') or step['offset'] < 0))
+                    or ('time_mode' in step and (step['time_mode'] not in ('usage','clock','sessions') or step['offset'] < 0))
                     or any(type(step[k]) is not bool for k in ('sound', 'popup'))):
                 raise ValueError('Invalid restriction plan.')
+            if step.get('time_mode')=='sessions' and (type(step['offset']) is not int or not 1<=step['offset']<=10000):
+                raise ValueError('Choose a session limit between 1 and 10000.')
+            if 'allow_early_break' in step and (type(step['allow_early_break']) is not bool or step['kind']!='break' or step.get('time_mode')!='usage'):
+                raise ValueError('Early breaks require a repeating usage interval.')
+            if 'session_choice' in step:
+                from .session_choices import validate
+                if step.get('time_mode') != 'sessions': raise ValueError('Opening choices require a daily session limit.')
+                validate(step['session_choice'])
             if step.get('time_mode')=='clock':
                 if type(step.get('clock_minute')) is not int or not 0<=step['clock_minute']<1440:
                     raise ValueError('Choose a valid daily action time.')
             elif 'clock_minute' in step: raise ValueError('Invalid restriction plan.')
             if step['kind']=='break':
-                if (set(step)-{'targets','clock_minute'} not in ({'id','kind','offset','sound','popup','time_mode','break_mode','break_minutes'}, {'id','kind','offset','sound','popup','time_mode','break_mode','break_minutes','redirect_url'})
-                        or step['time_mode'] not in ('usage','clock') or step['time_mode']=='usage' and step['offset']<=0
+                if (set(step)-{'targets','clock_minute','session_choice','allow_early_break'} not in ({'id','kind','offset','sound','popup','time_mode','break_mode','break_minutes'}, {'id','kind','offset','sound','popup','time_mode','break_mode','break_minutes','redirect_url'})
+                        or step['time_mode'] not in ('usage','clock','sessions') or step['time_mode']=='usage' and step['offset']<=0
                         or not isinstance(step['break_mode'],str) or step['break_mode'] not in RANK or type(step['break_minutes']) is not int
                         or not 1<=step['break_minutes']<=1440):
                     raise ValueError('Invalid restriction plan.')
@@ -123,7 +131,7 @@ def validate_plans(plans):
                 raise ValueError('Restrictions start at or after the limit.')
         closing=any(s['kind'] in ('close','restrict') or s['kind']=='break' and s['break_mode']=='close'
                     or s['kind'] in ('cover','minimize') and s.get('extension_minutes',plan['extension_minutes'])>0
-                    for s in target_steps(plan))
+                    for s in target_steps(plan) if not s.get('session_choice'))
         if closing and not plan['close_confirmed']:
             raise ValueError('Confirm that unsaved work may be lost.')
     return plans
@@ -158,6 +166,11 @@ def merge_breaks(current,previous):
 
 def remap_state(db, old, new):
     """Keep one-time rights consumed when discovery merges a manual game."""
+    if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='session_choices'").fetchone():
+        activity='activity' in {r[1] for r in db.execute('PRAGMA table_info(session_choices)')}
+        db.execute('INSERT OR IGNORE INTO session_choices SELECT ?,step,day,visit,choice,at'+(',activity' if activity else '')+' FROM session_choices WHERE budget=?',(new,old))
+        db.execute('DELETE FROM session_choices WHERE budget=?',(old,))
+        if activity: db.execute('UPDATE session_choices SET activity=? WHERE activity=?',(new,old))
     for day, raw in db.execute('SELECT day,value FROM restriction_state WHERE budget=?',(old,)).fetchall():
         value=json.loads(raw)
         existing=db.execute('SELECT value FROM restriction_state WHERE day=? AND budget=?',(day,new)).fetchone()
@@ -191,6 +204,7 @@ class Budget:
     breaks_allowed: bool = True
     day: str | None = None
     clock_deadlines: dict | None = None
+    sessions: int = 0
 
 
 class RestrictionState:
@@ -296,7 +310,7 @@ class RestrictionState:
                 if before != json.dumps(row): self._save(key)
 
     def update_breaks(self,key,budget,now):
-        row=self.rows[key]; steps=[s for s in target_steps(self.plans[key]) if s['kind']=='break']
+        row=self.rows[key]; steps=[s for s in target_steps(self.plans[key]) if s['kind']=='break' and not s.get('session_choice')]
         if not steps:
             row.pop('breaks',None); return
         states=row.setdefault('breaks',{})
@@ -320,7 +334,11 @@ class RestrictionState:
                         state['until']=max(state.get('until') or 0,until)
                 continue
             if state['until'] is not None and now>=state['until']:
-                state.update(until=None,next_at=budget.used+item['offset'])
+                state.update(until=None,next_at=(budget.sessions if item.get('time_mode')=='sessions' else budget.used)+item['offset'])
+            if item.get('time_mode')=='sessions':
+                if state['until'] is None and budget.breaks_allowed and budget.used<budget.limit and budget.sessions>state['next_at']:
+                    state['until']=now+item['break_minutes']*60
+                continue
             # A scheduled break belongs inside the allowance: expiry wins
             # when the next threshold is at or beyond the budget limit.
             if (state['until'] is None and budget.breaks_allowed and state['next_at']<budget.limit
@@ -333,16 +351,38 @@ class RestrictionState:
         return max((state['until']-self.now for identity,state in row.get('breaks',{}).items() if selected is None or identity in selected
                     if state.get('until') is not None and state['until']>self.now),default=0)
 
+    def early_break_steps(self,key):
+        """Available saved breaks, independent of the foreground application."""
+        budget=self.budgets.get(key);row=self.rows.get(key,{})
+        if (not budget or not budget.breaks_allowed or budget.used>=budget.limit
+                or self.break_remaining(key)>0 or self.has_restriction(key)
+                or (row.get('grant') or {}).get('until',0)>self.now): return []
+        return [s for s in target_steps(self.plans[key])
+                if s['kind']=='break' and s.get('time_mode')=='usage' and s.get('allow_early_break')]
+
+    def start_early_break(self,key,identity):
+        """Start the whole configured break; its normal expiry resets the interval."""
+        selected=[s for s in self.early_break_steps(key) if s['id'].split(':')[-1]==identity]
+        if not selected: return False
+        row=self.rows[key]
+        with self.db:
+            for item in selected:
+                state=row['breaks'][item['id']]
+                state['until']=self.now+item['break_minutes']*60
+            self._save(key)
+        return True
+
     def due(self, key, subject=None):
         budget = self.budgets.get(key)
         if not budget: return []
         row = self.rows[key]
-        return [s for s in target_steps(self.plans[key],subject) if
+        return [s for s in target_steps(self.plans[key],subject) if not s.get('session_choice') and (
                 (s['kind']=='break' and row.get('breaks',{}).get(s['id'],{}).get('until') is not None and row['breaks'][s['id']]['until']>self.now) or
                 (s['kind']!='break' and s.get('time_mode')=='clock' and self.now >= (budget.clock_deadlines or {}).get(s['clock_minute'],math.inf)) or
                 (s['kind']!='break' and s.get('time_mode')=='usage' and budget.used >= s['offset']) or
+                (s['kind']!='break' and s.get('time_mode')=='sessions' and budget.sessions > s['offset']) or
                 (s['kind']!='break' and 'time_mode' not in s and s['offset'] <= 0 and budget.used >= max(0, budget.limit + s['offset'])) or
-                (s['kind']!='break' and 'time_mode' not in s and s['offset'] > 0 and row['expired'] is not None and self.now >= row['expired'] + s['offset'])]
+                (s['kind']!='break' and 'time_mode' not in s and s['offset'] > 0 and row['expired'] is not None and self.now >= row['expired'] + s['offset']))]
 
     def grant(self, key, subject, identity=None):
         row = self.rows.get(key, {})

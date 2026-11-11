@@ -132,8 +132,8 @@ class FocusTests(unittest.TestCase):
     def test_domains_strip_paths_and_reject_private_or_non_web_values(self):
         self.assertEqual(domain('https://EXAMPLE.com/private?q=secret#fragment'), 'example.com')
         self.assertEqual(domain('*.példa.hu'), 'xn--plda-bpa.hu')
-        for value in ('file:///secret', 'chrome://settings', 'localhost', '127.0.0.1',
-                      'https://user:secret@example.com', 'app.local', 'bad host.com', 'https://[::1]'):
+        for value in ('file:///secret', 'chrome://settings', '192.168.1.1', '8.8.8.8',
+                      'https://user:secret@example.com', 'app.local', 'bad host.com', 'https://[fe80::1]'):
             with self.subTest(value=value), self.assertRaises(ValueError): domain(value)
 
     def test_invalid_rules_do_not_replace_saved_settings(self):
@@ -232,6 +232,16 @@ class BrowserBridgeTests(unittest.TestCase):
         self.assertEqual(legacy['mode'],'blocklist'); self.assertGreater(legacy['remaining'],0)
         modern=self.post({'browser':'brave','domain':'example.com','focused':True,'private':False,'restriction_version':1})
         from gametime import __version__
-        self.assertEqual(modern,dict(policy,extension_version=__version__))
+        self.assertEqual(modern,dict(policy,extension_version=__version__,continuity_version=1,local_sites=[],bridge_port=self.bridge.port))
         policy['restrictions'][0]['grant']={'subject':'site:example.com:token','until':9999999999}
         self.bridge.update(policy); self.assertFalse(self.post()['active'])
+
+    def test_loopback_observations_require_explicit_registration_and_never_track_bridge(self):
+        host='127.0.0.1:8766';owned=f'127.0.0.1:{self.bridge.port}'
+        data=dict(browser='brave',domain=host,focused=True,private=False)
+        self.post(data);self.assertEqual(self.bridge.website(r'C:\Brave\brave.exe'),'')
+        self.bridge.update(dict(active=False,block=[],allow=[],mode='blocklist',local_sites=[host,owned]))
+        self.post(data);self.assertEqual(self.bridge.website(r'C:\Brave\brave.exe'),host)
+        for other in ('127.0.0.1:8767',owned):
+            self.post(dict(data,domain=other));self.assertEqual(self.bridge.website(r'C:\Brave\brave.exe'),'')
+        self.post(dict(data,private=True));self.assertEqual(self.bridge.website(r'C:\Brave\brave.exe'),'')

@@ -1,0 +1,73 @@
+/* Active-tab visits and authenticated desktop choices. No page URLs leave the extension. */
+class WebsiteChoices {
+  constructor() { this.visit=null; this.loaded=false; this.pending=null; this.showing=new Map(); }
+  async load() {
+    if(this.loaded) return;
+    this.loaded=true; this.visit=(await chrome.storage.session.get('websiteChoiceVisit')).websiteChoiceVisit || null;
+    this.showing=new Map((await chrome.storage.session.get('websiteChoiceShowing')).websiteChoiceShowing || []);
+  }
+  async call(pairing,action,data) {
+    const response=await fetch(`http://127.0.0.1:${pairing.port}/control`,{method:'POST',cache:'no-store',signal:AbortSignal.timeout(4000),
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+pairing.token},body:JSON.stringify({action,data})});
+    if(!response.ok) throw Error('Choice connection unavailable');
+    const reply=await response.json();if(!reply.ok) throw Error('Choice unavailable');return reply.result;
+  }
+  async send(tabId,value) {
+    const message={action:'choice.overlay',value};
+    try {return await chrome.tabs.sendMessage(tabId,message,{frameId:0});}
+    catch {
+      if(!value) return;
+      await chrome.scripting.executeScript({target:{tabId},files:['site-choice-overlay.js']});
+      return chrome.tabs.sendMessage(tabId,message,{frameId:0});
+    }
+  }
+  async hideAll(except=null) {
+    let changed=false;
+    for(const tabId of this.showing.keys()) if(tabId!==except) {
+      await this.send(tabId,null).catch(()=>{});this.showing.delete(tabId);changed=true;
+    }
+    if(changed)await chrome.storage.session.set({websiteChoiceShowing:[...this.showing]});
+  }
+  async sync(tab,host,policy,pairing,browser) {
+    await this.load();
+    // Like desktop site sessions, tabs on the same domain share the current
+    // uninterrupted visit; a different domain or application ends it.
+    const key=tab && host && !tab.incognito ? `${browser}:${host}` : '';
+    if(this.visit?.key!==key) {
+      this.visit=key?{key,token:crypto.randomUUID().replaceAll('-','')}:null;
+      await chrome.storage.session.set({websiteChoiceVisit:this.visit});
+    }
+    const relevant=key && (policy.choice_rules || []).some(r=>r.all || r.domains.some(h=>host===h || host.endsWith('.'+h)));
+    const regular=host && siteDecision(host,policy,blockedTabs[tab?.id]?.token || '').kind;
+    this.pending=null;
+    if(!relevant || regular) {await this.hideAll();return;}
+    const data={browser,domain:host,visit:this.visit.token};
+    const result=await this.call(pairing,'choices.status',data);
+    const current=await activeTab();
+    if(!current || current.id!==tab.id || publicHost(current)!==host) {await this.hideAll();return;}
+    if(!result.choice) {await this.hideAll();return;}
+    const value={...result.choice,visit:this.visit.token,language:policy.language || 'en'};
+    this.pending={tabId:tab.id,host,data,value};
+    await this.hideAll(tab.id);
+    // A content script caches unchanged renders; this also heals a full page navigation.
+    await this.send(tab.id,value);
+    if(this.showing.get(tab.id)!==host){this.showing.set(tab.id,host);await chrome.storage.session.set({websiteChoiceShowing:[...this.showing]});}
+  }
+  async choose(message,sender,pairing) {
+    const pending=this.pending,tab=await activeTab();
+    if(!pending || sender.id!==chrome.runtime.id || sender.frameId!==0 || sender.tab?.incognito ||
+      sender.tab?.id!==pending.tabId || tab?.id!==pending.tabId || publicHost(tab)!==pending.host ||
+      publicHost({url:sender.url})!==pending.host || message.visit!==pending.data.visit ||
+      message.budget!==pending.value.budget || message.step!==pending.value.step) return {ok:false};
+    const result=await this.call(pairing,'choices.choose',{...pending.data,budget:message.budget,step:message.step,choice:message.choice});
+    if(!result.accepted) return {ok:false};
+    // Apply only if the response still belongs to the foreground visit.
+    if(this.pending===pending) {
+      if(result.choice) {
+        const value={...result.choice,visit:pending.data.visit,language:pending.value.language};
+        this.pending={...pending,value};await this.send(pending.tabId,value);
+      } else {this.pending=null;await this.hideAll();}
+    }
+    return {ok:true};
+  }
+}

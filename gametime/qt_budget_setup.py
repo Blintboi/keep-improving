@@ -9,10 +9,10 @@ from .qt_widgets import label,button,NoWheelDoubleSpinBox
 
 def budget_setup(app):
     if app.settings.budget_setup_completed: app._budget_setup_pending=False; return
-    window=app._dialog(app.t('Your first time budget'),580); window._personalization_kind='budget-setup'
+    window=app._dialog(app.t('Your first budget'),580); window._personalization_kind='budget-setup'
     layout=QVBoxLayout(window); layout.setContentsMargins(26,24,26,24); layout.setSpacing(18)
     layout.addWidget(label(app.t('Start with what matters to you'),'section'))
-    note=label(app.t('Create individual budgets or shared groups for games, applications and websites on the Time budgets page.'),'muted')
+    note=label(app.t('Create individual budgets or shared groups for games, applications and websites on the Budgets page.'),'muted')
     note.setWordWrap(True); layout.addWidget(note)
     games=QCheckBox(app.t('Create a shared budget for all games')); games.setAccessibleName(app.t('Create a shared budget for all games')); layout.addWidget(games)
     fields=QWidget(); row=QHBoxLayout(fields); row.setContentsMargins(0,0,0,0)

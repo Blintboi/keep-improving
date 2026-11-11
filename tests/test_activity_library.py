@@ -188,13 +188,14 @@ class ActivityLibraryTests(unittest.TestCase):
                  (local_group('cd'*16),'b'*32,'2026-10-28','site','private.example.com','private.example.com',10)])
         self.app.open_activities('app'); listing=self.app.activity_lists['app']
         self.assertEqual(listing.list.count(),1); self.assertEqual(listing.selected(),target('app','editor.exe'))
-        self.assertEqual(set(listing.icons.sources['app:editor.exe']),{old,current,remote,r'c:\downloads\editor-2.31.2-setup.exe'})
+        self.assertEqual(set(listing.icons.sources['app:editor.exe']),{old,current,remote})
+        self.assertIn('app:editor-2.31.2-setup.exe',listing.icons.sources)
         self.assertTrue(listing.countdown.isEnabled())
         self.assertEqual(activity_settings(self.app.settings,target('app',remote)).overlay_font_size,37)
         self.app.budget_editor.open_member(target('app',remote)); self.assertEqual(len(self.app.budget_editor.rules),1)
         self.app.open_activities('site'); self.assertEqual(self.app.activity_lists['site'].list.count(),2)
         before=self.store.db.total_changes
-        self.assertEqual(len(known_activities(self.store,replace(self.app.settings,statistics_sync_enabled=False),self.app.catalog)),2)
+        self.assertEqual(len(known_activities(self.store,replace(self.app.settings,statistics_sync_enabled=False),self.app.catalog)),3)
         self.assertEqual(self.store.db.total_changes,before)
 
     def test_editing_merged_countdown_replaces_old_aliases_and_all_versions_use_it(self):

@@ -18,7 +18,15 @@ class NotificationEditor(QWidget):
         t=self.app.t; layout=QVBoxLayout(self); layout.setContentsMargins(0,0,0,0); layout.setAlignment(Qt.AlignTop)
         card=panel(); form=QVBoxLayout(card); form.setContentsMargins(22,20,22,22); form.setSpacing(12); layout.addWidget(card)
         heading=QHBoxLayout(); heading.addWidget(label(t('Title')),1)
-        self.enabled=QCheckBox(t('Enabled')); heading.addWidget(self.enabled); form.addLayout(heading)
+        self.enabled=QCheckBox(t('Enabled')); heading.addWidget(self.enabled)
+        from .qt_device_scope import DeviceScope
+        self.devices=DeviceScope(self.app);form.addWidget(self.devices);self.devices.changed.connect(self.changed)
+        from .qt_schedule import DAY_SHORT
+        days=QHBoxLayout();self.days=[]
+        for day in range(7):
+            item=button(t(DAY_SHORT[day]),self.changed,'day');item.setCheckable(True);item.setFixedSize(56,44);self.days.append(item);days.addWidget(item)
+        days.addStretch();form.addWidget(label(t('Active days')));form.addLayout(days)
+        form.addLayout(heading)
         self.title=QLineEdit(); self.title.setMaxLength(80); self.title.setAccessibleName(t('Title')); form.addWidget(self.title)
         form.addWidget(label(t('Message')))
         self.message=QPlainTextEdit(); self.message.setAccessibleName(t('Message')); self.message.setFixedHeight(110); form.addWidget(self.message)
@@ -58,6 +66,8 @@ class NotificationEditor(QWidget):
         self.title.setText(item['title'] or (self.default_title if self.template else '')); self.message.setPlainText(item['text'] or self.default)
         self.trigger.setCurrentIndex(self.trigger.findData(item['trigger'])); self.time.setTime(QTime(item['minute']//60,item['minute']%60)); self.count.setValue(item['count'])
         self.enabled.setChecked(item['enabled']); self.icons.set_value(item['icon'])
+        self.devices.set_value(item.get('devices'))
+        for day,check in enumerate(self.days):check.setChecked(day in item['days'])
         self.action.setCurrentIndex(self.action.findData(item['action']['kind'])); self.application_path.setText(item['action'].get('path','')); self.pomodoro.set_value(item['action'])
         self.auto_close.setChecked(item['timeout']!=0); self.duration.setValue(item['timeout'] or max(12,min(90,len(self.message.toPlainText())*75//1000)))
         self.loading=False; self.update_controls(); self.title.setFocus()
@@ -72,7 +82,7 @@ class NotificationEditor(QWidget):
         ident=BUILTIN_IDS[self.key.split(':',1)[1]] if self.key.startswith('builtin:') else self.key.split(':',1)[1]
         return dict(id=ident,title='' if self.template and heading==self.default_title else heading,text='' if self.template and text==self.default else text,
                     icon=self.icons.value(),minute=self.time.time().hour()*60+self.time.time().minute(),enabled=self.enabled.isChecked(),trigger=self.trigger.currentData(),
-                    count=int(self.count.value()),action=action,timeout=int(self.duration.value()) if self.auto_close.isChecked() else 0,template=self.template)
+                    count=int(self.count.value()),action=action,timeout=int(self.duration.value()) if self.auto_close.isChecked() else 0,template=self.template,days=[day for day,item in enumerate(self.days) if item.isChecked()],**({'devices':self.devices.value()} if self.devices.value() else {}))
 
     def update_controls(self):
         trigger=self.trigger.currentData(); action=self.action.currentData(); t=self.app.t
@@ -80,8 +90,8 @@ class NotificationEditor(QWidget):
         notes={'time':'Appears once a day at the selected time while Keep Improving is running.',
                'startup':'Appears once each time Keep Improving starts. Saving a notification does not trigger it.',
                'pomodoros':'Counts completed focus rounds, not breaks. Uses the global day start and appears once per day.',
-               'bedtime':'Follows the bedtime reminder time in your time budget.'}
-        self.note.setText(t(notes.get(trigger,'Follows the shared game time budget.')))
+               'bedtime':'Follows the bedtime reminder time in your budget.'}
+        self.note.setText(t(notes.get(trigger,'Follows the shared game budget.')))
         self.application.setVisible(action=='app'); self.pomodoro.setVisible(action=='pomodoro'); self.action_note.setVisible(action=='pomodoro')
         self.duration_box.setVisible(self.auto_close.isChecked()); self.duration_note.setVisible(not self.auto_close.isChecked())
         self.hint.setVisible(bool(self.template)); self.reset.setVisible(bool(self.template))

@@ -6,7 +6,7 @@ import subprocess
 from sqlite3 import Error as SQLiteError
 from PySide6.QtCore import Qt,QSize,Signal
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QGridLayout,QFileDialog
+from PySide6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QGridLayout,QFileDialog,QSizePolicy
 from .qt_translation import QToolButton,QLineEdit
 from .qt_widgets import label,button,glyph,ACCENT,NoWheelComboBox,NoWheelDoubleSpinBox
 from .notification_rules import ICONS,POMODORO,executable
@@ -22,15 +22,17 @@ class IconPicker(QWidget):
     changed=Signal()
     def __init__(self,t):
         super().__init__(); self.t=t; self._value=''; self.loading=False
-        box=QVBoxLayout(self); box.setContentsMargins(0,0,0,0); grid=QGridLayout(); self.buttons={}
+        box=QVBoxLayout(self); box.setContentsMargins(0,0,0,0); grid=QGridLayout(); grid.setHorizontalSpacing(10); grid.setVerticalSpacing(10); self.buttons={}
+        for column in range(5): grid.setColumnStretch(column,1)
         for index,(name,text) in enumerate(ICONS.items()):
             item=QToolButton(); item.setText(t(text)); item.setIcon(glyph(name,ACCENT,28)); item.setIconSize(QSize(28,28))
+            item.setSizePolicy(QSizePolicy.Expanding,QSizePolicy.Fixed); item.setMinimumHeight(76)
             item.setToolButtonStyle(Qt.ToolButtonTextUnderIcon); item.setCheckable(True); item.setProperty('role','preset')
             item.setAccessibleName(t(text)); item.clicked.connect(lambda checked=False,n=name:self.select('preset:'+n))
             grid.addWidget(item,index//5,index%5); self.buttons[name]=item
         box.addLayout(grid); row=QHBoxLayout()
         self.path=QLineEdit(); self.path.setAccessibleName(t('Custom icon path')); row.addWidget(self.path,1)
-        row.addWidget(button(t('Choose image…'),self.browse)); box.addLayout(row)
+        row.addWidget(button(t('Choose image…'),self.browse),0,Qt.AlignLeft); box.addLayout(row)
         self.path.textChanged.connect(self.path_changed)
     def value(self): return self._value
     def set_value(self,value):
@@ -107,8 +109,8 @@ def popup_action(app,window,layout,alert):
                     raise ValueError('A focus timer is already running. Stop it in Focus mode before starting a new one.')
                 settings=replace(app.focus.settings,**fields.value()).validate()
                 app.focus.configure(settings); app.focus.stop(); app.focus.start(app.focus_awake())
-                app.update_focus_policy(); app.focus_page.refresh(force=True); fields.setEnabled(False)
-                result='Pomodoro started.'
+                app.update_focus_policy(); app.focus_page.refresh(force=True)
+                window.close(); return
             status.setText(t(result)); status.show()
         except (ValueError,OSError,SQLiteError) as exc:
             status.setText(t(str(exc)) if isinstance(exc,ValueError) else t('Could not start the action. Try again.')); status.show(); start.setEnabled(True)
