@@ -33,6 +33,13 @@ async function cdp(url){const socket=new WebSocket(url),pending=new Map();let id
     const {root}=await page.call('DOM.getDocument',{depth:-1,pierce:true});let button;
     function walk(n){if(!button&&n.nodeName==='BUTTON')button=n;for(const c of [...n.children||[],...n.shadowRoots||[]])walk(c);}walk(root);assert.ok(button);
     const {object}=await page.call('DOM.resolveNode',{nodeId:button.nodeId});await page.call('Runtime.callFunctionOn',{objectId:object.objectId,functionDeclaration:'function(){this.click();}'});await until(async()=>!await visible(),'choice accepted');
+    const before=await page.evaluate('({url:location.href,origin:performance.timeOrigin,draft:document.querySelector("#draft").value})');
+    await until(()=>worker.evaluate('!busy'),'idle worker');
+    await worker.evaluate("globalThis.originalFetch=fetch;globalThis.fetch=(url,...args)=>String(url).endsWith('/activity')?Promise.reject(Error('Injected outage')):originalFetch(url,...args);sync()");
+    await until(visible,'local in-page reconnect gate');
+    assert.deepEqual(await page.evaluate('({url:location.href,origin:performance.timeOrigin,draft:document.querySelector("#draft")?.value})'),before);
+    await worker.evaluate('globalThis.fetch=originalFetch;sync()');await until(async()=>!await visible(),'local accepted visit resumes');
+    assert.deepEqual(await page.evaluate('({url:location.href,origin:performance.timeOrigin,draft:document.querySelector("#draft")?.value})'),before);
     const opened=await open(`chrome-extension://${extension.id}/panel.html#budgets`);panel=opened.client;
     await until(()=>panel.evaluate("document.querySelector('.budget-row')!=null"),'budgets');
     await panel.evaluate(`(async()=>{const {api}=await import('./client.js');const state=await api('state');const b=state.result.budgets.find(b=>b.key==='web-choices');b.seconds=0;b.usage=true;b.plan=null;await api('budget.save',b,state.revision);})()`);
@@ -48,7 +55,7 @@ async function cdp(url){const socket=new WebSocket(url),pending=new Map();let id
     await panel.evaluate(`(async()=>{const {api}=await import('./client.js');const live=await api('live');return api('budget.delete',{key:'web-choices'},live.revision);})()`);
     await worker.evaluate('sync()');await until(()=>page.evaluate("document.querySelector('#draft')!=null"),'original local page restored');
     assert.equal(await page.evaluate('location.href'),`http://${host}/private?secret=not-recorded`);
-    console.log(JSON.stringify({local_member_saved:true,in_page_choice:true,zero_budget_blocks:true,localhost_alias:true,ipv6_alias:true,real_dnr_rules:true,other_port_unaffected:true,unconfigured_port_not_tracked:true,bridge_excluded:true,original_url_restored:true}));
+    console.log(JSON.stringify({local_reconnect_without_reload:true,local_member_saved:true,in_page_choice:true,zero_budget_blocks:true,localhost_alias:true,ipv6_alias:true,real_dnr_rules:true,other_port_unaffected:true,unconfigured_port_not_tracked:true,bridge_excluded:true,original_url_restored:true}));
   }catch(error){console.error(await worker?.evaluate('({policy,pending:websiteChoices.pending})').catch(()=>null));throw error;}
   finally{
     await fs.writeFile(path.join(report,'stop-fixture'),'stop');await until(async()=>fixture.exitCode!==null,'fixture shutdown',10000).catch(()=>fixture.kill());

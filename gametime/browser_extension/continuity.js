@@ -92,7 +92,7 @@ function offlinePolicy(snapshot, now=Date.now()/1000) {
   const policy={active:f.running && f.phase==='focus',tracking:snapshot.tracking,
     local_sites:snapshot.local_sites || [],bridge_port:snapshot.bridge_port,
     mode:f.all?'allowlist':'blocklist',block:f.domains,allow:[],remaining:f.remaining,
-    lease_seconds:90,language:snapshot.language,restrictions:[],restriction_version:1};
+    lease_seconds:90,language:snapshot.language,restrictions:[],restriction_version:1,choice_rules:[]};
   for (const b of snapshot.budgets) {
     if (!budgetActive(b,now)) continue;
     const domains=b.members.filter(m=>m.kind==='site').map(m=>m.value);
@@ -104,13 +104,15 @@ function offlinePolicy(snapshot, now=Date.now()/1000) {
     const legacyDue=b.enforce && b.usage && b.used>=b.seconds;
     if (zero || legacyDue) kinds.push('cover');
     const requiresDesktop = b.steps.some(s=>s.session_choice);
-    if (requiresDesktop) kinds.push('cover');
+    // A disconnected choice is an in-page gate, never a navigation rule.
+    // Otherwise each brief outage redirects every matching background tab,
+    // then reconnect restores/reloads them and destroys the current visit.
+    if (requiresDesktop) policy.choice_rules.push({domains,all,name:b.name,requires_desktop:true});
     if (!kinds.length) continue;
     const kind=kinds.includes('close')?'close':kinds.some(k=>k!=='redirect')?'cover':'redirect';
     const entry={key:b.id,name:b.name,all,domains,kind,
-      minutes:requiresDesktop || zero || b.runtime.used_extension || !regular.length ? 0 : Math.min(...selected.map(s=>s.extension_minutes??b.extension_minutes)),
-      grant:requiresDesktop || zero?null:b.runtime.grant || null,is_break:!requiresDesktop && !zero && !regular.length && !legacyDue};
-    if (requiresDesktop) entry.requires_desktop = true;
+      minutes:zero || b.runtime.used_extension || !regular.length ? 0 : Math.min(...selected.map(s=>s.extension_minutes??b.extension_minutes)),
+      grant:zero?null:b.runtime.grant || null,is_break:!zero && !regular.length && !legacyDue};
     if (kind==='redirect') entry.redirect_url=selected.find(s=>s.break_mode==='redirect'||s.kind==='redirect')?.redirect_url || '';
     if (entry.is_break) entry.break_until=Math.max(0,...Object.values(b.runtime.breaks || {}).map(s=>s.until || 0));
     policy.restrictions.push(entry);

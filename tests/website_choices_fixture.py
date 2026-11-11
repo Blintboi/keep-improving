@@ -20,7 +20,9 @@ QtInterfaceTests.setUpClass();case=QtInterfaceTests();case.setUp()
 try:
     app=case.app;case.enterContext(patch('gametime.win32.sample',side_effect=lambda:Sample(datetime.now().astimezone(),time.monotonic(),interactive=False)))
     rule=new_rule('Webes próba',[target('site',sys.argv[2] if len(sys.argv)>2 else 'choice.example.com'),target('site','second.example.com')],'web-choices');rule['enabled']=True
-    plan=new_plan();s=step('notify',2,popup=True);s.update(time_mode='sessions',session_choice=defaults(app.t));plan['steps']=[s]
+    regression=len(sys.argv)>3 and sys.argv[3]=='reconnect'
+    plan=new_plan();s=step('cover' if regression else 'notify',5 if regression else 2,popup=True);s.update(time_mode='sessions',session_choice=defaults(app.t));plan['steps']=[s]
+    if regression:s['session_choice']['allocation']='activity'
     app.settings=app.catalog.settings=replace(app.settings,wellbeing_rules=[rule],restriction_plans={rule['id']:plan},budget_usage_limits={rule['id']:False})
     app.wellbeing.configure(datetime.now().astimezone());case.store.save_settings(app.settings)
     app.schedule_editor.saved(app.settings);app.budget_editor.saved(app.settings)

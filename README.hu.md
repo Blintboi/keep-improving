@@ -1,6 +1,6 @@
-# Keep Improving — 2.46.0
+# Keep Improving — 2.46.1
 
-**[Letöltés Windows x64-re — 2.46.0](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256](downloads/GameTimeMonitor-Setup.exe.sha256) · [English](README.md)
+**[Letöltés Windows x64-re — 2.46.1](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256](downloads/GameTimeMonitor-Setup.exe.sha256) · [English](README.md)
 
 **[Android telepítő — 0.6.0 (.apk)](https://github.com/Blintboi/keep-improving/raw/refs/heads/main/downloads/KeepImproving-Android.apk)** · [SHA-256](downloads/KeepImproving-Android.apk.sha256) · [Telefonos útmutató](android/README.hu.md)
 

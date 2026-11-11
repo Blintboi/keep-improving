@@ -24,7 +24,7 @@
       root.append(style,dialog);document.documentElement.append(host);
     }
     const main=node('main');main.append(node('p','KEEP IMPROVING'));main.firstChild.className='brand';
-    main.append(node('p',value.name));const heading=node('h1',value.question);heading.id='question';main.append(heading);
+    main.append(node('p',value.name));const heading=node('h1',value.offline?(hu?'Kapcsolódás az alkalmazáshoz…':'Connecting to the application…'):value.question);heading.id='question';main.append(heading);
     dialog.setAttribute('aria-labelledby','question');dialog.setAttribute('lang',hu?'hu':'en');
     const controls=[];
     for(const option of value.options) {
@@ -41,9 +41,12 @@
         finally {busy=false;controls.forEach((b,i)=>b.disabled=value.options[i].remaining===0);}
       });main.append(pick);
     }
-    main.append(node('p',value.allocation==='activity'?(hu?'Erre az oldalra külön keret vonatkozik.':'This website has a separate allowance.'):
-      (hu?'A keret tagjai közösen használják ezeket az alkalmakat.':'These visits are shared across the budget members.')));
-    main.append(node('p',hu?'Válassz egy célt a folytatáshoz, vagy válts másik lapra.':'Choose a reason to continue, or switch to another tab.'));
+    if(value.offline) main.append(node('p',hu?'A munkamenetkeret ellenőrzéséhez a Keep Improving alkalmazásnak futnia kell. A kapcsolat helyreállásakor itt folytathatod, az oldal újratöltése nélkül.':'Keep Improving needs to be running to check this visit’s allowance. You can continue here when it reconnects, without reloading the page.'));
+    else {
+      main.append(node('p',value.allocation==='activity'?(hu?'Erre az oldalra külön keret vonatkozik.':'This website has a separate allowance.'):
+        (hu?'A keret tagjai közösen használják ezeket az alkalmakat.':'These visits are shared across the budget members.')));
+      main.append(node('p',hu?'Válassz egy célt a folytatáshoz, vagy válts másik lapra.':'Choose a reason to continue, or switch to another tab.'));
+    }
     const error=node('p');error.className='error';error.setAttribute('role','status');main.append(error);
     const scroll=dialog.scrollTop;dialog.replaceChildren(main);if(!dialog.open)dialog.showModal();dialog.scrollTop=scroll;
   }

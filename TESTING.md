@@ -1,5 +1,28 @@
 # Testing
 
+## 2.46.1 — opening-choice reconnect regression
+
+- Reproduced a short desktop-connection failure in disposable Brave: the old
+  fallback navigated both foreground and background choice-budget tabs to a
+  cover page. Reconnecting then reloaded their original URLs.
+- Offline choices now wait in the existing document. Choice-status and content
+  injection failures remain local to that tab. Independent limits, focus rules
+  and daily allowances retain their normal enforcement.
+- 91 targeted Python tests and 77 browser unit tests passed. The real-browser
+  reconnect fixture repeatedly interrupts activity, control and continuity
+  requests and checks document identity, unsaved input, viewport, scroll,
+  background tabs and the accepted visit token. It also exhausts the limited
+  choice while retaining the unlimited choice. HU/EN waiting screens were
+  inspected at wide and narrow sizes. Local-site coverage includes reconnecting
+  without navigation and independent restrictions for local ports.
+- The local installer passed all 102 installation/upgrade checks. The actual
+  desktop and running Brave worker were upgraded to 2.46.1; history, credentials,
+  settings and choice counts were preserved, and the temporarily paused rule
+  was restored. Reports stay in `test-reports/session-reload/`.
+- Publication uses the same tested application and extension, with updated
+  bundled guides. Public installer verification and delivery evidence stay in
+  `test-reports/publication-2461/`.
+
 ## Public delivery preparation — Windows 2.46.0 / Android 0.6.0
 
 - Rewrote the main and Android READMEs as current usage guides in HU/EN.

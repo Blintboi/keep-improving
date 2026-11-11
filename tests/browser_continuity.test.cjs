@@ -12,16 +12,31 @@ function snapshot(changes={}) {return {version:1,at:stamp,language:'en',browser:
 function model(s=snapshot()) {return new BrowserJournal({snapshot:s},uuid);}
 const tab={active:true,host:'example.com',redirect:'',locked:false};
 
-test('opening choices require desktop offline and never run as raw session actions',()=>{
+test('offline opening choices use in-page gates without navigation restrictions',()=>{
   for (const kind of ['notify','cover','break']) {
     const s=snapshot();s.focus.running=false;const b=s.budgets[0];b.enforce=false;b.usage=false;b.sessions=100;
     b.steps=[{id:'why',kind,time_mode:'sessions',offset:2,break_minutes:5,break_mode:'cover',
       session_choice:{question:'Why?',options:[{id:'work',label:'For work',limit:null},{id:'other',label:'Just checking',limit:2}]}}];
     const notices=[];updateBudget(b,stamp,notices);assert.equal(notices.length,0);assert.deepEqual(b.runtime.breaks,{});
-    const decision=siteDecision('example.com',offlinePolicy(s,stamp),'',stamp);
-    assert.equal(decision.kind,'cover');assert.equal(decision.minutes,0);assert.equal(decision.requires_desktop,true);
-    assert.equal(decision.break_until,undefined);
+    const policy=offlinePolicy(s,stamp),decision=siteDecision('example.com',policy,'',stamp);
+    assert.equal(decision.kind,'');assert.deepEqual(policy.restrictions,[]);
+    assert.deepEqual(policy.choice_rules,[{domains:['example.com'],all:true,name:b.name,requires_desktop:true}]);
   }
+});
+
+test('offline choices preserve independent limits, focus, grants and active days',()=>{
+  const s=snapshot();s.focus.running=false;const b=s.budgets[0];b.enforce=false;b.usage=false;
+  b.steps=[{id:'choice',kind:'cover',time_mode:'sessions',offset:2,session_choice:{question:'Why?'}},
+    {id:'limit',kind:'cover',time_mode:'sessions',offset:5}];
+  b.sessions=6;b.runtime.grant={subject:'site:example.com:token',until:stamp+60};
+  let p=offlinePolicy(s,stamp);
+  assert.equal(p.choice_rules.length,1);assert.equal(p.restrictions.length,1);
+  assert.equal(siteDecision('example.com',p,'',stamp).kind,'cover');
+  assert.equal(siteDecision('example.com',p,'token',stamp).kind,'');
+  b.steps.pop();b.usage=true;b.seconds=0;
+  assert.equal(siteDecision('example.com',offlinePolicy(s,stamp),'token',stamp).kind,'cover');
+  b.days=[];p=offlinePolicy(s,stamp);assert.deepEqual(p.choice_rules,[]);assert.deepEqual(p.restrictions,[]);
+  s.focus.running=true;assert.equal(siteDecision('blocked.example',offlinePolicy(s,stamp),'',stamp).kind,'cover');
 });
 
 test('one interval charges a browser/site group once and keeps a single timer',()=>{

@@ -8,7 +8,7 @@ function fixture(storage={}){
   const gate=vm.runInContext('new WebsiteChoices()',context);
   gate.call=async(pairing,action,data)=>{state.calls.push({action,data});return {choice:{budget:'budget',step:'step',question:'Why?',options:[]}};};
   const policy={language:'en',choice_rules:[{domains:['example.com'],all:false}]};
-  return {gate,state,storage,async sync(){return gate.sync(state.tab,state.tab&&!state.tab.incognito?new URL(state.tab.url).hostname:'',policy,{},'brave');}};
+  return {gate,state,storage,policy,async sync(){return gate.sync(state.tab,state.tab&&!state.tab.incognito?new URL(state.tab.url).hostname:'',policy,{},'brave');}};
 }
 test('same-domain tabs keep the visit; leaving and returning starts a new one',async()=>{
   const f=fixture();await f.sync();const first=f.gate.visit.token;
@@ -30,4 +30,27 @@ test('a stale tab, visit or subframe cannot consume an allowance',async()=>{
   assert.equal((await f.gate.choose(message,{...sender,frameId:1},{})).ok,false);
   f.state.tab={id:2,url:'https://elsewhere.com/'};assert.equal((await f.gate.choose(message,sender,{})).ok,false);
   assert.equal(f.state.calls.length,1);
+});
+
+test('failed choice requests wait in-page and reconnect with the same accepted visit',async()=>{
+  const f=fixture();f.gate.call=async()=>({choice:null});await f.sync();const token=f.gate.visit.token;
+  f.gate.call=async()=>{throw Error('Control timeout');};await f.sync();
+  assert.equal(f.gate.pending.value.offline,true);assert.equal(f.gate.visit.token,token);
+  assert.equal(f.state.sent.at(-1).message.value.offline,true);
+  f.gate.call=async()=>({choice:null});await f.sync();
+  assert.equal(f.gate.pending,null);assert.equal(f.gate.visit.token,token);assert.equal(f.state.sent.at(-1).message.value,null);
+});
+
+test('offline fallback makes no choice request and survives a worker restart',async()=>{
+  const f=fixture();f.policy.choice_rules[0].requires_desktop=true;await f.sync();
+  assert.equal(f.state.calls.length,0);assert.equal(f.gate.pending.value.offline,true);
+  const again=fixture(f.storage);again.policy.choice_rules[0].requires_desktop=true;await again.sync();
+  assert.equal(again.gate.visit.token,f.gate.visit.token);assert.equal(again.gate.pending.value.offline,true);
+  assert.equal((await again.gate.choose({}, {id:'fixture',frameId:0,tab:again.state.tab,url:again.state.tab.url},{})).ok,false);
+  again.state.tab.incognito=true;await again.sync();assert.equal(again.gate.visit,null);assert.equal(again.gate.pending,null);
+});
+
+test('a document rejecting injection cannot turn a healthy policy into global offline mode',async()=>{
+  const f=fixture();f.gate.send=async()=>{throw Error('Cannot access a protected document');};
+  await assert.doesNotReject(f.sync());assert.ok(f.gate.pending);
 });

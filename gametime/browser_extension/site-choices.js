@@ -37,25 +37,32 @@ class WebsiteChoices {
       this.visit=key?{key,token:crypto.randomUUID().replaceAll('-','')}:null;
       await chrome.storage.session.set({websiteChoiceVisit:this.visit});
     }
-    const relevant=key && (policy.choice_rules || []).some(r=>r.all || r.domains.some(h=>host===h || host.endsWith('.'+h)));
+    const relevant=key && (policy.choice_rules || []).find(r=>r.all || r.domains.some(h=>host===h || host.endsWith('.'+h)));
     const regular=host && siteDecision(host,policy,blockedTabs[tab?.id]?.token || '').kind;
     this.pending=null;
     if(!relevant || regular) {await this.hideAll();return;}
     const data={browser,domain:host,visit:this.visit.token};
-    const result=await this.call(pairing,'choices.status',data);
+    let result;
+    // Choice/control failures do not mean the entire restriction connection
+    // failed. Keep its valid policy and wait in this document without spending
+    // an allowance or replacing the accepted visit token.
+    try {if(!relevant.requires_desktop) result=await this.call(pairing,'choices.status',data);}
+    catch { /* Retry on the next normal choice tick. */ }
     const current=await activeTab();
     if(!current || current.id!==tab.id || publicHost(current)!==host) {await this.hideAll();return;}
-    if(!result.choice) {await this.hideAll();return;}
-    const value={...result.choice,visit:this.visit.token,language:policy.language || 'en'};
+    if(result && !result.choice) {await this.hideAll();return;}
+    const value={...(result?.choice || {offline:true,name:relevant.name || '',options:[]}),visit:this.visit.token,language:policy.language || 'en'};
     this.pending={tabId:tab.id,host,data,value};
     await this.hideAll(tab.id);
     // A content script caches unchanged renders; this also heals a full page navigation.
-    await this.send(tab.id,value);
+    // A closing/navigating tab or a protected document may reject injection.
+    // That is local to this tab; it must never trigger global offline blocking.
+    await this.send(tab.id,value).catch(()=>{});
     if(this.showing.get(tab.id)!==host){this.showing.set(tab.id,host);await chrome.storage.session.set({websiteChoiceShowing:[...this.showing]});}
   }
   async choose(message,sender,pairing) {
     const pending=this.pending,tab=await activeTab();
-    if(!pending || sender.id!==chrome.runtime.id || sender.frameId!==0 || sender.tab?.incognito ||
+    if(!pending || pending.value.offline || sender.id!==chrome.runtime.id || sender.frameId!==0 || sender.tab?.incognito ||
       sender.tab?.id!==pending.tabId || tab?.id!==pending.tabId || publicHost(tab)!==pending.host ||
       publicHost({url:sender.url})!==pending.host || message.visit!==pending.data.visit ||
       message.budget!==pending.value.budget || message.step!==pending.value.step) return {ok:false};

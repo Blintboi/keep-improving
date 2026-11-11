@@ -198,6 +198,9 @@ async function sync() {
     const fallback=await continuity.offline().catch(()=>continuity.model?.value.snapshot ? offlinePolicy(continuity.model.value.snapshot) : null);
     await setPolicy(fallback || {active: false, tracking: true, allow: [], block: [], mode: 'blocklist'});
     await applyPolicyTabs(null);
+    const tab=await activeTab();
+    const {pairing,browser='brave'}=await chrome.storage.local.get(['pairing','browser']);
+    await websiteChoices.sync(tab,trackedHost(tab),policy,pairing,browser);
     await chrome.storage.session.set({connected: false});
   } finally {
     busy = false;

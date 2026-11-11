@@ -1,6 +1,6 @@
-# Keep Improving — 2.46.0
+# Keep Improving — 2.46.1
 
-**[Download for Windows x64 — 2.46.0](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256](downloads/GameTimeMonitor-Setup.exe.sha256) · [Magyar](README.hu.md)
+**[Download for Windows x64 — 2.46.1](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256](downloads/GameTimeMonitor-Setup.exe.sha256) · [Magyar](README.hu.md)
 
 **[Download for Android — 0.6.0 (.apk)](https://github.com/Blintboi/keep-improving/raw/refs/heads/main/downloads/KeepImproving-Android.apk)** · [SHA-256](downloads/KeepImproving-Android.apk.sha256) · [Phone setup](android/README.md)
 
