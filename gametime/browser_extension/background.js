@@ -1,7 +1,7 @@
-importScripts('sites.js','policy.js', 'dashboard_update.js', 'local_update.js', 'continuity.js','site-choices.js');
+importScripts('sites.js','media.js','policy.js', 'dashboard_update.js', 'local_update.js', 'continuity.js','site-choices.js');
 const continuity = new BrowserContinuityWorker();
 const websiteChoices = new WebsiteChoices();
-let timer, busy = false, rerun = false, signature = '', leaseUntil = 0;
+let timer, busy = false, rerun = false, signature = '', leaseUntil = 0, mediaPlaying=false;
 let policy = {active: false, tracking: true, allow: [], block: [], mode: 'blocklist'};
 let blockedTabs = {};
 let returnPages = {}, savedReturns = '';
@@ -160,6 +160,7 @@ async function sync() {
     const {pairing, browser = 'brave'} = await chrome.storage.local.get(['pairing', 'browser']);
     await continuity.load(pairing,browser);
     if (!pairing) {
+      mediaPlaying=false;
       await setPolicy({active: false, tracking: true, allow: [], block: [], mode: 'blocklist'});
       await restoreReleasedTabs();
       return;
@@ -173,10 +174,19 @@ async function sync() {
     const choosing=websiteChoices.pending?.tabId===tab?.id && websiteChoices.pending?.host===host;
     try {await continuity.sample(tab,choosing?'':host,redirectBudget || '');}
     catch {continuity.error='Browser storage is full. Reconnect the desktop application.';}
+    const audibleTabs=policy.tracking && policy.background_media_sites?.length ? await chrome.tabs.query({audible:true}) : [];
+    const media=BackgroundMediaTabs.select(audibleTabs,policy.background_media_sites)
+      .filter(item=>websiteChoices.pending?.tabId!==item.tabId)
+      .map(item=>{
+        const record=blockedTabs[item.tabId],tab=audibleTabs.find(tab=>tab.id===item.tabId);
+        const redirect=isRedirectLanding(record,tab?.url) ? siteDecision(record.host,policy,record.token).redirect_key : '';
+        return {domain:item.domain,redirect_budget:redirect || ''};
+      });
+    mediaPlaying=media.length>0;
     const response = await fetch(`http://127.0.0.1:${pairing.port}/activity`, {
       method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(3000),
       headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + pairing.token},
-      body: JSON.stringify({browser, restriction_version: 1, choice_version:1, local_version:1, domain: policy.tracking ? host : '', focused: !!tab, private: !!tab?.incognito,
+      body: JSON.stringify({browser, media, restriction_version: 1, choice_version:1, local_version:1, domain: policy.tracking ? host : '', focused: !!tab, private: !!tab?.incognito,
         idle: braveNewTab(tab, browser), redirect_budget: policy.tracking ? redirectBudget || '' : ''})
     });
     if ([401,403].includes(response.status)) {continuity.model.value.snapshot=null;await continuity.save();}
@@ -194,6 +204,7 @@ async function sync() {
     await saving;
     await checkLocalExtensionUpdate(next.extension_version);
   } catch (error) {
+    mediaPlaying=false;
     if(/storage|quota/i.test(error?.message || '')) continuity.error='Browser storage is full. Reconnect the desktop application.';
     const fallback=await continuity.offline().catch(()=>continuity.model?.value.snapshot ? offlinePolicy(continuity.model.value.snapshot) : null);
     await setPolicy(fallback || {active: false, tracking: true, allow: [], block: [], mode: 'blocklist'});
@@ -206,12 +217,12 @@ async function sync() {
     busy = false;
     if (continuity.connected && (policy.active || (policy.restrictions || []).length) && Date.now() >= leaseUntil)
       await setPolicy({...policy, active: false, restrictions: []});
-    timer = setTimeout(sync, websiteChoices.pending || policy.active || (policy.restrictions || []).length || continuity.model?.value.snapshot?.focus.running ? 2000 : 10000);
+    timer = setTimeout(sync, mediaPlaying ? 1000 : websiteChoices.pending || policy.active || (policy.restrictions || []).length || continuity.model?.value.snapshot?.focus.running ? 2000 : 10000);
     if (rerun) { rerun = false; clearTimeout(timer); timer = setTimeout(sync, 0); }
   }
 }
 chrome.tabs.onActivated.addListener(sync);
-chrome.tabs.onUpdated.addListener((id, change, tab) => { if (tab.active && (change.url || change.status === 'complete')) sync(); });
+chrome.tabs.onUpdated.addListener((id, change, tab) => { if (tab.active && (change.url || change.status === 'complete') || policy.background_media_sites?.length && ('audible' in change || 'mutedInfo' in change)) sync(); });
 chrome.tabs.onRemoved.addListener(async (id,info) => {
   await restored;
   const record=blockedTabs[id]; delete blockedTabs[id];

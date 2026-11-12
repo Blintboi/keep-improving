@@ -25,18 +25,18 @@ async function cdp(url){const socket=new WebSocket(url),pending=new Map();let id
     await worker.evaluate(`chrome.storage.local.set({pairing:${JSON.stringify({port:pairing.port,token:pairing.token})},browser:'brave'})`);
     const popup=await open(`chrome-extension://${extension.id}/popup.html`);page=popup.client;
     await page.call('Emulation.setDeviceMetricsOverride',{width:380,height:720,deviceScaleFactor:1,mobile:false});
-    const row="document.querySelector('[data-timer-key=youtube]')";
+    const row="document.querySelector('[data-timer-key=youtube]')",quick="document.querySelector('[data-break-key=youtube]')";
     await until(()=>page.evaluate(`${row}?.textContent.includes('03:00')`),'three unused minutes');
     async function shot(name){await fs.writeFile(path.join(report,name+'.png'),Buffer.from((await page.call('Page.captureScreenshot',{format:'png'})).data,'base64'));}
     async function api(action,data={}){return page.evaluate(`(async()=>{const {api}=await import('./client.js');const live=await api('live');return api(${JSON.stringify(action)},${JSON.stringify(data)},live.revision);})()`);}
-    await until(()=>page.evaluate(`${row}?.querySelector('button')?.textContent==='Szünet most'`),'Hungarian button');await shot('popup-hu');
+    await until(()=>page.evaluate(`${quick}?.querySelector('button')?.textContent==='Szünet most'`),'Hungarian button');await shot('popup-hu');
     await api('settings.save',{language:'en'});
-    await until(()=>page.evaluate(`${row}?.querySelector('button')?.textContent==='Break now'`),'English button');await shot('popup-en');
-    await page.evaluate(`${row}.querySelector('button').click()`);
-    await until(()=>page.evaluate(`${row}?.textContent.includes('Break remaining')`),'full break started');
+    await until(()=>page.evaluate(`${quick}?.querySelector('button')?.textContent==='Break now'`),'English button');await shot('popup-en');
+    await page.evaluate(`${quick}.querySelector('button').click()`);
+    await until(()=>page.evaluate(`${quick}?.textContent.includes('Break remaining')`),'full break started');
     let response=await api('live'),event=response.result.timers.find(t=>t.key==='youtube');
     assert.equal(event.event,'break_active');assert.ok(event.seconds>295&&event.seconds<=300);assert.equal(event.break_step,'');assert.equal(event.total,2880);
-    assert.ok(await page.evaluate(`${row}.querySelector('button').hidden`));
+    assert.ok(await page.evaluate(`${quick}.querySelector('button').disabled`));
     await worker.evaluate('sync()');assert.ok(await worker.evaluate("policy.restrictions.some(r=>r.key==='youtube'&&r.is_break&&r.kind==='cover')"));
     await fs.writeFile(path.join(report,'finish-break'),'advance 300 seconds');
     await until(()=>page.evaluate(`${row}?.textContent.includes('15:00')`),'fresh fifteen minutes');

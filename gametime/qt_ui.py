@@ -12,7 +12,7 @@ import uuid
 import winsound
 from sqlite3 import Error as SQLiteError
 from PySide6.QtCore import Qt,QTimer,QPoint,QEventLoop,QObject,QEvent,Signal,QTime,QSize
-from PySide6.QtGui import QIcon,QFont,QAction,QColor,QPixmap
+from PySide6.QtGui import QIcon,QFont,QAction,QColor,QPixmap,QShortcut,QKeySequence
 from PySide6.QtWidgets import (QApplication,QMainWindow,QWidget,QFrame,QVBoxLayout,QHBoxLayout,
     QGridLayout,QStackedWidget,QScrollArea,QFileDialog,QInputDialog,QMenu,QAbstractSpinBox,
     QHeaderView,QAbstractItemView,QSizePolicy,QAbstractScrollArea,QColorDialog)
@@ -24,6 +24,7 @@ from .tracker import Tracker
 from .hub import HubWorker
 from .i18n import tr,LANGUAGES
 from . import win32,__version__
+from .qt_widgets import help_text
 from .qt_widgets import STYLE,ACCENT,MUTED,label,button,back_button,panel,separator,glyph,duration,BudgetRing,LocalArtwork,CardGrid,GameCard,normalize_icon,Disclosure,CursorGuard
 from .qt_widgets import (NoWheelComboBox as QComboBox,NoWheelDoubleSpinBox as QDoubleSpinBox,
     NoWheelTimeEdit as QTimeEdit,NoWheelSlider as QSlider)
@@ -169,6 +170,8 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
         self.statistics_event_timer.timeout.connect(self.sync_statistics_event)
         self.tracker=Tracker(store,self.catalog); self.hub=hub or HubWorker(data_dir); self.hub_fingerprint=None
         self.wellbeing=Wellbeing(store,self.catalog,self.focus)
+        from .background_media import BackgroundMedia
+        self.background_media=BackgroundMedia(self)
         from .qt_restrictions import RestrictionRuntime
         self.restrictions=RestrictionRuntime(self)
         from .browser_continuity import BrowserContinuity
@@ -201,6 +204,8 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
         self.overlay_timer=QTimer(self); self.overlay_timer.setInterval(200); self.overlay_timer.timeout.connect(self.update_overlay)
         self.assets_timer=QTimer(self); self.assets_timer.setInterval(1000); self.assets_timer.timeout.connect(self.poll_assets)
         self._build(); dark_window(self)
+        self._save_shortcut=QShortcut(QKeySequence.StandardKey.Save,self)
+        self._save_shortcut.activated.connect(self.save_current_page)
         if self.settings.statistics_sync_enabled:
             from .preferences_sync import pending_key
             self._preferences_pending=bool(self.store.db.execute('SELECT 1 FROM settings WHERE key=?',
@@ -244,10 +249,10 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
         side.addSpacing(32)
         self.nav={}
         for index,text,icon in ((1,'Overview','stats'),(0,'Activities','library'),(5,'Budgets','clock'),(6,'Notifications','bell'),(4,'Focus mode','focus')):
-            item=button(self.t(text),lambda checked=False,n=index:self.switch_page(n),'nav'); item.setCheckable(True); item.setIcon(glyph(icon)); item.setMinimumHeight(45)
+            item=button(self.t(text),lambda checked=False,n=index:self.navigate_to(n),'nav'); item.setCheckable(True); item.setIcon(glyph(icon)); item.setMinimumHeight(45)
             self.nav[index]=item; side.addWidget(item)
         side.addStretch()
-        item=button(self.t('Settings'),lambda:self.open_settings_section('general'),'nav'); item.setCheckable(True)
+        item=button(self.t('Settings'),lambda:self.feedback.run('Loading…',lambda:self.open_settings_section('general'),success=''),'nav'); item.setCheckable(True)
         item.setIcon(glyph('settings')); item.setMinimumHeight(45); self.nav[2]=item; side.addWidget(item)
         self.language=QComboBox(); self.language.popup_upwards=True
         self.language.setAccessibleName(self.t('Language / Nyelv')); self.language.setToolTip(self.t('Language / Nyelv'))
@@ -276,6 +281,9 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
         self.status_label=label(self.status_text,'muted'); self.status_label.setSizePolicy(QSizePolicy.Ignored,QSizePolicy.Fixed)
         self.status_label.setStyleSheet('font-size:11px; padding:8px 32px 12px; color:#7d9395;'); right.addWidget(self.status_label)
         self.status_label.setVisible(time.monotonic()<getattr(self,'_status_until',0))
+        from .qt_feedback import OperationFeedback
+        if hasattr(self,'feedback'):self.feedback.close_operation()
+        self.feedback=OperationFeedback(self);right.addWidget(self.feedback)
         row.addLayout(right,1)
         previous=self.takeCentralWidget(); self.setCentralWidget(surface)
         if previous: previous.deleteLater()
@@ -677,7 +685,7 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
         self.settings_body=body
         general=panel(); general_layout=QVBoxLayout(general); general_layout.setContentsMargins(22,20,22,22); general_layout.setSpacing(12)
         general_layout.addWidget(label(self.t('Day starts at'),'section'))
-        note=label(self.t('One daily boundary for statistics, all budgets and daily reminders.'),'muted'); note.setWordWrap(True); general_layout.addWidget(note)
+        note=help_text(self.t('One daily boundary for statistics, all budgets and daily reminders.'),'muted'); note.setWordWrap(True); general_layout.addWidget(note)
         from .qt_widgets import NoWheelTimeEdit
         self.global_day_start=NoWheelTimeEdit(); self.global_day_start.setDisplayFormat('HH:mm'); self.global_day_start.setAccessibleName(self.t('Day starts at'))
         minute=self.settings.budget_reset_minute; self.global_day_start.setTime(QTime(minute//60,minute%60)); general_layout.addWidget(self.global_day_start)
@@ -724,7 +732,8 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
             body_layout.addWidget(section); self.settings_sections[key]=section
         body_layout.addStretch(); self.show_settings_section('general')
         footer=QHBoxLayout(); self.settings_error=label('','danger'); self.settings_error.setWordWrap(True); footer.addWidget(self.settings_error,1)
-        footer.addWidget(button(self.t('Save'),lambda:self.save_settings(scope='general'),'primary')); outer.addLayout(footer)
+        self.general_save=button(self.t('Save'),self.request_general_save,'primary')
+        self.general_save.setToolTip(self.t('Save changes (Ctrl+S)'));footer.addWidget(self.general_save); outer.addLayout(footer)
         return page
 
     def _build_budget_page(self):
@@ -738,7 +747,7 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
         content.addWidget(self.budget_editor); content.addStretch(); scroll.setWidget(body); layout.addWidget(scroll,1)
         footer=QHBoxLayout(); self.budget_error=label('','danger'); self.budget_error.setWordWrap(True); footer.addWidget(self.budget_error,1)
         self.budget_discard=button(self.t('Discard draft'),self.budget_editor.drafts.discard,'quiet'); footer.addWidget(self.budget_discard); self.budget_discard.hide()
-        self.budget_save=button(self.t('Save changes'),self.save_budgets,'primary'); footer.addWidget(self.budget_save); layout.addLayout(footer)
+        self.budget_save=button(self.t('Save changes'),self.request_budget_save,'primary');self.budget_save.setToolTip(self.t('Save changes (Ctrl+S)')); footer.addWidget(self.budget_save); layout.addLayout(footer)
         self.budget_editor.views.layout().currentChanged.connect(self.update_budget_save)
         self.update_budget_save()
         self.budget_draft_note=label('','muted'); self.budget_draft_note.setWordWrap(True); layout.addWidget(self.budget_draft_note)
@@ -748,14 +757,32 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
         self.budget_save.setVisible(self.budget_editor.views.currentIndex()==1 or bool(self.budget_editor.drafts.last))
 
     def save_budgets(self):
-        if not self.budget_editor.drafts.prepare_save(): return
+        if not self.budget_editor.drafts.prepare_save(): return False
         self.budget_editor.collect()
         missing=next((rule for rule in self.budget_editor.rules if not rule['members']),None)
         if missing:
-            self.budget_error.setText(self.t('Choose what this budget applies to')); self.budget_editor.show_editor(missing['id']); return
+            self.budget_error.setText(self.t('Choose what this budget applies to')); self.budget_editor.show_editor(missing['id']); return False
         self.save_settings(scope='budgets')
         self.budget_error.setText(self.settings_error.text())
         if not self.settings_error.text(): self.budget_editor.show_list()
+        return not bool(self.settings_error.text())
+
+    def request_budget_save(self):
+        return self.feedback.run('Saving…',self.save_budgets,origin=self.budget_save,error=lambda:self.budget_error.text())
+
+    def request_general_save(self):
+        return self.feedback.run('Saving…',lambda:self.save_settings(scope='general'),origin=self.general_save,error=lambda:self.settings_error.text())
+
+    def save_current_page(self):
+        if QApplication.activeModalWidget() or self.feedback.busy:return
+        page=self.pages.currentIndex()
+        if page==5:self.request_budget_save()
+        elif page==2:self.request_general_save()
+        elif page==6:self.notifications_page.request_save()
+
+    def navigate_to(self,index):
+        if self.pages.currentIndex()==index:return
+        return self.feedback.run('Loading…',lambda:self.switch_page(index),success='')
 
     def cancel_general_settings(self):
         settings=self.settings
@@ -1237,16 +1264,23 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
             self.tracker.evaluate(datetime.now().astimezone())
             self.restrictions.prepare(datetime.now().astimezone()); self.update_focus_policy()
             if not any_countdown(settings): self.rtss.cancel_preparation()
-            self.tracker.unclassified.clear(); self.tracker.previous=None; self.service.configure(settings)
-            self.art.roots=list(dict.fromkeys(self.art.roots+settings.steam_roots)); self.art.invalidate(); self.art.refresh_links(settings.games_root)
-            self._art_queue=list(self.cards); self.call_later(10,self.load_next_art)
-            self.settings_error.setText(''); self.last_rows=None; self.set_status('Settings saved.'); self._overlay_preview_until=0; self.update_overlay(); self.render()
+            self.tracker.unclassified.clear(); self.tracker.previous=None
+            locations_changed=any(getattr(previous,key)!=getattr(settings,key) for key in ('games_root','steam_roots','epic_manifest_dirs','ubisoft_roots'))
+            if locations_changed or previous.hub_enabled!=settings.hub_enabled:self.service.configure(settings)
+            if locations_changed or previous.hub_enabled!=settings.hub_enabled:
+                self.art.roots=list(dict.fromkeys(self.art.roots+settings.steam_roots)); self.art.invalidate(); self.art.refresh_links(settings.games_root)
+                self._art_queue=list(self.cards); self.call_later(10,self.load_next_art)
+            self.settings_error.setText(''); self.set_status('Settings saved.'); self._overlay_preview_until=0; self.update_overlay()
+            if self.pages.currentIndex()==0:self.render()
+            elif locations_changed or previous.hub_enabled!=settings.hub_enabled:self.sync_hub()
             self.updates.saved()
             self.prepare_rtss_profiles()
             state,day,plan=bedtime_occurrence(settings,datetime.now())
             self.update_bedtime_banner(plan.bedtime_minimize and state=='bedtime')
+            return True
         except (ValueError,OSError,SQLiteError) as exc:
             self.settings_error.setText(self.t('{day}: {error}',day=self.t(DAY_NAMES[exc.day]),error=self.t(str(exc.error))) if isinstance(exc,DayScheduleError) else self.t(str(exc)))
+            return False
 
     def renewal_settings_changed(self,previous,settings):
         for key in previous.budget_reset_overrides.keys()-settings.budget_reset_overrides.keys():
@@ -1359,7 +1393,10 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
             policy=self.wellbeing.policy(self.focus.policy(self.settings.wellbeing_rules),datetime.now().astimezone(),delegated)
             if hasattr(self,'restrictions'): policy=self.restrictions.browser_policy(policy)
             from .website_identity import configured_local_sites
+            policy['background_media_sites']=[m['value'] for m in self.background_media.members if m['kind']=='site'] if self.focus.settings.tracking else []
             policy['local_sites']=configured_local_sites(self.settings,self.focus.settings,self.browser_bridge.port)
+            from .website_identity import is_local_site
+            policy['local_sites']=list(dict.fromkeys(policy['local_sites']+[host for host in policy['background_media_sites'] if is_local_site(host)]))
             self.browser_bridge.update(policy)
 
     def focus_tick(self,current):
@@ -1372,9 +1409,11 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
         redirect=getattr(self.browser_bridge,'redirect_budget',lambda path:'')(current.path) if self.browser_bridge else ''
         if not isinstance(redirect,str): redirect=''
         self.wellbeing.tick(current,website,redirect)
+        previous_media=self.background_media.atoms
+        self.background_media.tick(current,self.wellbeing.current[1],redirect)
         self.browser_continuity.sampled(current)
         if (previous and self.focus.revision != revision
-                and (app_key(previous[0].path) != app_key(current.path) or previous[1] != website)):
+                and (app_key(previous[0].path) != app_key(current.path) or previous[1] != website or previous_media!=self.background_media.atoms)):
             # Reuse the existing debounced, rate-limited sync when tracked activity changes.
             self.schedule_statistics_event(60)
         self.update_focus_policy()
@@ -1739,9 +1778,11 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
         self.budget_editor.drafts.close()
         self.statistics.flush_view()
         self.closed=True
+        self.feedback.close_operation()
         self.restrictions.close()
         QApplication.instance().removeEventFilter(self.scroll_guard)
         self.statistics_event_timer.stop()
+        self.background_media.close()
         self.focus.close()
         self.wellbeing.flush()
         if self.browser_bridge: self.browser_bridge.close()

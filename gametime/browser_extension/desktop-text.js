@@ -1,6 +1,13 @@
 // Shared desktop wording for the browser surfaces.
 export const nativeHu = {
     'Break now': 'Szünet most',
+    'Starting…': 'Indítás…',
+    'Break started.': 'A szünet elindult.',
+    'On break': 'Szünetel',
+    '{minutes} min break': '{minutes} perc szünet',
+    'This budget is inactive.': 'Ez a keret most nem aktív.',
+    'Daily limit reached': 'Elfogyott a napi keret.',
+    'Break unavailable during a restriction.': 'Korlátozás alatt nem indítható.',
     'Break remaining: {time}': 'Szünetből hátra: {time}',
     'Allow “Break now”': '„Szünet most” engedélyezése',
     'After the full break, a fresh usage interval begins. Unused minutes do not carry over; the daily budget is not reset.': 'A teljes szünet után új használati szakasz indul. A fel nem használt percek nem adódnak hozzá; a napi keret nem nullázódik.',

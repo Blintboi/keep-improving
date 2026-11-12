@@ -5,7 +5,7 @@ import uuid
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QScrollArea
 from .qt_translation import QDialog,QLineEdit,QCheckBox
-from .qt_widgets import label,button,NoWheelComboBox
+from .qt_widgets import label,button,help_text,NoWheelComboBox
 from . import device_scopes
 
 
@@ -25,7 +25,7 @@ class DeviceScope(QWidget):
         box=QVBoxLayout(self);box.setContentsMargins(0,0,0,0);box.setSpacing(8)
         box.addWidget(label(app.t('Devices'),'section'));row=QHBoxLayout();self.choice=NoWheelComboBox();self.choice.setAccessibleName(app.t('Devices'));row.addWidget(self.choice,1)
         row.addWidget(button(app.t('Device groups…'),self.groups,'quiet'));box.addLayout(row)
-        self.note=label(app.t('Selected devices share one allowance. Offline totals use the last synchronization.') if budget else app.t('This notification appears on the selected devices.'),'muted');self.note.setWordWrap(True);box.addWidget(self.note)
+        self.note=help_text(app.t('Selected devices share one allowance. Offline totals use the last synchronization.') if budget else app.t('This notification appears on the selected devices.'),'muted');self.note.setWordWrap(True);box.addWidget(self.note)
         if budget:
             row=app.store.db.execute("SELECT value FROM settings WHERE key='device_rules_received_at'").fetchone()
             if row:
@@ -56,7 +56,7 @@ class DeviceScope(QWidget):
     def groups(self):
         app=self.app;t=app.t;s=app.settings
         if not s.statistics_sync_enabled or not s.statistics_sync_group:
-            self.note.setText(t('Connect your devices in Statistics before creating groups.'));return
+            self.note.setText(t('Connect your devices in Statistics before creating groups.'));self.note.setExpanded(True);return
         dialog=QDialog(self);dialog.setObjectName('Surface');dialog.setWindowTitle(t('Device groups'));dialog.resize(500,480)
         box=QVBoxLayout(dialog);box.setContentsMargins(24,20,24,20);choose=NoWheelComboBox();choose.addItem(t('New group'),None)
         for id,g in s.device_groups.items():

@@ -9,6 +9,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QTabWidget,
     QAbstractItemView, QPlainTextEdit, QScrollArea,QListWidget,QListWidgetItem)
 from .qt_translation import QLineEdit
+from .qt_widgets import help_text
 from .qt_widgets import label, button, back_button, panel, NoWheelDoubleSpinBox
 from .focus import FocusSettings, domain
 
@@ -59,7 +60,7 @@ class FocusPage(QWidget):
                 self.url_input.setAccessibleName(t('Website URL or domain')); self.url_input.returnPressed.connect(self.add_url)
                 url_row.addWidget(self.url_input,1); self.add_url_button=button(t('Add website'),self.add_url)
                 url_row.addWidget(self.add_url_button); container_box.addLayout(url_row)
-                hint=label(t('The whole domain and its subdomains will be blocked during work.'),'muted'); hint.setWordWrap(True); container_box.addWidget(hint)
+                hint=help_text(t('The whole domain and its subdomains will be blocked during work.'),'muted'); hint.setWordWrap(True); container_box.addWidget(hint)
             elif kind=='app':
                 choices=QHBoxLayout()
                 choices.addWidget(button(t('Choose from detected applications…'),self.choose_detected_applications))
@@ -102,7 +103,7 @@ class FocusPage(QWidget):
 
     def choose_detected_applications(self):
         t=self.owner.t; dialog,box=self.dialog(t('Detected applications'),720)
-        note=label(t('Select one or more previously detected applications. The full executable path is shown when you hover over an entry.'),'muted')
+        note=help_text(t('Select one or more previously detected applications. The full executable path is shown when you hover over an entry.'),'muted')
         note.setWordWrap(True); box.addWidget(note)
         listing=QListWidget(); listing.setMinimumHeight(200); listing.setSelectionMode(QAbstractItemView.ExtendedSelection)
         from .activity_identity import is_idle_app
@@ -195,7 +196,7 @@ class FocusPage(QWidget):
 
     def choose_groups(self):
         t=self.owner.t; dialog,box=self.dialog(t('Add group'),620)
-        note=label(t('Choose a budget group or a whole category. All its applications, games and websites are blocked during focus. Changes to the group are followed automatically.'),'muted')
+        note=help_text(t('Choose a budget group or a whole category. All its applications, games and websites are blocked during focus. Changes to the group are followed automatically.'),'muted')
         note.setWordWrap(True); box.addWidget(note)
         listing=QListWidget(); listing.setAccessibleName(t('Groups')); box.addWidget(listing)
         for key,name in self.group_choices():
@@ -318,7 +319,7 @@ class FocusPage(QWidget):
         owner, t = self.owner, self.owner.t
         dialog, box = self.dialog(t('Blacklist'), 760,discard=True)
         dialog.resize(760, 430)
-        help_label = label(t('One entry per line. Paste website URLs or domains; the whole domain and its subdomains are blocked during focus. For applications, choose the .exe file. Remove a line to stop blocking it.'), 'muted')
+        help_label = help_text(t('One entry per line. Paste website URLs or domains; the whole domain and its subdomains are blocked during focus. For applications, choose the .exe file. Remove a line to stop blocking it.'), 'muted')
         help_label.setWordWrap(True); box.addWidget(help_label)
         grid = QGridLayout(); editors = {}
         for index, (key, name) in enumerate((('block_apps', 'Blocked applications'), ('block_sites', 'Blocked websites'))):
@@ -359,7 +360,7 @@ class FocusPage(QWidget):
             code = QLineEdit(bridge.pairing()); code.setReadOnly(True); code.setEchoMode(QLineEdit.Password)
             box.addWidget(code)
             box.addWidget(button(t('Copy pairing code'), lambda: owner.copy_browser_pairing(bridge.pairing())))
-            explanation = label(t('The pairing code connects only to this Windows profile on this computer. Enable the extension in each browser you want to track.'), 'muted')
+            explanation = help_text(t('The pairing code connects only to this Windows profile on this computer. Enable the extension in each browser you want to track.'), 'muted')
             explanation.setWordWrap(True); box.addWidget(explanation)
         else:
             error = label(t('Browser connection could not start. Another monitor may be using the local port.'), 'danger')

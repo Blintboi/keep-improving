@@ -1,9 +1,10 @@
 """Application and website libraries, with appearance owned by each activity."""
+import sqlite3
 import ntpath
 from PySide6.QtCore import Qt,QSize,QPoint,QTimer
 from PySide6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QListWidget,QListWidgetItem,QFileDialog,QInputDialog
 from .qt_translation import QLineEdit,QCheckBox
-from .qt_widgets import label,button,panel
+from .qt_widgets import label,button,panel,help_text
 from .activities import activity_key,activity_settings,has_budget,known_activities,matching_rules
 from .wellbeing import target
 from .activity_identity import canonical_member
@@ -35,6 +36,11 @@ class ActivityList(QWidget):
         self.status=label('','muted'); self.status.setWordWrap(True); detail.addWidget(self.status)
         self.countdown=button(app.t('Countdown settings…'),self.edit_countdown,'primary'); detail.addWidget(self.countdown)
         self.budget=button(app.t('Set budget…'),self.edit_budget); detail.addWidget(self.budget)
+        self.background_media=QCheckBox(app.t('Count background playback'))
+        self.background_media.setAccessibleName(app.t('Count background playback'));detail.addWidget(self.background_media)
+        self.background_media.toggled.connect(self.set_background_media)
+        detail.addWidget(help_text(app.t('Counts audible playback while the desktop application is running on this computer, including while another window is active. Paused or muted playback is not counted. Time counts toward matching budgets; shared budgets count each second once. Session counts still follow foreground visits. Simultaneous activities can make total activity time exceed elapsed time.')))
+
         self.tracking=button(app.t('Restore'),self.toggle_tracking);detail.addWidget(self.tracking);self.tracking.setVisible(kind=='app')
         side=QVBoxLayout(); side.addWidget(self.detail); side.addStretch(); content.addLayout(side); self.detail.hide()
         self.search.textChanged.connect(self.filter); self.list.currentItemChanged.connect(self.select)
@@ -124,11 +130,18 @@ class ActivityList(QWidget):
         member=self.selected(); self.detail.setVisible(member is not None)
         if not member: return
         self.tracking.setText(self.app.t('Restore' if self.excluded(member) else 'Exclude'))
+        blocked=self.background_media.blockSignals(True);self.background_media.setChecked(self.app.background_media.enabled(member));self.background_media.setEnabled(not self.excluded(member));self.background_media.blockSignals(blocked)
         self.name.setText(next((name for item,name in self.entries if item==member),member['value']))
         available=has_budget(self.app.settings,member); self.countdown.setEnabled(available)
         self.status.setText(self.app.t('Countdown on' if activity_settings(self.app.settings,member).overlay_enabled else 'Countdown off') if available else
                             self.app.t('Set an individual or shared budget first to use a countdown.'))
         self.display_icon(activity_key(member),self.icons.icon(member,self.name.text())); self.schedule_icons()
+
+    def set_background_media(self,enabled):
+        if member:=self.selected():
+            try:
+                self.app.background_media.set_enabled(member,enabled);self.app.set_status('Saved.')
+            except (ValueError,OSError,sqlite3.Error) as exc:self.app.message(str(exc));self.select()
 
     def edit_countdown(self):
         member=self.selected()

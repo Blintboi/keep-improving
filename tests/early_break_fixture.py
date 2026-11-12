@@ -15,6 +15,7 @@ from gametime.tracker import Sample
 from gametime.qt_budgets import new_rule
 
 report=Path(sys.argv[1]);report.mkdir(parents=True,exist_ok=True)
+no_timer=len(sys.argv)>2 and sys.argv[2]=='no-timer'
 QtInterfaceTests.setUpClass();case=QtInterfaceTests();case.setUp();offset=0
 class Clock(datetime):
     @classmethod
@@ -25,6 +26,7 @@ try:
     case.enterContext(patch('gametime.win32.sample',side_effect=lambda:Sample(Clock.now().astimezone(),time.monotonic(),interactive=False)))
     plan=new_plan();item=step('break',900,identity='pause',break_mode='cover',break_minutes=5);item['allow_early_break']=True;plan['steps']=[item]
     rule=new_rule('YouTube',[{'kind':'site','value':'youtube.com'}],'youtube');rule['enabled']=True;rule['seconds']=3600
+    if no_timer:rule['overlay']=False
     app.settings=app.catalog.settings=replace(app.settings,restriction_plans={'youtube':plan},wellbeing_rules=[rule])
     app.wellbeing.configure(Clock.now().astimezone())
     case.store.save_settings(app.settings);app.schedule_editor.saved(app.settings);app.budget_editor.saved(app.settings)
@@ -32,7 +34,7 @@ try:
     runtime.budgets=lambda wall:[budget]
     def timers(**kwargs):
         runtime.prepare(Clock.now().astimezone())
-        return [project(budget,plan,runtime.state.rows['youtube'],runtime.state.now,'site:youtube.com')]
+        return [] if no_timer else [project(budget,plan,runtime.state.rows['youtube'],runtime.state.now,'site:youtube.com')]
     app.timer_views=timers
     app.browser_control=BrowserControl(app)
     app.browser_bridge=BrowserBridge(case.store,port=0,control=app.browser_control.request)

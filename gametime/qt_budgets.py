@@ -251,10 +251,10 @@ class TimeBudgets(QWidget):
         rows.extend(self.periods.rows())
         for key,name,members,amount,enabled,overlay in rows:
             if not self.access.usage_limits.get(key,True): amount=t('No daily minute limit')
-            days=self.access.active_days.get(key)
-            if days is not None:
-                from .qt_schedule import DAY_SHORT
-                amount=str(amount)+' · '+(', '.join(str(t(DAY_SHORT[day])) for day in days) if days else str(t('No active days')))
+            days=self.access.active_days.get(key,list(range(7)))
+            from .qt_schedule import DAY_SHORT
+            day_summary=t('Every day') if len(days)==7 else ', '.join(str(t(DAY_SHORT[day])) for day in days) if days else t('No active days')
+            amount=str(amount)+' · '+str(day_summary)
             adjusted.append((key,name,members,amount,enabled,overlay))
         return adjusted
 

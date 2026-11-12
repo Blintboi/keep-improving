@@ -6,6 +6,7 @@ import {
   check,
   field,
   note,
+  helpNote,
   t,
   icon,
   clock,
@@ -66,11 +67,12 @@ export function iconButton(name, glyph, action, extra = "") {
   return b;
 }
 function daysText(days) {
-  return (days || []).length === 7
-    ? ""
-    : (days || [])
-        .map((d) => t(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][d]))
-        .join(", ");
+  const active = days ?? [0, 1, 2, 3, 4, 5, 6];
+  return active.length === 7
+    ? t("Every day")
+    : active.length
+      ? active.map((d) => t(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][d])).join(", ")
+      : t("No active days");
 }
 function memberName(ctx, m) {
   return m.kind === "category"
@@ -360,8 +362,8 @@ export async function overviewView(ctx) {
         multi ? el("div", { class: "row computer-legend", "aria-label": t("Computer colors") },
           ...Object.entries(data.computer_names).filter(([id]) => scope === "all" || scope === id).map(([id, name]) =>
             el("span", {}, el("span", { class: "series-dot", style: { background: data.computer_colors[id] } }), name))) : null,
-        note(multi ? "The side color identifies the computer. Spaces separate computers; activity colors match the list below." : "Each color is one activity. Click a day to see its details."),
-        note(sessionMode ? "Column height shows session counts. Hover over a block for details." : "Column height shows recorded time. Hover over a block for details."),
+        helpNote(multi ? "The side color identifies the computer. Spaces separate computers; activity colors match the list below." : "Each color is one activity. Click a day to see its details.",
+          sessionMode ? "Column height shows session counts. Hover over a block for details." : "Column height shows recorded time. Hover over a block for details."),
       );
       const detail = card(),
         rowsBox = el("div", { class: "table-wrap statistics-details" }),
@@ -780,6 +782,13 @@ export function activitiesView(ctx) {
           }),
         ),
       );
+    if(['app','site'].includes(v.member.kind)) {
+      const enabled=(ctx.state.background_media || []).some(m=>m.kind===v.member.kind && m.value===v.member.value);
+      box.append(check('Count background playback',enabled,async value=>{
+        try {await ctx.command('activity.media',{kind:v.member.kind,key:v.member.value,enabled:value});dialog.close();}
+        catch {dialog.close();}
+      }),helpNote('Counts audible playback while the desktop application is running on this computer, including while another window is active. Paused or muted playback is not counted. Time counts toward matching budgets; shared budgets count each second once. Session counts still follow foreground visits. Simultaneous activities can make total activity time exceed elapsed time.'));
+    }
     if (v.member.kind !== "site")
       box.append(
         action(v.excluded ? "Restore" : "Exclude", async () => {

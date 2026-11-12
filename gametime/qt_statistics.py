@@ -14,6 +14,7 @@ from PySide6.QtWidgets import QWidget,QScrollArea,QVBoxLayout,QHBoxLayout,QGridL
 from .statistics import date_range,summarize
 from .quota import current_day
 from .qt_scroll import preserving
+from .qt_widgets import help_text
 from .qt_widgets import label,button,panel,duration,DailyChart
 from .qt_widgets import NoWheelComboBox as QComboBox
 from .statistics_sync import computer_name
@@ -346,7 +347,7 @@ class StatisticsPage(QWidget):
         self.chart.setMinimumHeight(210); self.chart.day_clicked.connect(self.choose_day); chart_layout.addWidget(self.chart)
         self.computer_legend=ComputerLegend(); self.computer_legend.setAccessibleName(t('Computer colors'))
         chart_layout.addWidget(self.computer_legend); self.computer_legend.hide()
-        self.chart_hint=label('','muted'); self.chart_hint.setWordWrap(True); chart_layout.addWidget(self.chart_hint); layout.addWidget(chart_box)
+        self.chart_hint=help_text(t(''),'muted'); self.chart_hint.setWordWrap(True); chart_layout.addWidget(self.chart_hint); layout.addWidget(chart_box)
         details=panel(); details_box=QVBoxLayout(details); details_box.setContentsMargins(18,15,18,15); details_box.setSpacing(10)
         details_heading=QHBoxLayout(); self.breakdown_title=label(t('Where did the time go?'),'section'); details_heading.addWidget(self.breakdown_title,1)
         self.day_selector=QComboBox(); self.day_selector.setAccessibleName(t('Details for day')); self.day_selector.setMinimumWidth(210)
@@ -501,7 +502,7 @@ class StatisticsPage(QWidget):
     def explain(self):
         from .qt_ui import dark_window
         window=self.app._dialog(self.app.t('What is measured?'),620); box=QVBoxLayout(window); box.setContentsMargins(24,22,24,22); box.setSpacing(16)
-        for text in ('Only the foreground application or active website counts, including time spent reading without input. Tracking pauses when the session is locked.',
+        for text in ('Foreground use includes reading without input and pauses when the session is locked. Selected applications and websites can also count audible background playback; enable it in Activities.',
                      'Applications excludes recognized games. Websites shows the active browser tab. Everything counts website time inside browser time, so the same time is never added twice.',
                      'Linked computers share game, application and website history and supported settings.',
                      'The daily average uses all elapsed days in the selected period since tracking began, including days with no recorded time.'):

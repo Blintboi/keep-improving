@@ -5,6 +5,15 @@ export function setLanguage(value) {
   document.documentElement.lang = language;
 }
 const hu = {
+  "Count background playback":"Háttérbeli lejátszás mérése",
+  "Counts audible playback while the desktop application is running on this computer, including while another window is active. Paused or muted playback is not counted. Time counts toward matching budgets; shared budgets count each second once. Session counts still follow foreground visits. Simultaneous activities can make total activity time exceed elapsed time.":"Az asztali alkalmazás futása alatt ezen a gépen a hallható lejátszást háttérben is méri. A szüneteltetett vagy némított lejátszást nem számolja. Az idő a kapcsolódó kereteket is fogyasztja; egy közös keretben ugyanaz a másodperc csak egyszer számít. A munkamenetszám továbbra is az előtérbeli használatot követi. A párhuzamos tevékenységek összesített ideje meghaladhatja az eltelt időt.",
+  "Every day": "Minden nap",
+  "No active days": "Nincs kiválasztott nap",
+  "Help": "Súgó",
+  "Loading…": "Betöltés…",
+  "Saving…": "Mentés…",
+  "Working…": "Folyamatban…",
+  "Could not save changes. Try again.": "Nem sikerült menteni a módosításokat. Próbáld újra.",
   "Browser mode": "Böngészős mód",
   "The desktop application is unavailable. Browser tracking, focus and saved website budgets continue here.": "Az asztali alkalmazás nem érhető el. A böngészős mérés, a fókusz és a mentett webes keretek itt működnek tovább.",
   "Recorded time transfers automatically when the application returns, without counting it twice.": "A mért idő az alkalmazás visszatérésekor automatikusan átkerül, dupla elszámolás nélkül.",
@@ -337,6 +346,9 @@ export function button(text, click, kind = "") {
 }
 export function note(text) {
   return el("p", { class: "hint" }, t(text));
+}
+export function helpNote(...texts) {
+  return el('details',{class:'help-note'},el('summary',{},t('Help')),...texts.map(note));
 }
 export function field(
   text,

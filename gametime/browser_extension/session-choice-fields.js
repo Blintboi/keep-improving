@@ -1,4 +1,4 @@
-import {el, field, check, button, note, t, uid} from './client.js';
+import {el, field, check, button, helpNote, t, uid} from './client.js';
 
 export function defaultChoices() {
   return {question:t('Why are you opening this?'), allocation:'shared', options:[
@@ -15,8 +15,7 @@ export function choiceFields(step, changed, redraw) {
   const value = step.session_choice;
   if (!value) return box;
   box.append(field('Session allowance',value.allocation || 'shared',allocation=>{value.allocation=allocation;changed();},
-    {options:[['shared','Shared allowance'],['activity','Separate allowance per member']]}),
-    note('Shared: all members use the same count for each answer. Separate: each application or website gets the full count for each answer.'));
+    {options:[['shared','Shared allowance'],['activity','Separate allowance per member']]}));
   box.append(field('Question', value.question, text => {value.question=text;changed();}, {required:true,maxLength:180}));
   for (const option of value.options) {
     const row = el('div', {class:'subcard stack'}), remove = button('Remove choice', () => {
@@ -36,8 +35,9 @@ export function choiceFields(step, changed, redraw) {
     value.options.push({id:uid(),label:t('New choice'),limit:2});changed();redraw();
   },'quiet');
   add.disabled=value.options.length>=8;
-  box.append(add,note('Each choice has its own allowance. Exhausted choices stay visible but cannot be selected. Other budget rules still apply.'),
-    note('Choice allowances are counted on this computer and reset with this budget. Keep the desktop application running to show choices over applications and websites.'));
+  box.append(add,helpNote('Shared: all members use the same count for each answer. Separate: each application or website gets the full count for each answer.',
+    'Each choice has its own allowance. Exhausted choices stay visible but cannot be selected. Other budget rules still apply.',
+    'Choice allowances are counted on this computer and reset with this budget. Keep the desktop application running to show choices over applications and websites.'));
   for (const scope of ['app','site']) box.append(check(scope==='app'?'Ask for applications':'Ask for websites',step.targets?.[scope]?.enabled!==false,enabled=>{
     step.targets??={};(step.targets[scope]??={}).enabled=enabled;changed();
   }));

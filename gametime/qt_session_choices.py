@@ -3,7 +3,7 @@ from copy import deepcopy
 import uuid
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QSizePolicy
 from .qt_translation import QCheckBox, QLineEdit
-from .qt_widgets import label, button, NoWheelDoubleSpinBox, NoWheelComboBox
+from .qt_widgets import label, button, help_text, NoWheelDoubleSpinBox, NoWheelComboBox
 from .session_choices import defaults
 
 
@@ -19,17 +19,15 @@ class ChoiceFields(QWidget):
         self.allocation = NoWheelComboBox(); self.allocation.setAccessibleName(t('Session allowance'))
         self.allocation.addItem(t('Shared allowance'),'shared');self.allocation.addItem(t('Separate allowance per member'),'activity')
         self.body_box.addWidget(self.allocation)
-        allocation_note=label(t('Shared: all members use the same count for each answer. Separate: each application or website gets the full count for each answer.'),'muted')
-        allocation_note.setWordWrap(True);self.body_box.addWidget(allocation_note)
         self.body_box.addWidget(label(t('Question'), 'muted'))
         self.question = QLineEdit(); self.question.setMaxLength(180); self.question.setAccessibleName(t('Opening question'))
         self.body_box.addWidget(self.question)
         self.rows = QWidget(); self.rows_box = QVBoxLayout(self.rows); self.rows_box.setContentsMargins(0, 0, 0, 0)
         self.body_box.addWidget(self.rows)
         self.add = button(t('Add choice'), self.add_choice, 'quiet'); self.body_box.addWidget(self.add)
-        note = label(t('Each choice has its own allowance. Exhausted choices stay visible but cannot be selected. Other budget rules still apply.'), 'muted')
-        note.setWordWrap(True); self.body_box.addWidget(note)
-        scope = label(t('Choice allowances are counted on this computer and reset with this budget. Keep the desktop application running to show choices over applications and websites.'), 'muted')
+        scope = help_text(t('Shared: all members use the same count for each answer. Separate: each application or website gets the full count for each answer.')+'\n\n'+
+            t('Each choice has its own allowance. Exhausted choices stay visible but cannot be selected. Other budget rules still apply.')+'\n\n'+
+            t('Choice allowances are counted on this computer and reset with this budget. Keep the desktop application running to show choices over applications and websites.'))
         scope.setWordWrap(True); self.body_box.addWidget(scope); box.addWidget(self.body)
         self.enabled.setChecked(bool(card.value.get('session_choice')))
         self.enabled.toggled.connect(self.toggle)

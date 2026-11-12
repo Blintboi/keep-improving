@@ -46,7 +46,7 @@ class Mutes:
         self.ole.CoTaskMemFree.argtypes = [C.c_void_p]
         self.ole.CoCreateInstance.argtypes = [C.POINTER(GUID), C.c_void_p, W.DWORD, C.POINTER(GUID), C.POINTER(C.c_void_p)]
 
-    def sessions(self):
+    def sessions(self, audible_only=False):
         enumerator = C.c_void_p(); collection = C.c_void_p()
         self.ole.CoCreateInstance(C.byref(GUID('BCDE0395-E52F-467C-8E3D-C4579291692E')), None, 23,
                                  C.byref(GUID('A95664D2-9614-4F35-A746-DE8DB63617E6')), C.byref(enumerator))
@@ -57,6 +57,16 @@ class Mutes:
                 device = C.c_void_p(); manager = C.c_void_p(); sessions = C.c_void_p()
                 try:
                     call(collection, 4, [W.UINT, C.POINTER(C.c_void_p)], i, C.byref(device))
+                    if audible_only:
+                        endpoint = C.c_void_p()
+                        try:
+                            call(device, 3, [C.POINTER(GUID), W.DWORD, C.c_void_p, C.POINTER(C.c_void_p)],
+                                 C.byref(GUID('5CDF2C82-841E-4546-9722-0CF74078229A')), 23, None, C.byref(endpoint))
+                            muted = W.BOOL(); level = C.c_float()
+                            call(endpoint, 15, [C.POINTER(W.BOOL)], C.byref(muted))
+                            call(endpoint, 9, [C.POINTER(C.c_float)], C.byref(level))
+                            if muted.value or level.value <= 0: continue
+                        finally: release(endpoint)
                     call(device, 3, [C.POINTER(GUID), W.DWORD, C.c_void_p, C.POINTER(C.c_void_p)],
                          C.byref(GUID('77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F')), 23, None, C.byref(manager))
                     call(manager, 5, [C.POINTER(C.c_void_p)], C.byref(sessions))

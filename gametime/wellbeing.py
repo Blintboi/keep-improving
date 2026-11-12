@@ -1,7 +1,8 @@
-"""Local, overlapping daily budgets over disjoint foreground activity intervals.
+"""Local daily budgets over foreground intervals and opt-in background audio.
 
 One row describes one foreground interval (game, executable and optional host).
 Matching a browser and its website therefore never charges a group twice.
+Parallel audio records retain the foreground atom to conserve shared seconds.
 History uses the statistics day; each budget can use its own day boundary.
 """
 from collections import defaultdict
@@ -68,6 +69,8 @@ def validate_rules(rules):
 
 def applies(members,atom,*,budget=''):
     if atom is None: return False
+    if isinstance(atom,dict):
+        return not applies(members,atom.get('foreground'),budget=budget) and any(applies(members,item,budget=budget) for item in atom.get('media',()))
     game,app,site=atom
     if '\0' in site:
         site,excluded=site.split('\0',1)
@@ -120,6 +123,9 @@ class Wellbeing:
         store.db.execute('''CREATE TABLE IF NOT EXISTS wellbeing_usage (
             day TEXT NOT NULL, game_id TEXT NOT NULL, app TEXT NOT NULL, site TEXT NOT NULL,
             seconds REAL NOT NULL, PRIMARY KEY(day,game_id,app,site))''')
+        from .media_history import initialize
+        initialize(store.db)
+        self.media_atoms={};self.media_pending=defaultdict(float)
         self.previous=None; self.current=None; self.pending=defaultdict(float)
         self.current_redirect=''
         self.day=None; self.atoms={}; self.totals={}; self.source=None; self.rules=[]
@@ -137,10 +143,14 @@ class Wellbeing:
         old_day=period_day(wall,(self.day_start_minute,)*7).isoformat()
         new_day=period_day(wall,(minute,)*7).isoformat()
         rows=list(self.store.db.execute('SELECT game_id,app,site,seconds FROM wellbeing_usage WHERE day=?',(old_day,)))
+        from .media_history import budget_items
+        media=budget_items(self.store.db,old_day)
         overrides=self.catalog.settings.budget_reset_overrides
         keys=[key for key in self.store.alert_keys(old_day) if key.startswith('wellbeing:') and key.split(':',2)[1] not in overrides]
         with self.store.db:
             self.store.db.execute('DELETE FROM wellbeing_usage')
+            self.store.db.execute('DELETE FROM media_budget_usage')
+            self.store.db.executemany('INSERT INTO media_budget_usage VALUES (?,?,?)',[(new_day,key,seconds) for key,seconds in media.items()])
             self.store.db.executemany('INSERT INTO wellbeing_usage VALUES (?,?,?,?,?)',[(new_day,*row) for row in rows])
             self.store.db.execute("INSERT OR REPLACE INTO settings VALUES ('wellbeing_day_start',?)",(json.dumps(minute),))
         if keys: self.store.mark_alert(new_day,keys)
@@ -157,10 +167,13 @@ class Wellbeing:
                 'SELECT game_id,app,site,seconds FROM wellbeing_usage WHERE day=?',(day,)) if not is_idle_app(app)}
             with self.store.db:
                 self.store.db.execute('DELETE FROM wellbeing_usage WHERE day<?',((current_day(self.catalog.settings,wall)-timedelta(days=8)).isoformat(),))
+            from .media_history import budget_items
+            self.media_atoms=budget_items(self.store.db,day)
+            with self.store.db:self.store.db.execute('DELETE FROM media_budget_usage WHERE day<?',((current_day(self.catalog.settings,wall)-timedelta(days=8)).isoformat(),))
             self.source=None
         if source is not self.source:
             self.source=source; self.rules=[rule for rule in source if rule['enabled']]
-            self.totals={rule['id']:sum(seconds for atom,seconds in self.atoms.items() if applies(rule['members'],atom,budget=rule['id'])) for rule in source}
+            self.totals={rule['id']:self.local_total(rule) for rule in source}
             self.custom_markers.clear()
             self.revision+=1
         overrides=self.catalog.settings.budget_reset_overrides
@@ -168,17 +181,43 @@ class Wellbeing:
             key=rule['id']
             if key not in overrides:
                 if key in self.custom_markers:
-                    self.totals[key]=sum(seconds for atom,seconds in self.atoms.items() if applies(rule['members'],atom,budget=key))
+                    self.totals[key]=self.local_total(rule)
                     self.custom_markers.pop(key,None)
                 continue
             minute=overrides[key]; day=self.periods.day(wall,minute); marker=(minute,day)
             if self.custom_markers.get(key)!=marker:
-                def seed(): return {json.dumps(atom,ensure_ascii=False):seconds for atom,seconds in self.atoms.items()}
+                def seed(): return self.ledger_items()
                 values=self.periods.totals(key,minute,wall,seed,marker_key=key,
                                            previous_day=current_day(self.catalog.settings,wall).isoformat())
                 self.totals[key]=sum(seconds for item,seconds in values.items() if applies(rule['members'],json.loads(item),budget=key))
                 self.custom_markers[key]=marker
                 self.revision+=1
+
+    def ledger_items(self):
+        return {**{json.dumps(atom,ensure_ascii=False):seconds for atom,seconds in self.atoms.items()},**self.media_atoms}
+
+    def local_total(self,rule):
+        return sum(seconds for item,seconds in self.ledger_items().items() if applies(rule['members'],json.loads(item),budget=rule['id']))
+
+    def credit_media(self,start,end,seconds,foreground,media):
+        self.configure(start)
+        atom=dict(foreground=foreground,media=media);item=json.dumps(atom,ensure_ascii=False)
+        overrides=self.catalog.settings.budget_reset_overrides
+        for rule in self.source:
+            key=rule['id']
+            if key not in overrides:continue
+            minute=overrides[key];marker=self.custom_markers[key]
+            self.periods.credit(key,minute,item,start,end,seconds,self.ledger_items)
+            if applies(rule['members'],atom,budget=key):
+                for day,amount in day_slices(start,end,seconds,minute):
+                    if day==marker[1]:self.totals[key]+=amount
+        for day,amount in day_slices(start,end,seconds,self.day_start_minute):
+            self.configure(start if day==current_day(self.catalog.settings,start).isoformat() else end)
+            self.media_atoms[item]=self.media_atoms.get(item,0)+amount;self.media_pending[day,item]+=amount
+            for rule in self.rules:
+                if rule['id'] not in overrides and applies(rule['members'],atom,budget=rule['id']):self.totals[rule['id']]+=amount
+            self.revision+=1
+        self.configure(end)
 
     def atom(self,sample,website=''):
         if not sample.interactive or not sample.path or not sample.identity or sample.identity.startswith(str(os.getpid())+':'): return None
@@ -209,7 +248,7 @@ class Wellbeing:
                     key=rule['id']
                     if key not in overrides: continue
                     minute=overrides[key]; marker=self.custom_markers[key]
-                    seed=lambda: {json.dumps(atom,ensure_ascii=False):seconds for atom,seconds in self.atoms.items()}
+                    seed=lambda: self.ledger_items()
                     self.periods.credit(key,minute,item,prev.wall,sample.wall,delta,seed)
                     if applies(rule['members'],old,budget=key):
                         for day,seconds in day_slices(prev.wall,sample.wall,delta,minute):
@@ -266,13 +305,14 @@ class Wellbeing:
         return policy
 
     def flush(self):
-        if not self.pending and not self.periods.pending and not self.coverage.pending: return
+        if not self.pending and not self.media_pending and not self.periods.pending and not self.coverage.pending: return
         with self.store.db:
             self.periods.write_pending()
+            self.store.db.executemany('INSERT INTO media_budget_usage VALUES (?,?,?) ON CONFLICT(day,item) DO UPDATE SET seconds=seconds+excluded.seconds',[(*key,value) for key,value in self.media_pending.items()])
             self.store.db.executemany('''INSERT INTO wellbeing_usage VALUES (?,?,?,?,?)
                 ON CONFLICT(day,game_id,app,site) DO UPDATE SET seconds=seconds+excluded.seconds''',
                 [(*key,value) for key,value in self.pending.items()])
             self.coverage.write()
-        self.pending.clear()
+        self.pending.clear();self.media_pending.clear()
         self.periods.pending.clear()
         self.coverage.clear()

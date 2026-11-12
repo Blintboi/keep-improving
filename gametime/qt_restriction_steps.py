@@ -2,6 +2,7 @@
 from PySide6.QtCore import Qt,QSize,QTimer,QTime
 from PySide6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QSizePolicy
 from .qt_translation import QCheckBox,QLineEdit
+from .qt_widgets import help_text
 from .qt_widgets import label,button,glyph,NoWheelComboBox,NoWheelDoubleSpinBox,NoWheelTimeEdit
 from .restriction_policy import new_plan,step,KINDS,legacy_active,legacy_warning_active,legacy_restriction_active
 
@@ -42,7 +43,7 @@ class StepCard(QWidget):
         minute=value.get('clock_minute',22*60); self.clock_time.setTime(QTime(minute//60,minute%60)); timing.addWidget(self.clock_time)
         self.session_limit=NoWheelDoubleSpinBox(); self.session_limit.setDecimals(0); self.session_limit.setRange(1,10000); self.session_limit.setKeyboardTracking(False)
         self.session_limit.setAccessibleName(t('Allowed sessions')); self.session_limit.setValue(int(value['offset']) if value.get('time_mode')=='sessions' else 5); timing.addWidget(self.session_limit)
-        self.clock_note=label('','muted'); self.clock_note.setWordWrap(True); box.addWidget(self.clock_note)
+        self.clock_note=label('','muted'); self.clock_note.setWordWrap(True)
         self.old_time=label(t('Previous timing is preserved. Change the minutes to use active-use timing.'),'muted'); self.old_time.setWordWrap(True); box.addWidget(self.old_time)
         self.convert_time=button(t('Use active-use timing'),lambda:self.time_changed(self.minutes.value()),'quiet'); box.addWidget(self.convert_time,0,Qt.AlignLeft)
         from .qt_session_choices import ChoiceFields
@@ -55,11 +56,15 @@ class StepCard(QWidget):
         for name in ('sound','popup','extra','allowance','break_controls','break_mode','break_minutes','redirect_controls','redirect_url'):
             setattr(self,name,getattr(primary,name))
         self.hint=label(t('Breaks repeat after the same amount of use, only while time remains in the budget. The break ends after this time even in another application.'),'muted')
-        self.hint.setWordWrap(True); box.addWidget(self.hint)
+        self.hint.setWordWrap(True)
         self.early_break=QCheckBox(t('Allow “Break now”'))
         self.early_break.setChecked(value.get('allow_early_break',False));box.addWidget(self.early_break)
         self.early_note=label(t('After the full break, a fresh usage interval begins. Unused minutes do not carry over; the daily budget is not reset.'),'muted')
-        self.early_note.setWordWrap(True);box.addWidget(self.early_note)
+        self.early_note.setWordWrap(True)
+        self.help=help_text(t(''));self.help.detail.hide()
+        self.help_notes=[self.clock_note,*[fields.note for fields in self.targets.values()],self.hint,self.early_note]
+        for note in self.help_notes:self.help.body.addWidget(note)
+        box.addWidget(self.help)
         self.early_break.toggled.connect(self.early_break_changed)
         self.consent=QCheckBox(t('I understand that closing can lose unsaved work.')); box.addWidget(self.consent)
         self.minutes.valueChanged.connect(self.time_changed); self.kind.currentIndexChanged.connect(self.kind_changed); self.kind.activated.connect(self.kind_changed)
@@ -97,6 +102,7 @@ class StepCard(QWidget):
         if choosing:
             self.session_limit.hide(); self.time_label.hide(); self.clock_note.hide(); self.hint.hide(); self.consent.hide()
         else: self.time_label.show()
+        self.help.setVisible(not choosing and any(not note.isHidden() for note in self.help_notes))
 
     def time_changed(self,value):
         self.choices.suspend()
@@ -169,8 +175,10 @@ class RestrictionBlocks(QWidget):
         self.legacy_restrict_card=self.legacy_card('Minimize game','restriction_seconds',self.remove_legacy_restriction)
         self.legacy_single_card=self.single_legacy_card()
         self.empty=label('','muted'); self.empty.setWordWrap(True); body.addWidget(self.empty)
-        actions=QHBoxLayout(); self.add_step=button(t('Add action'),lambda:self.add('notify'))
+        actions=QHBoxLayout();actions.addWidget(label(t('Add action'),'muted')); self.add_step=button(t('Warning'),lambda:self.add('notify'))
         self.add_step.setIcon(glyph('plus')); actions.addWidget(self.add_step)
+        self.add_break=button(t('Break'),lambda:self.add('break'));actions.addWidget(self.add_break)
+        self.add_restriction=button(t('Restriction'),lambda:self.add('restrict'));actions.addWidget(self.add_restriction)
         self.restore=button(t('Restore previous settings'),self.restore_legacy,'quiet'); actions.addWidget(self.restore)
         actions.addStretch(); body.addLayout(actions)
         outer.addWidget(self.body)
@@ -352,4 +360,5 @@ class RestrictionBlocks(QWidget):
         self.empty.setText(self.app.t('No actions yet.'))
         self.restore.setVisible(active)
         self.add_step.setEnabled(len(self.cards)<20)
+        self.add_break.setEnabled(len(self.cards)<20);self.add_restriction.setEnabled(len(self.cards)<20)
         self.editor.schedule.set_custom_steps(bool(active and self.key=='shared-games'))

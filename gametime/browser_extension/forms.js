@@ -6,6 +6,7 @@ import {
   check,
   field,
   note,
+  helpNote,
   t,
   icon,
   clone,
@@ -71,7 +72,7 @@ function deviceScope(ctx, rule, budget, changed) {
       if (budget) rule.devices.accounting = "shared";
       changed();
     }, {options: selections.map(([s, name]) => [key(s), name])}),
-    note(budget ? "Selected devices share one allowance. Offline totals use the last synchronization." : "This notification appears on the selected devices."));
+    helpNote(budget ? "Selected devices share one allowance. Offline totals use the last synchronization." : "This notification appears on the selected devices."));
 }
 
 export function budgetEditor(ctx, source) {
@@ -247,28 +248,25 @@ export function budgetEditor(ctx, source) {
 }
 
 function actionsEditor(ctx, b, redraw, changed) {
+  function addAction(kind) {
+    b.plan??={...clone(ctx.state.default_plan),legacy:true,legacy_warning:true};
+    if(b.plan.steps.length>=20)return;
+    const step=clone(ctx.state.default_step);
+    step.id=uid();step.kind=kind;
+    step.sound=kind==='notify';step.popup=kind==='notify';
+    step.targets=kind==='notify'?{app:{enabled:true},site:{enabled:true}}:
+      {app:{enabled:true,mode:'cover'},site:{enabled:true,mode:'cover'}};
+    if(kind==='break')Object.assign(step,{time_mode:'usage',offset:1800,break_mode:'cover',break_minutes:5});
+    b.plan.steps.push(step);changed();redraw();
+  }
   const box = card(
     el(
       "div",
       { class: "row spread" },
       el("h2", {}, t("Actions")),
-      button("Add action", () => {
-        if (!b.plan)
-          b.plan = {
-            ...clone(ctx.state.default_plan),
-            legacy: true,
-            legacy_warning: true,
-          };
-        const step = clone(ctx.state.default_step);
-        step.id = uid();
-        step.targets = {
-          app: { enabled: true, mode: "cover" },
-          site: { enabled: true, mode: "cover" },
-        };
-        b.plan.steps.push(step);
-        changed();
-        redraw();
-      }),
+      el('div',{class:'row'},...['notify','break','restrict'].map((kind,index)=>{
+        const add=button(['Warning','Break','Restriction'][index],()=>addAction(kind));add.disabled=(b.plan?.steps.length || 0)>=20;return add;
+      })),
     ),
   );
   if (b.legacy?.active) {
@@ -444,8 +442,8 @@ function actionsEditor(ctx, b, redraw, changed) {
     );
     if(s.time_mode==='sessions') section.append(choiceFields(s,changed,redraw));
     if (s.session_choice) {box.append(section);continue;}
-    if(s.time_mode==='sessions') section.append(note("The action starts on the next session after the allowed count. The count resets at the budget renewal."));
-    if(s.time_mode==='sessions' && type==='break') section.append(note("After the break, the same number of new sessions is allowed before the next break."));
+    if(s.time_mode==='sessions') section.append(helpNote("The action starts on the next session after the allowed count. The count resets at the budget renewal.",
+      ...(type==='break'?["After the break, the same number of new sessions is allowed before the next break."]:[])));
     if (type === "notify")
       section.append(
         el(
@@ -463,7 +461,7 @@ function actionsEditor(ctx, b, redraw, changed) {
       check('Allow “Break now”',!!s.allow_early_break,v=>{
         if(v)s.allow_early_break=true;else delete s.allow_early_break;changed();redraw();
       }),
-      ...(s.allow_early_break?[note('After the full break, a fresh usage interval begins. Unused minutes do not carry over; the daily budget is not reset.')]:[]));
+      ...(s.allow_early_break?[helpNote('After the full break, a fresh usage interval begins. Unused minutes do not carry over; the daily budget is not reset.')]:[]));
     const targets = el("div", { class: "grid" });
     for (const scope of ["app", "site"]) {
       const options = s.targets?.[scope] || {},
@@ -910,7 +908,7 @@ export function settingsEditor(ctx, requested = settingsSection) {
       pages.general.append(
         card(
           el("h2", {}, t("Day starts at")),
-          note(
+          helpNote(
             "One daily boundary for statistics, all budgets and daily reminders.",
           ),
           field(

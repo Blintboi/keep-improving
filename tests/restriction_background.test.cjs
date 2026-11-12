@@ -274,3 +274,20 @@ test('toolbar keeps the app icon clear online, offline and before pairing',async
     assert.equal(f.state.badge,'');
   }
 });
+
+
+test('background audible observations are opt-in, private-safe and stop when muted',async()=>{
+  const f=await fixture({policy:{active:false,tracking:true,allow:[],block:[],restrictions:[],background_media_sites:['music.example.com','private.example.com']},tabs:[
+    [1,{id:1,url:'https://other.example.com/',active:true,windowId:1}],
+    [2,{id:2,url:'https://music.example.com/listen?private=value',audible:true,active:false,windowId:1}],
+    [3,{id:3,url:'https://private.example.com/',audible:true,incognito:true,windowId:1}]
+  ]});
+  await vm.runInContext('sync()',f.context);
+  let sent=f.state.fetches.filter(r=>r.url.endsWith('/activity')).at(-1).body;
+  assert.deepEqual(sent.media,[{domain:'music.example.com',redirect_budget:''}]);
+  assert.equal(vm.runInContext('mediaPlaying',f.context),true);
+  assert.ok(!JSON.stringify(sent).includes('private=value'));
+  f.tabs.get(2).mutedInfo={muted:true};await vm.runInContext('sync()',f.context);
+  sent=f.state.fetches.filter(r=>r.url.endsWith('/activity')).at(-1).body;
+  assert.deepEqual(sent.media,[]);assert.equal(vm.runInContext('mediaPlaying',f.context),false);
+});

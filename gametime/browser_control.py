@@ -65,7 +65,7 @@ class BrowserControl(QObject):
     def revision(self):
         app=self.app
         raw=json.dumps([asdict(app.settings),asdict(app.focus.settings),app.catalog.overrides,
-                        app.catalog.rules,sorted(app.store.hidden_ids()),app.overlay_consents.display_enabled,
+                        app.catalog.rules,sorted(app.store.hidden_ids()),app.overlay_consents.display_enabled,app.background_media.members,
                         [(g.id,g.name,g.installed) for g in app.catalog.games.values()]],sort_keys=True,ensure_ascii=False)
         return hashlib.sha256(raw.encode()).hexdigest()[:24]
 
@@ -94,7 +94,7 @@ class BrowserControl(QObject):
                       'focus.pause':self.focus_pause,'focus.stop':self.focus_stop,'budget.save':self.budget_save,
                       'budget.delete':self.budget_delete,'notification.save':self.notification_save,
                       'notification.delete':self.notification_delete,'notification.preview':self.notification_preview,'notification.action':self.notification_action,
-                      'activity.change':self.activity_change,'activity.appearance':self.activity_appearance,
+                      'activity.change':self.activity_change,'activity.media':self.activity_media,'activity.appearance':self.activity_appearance,
                       'game.launch':self.game_launch,'app.open':self.app_open,
                       'sync.state':lambda data:self.sync.state(),'sync.reveal':self.sync.reveal,
                       'sync.generate':self.sync.generate,'sync.command':self.sync.command,'sync.save':self.sync.save,
@@ -165,7 +165,7 @@ class BrowserControl(QObject):
         icon_entries += [(dict(kind='app',value=n['value']['action']['path']),n['title']) for n in notifications if n['value']['action']['kind']=='app']
         self.library.register_icons(icon_entries,sources,reset=True)
         self.library.notification_images={n['key']:n['value']['icon'] for n in notifications}
-        return dict(live=self.live({}),settings={k:deepcopy(getattr(settings,k)) for k in GENERAL},
+        return dict(background_media=deepcopy(app.background_media.members),live=self.live({}),settings={k:deepcopy(getattr(settings,k)) for k in GENERAL},
                     focus=asdict(app.focus.settings),focus_site_rules=dict(all=all_focus_sites,domains=focus_sites),activity_appearances=deepcopy(settings.activity_overlays),members=rows(app.focus.settings,settings.wellbeing_rules,app.catalog,inventory,names,app.t),
                     groups=[dict(id=k,name=str(v)) for k,v in names.items()],games=games,library=self.library.summary(),
                     activities=[dict(member=member,name=name,excluded=member['kind']=='app' and all(app.focus.settings.app_excluded(path) for path in sources[activity_key(member)]))
@@ -400,6 +400,10 @@ class BrowserControl(QObject):
         app.last_rows=None; app.update_focus_policy()
         if app.isVisible(): app.render()
         return True
+
+    def activity_media(self,data):
+        self.app.background_media.set_enabled({'kind':data.get('kind'),'value':data.get('key')},data.get('enabled'))
+        self.app.refresh_activity_lists();return True
 
     def activity_appearance(self,data):
         from .activities import activity_target

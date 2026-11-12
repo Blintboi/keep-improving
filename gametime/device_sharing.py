@@ -244,6 +244,9 @@ def local_usage(store,s,native,rule):
         rows=store.db.execute('SELECT day,game_id,seconds FROM '+table+' WHERE day>=?',(before,))
     elif 'wellbeing_usage' in tables:rows=((day,json.dumps([game,app,site]),seconds) for day,game,app,site,seconds in store.db.execute('SELECT day,game_id,app,site,seconds FROM wellbeing_usage WHERE day>=?',(before,)))
     else:return {}
+    if not independent and not key.startswith('quota:') and 'media_budget_usage' in tables:
+        from itertools import chain
+        rows=chain(rows,store.db.execute('SELECT day,item,seconds FROM media_budget_usage WHERE day>=?',(before,)))
     members=next((r['members'] for r in s.wellbeing_rules if r['id']==native),[])
     from .wellbeing import applies
     for day,item,seconds in rows:

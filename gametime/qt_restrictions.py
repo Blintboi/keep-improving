@@ -166,39 +166,43 @@ class RestrictionRuntime:
         website = app.browser_bridge.website(current.path) if app.browser_bridge else ''
         atom = app.wellbeing.atom(current, website)
         subject = 'app:' + app_key(current.path)
+        for observed,media_atom in getattr(getattr(app,'background_media',None),'targets',()):
+            if self.matching(media_atom):self.targets[observed.identity]=(observed,media_atom)
         if atom and current.identity:
             keys = self.matching(atom)
             if keys: self.targets[current.identity] = (current, atom)
-            pending=[]
-            for key in keys:
+        pending=[];seen=set()
+        observations=([atom] if atom and current.identity else [])+list(getattr(getattr(app,'background_media',None),'atoms',()))
+        for observed in observations:
+            for key in self.matching(observed):
                 members=self.state.budgets[key].members
                 scopes=[]
-                if applies([m for m in members if m['kind']!='site' and m!={'kind':'category','value':'sites'}],atom): scopes.append(subject)
-                if atom[2] and applies([m for m in members if m['kind']=='site' or m=={'kind':'category','value':'sites'}],atom): scopes.append('site:'+atom[2])
-                seen=set()
+                if applies([m for m in members if m['kind']!='site' and m!={'kind':'category','value':'sites'}],observed): scopes.append('app:'+observed[1])
+                if observed[2] and applies([m for m in members if m['kind']=='site' or m=={'kind':'category','value':'sites'}],observed): scopes.append('site:'+observed[2].split('\0')[0])
                 for scope in scopes:
                     for warning in self.state.warnings(key,scope):
-                        if warning['id'] not in seen: pending.append((key,warning)); seen.add(warning['id'])
-            if pending and not app.popup_window:
-                messages=[]
-                for key in dict.fromkeys(key for key,_ in pending):
-                    budget=self.state.budgets[key]
-                    clock_warning=next((warning for k,warning in pending if k==key and warning.get('time_mode')=='clock'),None)
-                    if clock_warning:
-                        minute=clock_warning['clock_minute']
-                        messages.append(app.t('{name}: the daily time {time} has been reached.',name=budget.name,time=f'{minute//60:02d}:{minute%60:02d}'))
-                    elif any(k==key and warning.get('time_mode')=='usage' for k,warning in pending):
-                        messages.append(app.t('{name}: {minutes:g} minutes of use.',name=budget.name,minutes=round(budget.used/60,2)))
-                    elif any(k==key and warning.get('time_mode')=='sessions' for k,warning in pending):
-                        messages.append(app.t('{name}: {count} sessions today.',name=budget.name,count=budget.sessions))
-                    else:
-                        messages.append(app.t('{name}: {minutes:g} minutes remaining.',name=budget.name,
-                            minutes=max(0,math.ceil((budget.limit-budget.used)/60))))
-                alert=Alert(self.state.day,(),'wellbeing','\n'.join(messages),app.t('OK'),
-                            title=app.t('Budget reminder'),sound=any(w['sound'] for _,w in pending))
-                delivered=app.popup(alert) if any(w['popup'] for _,w in pending) else play_notification(app.settings)
-                if delivered:
-                    for key,warning in pending: self.state.delivered(key,warning['id'])
+                        identity=(key,warning['id'])
+                        if identity not in seen: pending.append((key,warning)); seen.add(identity)
+        if pending and not app.popup_window:
+            messages=[]
+            for key in dict.fromkeys(key for key,_ in pending):
+                budget=self.state.budgets[key]
+                clock_warning=next((warning for k,warning in pending if k==key and warning.get('time_mode')=='clock'),None)
+                if clock_warning:
+                    minute=clock_warning['clock_minute']
+                    messages.append(app.t('{name}: the daily time {time} has been reached.',name=budget.name,time=f'{minute//60:02d}:{minute%60:02d}'))
+                elif any(k==key and warning.get('time_mode')=='usage' for k,warning in pending):
+                    messages.append(app.t('{name}: {minutes:g} minutes of use.',name=budget.name,minutes=round(budget.used/60,2)))
+                elif any(k==key and warning.get('time_mode')=='sessions' for k,warning in pending):
+                    messages.append(app.t('{name}: {count} sessions today.',name=budget.name,count=budget.sessions))
+                else:
+                    messages.append(app.t('{name}: {minutes:g} minutes remaining.',name=budget.name,
+                        minutes=max(0,math.ceil((budget.limit-budget.used)/60))))
+            alert=Alert(self.state.day,(),'wellbeing','\n'.join(messages),app.t('OK'),
+                        title=app.t('Budget reminder'),sound=any(w['sound'] for _,w in pending))
+            delivered=app.popup(alert) if any(w['popup'] for _,w in pending) else play_notification(app.settings)
+            if delivered:
+                for key,warning in pending: self.state.delivered(key,warning['id'])
         owned = bool(self.screen and self.screen.isVisible() and win32.u.GetForegroundWindow()==int(self.screen.winId()))
         mute = []; display = None; save_until = None
         for identity, (target, target_atom) in list(self.targets.items()):
@@ -394,7 +398,10 @@ class RestrictionRuntime:
             steps=self.state.early_break_steps(key)
             states=self.state.rows.get(key,{}).get('breaks',{})
             upcoming=min(steps,key=lambda s:(states.get(s['id'],{}).get('next_at',s['offset']),s['id']),default=None)
-            result[key]=dict(step=upcoming['id'].split(':')[-1] if upcoming else '',remaining=self.state.break_remaining(key))
+            budget=self.state.budgets.get(key)
+            unavailable=('inactive' if budget is None else 'limit' if budget.used>=budget.limit or not budget.breaks_allowed else 'restricted')
+            result[key]=dict(step=upcoming['id'].split(':')[-1] if upcoming else '',remaining=self.state.break_remaining(key),
+                             minutes=upcoming['break_minutes'] if upcoming else 0,unavailable='' if upcoming else unavailable)
         return result
 
     def start_early_break(self,key,step):

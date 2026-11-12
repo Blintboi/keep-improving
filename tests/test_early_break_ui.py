@@ -60,3 +60,20 @@ class EarlyBreakInterfaceTests(unittest.TestCase):
             self.assertEqual(control.dispatch(request),first);start.assert_called_once_with('fixture','pause')
             self.assertFalse(control.dispatch(dict(request,id='early-break-stale-fixture',revision='stale'))['ok'])
             start.assert_called_once()
+
+    def test_browser_quick_break_survives_no_timer_and_explains_unavailability(self):
+        from gametime.restriction_policy import Budget,new_plan,step
+        from gametime.browser_control import BrowserControl
+        plan=new_plan();item=step('break',900,identity='pause',break_mode='cover',break_minutes=5)
+        item['allow_early_break']=True;plan['steps']=[item]
+        self.app.settings=replace(self.app.settings,restriction_plans={'youtube':plan})
+        runtime=self.app.restrictions;budget=Budget('youtube','YouTube',3600,720,(target('site','youtube.com'),))
+        with patch.object(runtime,'budgets',return_value=[budget]),patch.object(self.app,'timer_views',return_value=[]):
+            runtime.prepare(datetime.now().astimezone());live=BrowserControl(self.app).live({})
+            self.assertEqual(live['timers'],[])
+            self.assertEqual(live['break_actions']['youtube']['step'],'pause')
+            self.assertEqual(live['break_actions']['youtube']['minutes'],5)
+            self.assertEqual(live['break_actions']['youtube']['unavailable'],'')
+        with patch.object(runtime,'budgets',return_value=[replace(budget,used=3600)]):
+            runtime.prepare(datetime.now().astimezone());action=runtime.early_break_actions()['youtube']
+            self.assertEqual(action['step'],'');self.assertEqual(action['unavailable'],'limit')

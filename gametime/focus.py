@@ -1,4 +1,4 @@
-"""Local foreground activity and Pomodoro state, independent of game budgets/sync."""
+"""Local activity history, optional background audio time and Pomodoro state."""
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from datetime import date,datetime
@@ -108,6 +108,8 @@ class Focus:
     """Single GUI-thread owner. Buffer writes; browser bridge owns no database handle."""
     def __init__(self, store):
         self.store = store
+        from .media_history import initialize
+        initialize(store.db);self.background_pending=defaultdict(float)
         from .activity_sessions import Sessions
         self.sessions=Sessions(store)
         from .continuity_ledger import Coverage
@@ -325,11 +327,12 @@ class Focus:
             self.flush()
             self.last_flush = sample.awake
 
-    def _credit(self, kind, key, name, start, end, seconds):
+    def _credit(self, kind, key, name, start, end, seconds,background=False):
         self.items[(kind, key)] = name
-        self.sessions.credit(kind,key,start.timestamp(),end.timestamp(),self.day(start))
+        if not background:self.sessions.credit(kind,key,start.timestamp(),end.timestamp(),self.day(start))
         for day, amount in day_slices(start, end, seconds,self.day_start_minute):
             self.pending[(day, kind, key)] += amount
+            if background:self.background_pending[(day,kind,key)]+=amount
             if day<self.started_on: self.started_on=day; self._started_dirty=True
         self.revision += 1
 
@@ -341,12 +344,13 @@ class Focus:
             self.store.db.executemany('INSERT INTO activity_usage VALUES (?,?,?,?) ON CONFLICT(day,kind,key) '
                                      'DO UPDATE SET seconds=seconds+excluded.seconds',
                                      [(*key, value) for key, value in self.pending.items()])
+            self.store.db.executemany('INSERT INTO media_activity_usage VALUES (?,?,?,?) ON CONFLICT(day,kind,key) DO UPDATE SET seconds=seconds+excluded.seconds',[(*key,seconds) for key,seconds in self.background_pending.items()])
             self.save_timer()
             self.coverage.write(); self.timer_coverage.write()
             self.sessions.write()
             if self._started_dirty: self._save('activity_started_on',self.started_on)
         self._started_dirty=False
-        self.pending.clear()
+        self.pending.clear();self.background_pending.clear()
         self.items.clear()
         self._dirty = False
         self.coverage.clear(); self.timer_coverage.clear()
@@ -404,20 +408,8 @@ class Focus:
         if category == 'apps': return apps
         if category == 'websites': return sites
         if category != 'all': return []
-        browser_totals = defaultdict(float)
-        output = []
-        for row in apps:
-            if ntpath.basename(row[1][len('activity:app:'):]) in BROWSERS: browser_totals[row[0]] += row[4]
-            else: output.append(row)
-        site_totals = defaultdict(float)
-        for row in sites: site_totals[row[0]] += row[4]
-        for day, key, name, source, seconds in sites:
-            scale = min(1, browser_totals[day] / site_totals[day]) if site_totals[day] else 0
-            if scale: output.append((day, key, name, source, seconds * scale))
-        for day, seconds in browser_totals.items():
-            remainder = max(0, seconds - site_totals[day])
-            if remainder: output.append((day, 'activity:browser:other', 'Other browser time', 'Browser', remainder))
-        return output
+        from .media_history import background_rows,combined_history
+        return combined_history(apps,sites,background_rows(self.store.db,start,end))
 
     def close(self):
         self.flush()

@@ -153,6 +153,29 @@ class Disclosure(QWidget):
 
     def setExpanded(self,expanded): self.toggle.setChecked(expanded)
 
+
+class HelpText(Disclosure):
+    """Optional explanation beside its controls, available with keyboard too."""
+    def __init__(self,text):
+        from .qt_translation import ui_text
+        super().__init__(ui_text('Help',getattr(text,'language','en')))
+        self.toggle.setAccessibleName(self.toggle.text())
+        self.toggle.setStyleSheet('QToolButton{border:0;padding:4px 0;color:#a1b4b5;background:transparent;}QToolButton:hover{color:#c4f7e3;}')
+        self.toggle.setSizePolicy(QSizePolicy.Maximum,QSizePolicy.Fixed)
+        self.detail=label(text,'muted');self.detail.setWordWrap(True);self.body.addWidget(self.detail)
+        self.body.setContentsMargins(8,3,8,8)
+
+    def setText(self,text):
+        from .qt_translation import ui_text
+        self.detail.setText(text)
+        if hasattr(text,'language'):
+            self.toggle.setText(ui_text('Help',text.language));self.toggle.setAccessibleName(self.toggle.text())
+    def text(self):return self.detail.text()
+    def setWordWrap(self,enabled):self.detail.setWordWrap(enabled)
+
+
+def help_text(text,role=None):return HelpText(text)
+
 def panel(name='Panel'):
     widget=QFrame(); widget.setObjectName(name)
     return widget

@@ -1,5 +1,75 @@
 # Testing
 
+## 2.48.1 — public delivery with direct extension break control
+
+- Popup break actions use saved eligible rules, independently of foreground
+  activity and visible timer events. They appear before Focus, with one-click
+  start, immediate busy feedback, failure/retry and a live remaining-time label.
+  Repeated clicks do not submit multiple starts; polling preserves the controls.
+- `test_early_break` and `test_early_break_ui`: 12 checks passed, including an
+  empty timer list and an exhausted budget. `popup_breaks_smoke.cjs` exercises
+  the real extension and local bridge in a disposable profile with no active
+  timer and overlay disabled, at 340/380 px in HU/EN. `early_break_smoke.cjs`
+  retains the complete break, website cover and fresh usage-interval checks.
+- Verified installer: 102 checks, clean source/payload audits and Defender scans.
+  Actual Windows and Brave installation upgraded to 2.48.1; all 23 profile
+  checks passed. The published package uses the same verified installer bytes,
+  with matching source, README download labels, checksum and update manifest.
+  Read-only inspection confirmed the saved YouTube quick action
+  with its existing running break; the Hub was reopened.
+- Evidence: `test-reports/popup-breaks-2481/`. No user rules are rewritten.
+
+## 2.48.0 — optional audible background playback (local preview)
+
+- Local per-application and per-website opt-in, off by default. Read-only Core
+  Audio sampling checks stream state, signal, session volume/mute and output
+  device volume/mute. Browser observations require an opted-in, audible,
+  unmuted public tab and an audible Windows browser session.
+- Parallel time preserves foreground sessions and counts a shared budget once.
+  Tests cover focus switches, simultaneous websites, pause, exclusions, lock,
+  sleep, day boundaries, independent renewal, restart, rule edits, redirects,
+  game identity migration, shared budgets and encrypted statistics snapshots.
+- 15 media tests, 3 UI/bridge tests and 150 existing targeted Python regressions;
+  90 browser unit tests. Real native audio fixture verifies signal detection,
+  muting and stopping without changing system volume or other audio sessions.
+- Native and real headless extension controls checked in HU/EN at 1000 and
+  1280 pixels wide, using disposable profiles. Long explanations are collapsed
+  in Help. Evidence: `test-reports/background-media-2480/`.
+- Verified installer: 102 checks passed; source/payload audits and Defender
+  scans passed. Actual Windows and Brave installation upgraded to 2.48.0;
+  21 profile-preservation checks passed and the Hub was reopened.
+- Background measurement requires the desktop app to be running. Settings are
+  local to this computer; Android behavior and the public download are unchanged.
+
+## 2.47.1 — consistent budget weekdays (local preview)
+
+- Native and browser budget lists use “Every day” for both implicit and explicit
+  seven-day schedules. Partial schedules list their days; empty schedules show
+  “No active days”. Rendering does not rewrite saved schedules.
+- 17 budget-list and fixed-day regression tests passed. Disposable native and
+  headless-browser views cover implicit, explicit, partial and empty schedules
+  in HU/EN at 1000×700. Reports: `test-reports/budget-days-2471/`.
+
+## 2.47.0 — save feedback and contextual help (local preview)
+
+- `test_usability` covers acknowledgement before work, duplicate protection,
+  retry with preserved inputs, translated button restoration, Ctrl+S routing,
+  direct action creation and optional in-place help. Budget-only saves avoid
+  discovery/artwork refresh; location and Hub changes still reconfigure them.
+- 157 targeted Python tests and 86 browser unit tests passed. Native regression
+  coverage includes budget drafts/lists, notifications, focus,
+  statistics, restriction steps, early breaks and browser control. Browser unit
+  tests run with `node --test tests/*.test.cjs`.
+- `tests/usability_smoke.cjs` runs the actual extension against a disposable
+  desktop profile in headless Brave. It delays and fails saves to verify visible
+  feedback, one request per save, recovery without lost edits and Ctrl+S.
+- HU/EN widgets are inspected at 1280×900 and 1000×700, including expanded Help,
+  direct action buttons and the reserved saving indicator. Native captures use
+  the test window only; no desktop capture or personal profile is used.
+- Local build, installer, visual and profile-preservation reports are kept in
+  `test-reports/usability-2470/`. The public download was 2.46.1 during that
+  local test stage; those validated changes are included in 2.48.1.
+
 ## 2.46.1 — opening-choice reconnect regression
 
 - Reproduced a short desktop-connection failure in disposable Brave: the old

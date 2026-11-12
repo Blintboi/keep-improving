@@ -39,6 +39,7 @@ class BrowserBridge:
         self.lock = threading.Lock()
         self.requests = []
         self.observation = {}
+        self.media_observations={}
         self.last_seen = 0
         self.current_policy = {'active': False, 'tracking': True, 'mode': 'blocklist', 'allow': [], 'block': [], 'remaining': 0}
         self.server = None
@@ -97,7 +98,7 @@ class BrowserBridge:
                 if self.path not in ('/activity','/restriction-extension','/control','/continuity'): return self.reply(404, {})
                 try:
                     length = int(self.headers.get('Content-Length', '0'))
-                    if not 0 < length <= (524288 if self.path in ('/control','/continuity') else 2048): raise ValueError()
+                    if not 0 < length <= (524288 if self.path in ('/control','/continuity') else 16384): raise ValueError()
                     data = json.loads(self.rfile.read(length))
                     if self.path in ('/control','/continuity'):
                         if not isinstance(data,dict): raise ValueError()
@@ -113,7 +114,7 @@ class BrowserBridge:
                             bridge.requests.append((data,answer,event))
                         event.wait(2.5)
                         return self.reply(200,answer or {'ok':False})
-                    if set(data) - {'browser', 'domain', 'focused', 'private', 'idle', 'redirect_budget', 'restriction_version','choice_version','local_version'}: raise ValueError()
+                    if set(data) - {'browser', 'domain', 'focused', 'private', 'idle', 'redirect_budget', 'restriction_version','choice_version','local_version','media'}: raise ValueError()
                     local_version=data.get('local_version',0)
                     if type(local_version) is not int or local_version not in (0,1):raise ValueError()
                     choice_version=data.get('choice_version',0)
@@ -128,11 +129,32 @@ class BrowserBridge:
                     redirect=data.get('redirect_budget','')
                     if not isinstance(redirect,str) or len(redirect)>2100 or '\0' in redirect: raise ValueError()
                     if data['private']: host = ''; idle=False; redirect=''
+                    media=data.get('media',[])
+                    if not isinstance(media,list) or len(media)>16:raise ValueError()
+                    records=[]
+                    for item in media:
+                        if not isinstance(item,dict) or set(item)-{'domain','redirect_budget'}:raise ValueError()
+                        media_host=domain(item['domain']);media_redirect=item.get('redirect_budget','')
+                        if not isinstance(media_redirect,str) or len(media_redirect)>2100 or '\0' in media_redirect:raise ValueError()
+                        records.append((media_host,media_redirect))
                 except (ValueError, TypeError, KeyError, AttributeError): return self.reply(400, {})
                 with bridge.lock:
                     if is_local_site(host) and host not in bridge.current_policy.get('local_sites',()):host=''
                     now = time.monotonic()
                     bridge.last_seen = now
+                    from .activity_identity import site_identity
+                    wanted={site_identity(value) for value in bridge.current_policy.get('background_media_sites',())}
+                    checked=[]
+                    for media_host,media_redirect in records:
+                        if not bridge.current_policy.get('tracking',True) or site_identity(media_host) not in wanted:continue
+                        if is_local_site(media_host) and media_host not in bridge.current_policy.get('local_sites',()):continue
+                        if media_redirect:
+                            def media_destination(entry):
+                                try:return domain(entry.get('redirect_url',''))
+                                except ValueError:return ''
+                            if not any(entry.get('key')==media_redirect and entry.get('kind')=='redirect' and media_destination(entry)==media_host for entry in bridge.current_policy.get('restrictions',())):media_redirect=''
+                        checked.append((media_host,media_redirect))
+                    bridge.media_observations[data['browser']]=(now,tuple(set(checked)))
                     # A background browser must not overwrite the foreground browser's observation.
                     if data['focused'] or data['browser'] == bridge.observation.get('browser'):
                         if redirect:
@@ -183,6 +205,11 @@ class BrowserBridge:
                     and BROWSERS.get(ntpath.basename(path).lower()) == item['browser']):
                 return BROWSER_IDLE if item.get('idle',False) else item['domain']
         return ''
+
+    def media(self):
+        with self.lock:
+            now=time.monotonic()
+            return [(browser,records) for browser,(at,records) in self.media_observations.items() if now-at<4]
 
     def redirect_budget(self, path):
         import ntpath

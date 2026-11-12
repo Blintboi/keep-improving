@@ -1,6 +1,16 @@
 """Small explicit English/Hungarian catalog. Stored IDs and paths never translate."""
 LANGUAGES = {"English": "en", "Magyar": "hu"}
 HU = {
+    'Count background playback':'Háttérbeli lejátszás mérése',
+    'Counts audible playback while the desktop application is running on this computer, including while another window is active. Paused or muted playback is not counted. Time counts toward matching budgets; shared budgets count each second once. Session counts still follow foreground visits. Simultaneous activities can make total activity time exceed elapsed time.':'Az asztali alkalmazás futása alatt ezen a gépen a hallható lejátszást háttérben is méri. A szüneteltetett vagy némított lejátszást nem számolja. Az idő a kapcsolódó kereteket is fogyasztja; egy közös keretben ugyanaz a másodperc csak egyszer számít. A munkamenetszám továbbra is az előtérbeli használatot követi. A párhuzamos tevékenységek összesített ideje meghaladhatja az eltelt időt.',
+    "Help": "Súgó",
+    "Break": "Szünet",
+    "Loading…": "Betöltés…",
+    "Saving…": "Mentés…",
+    "Saved.": "Mentve.",
+    "Operation status": "Művelet állapota",
+    "Save changes (Ctrl+S)": "Módosítások mentése (Ctrl+S)",
+    "Could not complete the action. Check the message and try again.": "A művelet nem sikerült. Ellenőrizd a hibaüzenetet, és próbáld újra.",
     "Session allowance": "Munkamenetkeret",
     "Shared allowance": "Közös keret",
     "Separate allowance per member": "Tagonként külön keret",
@@ -681,7 +691,7 @@ HU.update({
     'Settings synchronized from your linked computers.': 'A kapcsolt gépek beállításai szinkronizálva.',
     'Some synchronized settings could not be applied; local settings were kept.': 'Néhány szinkronizált beállítást nem sikerült alkalmazni; a helyi beállítások megmaradtak.',
     'Game statistics and supported settings synchronize automatically. Usage and budget consumption stay local. Account credentials, protected-game consent, computer names and machine-specific folders remain on this computer.': 'A játékstatisztikák és a támogatott beállítások automatikusan szinkronizálódnak. A felhasznált játékkeret és az aktivitáselőzmények helyben maradnak. A fiókadatok, a védett játékokhoz adott engedélyek, a gépnevek és a gépspecifikus mappák nem kerülnek át.',
-    'Only the foreground application or active website counts, including time spent reading without input. Tracking pauses when the session is locked.': 'Csak az előtérben lévő alkalmazás vagy aktív weboldal számít, akkor is, ha közben olvasol és nem használod az egeret vagy a billentyűzetet. Zárolt munkamenetben a mérés szünetel.',
+    'Foreground use includes reading without input and pauses when the session is locked. Selected applications and websites can also count audible background playback; enable it in Activities.': 'Az előtérbeli mérés az olvasást is számolja, zároláskor szünetel. Kiválasztott alkalmazásoknál és weboldalaknál a hallható háttérbeli lejátszás is mérhető; ezt a Tevékenységeknél kapcsolhatod be.',
     'Choose a section to find its settings. Changes on this page take effect after Save; separate dialogs have their own save buttons.': 'A gyorsgombokkal ugorhatsz a kívánt részhez. Az oldal módosításai mentés után lépnek életbe; a külön ablakok saját mentésgombot használnak.',
     'Game time': 'Játékidő', 'Reminders': 'Emlékeztetők', 'Game folders': 'Játékmappák',
     'Updates and sync': 'Frissítés és szinkron', 'Go to {section}': 'Ugrás ide: {section}',

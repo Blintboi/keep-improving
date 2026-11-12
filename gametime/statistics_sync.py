@@ -83,6 +83,9 @@ def validate_snapshot(value, group):
             if key in seen:
                 raise ValueError()
             seen.add(key)
+        if 'background_activity' in value:
+            from .media_history import validate_background
+            validate_background(value['background_activity'],value.get('activity',[]))
         if 'preferences' in value:
             from .preferences_sync import validate
             validate(value['preferences'])
@@ -280,6 +283,10 @@ class StatisticsData:
                     [[day, kind, item[len(prefix):], title, seconds]
                      for kind, category, prefix in (('app', 'apps', 'activity:app:'), ('site', 'websites', 'activity:site:'))
                      for day, item, title, source, seconds in self.focus.history('0001-01-01', '9999-12-31', category)])
+                from .media_history import background_rows
+                activity={(day,kind,item):seconds for day,kind,item,title,seconds in value['activity']}
+                background=[[*key,min(seconds,activity[key])] for key,seconds in background_rows(self.store.db).items() if key in activity and seconds>0]
+                if background:value['background_activity']=sorted(background)
             from .preferences_sync import read,key,observe,initialized_key
             state=read(self.store,key(group))
             if not self.store.db.execute('SELECT 1 FROM settings WHERE key=?',(initialized_key(group),)).fetchone():
@@ -311,6 +318,9 @@ class StatisticsData:
         with self.store.db:
             self.store.db.execute('INSERT OR REPLACE INTO statistics_devices VALUES (?,?,?,?,?)',
                                   (*key, value['name'], value['revision'], value['started']))
+            background_key='statistics_background:'+key[0]+':'+key[1]
+            self.store.db.execute('DELETE FROM settings WHERE key=?',(background_key,))
+            if value.get('background_activity'):self.store.db.execute('INSERT INTO settings VALUES (?,?)',(background_key,json.dumps(value['background_activity'])))
             session_key='statistics_sessions:'+key[0]+':'+key[1]
             self.store.db.execute('DELETE FROM settings WHERE key=?',(session_key,))
             if 'sessions' in value:self.store.db.execute('INSERT INTO settings VALUES (?,?)',(session_key,json.dumps(value['sessions'])))
@@ -448,19 +458,10 @@ class StatisticsData:
             if category == 'apps': selected = apps
             elif category == 'websites': selected = sites
             elif category == 'all':
-                browser_totals, site_totals = {}, {}
-                selected = []
-                for row in apps:
-                    if ntpath.basename(row[1][len('activity:app:'):]) in BROWSERS:
-                        browser_totals[row[0]] = browser_totals.get(row[0], 0) + row[4]
-                    else: selected.append(row)
-                for row in sites: site_totals[row[0]] = site_totals.get(row[0], 0) + row[4]
-                for day, key, name, source, seconds in sites:
-                    scale = min(1, browser_totals.get(day, 0) / site_totals[day])
-                    if scale: selected.append((day, key, name, source, seconds * scale))
-                for day, seconds in browser_totals.items():
-                    remainder = max(0, seconds - site_totals.get(day, 0))
-                    if remainder: selected.append((day, 'activity:browser:other', 'Other browser time', 'Browser', remainder))
+                from .media_history import combined_history
+                row=self.store.db.execute('SELECT value FROM settings WHERE key=?',('statistics_background:'+local_group(group)+':'+identity,)).fetchone()
+                background={(day,kind,key):seconds for day,kind,key,seconds in json.loads(row[0])} if row else {}
+                selected=combined_history(apps,sites,background)
             else: selected = []
             rows.extend((*row, identity, device_name) for row in selected)
         return rows

@@ -62,7 +62,10 @@ language and interaction patterns. Prefer familiar, user-friendly placement and
 behavior for navigation, actions and dialogs. Use the application's styled
 components for confirmations, keep destructive actions clear and cancellable,
 and visually check changed interfaces with representative window sizes and
-both supported languages when relevant.
+both supported languages when relevant. Keep primary flows concise; place longer
+explanations in contextual Help that opens in place. Show immediate progress
+and a clear result for user-initiated saves and loading operations. Prefer
+direct actions and avoid redundant clicks.
 
 # Statistics service
 

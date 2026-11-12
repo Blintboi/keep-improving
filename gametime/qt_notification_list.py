@@ -40,7 +40,7 @@ class NotificationsPage(QWidget):
         self.editor=NotificationEditor(self); body_layout.addWidget(self.editor); self.editor.hide()
         footer=QHBoxLayout(); self.error=label('','danger'); self.error.setWordWrap(True); footer.addWidget(self.error,1)
         self.discard=button(app.t('Discard draft'),self.discard_draft,'quiet'); footer.addWidget(self.discard)
-        self.save_button=button(app.t('Save changes'),self.save,'primary'); footer.addWidget(self.save_button); outer.addLayout(footer)
+        self.save_button=button(app.t('Save changes'),self.request_save,'primary');self.save_button.setToolTip(app.t('Save changes (Ctrl+S)')); footer.addWidget(self.save_button); outer.addLayout(footer)
         self.draft_note=label('','muted'); self.draft_note.setWordWrap(True); outer.addWidget(self.draft_note)
         self.row_keys=[]; self.refresh()
 
@@ -167,6 +167,9 @@ class NotificationsPage(QWidget):
 
     def show_error(self,text): self.error.setText(self.app.t(text))
 
+    def request_save(self):
+        return self.app.feedback.run('Saving…',self.save,origin=self.save_button,error=lambda:self.error.text())
+
     def save(self):
         from .notification_rules import validate_files
         try:
@@ -177,6 +180,8 @@ class NotificationsPage(QWidget):
             self.app.settings=self.app.catalog.settings=settings
             self.changes.clear(); self._revision+=1; self.error.clear(); self.show_list()
             self.app.set_status('Notifications saved.')
+            return True
         except (ValueError,OSError,SQLiteError) as exc:
             self.show_error(str(exc) if isinstance(exc,ValueError) else 'Could not save notifications. Try again.')
             self.flush_draft()
+            return False

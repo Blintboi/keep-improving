@@ -1,10 +1,12 @@
-# Keep Improving — 2.46.1
+# Keep Improving — 2.48.1
 
-**[Letöltés Windows x64-re — 2.46.1](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256](downloads/GameTimeMonitor-Setup.exe.sha256) · [English](README.md)
+**[Letöltés Windows x64-re — 2.48.1](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256](downloads/GameTimeMonitor-Setup.exe.sha256) · [English](README.md)
 
 **[Android telepítő — 0.6.0 (.apk)](https://github.com/Blintboi/keep-improving/raw/refs/heads/main/downloads/KeepImproving-Android.apk)** · [SHA-256](downloads/KeepImproving-Android.apk.sha256) · [Telefonos útmutató](android/README.hu.md)
 
 Lásd, mire megy el az időd, döntsd el, milyen gyakran térsz vissza, és iktass be szüneteket. A Keep Improving az előtérbeli használatot méri, időkereteket, napi munkamenetkorlátokat, emlékeztetőket és fókuszidőzítőt kínál. Ingyenes, nyílt forráskódú, magyar és angol felülettel.
+
+A mentés azonnal visszajelez, majd jelzi a sikert vagy a hibát. A keretek, értesítések és beállítások szerkesztésekor a **Ctrl+S** is ment. Új művelethez közvetlenül választhatsz **Figyelmeztetést**, **Szünetet** vagy **Korlátozást**. A hosszabb magyarázatokat az adott beállítás melletti **Súgóban** találod.
 
 ![Áttekintés időadatokkal, mért munkamenetekkel és napi tevékenységdiagrammal](docs/images/statistics-hu.png)
 *A képek az aktuális Windows-alkalmazásból, külön bemutatóprofillal készültek. Minden időadat, keret és választás példa; személyes előzmény és kapcsolódási kód nem szerepel rajtuk.*
@@ -22,7 +24,7 @@ Az ablak bezárásakor a Windows-program a tálcán fut tovább. A **Kilépés a
 
 Az **Áttekintés** diagramján idő vagy **munkamenetszám** is megjeleníthető. A **Mit szeretnél látni?** listában válaszd ki a tevékenységtípust és a mértéket, majd szűrj időszakra és eszközre. A tevékenységlista kereshető, idő és munkamenetszám szerint rendezhető; az azonos nevek összevonhatók. A szűrők megmaradnak.
 
-Egy munkamenet összefüggő, mért előtérbeli használat, a kezdőnapján számolva. Az alkalmazás azt a darabszámot mutatja, amit mérni tudott; régebbi előzményekhez nem talál ki alkalmakat. Csak az előtér számít: az olvasás és a játékmenü igen, a zárolás, alvás és háttérben hagyott alkalmazás nem. A weboldalidő a böngészőidő része, nem adódik hozzá még egyszer.
+Egy munkamenet összefüggő, mért előtérbeli használat, a kezdőnapján számolva. Az alkalmazás azt a darabszámot mutatja, amit mérni tudott; régebbi előzményekhez nem talál ki alkalmakat. Az előtérbeli időbe az olvasás és a játékmenü is beleszámít. A **Tevékenységek → Alkalmazások / Weboldalak** alatt válassz egy tevékenységet, és kapcsold be a **Háttérbeli lejátszás mérését**, ha az asztali alkalmazás futása alatt a hallható lejátszását is mérni szeretnéd ezen a gépen. A némított és szüneteltetett lejátszás háttérben nem számít. A kapcsoló alapból kikapcsolt, és nem ad hozzá munkameneteket. Az idő fogyasztja a kapcsolódó kereteket; egy közös keretben minden másodperc csak egyszer számít. Párhuzamos tevékenységeknél az áttekintés összesített ideje meghaladhatja az eltelt időt. A weboldalidő a hozzá tartozó böngészőidő helyére kerül.
 
 <details>
 <summary>Munkamenetdiagram és tevékenységtár</summary>
@@ -31,6 +33,8 @@ Egy munkamenet összefüggő, mért előtérbeli használat, a kezdőnapján sz�
 
 ![Felismert játékok a tevékenységtárban](docs/images/library-hu.png)
 *A játékok képei a tulajdonosaikhoz tartoznak.*
+
+![A hallható háttérbeli lejátszás külön bekapcsolható weboldalanként](docs/images/background-playback-hu.png)
 
 </details>
 
@@ -58,9 +62,11 @@ A **Közös keret** az összes tag között osztja el az adott válasz alkalmait
 
 ### Kezdj szünetet korábban
 
-Ismétlődő, használati időhöz kötött szünetnél bekapcsolható a **„Szünet most” engedélyezése**. A gomb az alkalmazás és a bővítmény **Keretek** listájában, az adott keret sorában jelenik meg; a bővítmény felugró ablakából és a tálcamenüből is elérhető. A lebegő visszaszámlálón nincs gomb.
+Ismétlődő, használati időhöz kötött szünetnél bekapcsolható a **„Szünet most” engedélyezése**. A gomb az alkalmazás és a bővítmény **Keretek** listájában, az adott keret sorában jelenik meg; a bővítmény felugró ablakának tetején akkor is elérhető, ha már elváltottál a weboldalról vagy elrejtetted a visszaszámlálót. Egy kattintás indítja a teljes szünetet, utána a hátralévő idő látszik. A lebegő visszaszámlálón nincs gomb.
 
 A teljes szünet után új teljes használati szakasz indul. Egy 15 perc használat / 5 perc szünet szabálynál a 12. percben indított szünet is öt percig tart, majd új tizenöt perc következik. A megmaradt percek nem adódnak hozzá, a napi keret nem nullázódik. A futó szünet újraindítás után is megmarad.
+
+![Szünet indítása közvetlenül a bővítmény felugró ablakából](docs/images/quick-break-hu.png)
 
 ![Ismétlődő szünet beállítása a korábbi indítás lehetőségével](docs/images/break-hu.png)
 

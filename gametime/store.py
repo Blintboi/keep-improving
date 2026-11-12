@@ -290,15 +290,18 @@ class Store:
                 new_budget=new_key if budget==old_key else budget
                 if budget.startswith('quota:'): new_item=new_id if item==old_id else item
                 else:
-                    try:
-                        atom=json.loads(item)
-                        if isinstance(atom,list) and len(atom)==3 and atom[0]==old_id:
-                            atom[0]=new_id; new_item=json.dumps(atom,ensure_ascii=False)
-                        else: new_item=item
-                    except (ValueError,TypeError): new_item=item
+                    from .media_history import remap_item
+                    new_item=remap_item(item,old_id,new_id)
                 if (new_budget,new_item)==(budget,item): continue
                 self.db.execute('DELETE FROM independent_budget_usage WHERE budget=? AND day=? AND item=?',(budget,day,item))
                 self.db.execute('INSERT INTO independent_budget_usage VALUES (?,?,?,?) ON CONFLICT(budget,day,item) DO UPDATE SET seconds=seconds+excluded.seconds',(new_budget,day,new_item,seconds))
+        if self.db.execute("SELECT 1 FROM sqlite_master WHERE name='media_budget_usage'").fetchone():
+            from .media_history import remap_item
+            for day,item,seconds in list(self.db.execute('SELECT day,item,seconds FROM media_budget_usage')):
+                new_item=remap_item(item,old_id,new_id)
+                if new_item==item:continue
+                self.db.execute('DELETE FROM media_budget_usage WHERE day=? AND item=?',(day,item))
+                self.db.execute('INSERT INTO media_budget_usage VALUES (?,?,?) ON CONFLICT(day,item) DO UPDATE SET seconds=seconds+excluded.seconds',(day,new_item,seconds))
         for table in ('usage', 'budget_usage'):
             rows = list(self.db.execute(f"SELECT day,seconds FROM {table} WHERE game_id=?", (old_id,)))
             self.db.executemany(f"INSERT INTO {table} VALUES (?,?,?) ON CONFLICT(day,game_id) "

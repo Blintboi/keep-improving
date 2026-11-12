@@ -27,6 +27,8 @@ import { budgetEditor, notificationEditor, settingsEditor } from "./forms.js";
 import { languagePicker } from "./language-picker.js";
 import { offlineView } from './offline-view.js';
 import { keepScroll, scrollRoot } from './scroll-position.js';
+import { OperationFeedback } from './operation-feedback.js';
+const feedback=new OperationFeedback(document.querySelector('#main'));
 const picker = languagePicker(document.querySelector("#language"));
 const content = document.querySelector("#content"),
   status = document.querySelector("#status");
@@ -144,6 +146,7 @@ function fail(error) {
   status.textContent = error.message || String(error);
 }
 async function command(action, data = {}, reload = true) {
+  return feedback.run('Working…',async()=>{
   try {
     const result = await api(action, data, revision);
     revision = result.revision;
@@ -153,8 +156,12 @@ async function command(action, data = {}, reload = true) {
     fail(error);
     throw error;
   }
+  });
 }
-async function load() {
+async function load(silent=false) {
+  return silent || feedback.busy ? loadState() : feedback.run('Loading…',loadState);
+}
+async function loadState() {
   const generation = ++loadGeneration;
   const result = await api("state");
   if (generation !== loadGeneration) return state;
@@ -216,6 +223,7 @@ function buttonNode(id, name, glyph) {
   );
 }
 function go(next) {
+  if(feedback.busy)return;
   rememberPosition();
   status.textContent = "";
   flushActiveDraft();
@@ -389,6 +397,8 @@ async function edit(title, key, initial, build, action) {
     "Save changes",
     async () => {
       if (!form.reportValidity()) return;
+      if(feedback.busy)return;
+      await feedback.run('Saving…',async()=>{
       save.disabled = true;
       document.querySelector("#language").disabled = true;
       status.textContent = "";
@@ -402,7 +412,7 @@ async function edit(title, key, initial, build, action) {
         flushActiveDraft = () => {};
         editing = false;
         await load();
-        status.textContent = t("Saved.");
+        status.textContent = "";
       } catch (e) {
         error.textContent = e.message;
         if (e.conflict) {
@@ -431,10 +441,12 @@ async function edit(title, key, initial, build, action) {
             }),
           );
         }
+        throw e;
       } finally {
         save.disabled = false;
         document.querySelector("#language").disabled = false;
       }
+      },{button:save,success:'Saved.'}).catch(()=>{});
     },
     "primary",
   );
@@ -466,6 +478,9 @@ async function edit(title, key, initial, build, action) {
     form,
   );
   form.append(body, error, footer);
+  form.addEventListener('keydown',event=>{
+    if((event.ctrlKey || event.metaKey) && event.key.toLowerCase()==='s') {event.preventDefault();save.click();}
+  });
 }
 function pairing() {
   editing = false;
@@ -537,19 +552,20 @@ async function boot() {
 }
 async function poll() {
   if (polling || changingLanguage || document.hidden || !state) return;
+  if(feedback.busy){schedule();return;}
   polling = true;
   try {
     const result = await api("live");
     if (changingLanguage) return;
     if(result.result.offline) {showOffline(result.result);return;}
-    if(state.offline) {await load();return;}
+    if(state.offline) {await load(true);return;}
     currentLive = result.result;
     liveAt = performance.now();
     if (
       (result.revision !== revision || state.live.day !== currentLive.day) &&
       !editing
     )
-      await load();
+      await load(true);
     else if (
       !editing &&
       page === "focus" &&
