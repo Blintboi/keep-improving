@@ -59,6 +59,33 @@ class ChoiceInterfaceTests(unittest.TestCase):
         with patch.object(self.app,'browser_bridge',bridge):
             self.assertFalse(gate.tick(current,'example.com'));self.assertIsNone(gate.screen)
 
+    def test_native_repeat_delay_survives_return_and_other_restrictions_win(self):
+        gate,s,current=self.configure_gate();s['session_choice']['remember_minutes']=5
+        work=s['session_choice']['options'][0]['id'];runtime=self.app.restrictions
+        self.assertTrue(gate.tick(current,''));self.assertTrue(gate.choose(work))
+        other=replace(current,path='',identity='');gate.tick(other,'')
+        runtime.state.now=1100;self.assertFalse(gate.tick(current,''))
+        runtime.state.now=1400;self.assertFalse(gate.tick(current,''))
+        gate.tick(other,'');self.assertTrue(gate.tick(current,''))
+        self.assertEqual(gate.ledger.counts('choice',s['id'],'2026-11-11'),{work:1})
+        runtime.state.now=1100;runtime.state.plans['choice']['steps'].append(step('cover',0,usage=True))
+        self.assertFalse(gate.choose(work))
+
+    def test_browser_repeat_delay_keeps_other_sites_and_limits_independent(self):
+        from gametime.browser_choices import request
+        gate,s,current=self.configure_gate(site=True);runtime=self.app.restrictions
+        runtime.state.budgets['choice']=replace(runtime.state.budgets['choice'],members=(target('site','example.com'),target('site','example.org')))
+        s['session_choice']['remember_minutes']=5;work=s['session_choice']['options'][0]['id']
+        def data(n,host='example.com'):return dict(browser='brave',domain=host,visit=f'{n:032x}')
+        self.assertTrue(request(self.app,dict(data(1),budget='choice',step=s['id'],choice=work),True)['accepted'])
+        runtime.state.now=1100;self.assertIsNone(request(self.app,data(2))['choice'])
+        self.assertIsNotNone(request(self.app,data(3,'example.org'))['choice'])
+        runtime.state.now=1300;self.assertIsNone(request(self.app,data(2))['choice'])
+        self.assertIsNotNone(request(self.app,data(4))['choice'])
+        self.assertEqual(gate.ledger.counts('choice',s['id'],'2026-11-11'),{work:1})
+        runtime.state.plans['choice']['steps'].append(step('cover',0,usage=True))
+        self.assertTrue(request(self.app,data(2))['blocked'])
+
     def test_editor_roundtrip_and_timing_change_in_both_languages(self):
         for language in ('hu','en'):
             self.app.set_language(language)
@@ -66,6 +93,7 @@ class ChoiceInterfaceTests(unittest.TestCase):
             editor.steps.add_step.click();card=editor.steps.cards[-1]
             card.time_mode.setCurrentIndex(card.time_mode.findData('sessions'));card.choices.enabled.setChecked(True)
             self.assertTrue(card.kind.isHidden());self.assertTrue(card.session_limit.isHidden());self.assertTrue(card.consent.isHidden())
+            card.choices.remember_minutes.setValue(15)
             card.choices.question.setText('Miért?');card.choices.option_widgets[1][0].setText('Csak úgy')
             card.choices.allocation.setCurrentIndex(card.choices.allocation.findData('activity'))
             card.choices.option_widgets[1][2].setValue(2)
@@ -74,6 +102,7 @@ class ChoiceInterfaceTests(unittest.TestCase):
             self.assertEqual(self.store.settings().restriction_plans[key]['steps'][-1]['session_choice'],expected)
             editor.show_editor(key);card=editor.steps.cards[-1]
             self.assertEqual(card.choices.allocation.currentData(),'activity')
+            self.assertEqual(card.choices.remember_minutes.value(),15)
             card.choices.add.click();self.assertEqual(len(card.value['session_choice']['options']),3)
             card.choices.option_widgets[-1][3].click();self.assertEqual(card.value['session_choice'],expected)
             card.choices.enabled.setChecked(False);self.assertNotIn('session_choice',card.value)

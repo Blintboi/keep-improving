@@ -66,6 +66,9 @@ class Settings:
     hub_enabled: bool = False
     language: str = "en"
     check_updates: bool = True
+    pause_when_idle: bool = False
+    idle_timeout_seconds: int = 300
+    media_prevents_idle: bool = False
     overlay_enabled: bool = False
     overlay_replace_warning: bool = True
     limit_popup_enabled: bool = True
@@ -120,6 +123,9 @@ class Settings:
     budget_setup_completed: bool = True
 
     def validate(self):
+        if type(self.media_prevents_idle) is not bool:raise ValueError('Invalid request.')
+        if type(self.pause_when_idle) is not bool or type(self.idle_timeout_seconds) is not int or not 60 <= self.idle_timeout_seconds <= 86400 or self.idle_timeout_seconds % 60:
+            raise ValueError('Choose an idle timeout between 1 and 1440 minutes.')
         from .device_scopes import validate as validate_scope,validate_groups
         validate_groups(self.device_groups)
         if not isinstance(self.budget_devices,dict) or len(self.budget_devices)>2200:raise ValueError('Invalid budget computer selection.')

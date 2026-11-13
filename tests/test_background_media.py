@@ -24,6 +24,8 @@ class BackgroundMediaTests(TestCase):
     def setUp(self):
         temp=tempfile.TemporaryDirectory();self.addCleanup(temp.cleanup)
         self.store=Store(Path(temp.name)/'usage.sqlite3');self.addCleanup(self.store.close)
+        self.start=datetime.combine(date.today(),datetime.min.time()).replace(hour=12).astimezone()
+        with self.store.db:self.store.db.execute("UPDATE settings SET value=? WHERE key='sessions_since'",(str(self.start.timestamp()-86400),))
         self.settings=Settings(games_root=str(Path(temp.name)/'Games'))
         self.focus=Focus(self.store);self.catalog=Catalog(self.settings)
         self.engine=Wellbeing(self.store,self.catalog,self.focus)
@@ -32,9 +34,7 @@ class BackgroundMediaTests(TestCase):
         self.app=SimpleNamespace(store=self.store,focus=self.focus,wellbeing=self.engine,
             browser_bridge=self.bridge,browser_continuity=SimpleNamespace(browser_path=lambda browser:'C:/Apps/'+browser+'.exe'),update_focus_policy=Mock())
         self.media=BackgroundMedia(self.app,self.audio)
-        self.start=datetime.combine(date.today(),datetime.min.time()).replace(hour=12).astimezone()
         self.editor=r'C:\Apps\editor.exe';self.player=r'C:\Apps\player.exe';self.browser=r'C:\Apps\brave.exe'
-        with self.store.db:self.store.db.execute("UPDATE settings SET value=? WHERE key='sessions_since'",(str(self.start.timestamp()-86400),))
 
     def rules(self,**groups):
         rules=[dict(id=key,name=key,members=members,seconds=600,enabled=True,enforce=False,overlay=False) for key,members in groups.items()]

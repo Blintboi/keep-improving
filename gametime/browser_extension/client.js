@@ -377,11 +377,12 @@ export function field(
   );
   return el("label", { class: "field" }, t(text), input);
 }
-export function check(text, value, change) {
+export function check(text, value, change, options = {}) {
   return el(
     "label",
     { class: "check" },
     el("input", {
+      ...options,
       type: "checkbox",
       checked: !!value,
       onchange: (e) => change(e.target.checked),

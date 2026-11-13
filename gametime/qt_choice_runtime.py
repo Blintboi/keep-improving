@@ -152,6 +152,10 @@ class ChoiceRuntime:
             visit = self.visits.current.get((budget.key, step['id']))
             if not visit: continue
             if visit['choice'] is not None: continue
+            recalled=self.ledger.recalled(budget.key,step['id'],budget.day,visit['token'],step['session_choice'],self.runtime.state.now,activity)
+            if recalled is not None:
+                visit['choice']=recalled
+                continue
             self.pending = budget, step, visit, activity
             break
         if not self.pending:

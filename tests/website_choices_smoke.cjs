@@ -8,7 +8,7 @@ async function cdp(url){const socket=new WebSocket(url),pending=new Map();let id
   const api={close:()=>socket.close(),call(method,params={}){return new Promise((ok,no)=>{const n=++id,timer=setTimeout(()=>{pending.delete(n);no(Error(method+' timeout'));},10000);pending.set(n,{ok,no,timer});socket.send(JSON.stringify({id:n,method,params}));});},
     async evaluate(expression){const r=await api.call('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw Error(JSON.stringify(r.exceptionDetails));return r.result.value;}};return api;}
 (async()=>{
-  const [browserPath,pythonPath]=process.argv.slice(2),report=path.resolve('test-reports/member-selection/web');await fs.mkdir(report,{recursive:true});
+  const [browserPath,pythonPath,reportArg]=process.argv.slice(2),report=path.resolve(reportArg||'test-reports/member-selection/web');await fs.mkdir(report,{recursive:true});
   for(const name of ['stop-fixture','fixture.json'])await fs.rm(path.join(report,name),{force:true});
   const fixture=spawn(pythonPath,['tests/website_choices_fixture.py',report],{windowsHide:true,stdio:['ignore','ignore','inherit']});
   const pairing=await until(async()=>JSON.parse(await fs.readFile(path.join(report,'fixture.json'),'utf8')),'desktop');
@@ -35,6 +35,31 @@ async function cdp(url){const socket=new WebSocket(url),pending=new Map();let id
     async function buttons(){const {root}=await page.call('DOM.getDocument',{depth:-1,pierce:true});const found=[];function walk(n){if(n.nodeName==='BUTTON')found.push(n);for(const c of [...n.children||[],...n.shadowRoots||[]])walk(c);}walk(root);return found;}
     async function click(index){const list=await buttons(),node=list[index];assert.ok(node);const {object}=await page.call('DOM.resolveNode',{nodeId:node.nodeId});await page.call('Runtime.callFunctionOn',{objectId:object.objectId,functionDeclaration:'function(){this.click();}'});await until(async()=>!await visible(),'choice accepted');}
     const during=await page.evaluate("({w:innerWidth,h:innerHeight,scroll:scrollY})");assert.deepEqual(during,{w:before.w,h:before.h,scroll:before.scroll});
+    await page.evaluate("window.savedCover=document.querySelector('#keep-improving-opening-choice')");
+    const checkCovered=async()=>{
+      assert.ok(await page.evaluate("window.savedCover===document.querySelector('#keep-improving-opening-choice') && window.savedCover.isConnected"));
+      const {root}=await page.call('DOM.getDocument',{depth:-1,pierce:true});
+      function dialog(n){return n.nodeName==='DIALOG'?n:[...n.children||[],...n.shadowRoots||[]].map(dialog).find(Boolean);}
+      assert.ok(dialog(root)?.attributes.includes('open'));
+    };
+    // A separate extension window leaves the original page visible behind it.
+    const popupId=await worker.evaluate(`(async()=>{const w=await chrome.windows.create({url:chrome.runtime.getURL('popup.html'),type:'popup',width:420,height:560});return w.id;})()`);
+    await worker.evaluate('sync()');await until(()=>worker.evaluate('!busy && websiteChoices.pending===null'),'extension popup focus');
+    await checkCovered();
+    for(const language of ['hu','en'])for(const width of [1000,390]) {
+      await page.call('Emulation.setDeviceMetricsOverride',{width,height:700,deviceScaleFactor:1,mobile:false});
+      const tabId=await worker.evaluate("[...websiteChoices.showing.keys()][0]");
+      await worker.evaluate(`(async()=>{const t=await chrome.tabs.get(${tabId});const r=await websiteChoices.call((await chrome.storage.local.get('pairing')).pairing,'choices.status',{browser:'brave',domain:publicHost(t),visit:'${'a'.repeat(32)}'});await websiteChoices.send(t.id,{...r.choice,visit:'${'a'.repeat(32)}',language:'${language}'});})()`);
+      await checkCovered();
+      await fs.writeFile(path.join(report,`parked-${language}-${width}.png`),Buffer.from((await page.call('Page.captureScreenshot',{format:'png'})).data,'base64'));
+    }
+    await page.call('Emulation.clearDeviceMetricsOverride');
+    await worker.evaluate(`chrome.windows.remove(${popupId})`);
+    await connection.call('Target.activateTarget',{targetId:website.id});await worker.evaluate('sync()');await until(()=>worker.evaluate('!!websiteChoices.pending'),'returned visit');
+    const parked=await open('about:blank');await worker.evaluate('sync()');
+    await until(()=>worker.evaluate('!busy && websiteChoices.pending===null'),'unrelated tab');await checkCovered();
+    parked.client.close();await connection.call('Target.closeTarget',{targetId:parked.id});
+    await connection.call('Target.activateTarget',{targetId:website.id});await worker.evaluate('sync()');await until(()=>worker.evaluate('!!websiteChoices.pending'),'returned from unrelated tab');
     await click(1);
     assert.deepEqual(await page.evaluate("({url:location.href,w:innerWidth,h:innerHeight,scroll:scrollY,draft:document.querySelector('#draft').value})"),before);
     const other=await open('about:blank');
@@ -46,7 +71,7 @@ async function cdp(url){const socket=new WebSocket(url),pending=new Map();let id
     await fs.writeFile(path.join(report,'overlay-en.png'),Buffer.from((await page.call('Page.captureScreenshot',{format:'png'})).data,'base64'));
     await click(0);
     assert.deepEqual(await page.evaluate("({url:location.href,w:innerWidth,h:innerHeight,scroll:scrollY,draft:document.querySelector('#draft').value})"),before);
-    other.client.close();console.log(JSON.stringify({in_page_overlay:true,viewport_preserved:true,scroll_preserved:true,unsaved_form_preserved:true,no_navigation:true,two_allowed_visits:true,exhausted_disabled:true,unlimited_available:true,hu_en_screenshots:true}));
+    other.client.close();console.log(JSON.stringify({extension_window_retains_cover:true,unrelated_tab_retains_cover:true,same_dialog_until_release:true,in_page_overlay:true,viewport_preserved:true,scroll_preserved:true,unsaved_form_preserved:true,no_navigation:true,two_allowed_visits:true,exhausted_disabled:true,unlimited_available:true,hu_en_screenshots:true}));
   }catch(error){if(page){await fs.writeFile(path.join(report,'failure.png'),Buffer.from((await page.call('Page.captureScreenshot',{format:'png'})).data,'base64')).catch(()=>{});console.log(await worker?.evaluate('({policy,pending:websiteChoices.pending,visit:websiteChoices.visit})').catch(()=>null));}throw error;}
   finally{
     await fs.writeFile(path.join(report,'stop-fixture'),'stop');await until(async()=>fixture.exitCode!==null,'fixture shutdown',10000).catch(()=>fixture.kill());

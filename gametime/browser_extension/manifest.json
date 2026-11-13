@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Keep Improving",
-  "version": "2.48.1",
+  "version": "2.49.1",
   "description": "Local website activity, daily time and session limits and focus lists for Brave, Chrome and Edge.",
   "permissions": ["tabs", "storage", "alarms", "declarativeNetRequest", "webNavigation", "idle", "notifications", "scripting"],
   "host_permissions": ["http://*/*", "https://*/*"],

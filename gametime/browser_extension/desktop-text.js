@@ -1,5 +1,12 @@
 // Shared desktop wording for the browser surfaces.
 export const nativeHu = {
+    'Do not ask again for (minutes)': 'Ne kérdezze újra ennyi percig',
+    'Choose a repeat delay between 0 and 1440 minutes.': 'Az újrakérdezési idő 0 és 1440 perc között lehet.',
+    'After answering, return to the same activity without another question for this many minutes. Returning does not use another allowance or extend the delay. Zero asks on every return. Other restrictions still apply.': 'Válaszadás után ennyi percig újabb kérdés nélkül térhetsz vissza ugyanahhoz a tevékenységhez. A visszatérés nem fogyaszt újabb alkalmat, és nem hosszabbítja meg az időt. Nulla esetén minden visszatéréskor rákérdez. A többi korlátozás továbbra is érvényes.',
+    'Count media playback as activity': 'Médialejátszás számítson aktivitásnak',
+    'Pause time tracking when idle': 'Időmérés szüneteltetése tétlenségkor',
+    'Pause after (minutes)': 'Szüneteltetés ennyi perc után',
+    'Applies to games, applications, websites and enabled background playback on this computer. Audible media can count as activity; after playback stops, the idle timeout starts. Muted or paused playback does not count. Background playback measurement is configured separately for each activity. Browser mode detects playback in that browser. Focus timers and scheduled restrictions keep running.': 'Ezen a gépen a játékokra, alkalmazásokra, weboldalakra és a bekapcsolt háttérlejátszás-mérésre is érvényes. A hallható média aktivitásnak számíthat; a lejátszás leállása után kezdődik a tétlenségi idő. A némított és szüneteltetett lejátszás nem számít. A háttérlejátszás mérése tevékenységenként külön állítható. A böngészős mód az adott böngésző lejátszását érzékeli. A fókuszidőzítők és az időponthoz kötött korlátozások tovább működnek.',
     'Break now': 'Szünet most',
     'Starting…': 'Indítás…',
     'Break started.': 'A szünet elindult.',

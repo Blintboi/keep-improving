@@ -62,6 +62,24 @@ test('redirect keeps the return URL in session storage, not in the URL or deskto
   const result=await f.message('status');assert.equal(result.minutes,3);
 });
 
+test('parked covers survive restart and never submit background media before unlocking',async()=>{
+  const tabs=[[1,{id:1,url:'https://example.com/watch',active:false,windowId:1,audible:true}],
+    [2,{id:2,url:'https://other.com/',active:true,windowId:1}]];
+  const policy={active:false,tracking:true,restrictions:[],choice_rules:[{domains:['example.com']}],background_media_sites:['example.com']};
+  const f=await fixture({tabs,policy,session:{websiteChoiceShowing:[[1,'example.com']]}});
+  // The first exchange learns the media opt-in; the next tick applies it.
+  await vm.runInContext('sync()',f.context);
+  assert.deepEqual(f.state.fetches.filter(r=>r.url.endsWith('/activity')).at(-1).body.media,[]);
+  assert.equal(vm.runInContext('websiteChoices.showing.get(1)',f.context),'example.com');
+  // Filtering covered tabs must precede same-domain media deduplication.
+  f.tabs.set(3,{id:3,url:'https://example.com/accepted',active:false,windowId:1,audible:true});
+  await vm.runInContext('sync()',f.context);
+  assert.deepEqual(f.state.fetches.filter(r=>r.url.endsWith('/activity')).at(-1).body.media,[{domain:'example.com',redirect_budget:''}]);
+  await f.chrome.tabs.onRemoved.listeners[0](1,{});
+  assert.equal(vm.runInContext('websiteChoices.showing.has(1)',f.context),false);
+  assert.deepEqual(f.storage.websiteChoiceShowing,[]);
+});
+
 test('a restored cover reconnects by token after restart with a different tab ID',async()=>{
   const first=await fixture(); const url=first.tabs.get(1).url;
   const next=await fixture({local:first.local,tabs:[[91,{id:91,url,active:true,windowId:1,incognito:false}]]});

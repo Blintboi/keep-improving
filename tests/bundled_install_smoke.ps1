@@ -56,6 +56,7 @@ try {
     $report.extension_dashboard_and_popup_bundled = $extensionManifest.options_page -eq 'panel.html' -and $extensionManifest.action.default_popup -eq 'popup.html' -and (Test-Path -LiteralPath (Join-Path $extensionDir 'panel.js')) -and (Test-Path -LiteralPath (Join-Path $extensionDir 'popup.js'))
     $report.extension_icons_bundled = @($extensionManifest.icons.PSObject.Properties | Where-Object { -not (Test-Path -LiteralPath (Join-Path $extensionDir $_.Value)) }).Count -eq 0 -and @($extensionManifest.icons.PSObject.Properties).Count -eq 4
     $report.fresh_update_checks_enabled = $first.check_updates -eq $true
+    $report.fresh_idle_tracking_continues = $first.pause_when_idle -eq $false -and $first.idle_timeout_seconds -eq 300 -and $first.media_prevents_idle -eq $false
     $report.runtime_and_profile_verified = $process.ExitCode -eq 0 -and $first.data -eq $data -and $first.games_root -eq $games -and $first.hub_enabled -and $first.language -eq 'en'
     $report.fresh_overlay_is_opt_in = -not $first.overlay_enabled -and $first.overlay_replace_warning -and $first.limit_popup_enabled
     $report.fresh_rtss_is_opt_in = $first.overlay_rtss_auto -eq $false
@@ -131,6 +132,7 @@ notice=builtin(Settings(),'warning'); notice.update(trigger='startup',action={'k
 c.update(notification_overrides={'warning':notice})
 c.update(removed_notifications=['session'])
 c.update(game_limits={'test:hidden':1800})
+c.update(pause_when_idle=True,idle_timeout_seconds=420,media_prevents_idle=True)
 c.update(computer_periods=[{'id':'computer-fixture','name':'Fixture period','values':{'bedtime_enabled':False,'bedtime_warning_enabled':True,'bedtime_warning_minute':1315,'bedtime_minute':1320,'bedtime_resume_minute':360,'bedtime_minimize':True,'bedtime_caps_budget':True}}])
 c.update(budget_reset_overrides={'shared-games':420,'game:test:hidden':540})
 c.update(budget_active_days={'website-fixture':[0,2,4],'game:test:hidden':[5,6]},budget_usage_limits={'website-fixture':False})
@@ -141,6 +143,7 @@ c['restriction_plans']['unified-fixture']={'version':1,'extension_minutes':5,'cl
 c['restriction_plans']['unified-fixture']['steps'][0]['targets']={'app':{'mode':'restrict','extension_minutes':2},'site':{'mode':'redirect','redirect_url':'https://example.org/rest'}}
 c['restriction_plans']['legacy-fixture']={'version':1,'extension_minutes':0,'close_confirmed':False,'steps':[{'id':'old-limit-fixture','kind':'minimize','offset':1800,'sound':False,'popup':False,'time_mode':'usage'}]}
 c['restriction_plans']['website-fixture']['steps'].append({'id':'clock-fixture','kind':'cover','offset':0,'sound':False,'popup':False,'time_mode':'clock','clock_minute':1320})
+c['restriction_plans']['website-fixture']['steps'].append({'id':'choice-fixture','kind':'notify','offset':2,'sound':False,'popup':True,'time_mode':'sessions','session_choice':{'question':'Why?','allocation':'shared','remember_minutes':15,'options':[{'id':'work','label':'For work','limit':None},{'id':'casual','label':'Just checking','limit':2}]}})
 c['wellbeing_rules'].append({'id':'zero-fixture','name':'Blocked fixture','members':[{'kind':'site','value':'zero.example.com'}],'seconds':0,'enabled':True,'enforce':False,'overlay':False})
 c['wellbeing_rules'].append({'id':'local-fixture','name':'Local website fixture','members':[{'kind':'site','value':'127.0.0.1:8766'}],'seconds':1800,'enabled':False,'enforce':False,'overlay':False})
 c['game_overlays']['test:hidden']['overlay_rtss_auto']=True
@@ -312,6 +315,11 @@ d.close()
     $report.bedtime_preferences_preserved_on_upgrade = (Get-Content -LiteralPath $diag -Raw -Encoding UTF8 | ConvertFrom-Json).bedtime_minute -eq 30 -and (Get-Content -LiteralPath $diag -Raw -Encoding UTF8 | ConvertFrom-Json).bedtime_minimize
     $report.bedtime_budget_preference_preserved_on_upgrade = (Get-Content -LiteralPath $diag -Raw -Encoding UTF8 | ConvertFrom-Json).bedtime_caps_budget -eq $true
     $report.update_check_preference_preserved_on_upgrade = (Get-Content -LiteralPath $diag -Raw -Encoding UTF8 | ConvertFrom-Json).check_updates -eq $false
+    $idleDiag=Get-Content -LiteralPath $diag -Raw -Encoding UTF8 | ConvertFrom-Json
+    $report.idle_tracking_preference_preserved_on_upgrade = $idleDiag.pause_when_idle -eq $true -and $idleDiag.idle_timeout_seconds -eq 420 -and $idleDiag.media_prevents_idle -eq $true
+    $repeatDelay = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); print(c["restriction_plans"]["website-fixture"]["steps"][-1]["session_choice"]["remember_minutes"]==15)' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
+    $report.opening_repeat_delay_preserved_on_upgrade = $repeatDelay -eq 'True'
+
     $rtssConfig = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); print(c["overlay_rtss_auto"] is False and c["overlay_rtss_paths"]==[r"C:\Fixture\game.exe"])' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')
     $report.rtss_selection_preserved_on_upgrade = $rtssConfig -eq 'True'
     $rtssDetails = 'import json,sqlite3,sys; d=sqlite3.connect(sys.argv[1]); c=json.loads(d.execute("SELECT value FROM settings WHERE key=?",("config",)).fetchone()[0]); print(c["overlay_rtss_details"] is False)' | & $PythonPath -B - (Join-Path $data 'usage.sqlite3')

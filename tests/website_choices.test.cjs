@@ -13,8 +13,46 @@ function fixture(storage={}){
 test('same-domain tabs keep the visit; leaving and returning starts a new one',async()=>{
   const f=fixture();await f.sync();const first=f.gate.visit.token;
   f.state.tab={...f.state.tab,id:2,url:'https://example.com/other'};await f.sync();assert.equal(f.gate.visit.token,first);
-  assert.ok(f.state.sent.some(m=>m.id===1&&m.message.value===null));
+  assert.ok(!f.state.sent.some(m=>m.message.value===null));
+  assert.equal(f.gate.showing.size,2);
   f.state.tab=null;await f.sync();f.state.tab={id:2,url:'https://example.com/other'};await f.sync();assert.notEqual(f.gate.visit.token,first);
+});
+
+test('application, extension and unrelated tab switches keep every unanswered page covered',async()=>{
+  const f=fixture();await f.sync();const count=f.state.sent.length,token=f.gate.visit.token;
+  for(const tab of [null,{id:2,url:'chrome-extension://fixture/popup.html'},{id:3,url:'https://other.com/'},{id:4,url:'https://example.com/',incognito:true}]) {
+    f.state.tab=tab;await f.sync();assert.equal(f.gate.pending,null);
+    assert.equal(f.gate.showing.get(1),'example.com');assert.equal(f.state.sent.length,count);
+  }
+  f.state.tab={id:1,url:'https://example.com/page'};await f.sync();
+  assert.notEqual(f.gate.visit.token,token);assert.ok(f.gate.pending);
+});
+
+test('accepting a choice releases only its tab and keeps another unanswered page covered',async()=>{
+  const f=fixture();await f.sync();f.state.tab={id:2,url:'https://example.com/other'};await f.sync();
+  const p=f.gate.pending;f.gate.call=async()=>({accepted:true,choice:null});
+  const result=await f.gate.choose({visit:p.data.visit,budget:'budget',step:'step',choice:'answer'},
+    {id:'fixture',frameId:0,tab:f.state.tab,url:f.state.tab.url},{});
+  assert.equal(result.ok,true);assert.equal(f.gate.showing.has(2),false);assert.equal(f.gate.showing.has(1),true);
+  assert.deepEqual(f.state.sent.filter(m=>m.message.value===null).map(m=>m.id),[2]);
+});
+
+test('worker restart while unfocused retains covers without requesting a choice',async()=>{
+  const f=fixture();await f.sync();const again=fixture(f.storage);again.state.tab=null;await again.sync();
+  assert.equal(again.gate.showing.get(1),'example.com');assert.equal(again.state.sent.length,0);assert.equal(again.state.calls.length,0);
+});
+
+test('focus lost during a status request cannot uncover the waiting page',async()=>{
+  const f=fixture();await f.sync();f.gate.call=async()=>{f.state.tab=null;return {choice:null};};
+  await f.sync();assert.equal(f.gate.showing.has(1),true);assert.ok(!f.state.sent.some(m=>m.message.value===null));
+});
+
+test('removing a rule releases its parked covers but retains other applicable covers',async()=>{
+  const f=fixture();await f.sync();f.policy.choice_rules.push({domains:['other.com']});
+  f.state.tab={id:2,url:'https://other.com/'};await f.sync();f.state.tab=null;
+  f.policy.choice_rules.shift();await f.sync();
+  assert.deepEqual(f.state.sent.filter(m=>m.message.value===null).map(m=>m.id),[1]);assert.equal(f.gate.showing.get(2),'other.com');
+  await f.gate.hide(2);assert.equal(f.storage.websiteChoiceShowing.length,0);
 });
 test('worker restart retains visit and can dismiss its restored overlay',async()=>{
   const f=fixture();await f.sync();const again=fixture(f.storage);again.gate.call=async()=>({choice:null});await again.sync();

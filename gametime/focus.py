@@ -294,7 +294,8 @@ class Focus:
         self.continuity_running=self.running
         if persist: self.flush()
 
-    def tick(self, sample, website=''):
+    def tick(self, sample, website='',idle_timeout=0):
+        from .idle_tracking import allows_interval
         self.advance(sample.awake, sample.wall)
         previous = self.previous
         self.previous = (sample, website)
@@ -312,7 +313,7 @@ class Focus:
             delta = sample.awake - prev.awake
             wall = sample.wall.timestamp() - prev.wall.timestamp()
             if (0 < delta <= 3 and wall > 0 and abs(wall - delta) <= 1.5 and prev.interactive
-                    and sample.interactive and prev.path and prev.identity):
+                    and sample.interactive and prev.path and prev.identity and allows_interval(prev,sample,idle_timeout)):
                 key = app_key(prev.path)
                 if (not is_idle_app(key) and not self.settings.app_excluded(key)
                         and not (prev_site==BROWSER_IDLE and ntpath.basename(key) in BROWSERS)):

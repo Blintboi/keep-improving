@@ -9,6 +9,7 @@ from .schedule import day_settings
 from .budget import remaining_budget
 from .quota import period_day, period_slices, reset_clock, budget_day
 from .restriction_policy import legacy_warning_active
+from .idle_tracking import allows_interval,timeout
 
 
 @dataclass(frozen=True)
@@ -231,7 +232,8 @@ class Tracker:
             wall = sample.wall.timestamp() - prev.wall.timestamp()
             # Drop scheduler stalls, sleep/resume gaps, clock jumps, secure desktops.
             if (0 < delta <= 3 and abs(wall - delta) <= 1.5 and wall > 0
-                    and prev.interactive and sample.interactive and prev.path and not blocked(prev.path)):
+                    and prev.interactive and sample.interactive and prev.path and not blocked(prev.path)
+                    and allows_interval(prev,sample,timeout(self.catalog.settings))):
                 self._interval(prev.path, prev.wall, sample.wall, delta)
         self.replay(sample.wall)
         self.active = self.catalog.resolve(sample.path) if sample.interactive else None

@@ -57,6 +57,23 @@ api(u, "GetAsyncKeyState", [C.c_int], W.SHORT)
 api(s, "SHQueryUserNotificationState", [C.POINTER(C.c_int)], C.c_long)
 
 
+class LASTINPUTINFO(C.Structure):
+    _fields_ = [('cbSize',W.UINT),('dwTime',W.DWORD)]
+
+
+api(u,'GetLastInputInfo',[C.POINTER(LASTINPUTINFO)],W.BOOL)
+api(k,'GetTickCount',[],W.DWORD)
+
+
+def idle_seconds():
+    info=LASTINPUTINFO();info.cbSize=C.sizeof(info)
+    if not u.GetLastInputInfo(C.byref(info)):return 0
+    elapsed=(k.GetTickCount()-info.dwTime)&0xffffffff
+    # Input timestamps can be out of order; a future timestamp is not days of
+    # inactivity. Unsigned subtraction also handles the normal 49-day rollover.
+    return elapsed/1000 if elapsed<=0x7fffffff else 0
+
+
 def desktop_overlay_available():
     """Conservative fallback: a topmost HWND is not proof of fullscreen visibility."""
     state = C.c_int()
@@ -251,7 +268,7 @@ def sample():
     if window:
         u.GetWindowThreadProcessId(window, C.byref(pid))
     path, identity = process_image(pid.value) if pid.value else ("", "")
-    return Sample(datetime.now().astimezone(), awake_seconds(), path, identity, active)
+    return Sample(datetime.now().astimezone(), awake_seconds(), path, identity, active,idle_seconds())
 
 
 class Instance:

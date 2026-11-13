@@ -31,7 +31,7 @@ class CancelNavigationTests(unittest.TestCase):
             self.assertTrue(app.statistics.computer_panel.isVisible())
             self.assertTrue(any(w.isVisible() and w.text()==app.t('Link computers') for w in app.statistics.findChildren(QPushButton)))
             app.statistics.computers_button.click()
-            app.nav[2].click(); self.assertTrue(app.global_day_start.isVisible())
+            app.nav[2].click(); self.pump(.02); self.assertTrue(app.global_day_start.isVisible())
             self.assertTrue(app.activity_tracking.isVisible())
             self.assertFalse(any(w.text()==app.t('Link computers') for w in app.settings_page.findChildren(QPushButton)))
             app.show_settings_section('reminders'); self.assertTrue(app.display_settings.isVisible())

@@ -1,12 +1,10 @@
-# Keep Improving — 2.48.1
+# Keep Improving — 2.49.1
 
-**[Letöltés Windows x64-re — 2.48.1](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256](downloads/GameTimeMonitor-Setup.exe.sha256) · [English](README.md)
+**[Letöltés Windows x64-re — 2.49.1](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256](downloads/GameTimeMonitor-Setup.exe.sha256) · [English](README.md)
 
 **[Android telepítő — 0.6.0 (.apk)](https://github.com/Blintboi/keep-improving/raw/refs/heads/main/downloads/KeepImproving-Android.apk)** · [SHA-256](downloads/KeepImproving-Android.apk.sha256) · [Telefonos útmutató](android/README.hu.md)
 
 Lásd, mire megy el az időd, döntsd el, milyen gyakran térsz vissza, és iktass be szüneteket. A Keep Improving az előtérbeli használatot méri, időkereteket, napi munkamenetkorlátokat, emlékeztetőket és fókuszidőzítőt kínál. Ingyenes, nyílt forráskódú, magyar és angol felülettel.
-
-A mentés azonnal visszajelez, majd jelzi a sikert vagy a hibát. A keretek, értesítések és beállítások szerkesztésekor a **Ctrl+S** is ment. Új művelethez közvetlenül választhatsz **Figyelmeztetést**, **Szünetet** vagy **Korlátozást**. A hosszabb magyarázatokat az adott beállítás melletti **Súgóban** találod.
 
 ![Áttekintés időadatokkal, mért munkamenetekkel és napi tevékenységdiagrammal](docs/images/statistics-hu.png)
 *A képek az aktuális Windows-alkalmazásból, külön bemutatóprofillal készültek. Minden időadat, keret és választás példa; személyes előzmény és kapcsolódási kód nem szerepel rajtuk.*
@@ -15,14 +13,14 @@ A mentés azonnal visszajelez, majd jelzi a sikert vagy a hibát. A keretek, ér
 
 1. Telepítsd **Windows 11 x64** rendszerre. Normál telepítéshez nem kell Python vagy rendszergazdai jogosultság. A frissítés megőrzi a profilodat.
 2. A **Tevékenységek** alatt nézd át a játékokat, alkalmazásokat és weboldalakat. Hiányzó játékot a futtatható fájljával adhatsz hozzá.
-3. A **Keretek → Új hozzáadása** alatt válaszd ki a tagokat, az érvényes napokat és a kívánt korlátokat vagy emlékeztetőket. Keresés közben is látható marad, mit jelöltél már ki.
+3. A **Keretek → Új hozzáadása** alatt válaszd ki a tagokat, az érvényes napokat és a kívánt korlátokat vagy emlékeztetőket.
 4. Weboldalakhoz [csatlakoztasd a böngészőbővítményt](#böngészőbővítmény). Android 8.0 vagy újabb telefonra telepítsd az APK-t a [telefonos útmutató](android/README.hu.md) szerint.
 
 Az ablak bezárásakor a Windows-program a tálcán fut tovább. A **Kilépés a figyelőből** leállítja. Új profilban nincs kötelező keret. A Windows-telepítő nincs digitálisan aláírva; lásd a [Windows bizalmi útmutatóját](docs/WINDOWS-TRUST.hu.md).
 
 ## Értsd meg a használatodat
 
-Az **Áttekintés** diagramján idő vagy **munkamenetszám** is megjeleníthető. A **Mit szeretnél látni?** listában válaszd ki a tevékenységtípust és a mértéket, majd szűrj időszakra és eszközre. A tevékenységlista kereshető, idő és munkamenetszám szerint rendezhető; az azonos nevek összevonhatók. A szűrők megmaradnak.
+Az **Áttekintés** diagramján idő vagy **munkamenetszám** is megjeleníthető. A **Mit szeretnél látni?** listában válaszd ki a tevékenységtípust és a mértéket, majd szűrj időszakra és eszközre. A tevékenységlista kereshető, idő és munkamenetszám szerint rendezhető; az azonos nevek összevonhatók.
 
 Egy munkamenet összefüggő, mért előtérbeli használat, a kezdőnapján számolva. Az alkalmazás azt a darabszámot mutatja, amit mérni tudott; régebbi előzményekhez nem talál ki alkalmakat. Az előtérbeli időbe az olvasás és a játékmenü is beleszámít. A **Tevékenységek → Alkalmazások / Weboldalak** alatt válassz egy tevékenységet, és kapcsold be a **Háttérbeli lejátszás mérését**, ha az asztali alkalmazás futása alatt a hallható lejátszását is mérni szeretnéd ezen a gépen. A némított és szüneteltetett lejátszás háttérben nem számít. A kapcsoló alapból kikapcsolt, és nem ad hozzá munkameneteket. Az idő fogyasztja a kapcsolódó kereteket; egy közös keretben minden másodperc csak egyszer számít. Párhuzamos tevékenységeknél az áttekintés összesített ideje meghaladhatja az eltelt időt. A weboldalidő a hozzá tartozó böngészőidő helyére kerül.
 

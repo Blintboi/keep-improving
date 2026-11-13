@@ -48,12 +48,26 @@ Documentation-only changes do not require a new application version or installer
 
 # Resource usage
 
+After every computer-use check, release all screen-capture sessions started for
+the task so the Windows yellow capture border does not remain visible. The user
+explicitly requires this cleanup every time. Prefer test-window renders or
+read-only checks that do not start desktop capture. Stop capture itself rather
+than disabling the operating system's capture indicator, and do not start a new
+capture merely to verify that the border disappeared.
+
 Keep CPU, memory, disk and network usage low, especially while the Hub is hidden
 or minimized during gameplay. Prefer event-driven work and cached results;
 poll fast only while work is pending or a visible countdown requires it. Preserve
 foreground time accounting, warning/restriction responsiveness, synchronization
 and upgrade durability when optimizing. Avoid repeatedly rebuilding unchanged
 widgets or reading the catalog for a hidden window.
+
+# Documentation
+
+Keep both READMEs focused on the product and essential setup. Do not use them as
+changelogs or describe ordinary interface conventions such as save feedback,
+remembered filters or routine button behavior. Put development changes and
+verification evidence in TESTING.md.
 
 # Interface consistency
 

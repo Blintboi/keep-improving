@@ -18,7 +18,7 @@ GENERAL={'games_root','steam_roots','epic_manifest_dirs','ubisoft_roots','hub_en
          'check_updates','budget_reset_minute','overlay_enabled','overlay_replace_warning','limit_popup_enabled',
          'overlay_opacity','overlay_font_size','overlay_color_normal','overlay_color_warning','overlay_x','overlay_y',
          'overlay_screen','overlay_rtss_auto','overlay_rtss_details','notification_sound','notification_sound_path',
-         'statistics_device_name'}
+         'statistics_device_name','pause_when_idle','idle_timeout_seconds','media_prevents_idle'}
 APPEARANCE={'overlay_enabled','overlay_x','overlay_y','overlay_font_size','overlay_screen','overlay_color_normal','overlay_color_warning','overlay_opacity','overlay_rtss_auto'}
 
 

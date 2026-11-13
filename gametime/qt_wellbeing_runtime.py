@@ -63,7 +63,7 @@ class WellbeingActions:
             member=foreground_target(self.settings,self.wellbeing.current[1])
             if not any(activity_settings(self.settings,member,state.rule).overlay_enabled for state in active):
                 self.overlay_timer.stop(); self.hide_countdown(); return
-            current=win32.sample()
+            current=self.background_media.tracking_sample(win32.sample())
             website=self.browser_bridge.website(current.path) if self.browser_bridge else ''
             current_atom=self.wellbeing.atom(current,website)
             if not current_atom: self.hide_countdown(); self.overlay_timer.stop(); return
@@ -79,6 +79,8 @@ class WellbeingActions:
             if current.identity!=sample.identity or self.wellbeing.atom(current,website)!=atom:
                 self.hide_countdown(); return
             elapsed=current.awake-sample.awake
+            from .idle_tracking import allows_interval,timeout
+            if not allows_interval(sample,current,timeout(self.settings)):elapsed=0
             if 0<elapsed<=1.5 and budget_day(self.settings,state.rule['id'],current.wall)==budget_day(self.settings,state.rule['id'],sample.wall) and abs((current.wall-sample.wall).total_seconds()-elapsed)<1.5:
                 usage=max(0,state.rule['seconds']-state.used-elapsed) if state.usage_limit else math.inf
                 remaining=min(usage,state.clock_remaining)

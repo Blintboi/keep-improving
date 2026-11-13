@@ -21,15 +21,20 @@ class WebsiteChoices {
       return chrome.tabs.sendMessage(tabId,message,{frameId:0});
     }
   }
-  async hideAll(except=null) {
-    let changed=false;
-    for(const tabId of this.showing.keys()) if(tabId!==except) {
-      await this.send(tabId,null).catch(()=>{});this.showing.delete(tabId);changed=true;
-    }
-    if(changed)await chrome.storage.session.set({websiteChoiceShowing:[...this.showing]});
+  rule(host,policy) {
+    return host && (policy.choice_rules || []).find(r=>r.all || r.domains.some(h=>host===h || host.endsWith('.'+h)));
+  }
+  async hide(tabId) {
+    if(!this.showing.has(tabId))return;
+    await this.send(tabId,null).catch(()=>{});this.showing.delete(tabId);
+    await chrome.storage.session.set({websiteChoiceShowing:[...this.showing]});
   }
   async sync(tab,host,policy,pairing,browser) {
     await this.load();
+    // A parked document stays covered when another tab, extension popup or
+    // application takes focus. Only a removed rule or this tab's own release
+    // may dismiss its question; foreground visit accounting stays separate.
+    for(const [tabId,coveredHost] of this.showing) if(!this.rule(coveredHost,policy))await this.hide(tabId);
     // Like desktop site sessions, tabs on the same domain share the current
     // uninterrupted visit; a different domain or application ends it.
     const key=tab && host && !tab.incognito ? `${browser}:${host}` : '';
@@ -37,10 +42,10 @@ class WebsiteChoices {
       this.visit=key?{key,token:crypto.randomUUID().replaceAll('-','')}:null;
       await chrome.storage.session.set({websiteChoiceVisit:this.visit});
     }
-    const relevant=key && (policy.choice_rules || []).find(r=>r.all || r.domains.some(h=>host===h || host.endsWith('.'+h)));
+    const relevant=key && this.rule(host,policy);
     const regular=host && siteDecision(host,policy,blockedTabs[tab?.id]?.token || '').kind;
     this.pending=null;
-    if(!relevant || regular) {await this.hideAll();return;}
+    if(!relevant || regular) {if(tab)await this.hide(tab.id);return;}
     const data={browser,domain:host,visit:this.visit.token};
     let result;
     // Choice/control failures do not mean the entire restriction connection
@@ -49,11 +54,10 @@ class WebsiteChoices {
     try {if(!relevant.requires_desktop) result=await this.call(pairing,'choices.status',data);}
     catch { /* Retry on the next normal choice tick. */ }
     const current=await activeTab();
-    if(!current || current.id!==tab.id || publicHost(current)!==host) {await this.hideAll();return;}
-    if(result && !result.choice) {await this.hideAll();return;}
+    if(!current || current.id!==tab.id || publicHost(current)!==host) return;
+    if(result && !result.choice) {await this.hide(tab.id);return;}
     const value={...(result?.choice || {offline:true,name:relevant.name || '',options:[]}),visit:this.visit.token,language:policy.language || 'en'};
     this.pending={tabId:tab.id,host,data,value};
-    await this.hideAll(tab.id);
     // A content script caches unchanged renders; this also heals a full page navigation.
     // A closing/navigating tab or a protected document may reject injection.
     // That is local to this tab; it must never trigger global offline blocking.
@@ -73,7 +77,7 @@ class WebsiteChoices {
       if(result.choice) {
         const value={...result.choice,visit:pending.data.visit,language:pending.value.language};
         this.pending={...pending,value};await this.send(pending.tabId,value);
-      } else {this.pending=null;await this.hideAll();}
+      } else {this.pending=null;await this.hide(pending.tabId);}
     }
     return {ok:true};
   }

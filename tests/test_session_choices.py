@@ -116,3 +116,23 @@ class ChoiceTests(unittest.TestCase):
         self.ledger=ChoiceLedger(self.store)
         self.assertEqual(self.ledger.counts('web','why','2026-11-11'),{self.casual:1})
         self.assertTrue(self.choose('new'));self.assertFalse(self.choose('exhausted'))
+
+    def test_repeat_delay_is_scoped_durable_and_does_not_spend_or_extend(self):
+        self.value['remember_minutes']=5
+        self.ledger.choose('web','why','2026-11-11','first',self.value,self.casual,1000,'site:a.test')
+        def recall(at,visit='return',activity='site:a.test',day='2026-11-11'):
+            return self.ledger.recalled('web','why',day,visit,self.value,at,activity)
+        self.assertEqual(recall(1100),self.casual)
+        self.assertIsNone(recall(1100,activity='site:b.test'))
+        self.assertIsNone(recall(1100,day='2026-11-12'))
+        self.assertIsNone(recall(999,visit='clock-backwards'))
+        self.assertEqual(recall(1400),self.casual) # Already accepted visit stays open.
+        self.assertIsNone(recall(1300,visit='later')) # Returning did not extend the window.
+        self.assertEqual(self.ledger.counts('web','why','2026-11-11'),{self.casual:1})
+        self.ledger=ChoiceLedger(self.store)
+        self.assertEqual(recall(1200,visit='restarted'),self.casual)
+        self.value['remember_minutes']=0;self.assertIsNone(recall(1201,visit='restarted'))
+        for amount in (-1,True,1.5,1441):
+            self.value['remember_minutes']=amount
+            with self.assertRaises(ValueError):validate(self.value)
+        self.value.pop('remember_minutes');validate(self.value) # Existing profiles keep asking.

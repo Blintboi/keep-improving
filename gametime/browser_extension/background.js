@@ -156,6 +156,7 @@ async function sync() {
   clearTimeout(timer);
   try {
     await restored;
+    await websiteChoices.load();
     await recoverTabs();
     const {pairing, browser = 'brave'} = await chrome.storage.local.get(['pairing', 'browser']);
     await continuity.load(pairing,browser);
@@ -163,6 +164,7 @@ async function sync() {
       mediaPlaying=false;
       await setPolicy({active: false, tracking: true, allow: [], block: [], mode: 'blocklist'});
       await restoreReleasedTabs();
+      await websiteChoices.sync(null,'',policy,pairing,browser);
       return;
     }
     const tab = await activeTab();
@@ -171,12 +173,11 @@ async function sync() {
     const redirectBudget=isRedirectLanding(landing,tab?.url) ? siteDecision(landing.host,policy,landing.token).redirect_key : '';
     // A full journal must still be able to reconnect and drain its durable
     // records. sample rolls back unsaved mutations before this recovery path.
-    const choosing=websiteChoices.pending?.tabId===tab?.id && websiteChoices.pending?.host===host;
+    const choosing=websiteChoices.showing.get(tab?.id)===host;
     try {await continuity.sample(tab,choosing?'':host,redirectBudget || '');}
     catch {continuity.error='Browser storage is full. Reconnect the desktop application.';}
     const audibleTabs=policy.tracking && policy.background_media_sites?.length ? await chrome.tabs.query({audible:true}) : [];
-    const media=BackgroundMediaTabs.select(audibleTabs,policy.background_media_sites)
-      .filter(item=>websiteChoices.pending?.tabId!==item.tabId)
+    const media=BackgroundMediaTabs.select(audibleTabs.filter(tab=>websiteChoices.showing.get(tab.id)!==publicHost(tab)),policy.background_media_sites)
       .map(item=>{
         const record=blockedTabs[item.tabId],tab=audibleTabs.find(tab=>tab.id===item.tabId);
         const redirect=isRedirectLanding(record,tab?.url) ? siteDecision(record.host,policy,record.token).redirect_key : '';
@@ -225,6 +226,7 @@ chrome.tabs.onActivated.addListener(sync);
 chrome.tabs.onUpdated.addListener((id, change, tab) => { if (tab.active && (change.url || change.status === 'complete') || policy.background_media_sites?.length && ('audible' in change || 'mutedInfo' in change)) sync(); });
 chrome.tabs.onRemoved.addListener(async (id,info) => {
   await restored;
+  await websiteChoices.load();await websiteChoices.hide(id);
   const record=blockedTabs[id]; delete blockedTabs[id];
   if (record && !info?.isWindowClosing && !Object.values(blockedTabs).some(other=>other.token===record.token)) delete returnPages[record.token];
   await saveBlocked(); sync();

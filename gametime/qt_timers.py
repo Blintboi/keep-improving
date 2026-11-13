@@ -10,6 +10,7 @@ from .quota import budget_day
 from .activities import activity_settings,foreground_target
 from .budget import quota_plan,remaining_budget
 from .restriction_policy import legacy_warning_active,legacy_restriction_active,step
+from .idle_tracking import allows_interval,timeout
 
 
 class TimerActions:
@@ -57,7 +58,7 @@ class TimerActions:
                 previous=self.tracker.previous if budget.key=='shared-games' or budget.key.startswith('game:') else self.wellbeing.current[0] if self.wellbeing.current else None
                 if previous and current.identity==previous.identity and budget_day(self.settings,budget.key,previous.wall)==budget_day(self.settings,budget.key,wall):
                     delta=current.awake-previous.awake
-                    if 0<delta<=1.5 and abs((wall-previous.wall).total_seconds()-delta)<1.5: elapsed=delta
+                    if 0<delta<=1.5 and abs((wall-previous.wall).total_seconds()-delta)<1.5 and allows_interval(previous,current,timeout(self.settings)): elapsed=delta
                 event=project(budget,plan,row,event_now,subject,elapsed,current.identity)
                 if event: result.append(replace(event,active=True)); present.add(event.scope)
             if overlays: continue

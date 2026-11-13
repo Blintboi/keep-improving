@@ -19,13 +19,18 @@ class ChoiceFields(QWidget):
         self.allocation = NoWheelComboBox(); self.allocation.setAccessibleName(t('Session allowance'))
         self.allocation.addItem(t('Shared allowance'),'shared');self.allocation.addItem(t('Separate allowance per member'),'activity')
         self.body_box.addWidget(self.allocation)
+        self.body_box.addWidget(label(t('Do not ask again for (minutes)'), 'muted'))
+        self.remember_minutes=NoWheelDoubleSpinBox();self.remember_minutes.setDecimals(0);self.remember_minutes.setRange(0,1440)
+        self.remember_minutes.setAccessibleName(t('Do not ask again for (minutes)'));self.remember_minutes.setKeyboardTracking(False)
+        self.body_box.addWidget(self.remember_minutes)
         self.body_box.addWidget(label(t('Question'), 'muted'))
         self.question = QLineEdit(); self.question.setMaxLength(180); self.question.setAccessibleName(t('Opening question'))
         self.body_box.addWidget(self.question)
         self.rows = QWidget(); self.rows_box = QVBoxLayout(self.rows); self.rows_box.setContentsMargins(0, 0, 0, 0)
         self.body_box.addWidget(self.rows)
         self.add = button(t('Add choice'), self.add_choice, 'quiet'); self.body_box.addWidget(self.add)
-        scope = help_text(t('Shared: all members use the same count for each answer. Separate: each application or website gets the full count for each answer.')+'\n\n'+
+        scope = help_text(t('After answering, return to the same activity without another question for this many minutes. Returning does not use another allowance or extend the delay. Zero asks on every return. Other restrictions still apply.')+'\n\n'+
+            t('Shared: all members use the same count for each answer. Separate: each application or website gets the full count for each answer.')+'\n\n'+
             t('Each choice has its own allowance. Exhausted choices stay visible but cannot be selected. Other budget rules still apply.')+'\n\n'+
             t('Choice allowances are counted on this computer and reset with this budget. Keep the desktop application running to show choices over applications and websites.'))
         scope.setWordWrap(True); self.body_box.addWidget(scope); box.addWidget(self.body)
@@ -33,9 +38,14 @@ class ChoiceFields(QWidget):
         self.enabled.toggled.connect(self.toggle)
         self.question.textChanged.connect(self.question_changed)
         self.allocation.currentIndexChanged.connect(self.allocation_changed)
+        self.remember_minutes.valueChanged.connect(self.remember_changed)
         self.option_widgets = []; self.rebuild()
 
     def changed(self): self.card.owner.changed()
+
+    def remember_changed(self,value):
+        if self.card.value.get('session_choice'):
+            self.card.value['session_choice']['remember_minutes']=int(value);self.changed()
 
     def allocation_changed(self):
         if self.card.value.get('session_choice'):
@@ -63,6 +73,7 @@ class ChoiceFields(QWidget):
         self.body.setVisible(bool(value))
         if not value: return
         t = self.card.owner.app.t
+        blocked=self.remember_minutes.blockSignals(True);self.remember_minutes.setValue(value.get('remember_minutes',0));self.remember_minutes.blockSignals(blocked)
         blocked=self.allocation.blockSignals(True);self.allocation.setCurrentIndex(self.allocation.findData(value.get('allocation','shared')));self.allocation.blockSignals(blocked)
         blocked = self.question.blockSignals(True); self.question.setText(value['question']); self.question.blockSignals(blocked)
         for index, option in enumerate(value['options']):

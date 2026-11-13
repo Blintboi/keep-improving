@@ -499,6 +499,8 @@ class MonitorActions:
                 self.show()
             self.drain_discovery()
             current = win32.sample()
+            media=getattr(self,'background_media',None)
+            if media:current=media.tracking_sample(current)
             focus_tick = getattr(self, 'focus_tick', None)
             if focus_tick: focus_tick(current)
             was_playing = self.tracker.active is not None

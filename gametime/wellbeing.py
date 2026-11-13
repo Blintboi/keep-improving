@@ -231,6 +231,7 @@ class Wellbeing:
         return (game.id if game else '',app,website if filename in BROWSERS and self.focus.settings.tracking else '')
 
     def tick(self,sample,website='',redirect_budget=''):
+        from .idle_tracking import allows_interval,timeout
         if self.day_start_minute!=self.catalog.settings.budget_reset_minute: self.configure(sample.wall)
         atom=self.atom(sample,website); previous=self.previous
         tagged=atom
@@ -240,7 +241,7 @@ class Wellbeing:
         if previous:
             prev,old=previous; delta=sample.awake-prev.awake; wall=sample.wall.timestamp()-prev.wall.timestamp()
             if 0<delta<=3 and wall>0 and abs(wall-delta)<=1.5: self.coverage.record(prev.wall.timestamp(),sample.wall.timestamp())
-            if old and self.atom(prev,old[2].split('\0',1)[0]) and sample.interactive and 0<delta<=3 and wall>0 and abs(wall-delta)<=1.5:
+            if old and self.atom(prev,old[2].split('\0',1)[0]) and sample.interactive and 0<delta<=3 and wall>0 and abs(wall-delta)<=1.5 and allows_interval(prev,sample,timeout(self.catalog.settings)):
                 self.configure(prev.wall)
                 overrides=self.catalog.settings.budget_reset_overrides
                 item=json.dumps(old,ensure_ascii=False)

@@ -1,12 +1,10 @@
-# Keep Improving — 2.48.1
+# Keep Improving — 2.49.1
 
-**[Download for Windows x64 — 2.48.1](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256](downloads/GameTimeMonitor-Setup.exe.sha256) · [Magyar](README.hu.md)
+**[Download for Windows x64 — 2.49.1](https://github.com/Blintboi/windows-game-time-monitor/raw/refs/heads/main/downloads/GameTimeMonitor-Setup.exe)** · [SHA-256](downloads/GameTimeMonitor-Setup.exe.sha256) · [Magyar](README.hu.md)
 
 **[Download for Android — 0.6.0 (.apk)](https://github.com/Blintboi/keep-improving/raw/refs/heads/main/downloads/KeepImproving-Android.apk)** · [SHA-256](downloads/KeepImproving-Android.apk.sha256) · [Phone setup](android/README.md)
 
 See where your time goes, choose how often you return, and make room for breaks. Keep Improving measures foreground activity and offers time budgets, daily session limits, reminders and focus timers. It is free and open source, with English and Hungarian interfaces.
-
-Save buttons acknowledge work immediately and report success or failure. Use **Ctrl+S** in budget, notification and settings editors. Choose **Warning**, **Break** or **Restriction** directly when adding an action. Longer explanations are under **Help** next to the relevant controls.
 
 ![Overview with time, measured sessions and a daily activity chart](docs/images/statistics-en.png)
 *Screenshots show the current Windows application with an isolated demonstration profile. All usage, budgets and choices are examples; no personal history or connection codes are shown.*
@@ -15,14 +13,14 @@ Save buttons acknowledge work immediately and report success or failure. Use **C
 
 1. Install on **Windows 11 x64**. Python and administrator rights are not required for a normal installation. Upgrades preserve your profile.
 2. Review your games, applications and websites under **Activities**. Add missing games by choosing their executable.
-3. Open **Budgets → Add new**, select the members, choose active days and add the limits or reminders you want. The picker keeps your current selection visible while you search.
+3. Open **Budgets → Add new**, select the members, choose active days and add the limits or reminders you want.
 4. For websites, [pair the browser extension](#browser-extension). On Android 8.0 or newer, install the APK and follow the [phone guide](android/README.md).
 
 Closing the Windows window leaves the monitor running in the tray. **Exit monitor** stops it. New profiles have no compulsory budget. The Windows installer is unsigned; see the [Windows trust guide](docs/WINDOWS-TRUST.hu.md).
 
 ## Understand your usage
 
-**Overview** can show either time or **session counts** in its chart. Choose the activity type and measure in **Show activity**, then filter by period and device. The activity list can be searched, sorted by time or sessions, and combined by matching names. Filters are remembered.
+**Overview** can show either time or **session counts** in its chart. Choose the activity type and measure in **Show activity**, then filter by period and device. The activity list can be searched, sorted by time or sessions, and combined by matching names.
 
 A session is a continuous measured foreground visit, counted on its starting day. The app shows the number it could measure; it does not invent counts for older history. Foreground use includes reading and game menus. Under **Activities → Applications / Websites**, select an activity and enable **Count background playback** to also measure its audible playback on this computer while the desktop app runs. Paused or muted playback does not count in the background. The option is off by default and does not add sessions. Matching budgets include the time; a shared budget counts each second once. The overview can show parallel activity time, so its total may exceed elapsed time. Website time replaces the corresponding browser time.
 

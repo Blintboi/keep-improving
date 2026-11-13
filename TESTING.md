@@ -1,5 +1,71 @@
 # Testing
 
+## 2.49.1 — media activity and opening-question repeat delay
+
+- The local idle policy can optionally treat audible media as activity, using
+  the existing cached Windows audio sampler. Paused and muted audio remains
+  inactive; stopping playback starts the configured idle timeout. Sleep expires
+  that timeout, and resuming never fills an idle gap. Per-activity background
+  measurement opt-ins and foreground lock checks remain independent.
+- Native and browser Settings expose the switch; browser fallback honors
+  audible unmuted tabs and retains its last media observation across worker
+  restarts. The option defaults off and stays local to the computer.
+- Opening questions have a 0–1440 minute repeat delay, defaulting to zero.
+  Accepted answers allow returns to the same configured activity during that
+  window without another charge or extending the deadline. Other activities,
+  daily renewals, overlapping restrictions and depleted-answer checks remain
+  independent. Existing accepted-answer history supplies the window after a
+  restart; an uninterrupted accepted visit is not interrupted at expiry.
+- 243 Python tests across 19 isolated modules and 98 JavaScript tests passed.
+  Native window renders and a real headless extension verify HU/EN at 1000 and
+  1280 pixels, save/reload, disabled controls, repeat-delay persistence and
+  independent questions for another site. The real website-cover regression
+  also passes, preserving the parked dialog, scroll and unsaved form data.
+- The extracted installer passed 105 checks, including fresh installation and
+  upgrade preservation of both preferences. The actual local 2.49.1 installation
+  was backed up, updated and opened; all 23 profile/payload checks also passed
+  after startup. Local build, installer and preservation evidence:
+  `test-reports/media-choice-2491/`. No desktop capture was used for these visual
+  checks. The verified installer, stable checksum and generated update manifest
+  are delivered together with the matching source and README versions.
+
+## 2.49.0 — global input-idle tracking preference (local preview)
+
+- Settings → General has a local pause-on-idle switch and a 1–1440 minute
+  timeout. Existing profiles keep continuous measurement by default; the
+  inactive timeout starts at five minutes. Native and browser forms share
+  validation, cancellation, durable saves and in-place Help in HU/EN.
+- Windows samples the current session's last input without hooks or another
+  timer. The policy applies to game, application, website and opted-in media
+  usage; returning input never backfills idle time. Restrictions keep their
+  targets, while focus timers and scheduled actions continue normally.
+- Browser fallback snapshots carry the same timeout. Native coverage includes
+  skipped intervals so replay cannot count them again. Idle settings remain
+  local to the computer and do not change account credentials or shared rules.
+- Eight idle-specific Python tests and 97 browser unit tests passed. Disposable
+  native and real browser fixtures cover saving, retry/cancel, reload, disabling
+  while retaining the timeout, and HU/EN layouts at 1280 and 1000 pixels wide.
+  Related regressions run in separate processes to isolate Windows COM state.
+- Build, installer and profile-preservation evidence:
+  `test-reports/idle-tracking-2490/`. Publication has not been requested.
+
+## 2.48.2 — persistent opening-choice covers (local preview)
+
+- Unanswered website dialogs remain over their own page when another tab,
+  extension window or application takes focus. Accepting a choice releases only
+  that tab; removed rules and closed tabs clean up their saved cover state.
+  Foreground visits still end normally, without spending an allowance on blur.
+- Covered pages are excluded from background-media observations, including
+  after a worker restart. An accepted audible tab on the same domain can still
+  count. The change adds no polling or background-page redraws.
+- 96 browser unit tests and 19 session-choice Python tests passed. The real
+  extension smoke test uses disposable profiles and a separate extension window,
+  verifies that the same open dialog remains attached, preserves unsaved text
+  and scroll position, and captures HU/EN at 1000 and 390 pixels wide.
+- Build, installer and local profile-preservation evidence is kept under
+  `test-reports/choice-cover-2482/`. Public downloads remain on 2.48.1 until
+  publication is requested.
+
 ## 2.48.1 — public delivery with direct extension break control
 
 - Popup break actions use saved eligible rules, independently of foreground

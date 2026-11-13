@@ -4,14 +4,16 @@ import uuid
 
 
 def defaults(t=lambda text: text):
-    return {'question': str(t('Why are you opening this?')), 'allocation': 'shared', 'options': [
+    return {'question': str(t('Why are you opening this?')), 'allocation': 'shared', 'remember_minutes': 0, 'options': [
         {'id': uuid.uuid4().hex, 'label': str(t('For work')), 'limit': None},
         {'id': uuid.uuid4().hex, 'label': str(t('Just checking')), 'limit': 2}]}
 
 
 def validate(value):
-    if not isinstance(value, dict) or set(value) not in ({'question', 'options'}, {'question', 'options', 'allocation'}):
+    if not isinstance(value, dict) or not {'question','options'} <= set(value) or set(value)-{'question','options','allocation','remember_minutes'}:
         raise ValueError('Invalid opening choices.')
+    minutes=value.get('remember_minutes',0)
+    if type(minutes) is not int or not 0<=minutes<=1440:raise ValueError('Choose a repeat delay between 0 and 1440 minutes.')
     if value.get('allocation','shared') not in ('shared','activity'): raise ValueError('Choose shared or separate session allowances.')
     question, options = value['question'], value['options']
     if not isinstance(question, str) or not question.strip() or len(question) > 180 or '\0' in question:
@@ -57,7 +59,27 @@ class ChoiceLedger:
         if 'activity' not in {row[1] for row in self.db.execute('PRAGMA table_info(session_choices)')}:
             self.db.execute("ALTER TABLE session_choices ADD COLUMN activity TEXT NOT NULL DEFAULT ''")
         self.db.execute('CREATE INDEX IF NOT EXISTS session_choices_day ON session_choices(budget,step,day,choice)')
-        self.cache = {}
+        self.db.execute('CREATE INDEX IF NOT EXISTS session_choices_recent ON session_choices(budget,step,day,activity,at)')
+        self.cache = {};self.recent={};self.returns={}
+
+    def recalled(self,budget,step,day,visit,value,now,activity):
+        minutes=value.get('remember_minutes',0)
+        if not minutes:return None
+        key=(budget,step,day,activity);visit_key=(*key,visit)
+        valid={option['id'] for option in value['options']}
+        if self.returns.get(visit_key) in valid:return self.returns[visit_key]
+        if key not in self.recent:
+            if len(self.recent)>=1024:self.recent.clear()
+            self.recent[key]=self.db.execute('SELECT choice,at FROM session_choices '
+                'WHERE budget=? AND step=? AND day=? AND activity=? ORDER BY at DESC LIMIT 1',key).fetchone()
+        row=self.recent[key]
+        if row and row[0] in valid and 0<=now-row[1]<minutes*60:
+            # A return during the grace window remains accepted for this visit.
+            # It neither consumes another answer nor extends the original window.
+            if len(self.returns)>=4096:self.returns.pop(next(iter(self.returns)))
+            self.returns[visit_key]=row[0]
+            return row[0]
+        return None
 
     def counts(self, budget, step, day, activity=None):
         key = (budget, step, day, activity)
@@ -88,6 +110,7 @@ class ChoiceLedger:
             if option['limit'] is not None and used >= option['limit']: return False
             self.db.execute('INSERT INTO session_choices VALUES (?,?,?,?,?,?,?)', (budget, step, day, visit, choice, now, activity))
         self.cache = {k:v for k,v in self.cache.items() if k[:3] != (budget,step,day)}
+        self.recent.pop((budget,step,day,activity),None)
         return True
 
 

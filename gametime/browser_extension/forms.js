@@ -920,6 +920,14 @@ export function settingsEditor(ctx, requested = settingsSection) {
           note("Earlier statistics and already used time are kept."),
           check("Measure application and website time", s.tracking,
             (v) => (s.tracking = v)),
+          check("Pause time tracking when idle", s.pause_when_idle,
+            (v) => {s.pause_when_idle=v;changed();redraw();}),
+          field("Pause after (minutes)",s.idle_timeout_seconds/60,
+            (v) => (s.idle_timeout_seconds=Number(v)*60),
+            {type:"number",min:1,max:1440,step:1,required:true,disabled:!s.pause_when_idle}),
+          check("Count media playback as activity",s.media_prevents_idle,
+            (v) => (s.media_prevents_idle=v),{disabled:!s.pause_when_idle}),
+          helpNote("Applies to games, applications, websites and enabled background playback on this computer. Audible media can count as activity; after playback stops, the idle timeout starts. Muted or paused playback does not count. Background playback measurement is configured separately for each activity. Browser mode detects playback in that browser. Focus timers and scheduled restrictions keep running."),
         ),
       );
       const sound = card(

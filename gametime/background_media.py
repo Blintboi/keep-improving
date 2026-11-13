@@ -12,7 +12,9 @@ KEY='background_media_tracking'
 class BackgroundMedia:
     def __init__(self,app,audio=None):
         from .media_audio import AudioSampler
+        from .idle_tracking import MediaActivity
         self.app=app;self.audio=audio or AudioSampler();self.previous=None;self.targets=[];self.atoms=();self.browser_paths={}
+        self.idle_activity=MediaActivity()
         row=app.store.db.execute('SELECT value FROM settings WHERE key=?',(KEY,)).fetchone()
         try:
             value=json.loads(row[0]) if row else []
@@ -35,11 +37,21 @@ class BackgroundMedia:
         with self.app.store.db:self.app.store.db.execute('INSERT OR REPLACE INTO settings VALUES (?,?)',(KEY,json.dumps(updated)))
         self.members=updated;self.previous=None;self.app.update_focus_policy()
 
+    def audible(self):
+        settings=self.app.wellbeing.catalog.settings
+        enabled=bool(self.app.focus.settings.tracking and self.members) or settings.pause_when_idle and settings.media_prevents_idle
+        return self.audio.sample(enabled)
+
+    def tracking_sample(self,sample):
+        settings=self.app.wellbeing.catalog.settings
+        enabled=settings.pause_when_idle and settings.media_prevents_idle
+        return self.idle_activity.sample(sample,enabled,bool(self.audible()) if enabled else False)
+
     def observations(self,sample):
         app=self.app;enabled=app.focus.settings.tracking and bool(self.members);media=[];self.targets=[]
         browser=BROWSERS.get(ntpath.basename(sample.path).lower())
         if browser:self.browser_paths[browser]=sample.path
-        audible=self.audio.sample(enabled)
+        audible=self.audible()
         audible_browsers={BROWSERS.get(ntpath.basename(path).lower()) for path,_ in audible}
         for path,identity in audible:
             if not self.enabled({'kind':'app','value':path}) or app.focus.settings.app_excluded(path):continue
@@ -59,12 +71,14 @@ class BackgroundMedia:
         return self.atoms
 
     def tick(self,sample,foreground,redirect=''):
+        from .idle_tracking import allows_interval,timeout
         app=self.app;media=self.observations(sample);previous=self.previous
         tagged=foreground
         if tagged and redirect:tagged=(tagged[0],tagged[1],tagged[2]+'\0'+redirect)
         self.previous=(sample,tagged,media,app.focus.previous[1] if app.focus.previous else "")
         if not previous or not app.focus.settings.tracking:return
         prev,old,playing,prev_site=previous;seconds=sample.awake-prev.awake;wall=(sample.wall-prev.wall).total_seconds()
+        if not allows_interval(prev,sample,timeout(app.wellbeing.catalog.settings)):return
         if not playing or not 0<seconds<=3 or wall<=0 or abs(wall-seconds)>1.5:return
         # Settings changes/exclusion apply immediately to every outstanding observation.
         playing=tuple(atom for atom in playing if not app.focus.settings.app_excluded(atom[1]) and

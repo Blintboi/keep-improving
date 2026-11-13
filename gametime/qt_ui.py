@@ -21,6 +21,7 @@ from .controller import MonitorActions
 from .model import Catalog,Game,Settings,norm,blocked,helper
 from .service import DiscoveryService
 from .tracker import Tracker
+from .idle_tracking import allows_interval,timeout as idle_timeout
 from .hub import HubWorker
 from .i18n import tr,LANGUAGES
 from . import win32,__version__
@@ -524,6 +525,8 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
                 epic_manifest_dirs=[p.strip() for p in self.paths['epic'].text().split(';') if p.strip()],
                 ubisoft_roots=[p.strip() for p in self.paths['ubisoft'].text().split(';') if p.strip()],
                 hub_enabled=self.hub_enabled.isChecked(),check_updates=self.updates.automatic.isChecked(),
+                pause_when_idle=self.pause_when_idle.isChecked(),idle_timeout_seconds=round(self.idle_minutes.value()*60),
+                media_prevents_idle=self.media_prevents_idle.isChecked(),
                 budget_reset_minute=self.global_day_start.time().hour()*60+self.global_day_start.time().minute(),
                 **self.overlay_values(),**self.sound_values())
             return proposed!=self.settings or self.activity_tracking.isChecked()!=self.focus.settings.tracking
@@ -692,6 +695,20 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
         note=label(self.t('Earlier statistics and already used time are kept.'),'muted'); note.setWordWrap(True); general_layout.addWidget(note)
         self.activity_tracking=QCheckBox(self.t('Measure application and website time'))
         self.activity_tracking.setChecked(self.focus.settings.tracking); general_layout.addWidget(self.activity_tracking)
+        general_layout.addWidget(separator())
+        self.pause_when_idle=QCheckBox(self.t('Pause time tracking when idle'))
+        self.pause_when_idle.setChecked(self.settings.pause_when_idle);general_layout.addWidget(self.pause_when_idle)
+        idle_row=QHBoxLayout();idle_row.addWidget(label(self.t('Pause after (minutes)'),'muted'))
+        self.idle_minutes=QDoubleSpinBox();self.idle_minutes.setDecimals(0);self.idle_minutes.setRange(1,1440)
+        self.idle_minutes.setAccessibleName(self.t('Pause after (minutes)'));self.idle_minutes.setValue(self.settings.idle_timeout_seconds/60)
+        self.idle_minutes.setEnabled(self.settings.pause_when_idle);self.pause_when_idle.toggled.connect(self.idle_minutes.setEnabled)
+        idle_row.addWidget(self.idle_minutes);general_layout.addLayout(idle_row)
+        self.media_prevents_idle=QCheckBox(self.t('Count media playback as activity'))
+        self.media_prevents_idle.setChecked(self.settings.media_prevents_idle)
+        self.media_prevents_idle.setEnabled(self.settings.pause_when_idle)
+        self.pause_when_idle.toggled.connect(self.media_prevents_idle.setEnabled)
+        general_layout.addWidget(self.media_prevents_idle)
+        general_layout.addWidget(help_text(self.t('Applies to games, applications, websites and enabled background playback on this computer. Audible media can count as activity; after playback stops, the idle timeout starts. Muted or paused playback does not count. Background playback measurement is configured separately for each activity. Browser mode detects playback in that browser. Focus timers and scheduled restrictions keep running.'),'muted'))
         from .qt_schedule import WeeklyScheduleEditor
         self.schedule_editor=WeeklyScheduleEditor(self.settings,self.t)
         for name in ('limit','warning','restriction_enabled','restriction_minutes','bedtime_enabled','bedtime_times','bedtime_minimize','bedtime_controls','bedtime_caps_budget'):
@@ -787,6 +804,8 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
     def cancel_general_settings(self):
         settings=self.settings
         self.activity_tracking.setChecked(self.focus.settings.tracking)
+        self.pause_when_idle.setChecked(settings.pause_when_idle);self.idle_minutes.setValue(settings.idle_timeout_seconds/60)
+        self.media_prevents_idle.setChecked(settings.media_prevents_idle)
         self.global_day_start.setTime(QTime(settings.budget_reset_minute//60,settings.budget_reset_minute%60))
         self.games_path.setText(settings.games_root)
         for key,values in (('steam',settings.steam_roots),('epic',settings.epic_manifest_dirs),('ubisoft',settings.ubisoft_roots)):
@@ -1097,7 +1116,7 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
             self.hide_countdown(); return
         if not self.overlay_timer.isActive(): self.overlay_timer.start()
         try:
-            current=win32.sample()
+            current=self.background_media.tracking_sample(win32.sample())
             if not current.interactive:
                 self._overlay_preview_until=0; self._overlay_preview_target=None
                 self.hide_countdown(); return
@@ -1142,6 +1161,7 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
                 if previous and previous.identity==current.identity:
                     raw_elapsed=current.awake-previous.awake
                     if not (0<raw_elapsed<=1.5 and abs((current.wall-previous.wall).total_seconds()-raw_elapsed)<1.5): raw_elapsed=0
+                    if not allows_interval(previous,current,idle_timeout(self.settings)):raw_elapsed=0
                     if budget_day(self.settings,'shared-games',previous.wall)==budget_day(self.settings,'shared-games',current.wall): elapsed=raw_elapsed
                 game_elapsed=raw_elapsed if previous and budget_day(self.settings,'game:'+active.id,previous.wall)==budget_day(self.settings,'game:'+active.id,current.wall) else 0
                 budget=gameplay_budget(self.settings,current.wall,totals,active.id,elapsed,
@@ -1234,6 +1254,8 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
                 epic_manifest_dirs=[p.strip() for p in self.paths['epic'].text().split(';') if p.strip()],
                 ubisoft_roots=[p.strip() for p in self.paths['ubisoft'].text().split(';') if p.strip()],
                 hub_enabled=self.hub_enabled.isChecked(),
+                pause_when_idle=self.pause_when_idle.isChecked(),idle_timeout_seconds=round(self.idle_minutes.value()*60),
+                media_prevents_idle=self.media_prevents_idle.isChecked(),
                 budget_reset_minute=self.global_day_start.time().hour()*60+self.global_day_start.time().minute(),
                 overlay_replace_warning=self.overlay_warning.isChecked(),limit_popup_enabled=self.limit_popup.isChecked(),
                 check_updates=self.updates.automatic.isChecked(),**self.sound_values())
@@ -1401,11 +1423,12 @@ class App(QMainWindow,MonitorActions,WellbeingActions,TimerActions):
 
     def focus_tick(self,current):
         import ntpath
+        current=self.background_media.tracking_sample(current)
         self.focus.configure_day_start(self.settings.budget_reset_minute)
         website=self.browser_bridge.website(current.path) if self.browser_bridge else ''
         previous=self.focus.previous
         revision=self.focus.revision
-        self.focus.tick(current,website)
+        self.focus.tick(current,website,idle_timeout=idle_timeout(self.settings))
         redirect=getattr(self.browser_bridge,'redirect_budget',lambda path:'')(current.path) if self.browser_bridge else ''
         if not isinstance(redirect,str): redirect=''
         self.wellbeing.tick(current,website,redirect)

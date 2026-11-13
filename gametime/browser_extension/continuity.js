@@ -133,7 +133,7 @@ class BrowserJournal {
     if(previous && stamp<=previous.at) return;
     if (previous && previous.session===session && stamp>previous.at && stamp-previous.at<=45) {
       const record={kind:'sample',start:previous.at,end:stamp,host:previous.host || '',
-        active:!!(previous.active && !observation.locked),redirect:previous.redirect || '',timer:snapshot?.focus.running?snapshot.focus.token:''};
+        active:!!(previous.active && !observation.locked && !observation.idle),redirect:previous.redirect || '',timer:snapshot?.focus.running?snapshot.focus.token:''};
       if (snapshot && (record.active && snapshot.tracking || record.timer)) {
         this.append(record);this.advance(record);
       }
@@ -247,12 +247,20 @@ class BrowserContinuityWorker {
     this.savedThrough=v.seq;this.savedAck=v.ack;
   }
   async sample(tab,host,redirect) {
-    let locked=false;
-    if(chrome.idle?.queryState) locked=(await chrome.idle.queryState(60))==='locked';
-    const active=!!tab && !tab.incognito && !locked && !braveNewTab(tab,this.browser);
+    const timeout=this.model.value.snapshot?.idle_timeout_seconds || 0;
+    const state=chrome.idle?.queryState ? await chrome.idle.queryState(timeout || 60) : 'active';
+    const now=Date.now()/1000,mediaEnabled=!!timeout && this.model.value.snapshot?.media_prevents_idle;
+    let mediaAt=mediaEnabled?this.model.value.checkpoint?.mediaAt:null;
+    if(mediaEnabled && chrome.tabs?.query) {
+      const audible=await chrome.tabs.query({audible:true});
+      if(audible.some(t=>!t.incognito && t.audible && !t.mutedInfo?.muted)) mediaAt=now;
+    }
+    const recentMedia=Number.isFinite(mediaAt) && mediaAt<=now && now-mediaAt<timeout;
+    const locked=state==='locked',idle=!!timeout && state==='idle' && !recentMedia;
+    const active=!!tab && !tab.incognito && !locked && !idle && !braveNewTab(tab,this.browser);
     const {records,...meta}=this.model.value,before={...copyContinuity(meta),records:[...records]};
     try {
-      this.model.observe({active,host:active?host:'',redirect:active?redirect:'',locked},Date.now()/1000,this.session);
+      this.model.observe({active,host:active?host:'',redirect:active?redirect:'',locked,idle,mediaAt},now,this.session);
       await this.save();
     } catch(error) {this.model.value=before;throw error;}
   }

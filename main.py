@@ -151,6 +151,9 @@ def main():
                               "bedtime_caps_budget": store.settings().bedtime_caps_budget,
                               "budget_reset_minute": store.settings().budget_reset_minute,
                               "check_updates": store.settings().check_updates,
+                              "pause_when_idle": store.settings().pause_when_idle,
+                              "idle_timeout_seconds": store.settings().idle_timeout_seconds,
+                              "media_prevents_idle": store.settings().media_prevents_idle,
                               "tracking_started_on": store.tracking_started_on(),
                               "today_seconds": sum(store.totals(datetime.now().date()).values())})
         if args.configure or args.scan_once or args.diagnose or args.sync_hub:

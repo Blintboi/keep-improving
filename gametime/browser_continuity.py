@@ -287,6 +287,8 @@ class BrowserContinuity:
         return dict(version=1,app_version=__version__,at=now.timestamp(),language=app.settings.language,
             local_sites=configured_local_sites(app.settings,f.settings,port) if local_version else [],bridge_port=port,
             browser=browser,path=path,tracking=f.settings.tracking and bool(path) and not f.settings.app_excluded(path),
+            idle_timeout_seconds=app.settings.idle_timeout_seconds if app.settings.pause_when_idle else 0,
+            media_prevents_idle=app.settings.media_prevents_idle,
             day_start=app.settings.budget_reset_minute,sound=app.settings.notification_sound!='silent',budgets=budgets,
             focus=dict(token=f.continuity_token,running=f.running,phase=f.phase,remaining=f.remaining,round=f.round,
                 total=f.completed_rounds,today=f.completed_on(f.day(now)),day=f.day(now).isoformat(),settings=asdict(f.settings),

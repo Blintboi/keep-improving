@@ -17,6 +17,7 @@ LOCAL_FIELDS.add('removed_notifications'); CONFIG_FIELDS.discard('removed_notifi
 LOCAL_FIELDS.add('notification_overrides'); CONFIG_FIELDS.discard('notification_overrides')
 LOCAL_FIELDS.add('computer_periods'); CONFIG_FIELDS.discard('computer_periods')
 LOCAL_FIELDS.update(('budget_devices','device_groups','scope_device'));CONFIG_FIELDS.difference_update(('budget_devices','device_groups','scope_device'))
+LOCAL_FIELDS.update(('pause_when_idle','idle_timeout_seconds','media_prevents_idle'));CONFIG_FIELDS.difference_update(('pause_when_idle','idle_timeout_seconds','media_prevents_idle'))
 CONFIG_FIELDS-={'game_limits','game_overlays','limit_seconds','warning_seconds',
                 'bedtime_warning_minute','bedtime_minute','bedtime_resume_minute'}
 PAIRED_FIELDS={'settings.play_window':('limit_seconds','warning_seconds'),

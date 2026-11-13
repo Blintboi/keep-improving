@@ -35,10 +35,12 @@ def request(app,data,choose=False):
         for step in runtime.state.plans[key]['steps']:
             value=step.get('session_choice')
             if not value or not step.get('targets',{}).get('site',{}).get('enabled',True): continue
+            existing=ledger.db.execute('SELECT choice FROM session_choices WHERE budget=? AND step=? AND visit=?',(key,step['id'],visit)).fetchone()
+            recalled=None if existing else ledger.recalled(key,step['id'],budget.day,visit,value,runtime.state.now,activity)
             if choose and key==data['budget'] and step['id']==data['step']:
-                accepted=ledger.choose(key,step['id'],budget.day,visit,value,data['choice'],runtime.state.now,activity)
-            existing=ledger.db.execute('SELECT 1 FROM session_choices WHERE budget=? AND step=? AND visit=?',(key,step['id'],visit)).fetchone()
-            if not existing:
+                accepted=recalled==data['choice'] if recalled else ledger.choose(key,step['id'],budget.day,visit,value,data['choice'],runtime.state.now,activity)
+                if accepted:existing=True
+            if not existing and not recalled:
                 pending.append(dict(budget=key,step=step['id'],name=budget.name,question=value['question'],
                     allocation=value.get('allocation','shared'),options=ledger.options(key,step['id'],budget.day,value,activity)))
     return dict(accepted=accepted,choice=pending[0] if pending else None,blocked=False)

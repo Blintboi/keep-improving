@@ -12,6 +12,24 @@ function snapshot(changes={}) {return {version:1,at:stamp,language:'en',browser:
 function model(s=snapshot()) {return new BrowserJournal({snapshot:s},uuid);}
 const tab={active:true,host:'example.com',redirect:'',locked:false};
 
+test('idle browser samples pause usage but preserve focus clocks and resume without backfill',async()=>{
+  const vm=require('node:vm'),fs=require('node:fs'),crypto=require('node:crypto');let now=stamp,state='active';const queried=[];
+  const context=vm.createContext({module:{exports:{}},crypto,JSON,Date:{now:()=>now*1000},
+    chrome:{idle:{queryState:async seconds=>{queried.push(seconds);return state;}}},braveNewTab:()=>false});
+  vm.runInContext(fs.readFileSync('gametime/browser_extension/continuity.js','utf8'),context);
+  const worker=new context.module.exports.BrowserContinuityWorker();worker.model=model(snapshot({idle_timeout_seconds:120}));
+  worker.session='one';worker.browser='brave';worker.save=async()=>{};
+  await worker.sample({},'example.com','');now++;await worker.sample({},'example.com','');
+  assert.equal(worker.model.value.snapshot.budgets[0].used,1);
+  state='idle';now++;await worker.sample({},'example.com','');now+=2;await worker.sample({},'example.com','');
+  assert.equal(worker.model.value.snapshot.budgets[0].used,1);assert.equal(worker.model.value.snapshot.focus.remaining,21);
+  state='active';now++;await worker.sample({},'example.com','');now++;await worker.sample({},'example.com','');
+  assert.equal(worker.model.value.snapshot.budgets[0].used,2);assert.ok(queried.every(s=>s===120));
+  worker.model.value.snapshot.idle_timeout_seconds=0;state='idle';now++;await worker.sample({},'example.com','');
+  assert.equal(worker.model.value.snapshot.budgets[0].used,3);assert.equal(queried.at(-1),60);
+  state='locked';now++;await worker.sample({},'example.com','');assert.equal(worker.model.value.snapshot.budgets[0].used,3);
+});
+
 test('offline opening choices use in-page gates without navigation restrictions',()=>{
   for (const kind of ['notify','cover','break']) {
     const s=snapshot();s.focus.running=false;const b=s.budgets[0];b.enforce=false;b.usage=false;b.sessions=100;
@@ -217,4 +235,27 @@ test('session seed and browser/site overlap continue one visit across handoff',(
   m.observe({...tab,active:false},stamp+21,'one');m.observe(tab,stamp+22,'one');m.observe(tab,stamp+23,'one');
   assert.equal(m.value.snapshot.budgets[0].sessions,6);assert.equal(offlinePolicy(m.value.snapshot,stamp+23).restrictions.length,1);
   updateBudget(m.value.snapshot.budgets[0],stamp+83,[]);assert.equal(offlinePolicy(m.value.snapshot,stamp+83).restrictions.length,0);
+});
+
+
+test('audible media optionally prevents idle and stopping starts the timeout, including worker restart',async()=>{
+  const vm=require('node:vm'),fs=require('node:fs'),crypto=require('node:crypto');let now=stamp,state='idle',audible=[],queries=0;
+  const context=vm.createContext({module:{exports:{}},crypto,JSON,Date:{now:()=>now*1000},
+    chrome:{idle:{queryState:async()=>state},tabs:{query:async()=>{queries++;return audible;}}},braveNewTab:()=>false});
+  vm.runInContext(fs.readFileSync('gametime/browser_extension/continuity.js','utf8'),context);
+  const Worker=context.module.exports.BrowserContinuityWorker;let worker=new Worker();
+  worker.model=model(snapshot({idle_timeout_seconds:60,media_prevents_idle:true}));worker.session='one';worker.save=async()=>{};
+  await worker.sample({},'example.com','');assert.equal(worker.model.value.checkpoint.active,false);
+  audible=[{audible:true,mutedInfo:{muted:false}}];now++;await worker.sample({},'example.com','');now++;await worker.sample({},'example.com','');
+  assert.equal(worker.model.value.snapshot.budgets[0].used,1);
+  audible=[];now+=10;await worker.sample({},'example.com','');assert.equal(worker.model.value.checkpoint.active,true);
+  const saved=worker.model;worker=new Worker();worker.model=saved;worker.session='one';worker.save=async()=>{};
+  now+=10;await worker.sample({},'example.com','');assert.equal(worker.model.value.checkpoint.active,true);
+  now+=40;await worker.sample({},'example.com','');assert.equal(worker.model.value.checkpoint.active,false);
+  audible=[{audible:true,mutedInfo:{muted:true}},{audible:true,incognito:true}];now++;await worker.sample({},'example.com','');
+  assert.equal(worker.model.value.checkpoint.active,false);
+  audible=[{audible:true}];now++;await worker.sample({},'example.com','');assert.equal(worker.model.value.checkpoint.active,true);
+  state='locked';now++;await worker.sample({},'example.com','');assert.equal(worker.model.value.checkpoint.active,false);
+  worker.model.value.snapshot.media_prevents_idle=false;state='idle';const before=queries;now++;await worker.sample({},'example.com','');
+  assert.equal(worker.model.value.checkpoint.active,false);assert.equal(queries,before);
 });
